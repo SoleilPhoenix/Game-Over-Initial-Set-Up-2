@@ -57,14 +57,28 @@ export const eventKeys = {
 ### State Management
 Zustand stores with MMKV persistence (`src/stores/`):
 - `authStore` - Auth state, session, user
-- `wizardStore` - Event creation wizard (multi-step form state)
+- `wizardStore` - Event creation wizard with auto-save (debounced 2s persist to MMKV)
 - `uiStore` - Global UI state (loading, toasts, modals)
+
+Auto-save pattern in wizardStore:
+```typescript
+// Draft saved indicator component shows when lastSavedAt updates
+const lastSavedAt = useWizardStore((state) => state.lastSavedAt);
+```
 
 ### Supabase Integration
 - Client config: `src/lib/supabase/client.ts` (MMKV session storage)
 - Database types: `src/lib/supabase/types.ts` (auto-generated)
 - Migrations: `supabase/migrations/` (schema, RLS policies, seed data)
+- Edge Functions: `supabase/functions/` (Deno runtime)
 - Auth: Email/password, Apple Sign-In, Google OAuth, Facebook OAuth
+
+### Edge Functions (Supabase/Deno)
+Located in `supabase/functions/`:
+- `create-payment-intent` - Creates Stripe PaymentIntent for package bookings
+- `stripe-webhook` - Handles Stripe webhook events (payment success/failure)
+
+Deploy with: `npx supabase functions deploy <function-name>`
 
 ### Path Aliases
 Configured in `tsconfig.json`:
@@ -103,3 +117,65 @@ useEffect(() => {
   return () => { supabase.removeChannel(channel); };
 }, []);
 ```
+
+### Package Matching Algorithm
+Located in `src/utils/packageMatching.ts`. Scores packages based on:
+- Gathering type match (40 points)
+- Energy level match (30 points)
+- Vibe keywords match (30 points)
+
+Usage via `usePackageMatching` hook - returns packages sorted by score with `bestMatch` flag.
+
+### Invite Deep Links
+URL scheme: `gameover://invite/[code]`
+- `app/invite/[code].tsx` - Handles invite acceptance
+- `useValidateInvite` / `useAcceptInvite` hooks in `src/hooks/queries/useInvites.ts`
+- invite_codes table with expiration, max_uses, RLS policies
+
+### Calendar Integration
+`src/utils/calendar.ts` provides:
+- `addEventToCalendar(eventData)` - Adds event with permission handling
+- `addEventToCalendarWithFeedback(eventData)` - Same with Alert feedback
+- Uses expo-calendar, handles iOS/Android differences
+
+### UI Components
+Tamagui-based components in `src/components/ui/`:
+- `Skeleton` - Loading states with `SkeletonEventCard`, `SkeletonPackageCard` variants
+- `Badge` - Status badges including `bestMatch` variant for package recommendations
+- `Card`, `Button`, `Input` - Standard form components
+
+### Booking References
+Auto-generated `GO-XXXXXX` format via database trigger on bookings table.
+Displayed on confirmation screen with copy-to-clipboard functionality.
+
+### Dark Theme Design System
+UI designs in `UI_and_UX/` folder use a consistent dark theme:
+```typescript
+const DARK_THEME = {
+  backgroundDark: '#15181D',    // Main background
+  surfaceDark: '#1E2329',       // Surface/cards
+  surfaceCard: '#23272F',       // Elevated cards
+  secondary: '#2D3748',         // Alternative background
+  primary: '#4A6FA5',           // Primary accent
+  glassCard: 'rgba(45, 55, 72, 0.6)', // Glassmorphic effect
+};
+```
+
+### Push Notifications
+`src/hooks/usePushNotifications.ts` handles:
+- Expo push token registration
+- Permission requests
+- Token storage to `user_push_tokens` table
+- Local notification scheduling
+- Deep link handling on notification tap
+
+Send notifications via Edge Function: `supabase/functions/send-push-notification/`
+
+## Troubleshooting
+
+### npm Dependency Conflicts
+If `npx expo install` fails with peer dependency errors, use:
+```bash
+npm install <package> --legacy-peer-deps
+```
+This is due to @testing-library/react-native peer dependency conflicts with react-test-renderer.
