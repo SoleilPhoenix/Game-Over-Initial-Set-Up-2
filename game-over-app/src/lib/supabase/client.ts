@@ -10,12 +10,13 @@ import type { Database } from './types';
 // MMKV Storage for Supabase session persistence
 const storage = new MMKV({ id: 'supabase-storage' });
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
+// Fail fast if environment variables are not configured
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    'Supabase URL or Anon Key not configured. Please set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY environment variables.'
+  throw new Error(
+    'Supabase configuration missing. Please set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY environment variables. See .env.example for reference.'
   );
 }
 
@@ -34,8 +35,8 @@ const mmkvStorage = {
 };
 
 export const supabase = createClient<Database>(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key',
+  supabaseUrl,
+  supabaseAnonKey,
   {
     auth: {
       storage: mmkvStorage,

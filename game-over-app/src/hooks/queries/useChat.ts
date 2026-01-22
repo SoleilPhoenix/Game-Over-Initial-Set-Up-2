@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { channelsRepository, messagesRepository, MessageWithAuthor } from '@/repositories';
 import { useAuthStore } from '@/stores/authStore';
 import type { Database } from '@/lib/supabase/types';
@@ -123,12 +123,20 @@ export function useMarkChannelAsRead() {
 
 /**
  * Subscribe to realtime messages
+ * Uses a ref for the callback to avoid subscription churn
  */
 export function useRealtimeMessages(
   channelId: string | undefined,
   onMessage: (message: MessageWithAuthor) => void
 ) {
   const queryClient = useQueryClient();
+  // Use ref to store callback to avoid recreating subscription on callback change
+  const onMessageRef = useRef(onMessage);
+
+  // Keep ref updated with latest callback
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
 
   useEffect(() => {
     if (!channelId) return;
@@ -155,11 +163,11 @@ export function useRealtimeMessages(
           }
         );
 
-        // Notify callback
-        onMessage(message as MessageWithAuthor);
+        // Notify callback via ref (avoids stale closure)
+        onMessageRef.current(message as MessageWithAuthor);
       }
     );
 
     return unsubscribe;
-  }, [channelId, queryClient, onMessage]);
+  }, [channelId, queryClient]);
 }

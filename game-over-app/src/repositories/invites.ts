@@ -4,6 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase/client';
+import * as Crypto from 'expo-crypto';
 import type { Database } from '@/lib/supabase/types';
 
 type InviteCode = Database['public']['Tables']['invite_codes']['Row'];
@@ -22,13 +23,15 @@ export interface InviteCodeWithEvent extends InviteCode {
 }
 
 /**
- * Generate a random invite code
+ * Generate a cryptographically secure random invite code
+ * Uses expo-crypto for secure random number generation
  */
 function generateCode(): string {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const randomBytes = Crypto.getRandomBytes(8);
   let code = '';
   for (let i = 0; i < 8; i++) {
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
+    code += chars.charAt(randomBytes[i] % chars.length);
   }
   return code;
 }
@@ -128,27 +131,33 @@ export const invitesRepository = {
 
   /**
    * Increment use count when an invite is accepted
+   * Uses RPC for atomic increment to prevent race conditions
+   *
+   * IMPORTANT: Requires the 'increment_invite_use_count' RPC function in Supabase:
+   *
+   * CREATE OR REPLACE FUNCTION increment_invite_use_count(invite_id UUID)
+   * RETURNS VOID AS $$
+   * BEGIN
+   *   UPDATE invite_codes
+   *   SET use_count = use_count + 1
+   *   WHERE id = invite_id;
+   * END;
+   * $$ LANGUAGE plpgsql SECURITY DEFINER;
    */
   async incrementUseCount(inviteId: string): Promise<void> {
     const { error } = await supabase.rpc('increment_invite_use_count', {
       invite_id: inviteId,
     });
 
-    // If the RPC doesn't exist, fall back to direct update
-    if (error && error.code === 'PGRST202') {
-      const { data: invite } = await supabase
-        .from('invite_codes')
-        .select('use_count')
-        .eq('id', inviteId)
-        .single();
-
-      if (invite) {
-        await supabase
-          .from('invite_codes')
-          .update({ use_count: (invite.use_count || 0) + 1 })
-          .eq('id', inviteId);
+    if (error) {
+      // If RPC doesn't exist (PGRST202), throw with clear instructions
+      if (error.code === 'PGRST202') {
+        console.error(
+          'Missing RPC function: increment_invite_use_count. ' +
+          'Please create this function in Supabase for atomic invite counting.'
+        );
+        throw new Error('Server configuration error: Missing invite increment function');
       }
-    } else if (error) {
       throw error;
     }
   },

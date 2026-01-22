@@ -4,14 +4,14 @@
  */
 
 import { Stack } from 'expo-router';
-import { colors } from '@/constants/colors';
+import { DARK_THEME } from '@/constants/theme';
 
 export default function AuthLayout() {
   return (
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: colors.light.background },
+        contentStyle: { backgroundColor: DARK_THEME.background },
         animation: 'slide_from_right',
       }}
     >

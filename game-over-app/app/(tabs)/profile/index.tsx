@@ -11,17 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useUser, useAuthStore } from '@/stores/authStore';
-import { colors } from '@/constants/colors';
-
-// Dark theme colors matching UI design
-const THEME = {
-  background: '#2D3748',
-  surface: 'rgba(45, 55, 72, 0.7)',
-  border: 'rgba(255, 255, 255, 0.08)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#9CA3AF',
-  primary: '#4a6fa5',
-};
+import { DARK_THEME } from '@/constants/theme';
 
 interface MenuItemProps {
   icon: string;
@@ -65,7 +55,7 @@ function MenuItem({
         >
           <Ionicons name={icon as any} size={18} color={iconColor} />
         </View>
-        <Text color={THEME.textPrimary} fontSize={14} fontWeight="500">
+        <Text color={DARK_THEME.textPrimary} fontSize={14} fontWeight="500">
           {label}
         </Text>
       </XStack>
@@ -74,7 +64,7 @@ function MenuItem({
           <View width={8} height={8} borderRadius={4} backgroundColor="#EF4444" />
         )}
         {value && (
-          <Text color={THEME.textSecondary} fontSize={12}>
+          <Text color={DARK_THEME.textSecondary} fontSize={12}>
             {value}
           </Text>
         )}
@@ -95,7 +85,7 @@ function MenuSection({ title, children }: MenuSectionProps) {
       <Text
         fontSize={11}
         fontWeight="600"
-        color={THEME.textSecondary}
+        color={DARK_THEME.textSecondary}
         textTransform="uppercase"
         letterSpacing={1}
         marginBottom="$3"
@@ -141,7 +131,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View flex={1} backgroundColor={THEME.background}>
+    <View flex={1} backgroundColor={DARK_THEME.background}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -154,7 +144,7 @@ export default function ProfileScreen() {
         <Text
           fontSize={24}
           fontWeight="700"
-          color={THEME.textPrimary}
+          color={DARK_THEME.textPrimary}
           textAlign="center"
           marginBottom="$6"
         >
@@ -172,29 +162,29 @@ export default function ProfileScreen() {
           >
             <View style={styles.avatarContainer}>
               <LinearGradient
-                colors={[THEME.primary, '#60A5FA']}
+                colors={[DARK_THEME.primary, '#60A5FA']}
                 style={styles.avatarGradient}
               >
                 <View style={styles.avatarInner}>
-                  <Text fontSize={24} fontWeight="700" color={THEME.textPrimary}>
+                  <Text fontSize={24} fontWeight="700" color={DARK_THEME.textPrimary}>
                     {userInitials}
                   </Text>
                 </View>
               </LinearGradient>
               <View style={styles.editBadge}>
-                <Ionicons name="pencil" size={12} color={THEME.primary} />
+                <Ionicons name="pencil" size={12} color={DARK_THEME.primary} />
               </View>
             </View>
           </Pressable>
           <Text
             fontSize={20}
             fontWeight="700"
-            color={THEME.textPrimary}
+            color={DARK_THEME.textPrimary}
             marginTop="$4"
           >
             {userName}
           </Text>
-          <Text fontSize={14} color={THEME.textSecondary}>
+          <Text fontSize={14} color={DARK_THEME.textSecondary}>
             {userEmail}
           </Text>
         </YStack>
@@ -297,10 +287,10 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   glassCard: {
-    backgroundColor: THEME.surface,
+    backgroundColor: DARK_THEME.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: THEME.border,
+    borderColor: DARK_THEME.border,
     overflow: 'hidden',
   },
   menuItem: {
@@ -311,7 +301,7 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 1,
-    backgroundColor: THEME.border,
+    backgroundColor: DARK_THEME.border,
     marginLeft: 56,
   },
   avatarContainer: {
@@ -337,9 +327,9 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: THEME.background,
+    backgroundColor: DARK_THEME.background,
     borderWidth: 1,
-    borderColor: THEME.border,
+    borderColor: DARK_THEME.border,
     alignItems: 'center',
     justifyContent: 'center',
   },

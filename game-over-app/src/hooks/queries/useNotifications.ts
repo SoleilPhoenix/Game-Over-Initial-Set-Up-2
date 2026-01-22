@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { notificationsRepository } from '@/repositories';
 import { useAuthStore } from '@/stores/authStore';
 import type { Database } from '@/lib/supabase/types';
@@ -98,12 +98,20 @@ export function useMarkAllNotificationsAsRead() {
 
 /**
  * Subscribe to realtime notifications
+ * Uses a ref for the callback to avoid subscription churn
  */
 export function useRealtimeNotifications(
   onNotification: (notification: Notification) => void
 ) {
   const queryClient = useQueryClient();
   const user = useAuthStore((state) => state.user);
+  // Use ref to store callback to avoid recreating subscription on callback change
+  const onNotificationRef = useRef(onNotification);
+
+  // Keep ref updated with latest callback
+  useEffect(() => {
+    onNotificationRef.current = onNotification;
+  }, [onNotification]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -117,13 +125,13 @@ export function useRealtimeNotifications(
           (old: number | undefined) => (old || 0) + 1
         );
 
-        // Notify callback
-        onNotification(notification);
+        // Notify callback via ref (avoids stale closure)
+        onNotificationRef.current(notification);
       }
     );
 
     return unsubscribe;
-  }, [user?.id, queryClient, onNotification]);
+  }, [user?.id, queryClient]);
 }
 
 /**

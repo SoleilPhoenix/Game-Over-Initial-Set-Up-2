@@ -20,7 +20,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SocialButton } from '@/components/ui/SocialButton';
-import { colors } from '@/constants/colors';
+import { DARK_THEME } from '@/constants/theme';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -31,17 +31,17 @@ WebBrowser.maybeCompleteAuthSession();
 
 const { width, height } = Dimensions.get('window');
 
-// Theme colors matching UI designs
-const THEME = {
-  background: '#15181D',
-  deepNavy: '#2D3748',
-  glass: 'rgba(45, 55, 72, 0.8)',
-  glassBorder: 'rgba(255, 255, 255, 0.1)',
-  primary: '#4A6FA5',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#D1D5DB',
-  textTertiary: '#9CA3AF',
-};
+/**
+ * Validates that a token appears to be a valid JWT format
+ * JWT tokens have 3 base64-encoded parts separated by dots
+ */
+function isValidJWTFormat(token: string): boolean {
+  if (!token || typeof token !== 'string') return false;
+  const parts = token.split('.');
+  if (parts.length !== 3) return false;
+  // Check each part is non-empty and looks like base64
+  return parts.every(part => part.length > 0 && /^[A-Za-z0-9_-]+$/.test(part));
+}
 
 export default function WelcomeScreen() {
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
@@ -99,6 +99,10 @@ export default function WelcomeScreen() {
           const refreshToken = url.searchParams.get('refresh_token');
 
           if (accessToken && refreshToken) {
+            // Validate token format before setting session
+            if (!isValidJWTFormat(accessToken)) {
+              throw new Error('Invalid access token format received');
+            }
             await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
@@ -137,6 +141,10 @@ export default function WelcomeScreen() {
           const refreshToken = url.searchParams.get('refresh_token');
 
           if (accessToken && refreshToken) {
+            // Validate token format before setting session
+            if (!isValidJWTFormat(accessToken)) {
+              throw new Error('Invalid access token format received');
+            }
             await supabase.auth.setSession({
               access_token: accessToken,
               refresh_token: refreshToken,
@@ -169,7 +177,7 @@ export default function WelcomeScreen() {
       >
         {/* Gradient Overlay */}
         <LinearGradient
-          colors={['rgba(0,0,0,0.4)', 'transparent', THEME.background]}
+          colors={['rgba(0,0,0,0.4)', 'transparent', DARK_THEME.background]}
           locations={[0, 0.4, 1]}
           style={styles.gradientOverlay}
         />
@@ -179,7 +187,7 @@ export default function WelcomeScreen() {
           {/* Top App Bar */}
           <View style={styles.topBar}>
             <View style={styles.logoBadge}>
-              <Ionicons name="game-controller" size={20} color={THEME.primary} />
+              <Ionicons name="game-controller" size={20} color={DARK_THEME.primary} />
               <Text style={styles.logoText}>Game-Over.app</Text>
             </View>
           </View>
@@ -275,7 +283,7 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.background,
+    backgroundColor: DARK_THEME.background,
   },
   heroImage: {
     flex: 1,
@@ -307,7 +315,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255, 255, 255, 0.05)',
   },
   logoText: {
-    color: THEME.textPrimary,
+    color: DARK_THEME.textPrimary,
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -323,10 +331,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: THEME.glassBorder,
+    borderColor: DARK_THEME.glassBorder,
   },
   glassCardInner: {
-    backgroundColor: THEME.glass,
+    backgroundColor: DARK_THEME.glass,
     padding: 24,
     gap: 20,
   },
@@ -334,14 +342,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   title: {
-    color: THEME.textPrimary,
+    color: DARK_THEME.textPrimary,
     fontSize: 28,
     fontWeight: '800',
     lineHeight: 34,
     letterSpacing: -0.5,
   },
   subtitle: {
-    color: THEME.textSecondary,
+    color: DARK_THEME.textSecondary,
     fontSize: 16,
     lineHeight: 24,
     fontWeight: '400',
@@ -359,7 +367,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255, 255, 255, 0.1)',
   },
   dividerText: {
-    color: THEME.textTertiary,
+    color: DARK_THEME.textTertiary,
     fontSize: 12,
     fontWeight: '500',
     marginHorizontal: 16,
@@ -369,10 +377,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: THEME.primary,
+    backgroundColor: DARK_THEME.primary,
     paddingVertical: 16,
     borderRadius: 12,
-    shadowColor: THEME.primary,
+    shadowColor: DARK_THEME.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -383,7 +391,7 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   primaryButtonText: {
-    color: THEME.textPrimary,
+    color: DARK_THEME.textPrimary,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -398,18 +406,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   loginLinkText: {
-    color: THEME.primary,
+    color: DARK_THEME.primary,
     fontSize: 14,
     fontWeight: '700',
     textDecorationLine: 'underline',
   },
   terms: {
-    color: THEME.textTertiary,
+    color: DARK_THEME.textTertiary,
     fontSize: 11,
     textAlign: 'center',
     lineHeight: 16,
   },
   termsLink: {
-    color: THEME.primary,
+    color: DARK_THEME.primary,
   },
 });

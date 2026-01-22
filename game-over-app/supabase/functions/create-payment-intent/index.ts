@@ -73,6 +73,12 @@ serve(async (req: Request) => {
       throw new Error('amount_cents must be a positive number');
     }
 
+    // Maximum amount validation (100,000 EUR = 10,000,000 cents)
+    const MAX_AMOUNT_CENTS = 10000000;
+    if (amount_cents > MAX_AMOUNT_CENTS) {
+      throw new Error(`Amount exceeds maximum allowed: ${MAX_AMOUNT_CENTS} cents`);
+    }
+
     // Fetch booking to verify it exists and belongs to user's event
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')

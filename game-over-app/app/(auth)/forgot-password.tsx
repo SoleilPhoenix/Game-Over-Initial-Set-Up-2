@@ -23,21 +23,8 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Input } from '@/components/ui/Input';
+import { DARK_THEME } from '@/constants/theme';
 import { supabase } from '@/lib/supabase/client';
-
-// Theme colors matching UI designs
-const THEME = {
-  background: '#15181D',
-  deepNavy: '#2D3748',
-  glass: 'rgba(45, 55, 72, 0.7)',
-  glassBorder: 'rgba(255, 255, 255, 0.08)',
-  primary: '#4A6FA5',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#D1D5DB',
-  textTertiary: '#9CA3AF',
-  error: '#EF4444',
-  success: '#22C55E',
-};
 
 const forgotPasswordSchema = z.object({
   email: z.string().email('Please enter a valid email'),
@@ -89,7 +76,7 @@ export default function ForgotPasswordScreen() {
 
         {/* Background gradient */}
         <LinearGradient
-          colors={[THEME.deepNavy, THEME.background]}
+          colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
           style={StyleSheet.absoluteFill}
         />
 
@@ -101,10 +88,10 @@ export default function ForgotPasswordScreen() {
           {/* Success Icon */}
           <View style={styles.successIconContainer}>
             <LinearGradient
-              colors={[`${THEME.success}30`, `${THEME.success}10`]}
+              colors={[`${DARK_THEME.success}30`, `${DARK_THEME.success}10`]}
               style={styles.successIconGradient}
             >
-              <Ionicons name="mail" size={48} color={THEME.success} />
+              <Ionicons name="mail" size={48} color={DARK_THEME.success} />
             </LinearGradient>
           </View>
 
@@ -152,7 +139,7 @@ export default function ForgotPasswordScreen() {
 
       {/* Background gradient */}
       <LinearGradient
-        colors={[THEME.deepNavy, THEME.background]}
+        colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
         style={StyleSheet.absoluteFill}
       />
 
@@ -180,7 +167,7 @@ export default function ForgotPasswordScreen() {
               hitSlop={10}
               testID="back-button"
             >
-              <Ionicons name="arrow-back" size={24} color={THEME.textPrimary} />
+              <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
             </Pressable>
           </View>
 
@@ -198,7 +185,7 @@ export default function ForgotPasswordScreen() {
               {/* Error Message */}
               {error && (
                 <View style={styles.errorContainer} testID="error-message">
-                  <Ionicons name="alert-circle" size={18} color={THEME.error} />
+                  <Ionicons name="alert-circle" size={18} color={DARK_THEME.error} />
                   <Text style={styles.errorText}>{error}</Text>
                 </View>
               )}
@@ -212,14 +199,14 @@ export default function ForgotPasswordScreen() {
                     name="email"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.email && styles.inputError]}>
-                        <Ionicons name="mail-outline" size={20} color={THEME.textTertiary} />
+                        <Ionicons name="mail-outline" size={20} color={DARK_THEME.textTertiary} />
                         <View style={styles.inputInner}>
                           <Input
                             value={value}
                             onChangeText={onChange}
                             onBlur={onBlur}
                             placeholder="Enter your email"
-                            placeholderTextColor={THEME.textTertiary}
+                            placeholderTextColor={DARK_THEME.textTertiary}
                             keyboardType="email-address"
                             autoCapitalize="none"
                             autoComplete="email"
@@ -266,7 +253,7 @@ export default function ForgotPasswordScreen() {
             style={styles.loginLink}
             testID="back-to-login-link"
           >
-            <Ionicons name="arrow-back" size={16} color={THEME.primary} />
+            <Ionicons name="arrow-back" size={16} color={DARK_THEME.primary} />
             <Text style={styles.loginLinkText}>Back to Login</Text>
           </Pressable>
         </ScrollView>
@@ -278,7 +265,7 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.background,
+    backgroundColor: DARK_THEME.background,
   },
   decorCircle1: {
     position: 'absolute',
@@ -287,7 +274,7 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: `${THEME.primary}20`,
+    backgroundColor: `${DARK_THEME.primary}20`,
   },
   decorCircle2: {
     position: 'absolute',
@@ -296,7 +283,7 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: `${THEME.primary}10`,
+    backgroundColor: `${DARK_THEME.primary}10`,
   },
   keyboardView: {
     flex: 1,
@@ -324,23 +311,23 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '800',
-    color: THEME.textPrimary,
+    color: DARK_THEME.textPrimary,
     marginBottom: 8,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: THEME.textSecondary,
+    color: DARK_THEME.textSecondary,
     lineHeight: 24,
   },
   glassCard: {
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: THEME.glassBorder,
+    borderColor: DARK_THEME.glassBorder,
   },
   glassCardInner: {
-    backgroundColor: THEME.glass,
+    backgroundColor: DARK_THEME.glass,
     padding: 24,
     gap: 24,
   },
@@ -348,16 +335,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: `${THEME.error}15`,
+    backgroundColor: `${DARK_THEME.error}15`,
     borderRadius: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: `${THEME.error}30`,
+    borderColor: `${DARK_THEME.error}30`,
   },
   errorText: {
     flex: 1,
     fontSize: 14,
-    color: THEME.error,
+    color: DARK_THEME.error,
   },
   form: {
     gap: 20,
@@ -368,7 +355,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: THEME.textSecondary,
+    color: DARK_THEME.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -384,7 +371,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   inputError: {
-    borderColor: THEME.error,
+    borderColor: DARK_THEME.error,
   },
   inputInner: {
     flex: 1,
@@ -392,7 +379,7 @@ const styles = StyleSheet.create({
   darkInput: {
     backgroundColor: 'transparent',
     borderWidth: 0,
-    color: THEME.textPrimary,
+    color: DARK_THEME.textPrimary,
     fontSize: 16,
     paddingVertical: 0,
     paddingHorizontal: 0,
@@ -400,7 +387,7 @@ const styles = StyleSheet.create({
   },
   fieldError: {
     fontSize: 12,
-    color: THEME.error,
+    color: DARK_THEME.error,
     marginTop: 4,
   },
   primaryButton: {
@@ -408,10 +395,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: THEME.primary,
+    backgroundColor: DARK_THEME.primary,
     paddingVertical: 16,
     borderRadius: 12,
-    shadowColor: THEME.primary,
+    shadowColor: DARK_THEME.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -425,7 +412,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   primaryButtonText: {
-    color: THEME.textPrimary,
+    color: DARK_THEME.textPrimary,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -439,7 +426,7 @@ const styles = StyleSheet.create({
   },
   loginLinkText: {
     fontSize: 14,
-    color: THEME.primary,
+    color: DARK_THEME.primary,
     fontWeight: '600',
   },
   // Success state styles
@@ -462,24 +449,24 @@ const styles = StyleSheet.create({
   successTitle: {
     fontSize: 28,
     fontWeight: '800',
-    color: THEME.textPrimary,
+    color: DARK_THEME.textPrimary,
     marginBottom: 12,
     textAlign: 'center',
   },
   successMessage: {
     fontSize: 16,
-    color: THEME.textSecondary,
+    color: DARK_THEME.textSecondary,
     textAlign: 'center',
     marginBottom: 8,
     lineHeight: 24,
   },
   emailText: {
     fontWeight: '600',
-    color: THEME.textPrimary,
+    color: DARK_THEME.textPrimary,
   },
   successHint: {
     fontSize: 14,
-    color: THEME.textTertiary,
+    color: DARK_THEME.textTertiary,
     textAlign: 'center',
     marginBottom: 32,
     lineHeight: 20,
@@ -489,10 +476,10 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: THEME.glassBorder,
+    borderColor: DARK_THEME.glassBorder,
   },
   successButtonCardInner: {
-    backgroundColor: THEME.glass,
+    backgroundColor: DARK_THEME.glass,
     padding: 24,
     gap: 12,
   },
@@ -502,7 +489,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     fontSize: 14,
-    color: THEME.primary,
+    color: DARK_THEME.primary,
     fontWeight: '600',
   },
 });

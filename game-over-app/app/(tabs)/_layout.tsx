@@ -10,17 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-
-// Theme colors matching UI designs
-const THEME = {
-  background: '#15181D',
-  surface: '#1E2329',
-  glass: 'rgba(45, 55, 72, 0.85)',
-  glassBorder: 'rgba(255, 255, 255, 0.08)',
-  primary: '#4A6FA5',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#9CA3AF',
-};
+import { DARK_THEME } from '@/constants/theme';
 
 type IconName = 'calendar' | 'calendar-outline' | 'chatbubbles' | 'chatbubbles-outline' |
   'wallet' | 'wallet-outline' | 'person' | 'person-outline' | 'add';
@@ -41,7 +31,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
       <Ionicons
         name={iconName}
         size={24}
-        color={focused ? THEME.primary : THEME.textSecondary}
+        color={focused ? DARK_THEME.primary : DARK_THEME.textSecondary}
       />
     </View>
   );
@@ -64,7 +54,7 @@ function FABButton() {
       testID="fab-create-event"
     >
       <LinearGradient
-        colors={[THEME.primary, '#3B5984']}
+        colors={[DARK_THEME.primary, '#3B5984']}
         style={styles.fabGradient}
       >
         <Ionicons name="add" size={32} color="#FFFFFF" />
@@ -178,13 +168,13 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: THEME.glassBorder,
+    borderColor: DARK_THEME.glassBorder,
     marginHorizontal: 16,
     marginBottom: Platform.OS === 'android' ? 8 : 0,
   },
   tabBarInner: {
     flexDirection: 'row',
-    backgroundColor: THEME.glass,
+    backgroundColor: DARK_THEME.glass,
     paddingTop: 12,
     paddingBottom: 8,
     paddingHorizontal: 8,
@@ -215,7 +205,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    shadowColor: THEME.primary,
+    shadowColor: DARK_THEME.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -232,6 +222,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: THEME.background,
+    borderColor: DARK_THEME.background,
   },
 });

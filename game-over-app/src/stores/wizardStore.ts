@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { MMKV } from 'react-native-mmkv';
+import { useEffect, useRef } from 'react';
 
 // MMKV storage instance for wizard
 const wizardStorage = new MMKV({ id: 'wizard-storage' });
@@ -377,4 +378,45 @@ export const useWizardAutoSaveStatus = () => {
       isDirty,
     };
   }
+};
+
+/**
+ * Custom hook for managing wizard auto-save lifecycle
+ * Use this hook in your wizard component to ensure proper timer cleanup
+ * This is the recommended way to enable auto-save instead of calling
+ * startAutoSave/stopAutoSave directly
+ */
+export const useWizardAutoSave = (enabled: boolean = true) => {
+  const isDirty = useWizardStore((state) => state.isDirty);
+  const saveDraft = useWizardStore((state) => state.saveDraft);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    if (!enabled) {
+      // Clean up timer if disabled
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+
+    // Start auto-save timer
+    timerRef.current = setInterval(() => {
+      const currentState = useWizardStore.getState();
+      if (currentState.isDirty) {
+        currentState.saveDraft();
+      }
+    }, AUTO_SAVE_INTERVAL);
+
+    // Cleanup on unmount or when disabled
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [enabled]);
+
+  return { isDirty, saveDraft };
 };

@@ -16,23 +16,7 @@ import { useEvents } from '@/hooks/queries/useEvents';
 import { useUser, useAuthStore } from '@/stores/authStore';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
-
-// Theme colors matching UI designs
-const THEME = {
-  background: '#15181D',
-  deepNavy: '#2D3748',
-  surface: '#1E2329',
-  surfaceCard: '#23272F',
-  glass: 'rgba(45, 55, 72, 0.7)',
-  glassBorder: 'rgba(255, 255, 255, 0.08)',
-  primary: '#4A6FA5',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#D1D5DB',
-  textTertiary: '#9CA3AF',
-  success: '#22C55E',
-  error: '#EF4444',
-  info: '#4A6FA5',
-};
+import { DARK_THEME } from '@/constants/theme';
 
 export default function EventsScreen() {
   const router = useRouter();
@@ -92,10 +76,10 @@ export default function EventsScreen() {
             )}
             <XStack justifyContent="space-between" alignItems="flex-start">
               <YStack flex={1} gap={4}>
-                <Text fontSize={18} fontWeight="700" color={THEME.textPrimary}>
+                <Text fontSize={18} fontWeight="700" color={DARK_THEME.textPrimary}>
                   {item.title || `${item.honoree_name}'s Party`}
                 </Text>
-                <Text fontSize={14} color={THEME.textSecondary}>
+                <Text fontSize={14} color={DARK_THEME.textSecondary}>
                   Celebrating {item.honoree_name}
                 </Text>
               </YStack>
@@ -103,14 +87,14 @@ export default function EventsScreen() {
             </XStack>
             <XStack gap={16} marginTop={12}>
               <XStack gap={6} alignItems="center">
-                <Ionicons name="location-outline" size={14} color={THEME.textTertiary} />
-                <Text fontSize={13} color={THEME.textSecondary}>
+                <Ionicons name="location-outline" size={14} color={DARK_THEME.textTertiary} />
+                <Text fontSize={13} color={DARK_THEME.textSecondary}>
                   {item.city?.name || 'TBD'}
                 </Text>
               </XStack>
               <XStack gap={6} alignItems="center">
-                <Ionicons name="calendar-outline" size={14} color={THEME.textTertiary} />
-                <Text fontSize={13} color={THEME.textSecondary}>
+                <Ionicons name="calendar-outline" size={14} color={DARK_THEME.textTertiary} />
+                <Text fontSize={13} color={DARK_THEME.textSecondary}>
                   {item.start_date
                     ? new Date(item.start_date).toLocaleDateString('en-US', {
                         month: 'short',
@@ -130,18 +114,18 @@ export default function EventsScreen() {
     <YStack flex={1} justifyContent="center" alignItems="center" padding={24}>
       <View style={styles.emptyIconContainer}>
         <LinearGradient
-          colors={[`${THEME.primary}30`, `${THEME.primary}10`]}
+          colors={[`${DARK_THEME.primary}30`, `${DARK_THEME.primary}10`]}
           style={styles.emptyIconGradient}
         >
           <Text fontSize={56}>🎊</Text>
         </LinearGradient>
       </View>
-      <Text fontSize={24} fontWeight="800" color={THEME.textPrimary} marginBottom={8}>
+      <Text fontSize={24} fontWeight="800" color={DARK_THEME.textPrimary} marginBottom={8}>
         No Events Yet
       </Text>
       <Text
         fontSize={16}
-        color={THEME.textSecondary}
+        color={DARK_THEME.textSecondary}
         textAlign="center"
         marginBottom={24}
         maxWidth={280}
@@ -177,7 +161,7 @@ export default function EventsScreen() {
 
       {/* Background gradient */}
       <LinearGradient
-        colors={[THEME.deepNavy, THEME.background]}
+        colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
         style={StyleSheet.absoluteFill}
       />
 
@@ -188,10 +172,10 @@ export default function EventsScreen() {
       <BlurView intensity={15} tint="dark" style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerInner}>
           <YStack>
-            <Text fontSize={14} color={THEME.textSecondary}>
+            <Text fontSize={14} color={DARK_THEME.textSecondary}>
               Welcome back,
             </Text>
-            <Text fontSize={20} fontWeight="700" color={THEME.textPrimary}>
+            <Text fontSize={20} fontWeight="700" color={DARK_THEME.textPrimary}>
               {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Guest'}
             </Text>
           </YStack>
@@ -221,8 +205,8 @@ export default function EventsScreen() {
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={handleRefresh}
-              tintColor={THEME.primary}
-              colors={[THEME.primary]}
+              tintColor={DARK_THEME.primary}
+              colors={[DARK_THEME.primary]}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -238,7 +222,7 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: THEME.background,
+    backgroundColor: DARK_THEME.background,
   },
   decorCircle: {
     position: 'absolute',
@@ -247,11 +231,11 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: `${THEME.primary}15`,
+    backgroundColor: `${DARK_THEME.primary}15`,
   },
   header: {
     borderBottomWidth: 1,
-    borderBottomColor: THEME.glassBorder,
+    borderBottomColor: DARK_THEME.glassBorder,
   },
   headerInner: {
     flexDirection: 'row',
@@ -259,16 +243,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingBottom: 16,
-    backgroundColor: THEME.glass,
+    backgroundColor: DARK_THEME.glass,
   },
   createButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: THEME.primary,
+    backgroundColor: DARK_THEME.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: THEME.primary,
+    shadowColor: DARK_THEME.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -283,7 +267,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: THEME.glassBorder,
+    borderColor: DARK_THEME.glassBorder,
   },
   eventCardPressed: {
     transform: [{ scale: 0.98 }],
@@ -294,7 +278,7 @@ const styles = StyleSheet.create({
   },
   cardInner: {
     padding: 16,
-    backgroundColor: THEME.glass,
+    backgroundColor: DARK_THEME.glass,
   },
   emptyIconContainer: {
     marginBottom: 24,
@@ -311,11 +295,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: THEME.primary,
+    backgroundColor: DARK_THEME.primary,
     paddingVertical: 14,
     paddingHorizontal: 24,
     borderRadius: 12,
-    shadowColor: THEME.primary,
+    shadowColor: DARK_THEME.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
