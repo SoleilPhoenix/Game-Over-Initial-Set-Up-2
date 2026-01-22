@@ -1,158 +1,358 @@
 /**
  * Profile Screen
- * User profile and settings
+ * User settings hub with dark glassmorphic theme
  */
 
 import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  SafeAreaView,
-  ScrollView,
-  Pressable,
-} from 'react-native';
-import { Button } from '@/components/ui/Button';
-import { colors } from '@/constants/colors';
-import { spacing, layout, borderRadius } from '@/constants/spacing';
-import { textStyles } from '@/constants/typography';
+import { Alert, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
+import { YStack, XStack, Text, View } from 'tamagui';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useUser, useAuthStore } from '@/stores/authStore';
+import { colors } from '@/constants/colors';
+
+// Dark theme colors matching UI design
+const THEME = {
+  background: '#2D3748',
+  surface: 'rgba(45, 55, 72, 0.7)',
+  border: 'rgba(255, 255, 255, 0.08)',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#9CA3AF',
+  primary: '#4a6fa5',
+};
+
+interface MenuItemProps {
+  icon: string;
+  iconColor: string;
+  iconBgColor: string;
+  label: string;
+  value?: string;
+  showBadge?: boolean;
+  onPress: () => void;
+  testID?: string;
+}
+
+function MenuItem({
+  icon,
+  iconColor,
+  iconBgColor,
+  label,
+  value,
+  showBadge,
+  onPress,
+  testID,
+}: MenuItemProps) {
+  return (
+    <Pressable
+      style={styles.menuItem}
+      onPress={onPress}
+      testID={testID}
+      accessible={true}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}${value ? `, current value: ${value}` : ''}${showBadge ? ', has notification' : ''}`}
+      accessibilityHint={`Opens ${label} settings`}
+    >
+      <XStack alignItems="center" gap="$3">
+        <View
+          width={32}
+          height={32}
+          borderRadius={16}
+          backgroundColor={iconBgColor}
+          alignItems="center"
+          justifyContent="center"
+        >
+          <Ionicons name={icon as any} size={18} color={iconColor} />
+        </View>
+        <Text color={THEME.textPrimary} fontSize={14} fontWeight="500">
+          {label}
+        </Text>
+      </XStack>
+      <XStack alignItems="center" gap="$2">
+        {showBadge && (
+          <View width={8} height={8} borderRadius={4} backgroundColor="#EF4444" />
+        )}
+        {value && (
+          <Text color={THEME.textSecondary} fontSize={12}>
+            {value}
+          </Text>
+        )}
+        <Ionicons name="chevron-forward" size={20} color="#6B7280" />
+      </XStack>
+    </Pressable>
+  );
+}
+
+interface MenuSectionProps {
+  title: string;
+  children: React.ReactNode;
+}
+
+function MenuSection({ title, children }: MenuSectionProps) {
+  return (
+    <YStack marginBottom="$5">
+      <Text
+        fontSize={11}
+        fontWeight="600"
+        color={THEME.textSecondary}
+        textTransform="uppercase"
+        letterSpacing={1}
+        marginBottom="$3"
+        marginLeft="$1"
+      >
+        {title}
+      </Text>
+      <View style={styles.glassCard}>
+        {children}
+      </View>
+    </YStack>
+  );
+}
 
 export default function ProfileScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const user = useUser();
   const signOut = useAuthStore((state) => state.signOut);
 
-  const menuItems = [
-    { id: 'notifications', label: 'Notifications', icon: '🔔' },
-    { id: 'payment', label: 'Payment Methods', icon: '💳' },
-    { id: 'help', label: 'Help & Support', icon: '❓' },
-    { id: 'about', label: 'About', icon: 'ℹ️' },
-  ];
+  const userName = user?.user_metadata?.full_name || 'User';
+  const userEmail = user?.email || '';
+  const userInitials = userName
+    .split(' ')
+    .map((n: string) => n[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
+
+  const handleLogout = () => {
+    Alert.alert(
+      'Log Out',
+      'Are you sure you want to log out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Log Out',
+          style: 'destructive',
+          onPress: signOut,
+        },
+      ]
+    );
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Profile</Text>
-        </View>
+    <View flex={1} backgroundColor={THEME.background}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          paddingBottom: insets.bottom + 100,
+          paddingTop: insets.top + 16,
+        }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header Title */}
+        <Text
+          fontSize={24}
+          fontWeight="700"
+          color={THEME.textPrimary}
+          textAlign="center"
+          marginBottom="$6"
+        >
+          Settings
+        </Text>
 
         {/* Profile Card */}
-        <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user?.user_metadata?.full_name?.[0] ||
-                user?.email?.[0]?.toUpperCase() ||
-                '?'}
-            </Text>
-          </View>
-          <Text style={styles.userName}>
-            {user?.user_metadata?.full_name || 'User'}
+        <YStack alignItems="center" marginBottom="$8">
+          <Pressable
+            onPress={() => router.push('/profile/edit')}
+            testID="profile-avatar-button"
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel={`Profile picture for ${userName}. Tap to edit profile`}
+          >
+            <View style={styles.avatarContainer}>
+              <LinearGradient
+                colors={[THEME.primary, '#60A5FA']}
+                style={styles.avatarGradient}
+              >
+                <View style={styles.avatarInner}>
+                  <Text fontSize={24} fontWeight="700" color={THEME.textPrimary}>
+                    {userInitials}
+                  </Text>
+                </View>
+              </LinearGradient>
+              <View style={styles.editBadge}>
+                <Ionicons name="pencil" size={12} color={THEME.primary} />
+              </View>
+            </View>
+          </Pressable>
+          <Text
+            fontSize={20}
+            fontWeight="700"
+            color={THEME.textPrimary}
+            marginTop="$4"
+          >
+            {userName}
           </Text>
-          <Text style={styles.userEmail}>{user?.email}</Text>
-        </View>
+          <Text fontSize={14} color={THEME.textSecondary}>
+            {userEmail}
+          </Text>
+        </YStack>
 
-        {/* Menu */}
-        <View style={styles.menu}>
-          {menuItems.map((item) => (
-            <Pressable key={item.id} style={styles.menuItem}>
-              <Text style={styles.menuIcon}>{item.icon}</Text>
-              <Text style={styles.menuLabel}>{item.label}</Text>
-              <Text style={styles.menuArrow}>›</Text>
-            </Pressable>
-          ))}
-        </View>
+        <YStack paddingHorizontal="$4">
+          {/* Notifications Section */}
+          <MenuSection title="Notifications">
+            <MenuItem
+              icon="notifications"
+              iconColor="#60A5FA"
+              iconBgColor="rgba(96, 165, 250, 0.2)"
+              label="Notification Preferences"
+              showBadge
+              onPress={() => router.push('/profile/notifications')}
+              testID="menu-notifications"
+            />
+          </MenuSection>
 
-        {/* Sign Out */}
-        <View style={styles.signOutContainer}>
-          <Button variant="secondary" fullWidth onPress={signOut}>
-            Sign Out
-          </Button>
-        </View>
+          {/* Account Section */}
+          <MenuSection title="Account">
+            <MenuItem
+              icon="person"
+              iconColor="#A78BFA"
+              iconBgColor="rgba(167, 139, 250, 0.2)"
+              label="Edit Profile"
+              onPress={() => router.push('/profile/edit')}
+              testID="menu-edit-profile"
+            />
+            <View style={styles.separator} />
+            <MenuItem
+              icon="lock-closed"
+              iconColor="#34D399"
+              iconBgColor="rgba(52, 211, 153, 0.2)"
+              label="Password & Security"
+              onPress={() => router.push('/profile/security')}
+              testID="menu-security"
+            />
+            <View style={styles.separator} />
+            <MenuItem
+              icon="language"
+              iconColor="#FB923C"
+              iconBgColor="rgba(251, 146, 60, 0.2)"
+              label="Language"
+              value="English (US)"
+              onPress={() => {/* Future: Language picker */}}
+              testID="menu-language"
+            />
+          </MenuSection>
 
-        {/* Version */}
-        <Text style={styles.version}>Version 1.0.0</Text>
+          {/* Wellness & Support Section */}
+          <MenuSection title="Wellness & Support">
+            <MenuItem
+              icon="heart"
+              iconColor="#F472B6"
+              iconBgColor="rgba(244, 114, 182, 0.2)"
+              label="Relationship Health Center"
+              onPress={() => Alert.alert('Coming Soon', 'This feature will be available in a future update.')}
+              testID="menu-wellness"
+            />
+            <View style={styles.separator} />
+            <MenuItem
+              icon="help-circle"
+              iconColor="#9CA3AF"
+              iconBgColor="rgba(156, 163, 175, 0.2)"
+              label="Support & FAQ"
+              onPress={() => {/* Future: Support screen */}}
+              testID="menu-support"
+            />
+          </MenuSection>
+
+          {/* Logout Button */}
+          <Pressable
+            style={styles.logoutButton}
+            onPress={handleLogout}
+            testID="logout-button"
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Log out of your account"
+          >
+            <Ionicons name="log-out-outline" size={18} color="#F87171" />
+            <Text color="#F87171" fontSize={14} fontWeight="600">
+              Log Out
+            </Text>
+          </Pressable>
+
+          {/* Version */}
+          <Text
+            fontSize={10}
+            color="#4B5563"
+            textAlign="center"
+            marginTop="$6"
+          >
+            Version 1.0.0 (Build 1)
+          </Text>
+        </YStack>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.light.background,
-  },
-  header: {
-    paddingHorizontal: layout.screenPaddingHorizontal,
-    paddingVertical: spacing.lg,
-    backgroundColor: colors.light.surface,
-  },
-  title: {
-    ...textStyles.h2,
-    color: colors.light.textPrimary,
-  },
-  profileCard: {
-    alignItems: 'center',
-    paddingVertical: spacing.xl,
-    backgroundColor: colors.light.surface,
-    marginBottom: spacing.md,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  avatarText: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  userName: {
-    ...textStyles.h3,
-    color: colors.light.textPrimary,
-    marginBottom: spacing.xxs,
-  },
-  userEmail: {
-    ...textStyles.body,
-    color: colors.light.textSecondary,
-  },
-  menu: {
-    backgroundColor: colors.light.surface,
-    marginBottom: spacing.md,
+  glassCard: {
+    backgroundColor: THEME.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    overflow: 'hidden',
   },
   menuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: layout.screenPaddingHorizontal,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.light.border,
+    justifyContent: 'space-between',
+    padding: 16,
   },
-  menuIcon: {
-    fontSize: 20,
-    marginRight: spacing.md,
+  separator: {
+    height: 1,
+    backgroundColor: THEME.border,
+    marginLeft: 56,
   },
-  menuLabel: {
-    ...textStyles.body,
-    color: colors.light.textPrimary,
+  avatarContainer: {
+    position: 'relative',
+  },
+  avatarGradient: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    padding: 3,
+  },
+  avatarInner: {
     flex: 1,
+    borderRadius: 45,
+    backgroundColor: '#374151',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  menuArrow: {
-    fontSize: 20,
-    color: colors.light.textTertiary,
+  editBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: THEME.background,
+    borderWidth: 1,
+    borderColor: THEME.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  signOutContainer: {
-    paddingHorizontal: layout.screenPaddingHorizontal,
-    marginTop: spacing.lg,
-  },
-  version: {
-    ...textStyles.caption,
-    color: colors.light.textTertiary,
-    textAlign: 'center',
-    marginVertical: spacing.xl,
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+    marginTop: 8,
   },
 });

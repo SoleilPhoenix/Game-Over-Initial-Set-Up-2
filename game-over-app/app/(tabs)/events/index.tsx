@@ -1,20 +1,38 @@
 /**
  * Events Screen
  * Main dashboard showing user's events with pull-to-refresh
+ * Dark glassmorphic design matching UI specifications
  */
 
 import React, { useCallback, useState } from 'react';
-import { FlatList, RefreshControl, Pressable } from 'react-native';
+import { FlatList, RefreshControl, Pressable, StatusBar, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Image } from 'tamagui';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useUser, useAuthStore } from '@/stores/authStore';
-import { Button } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
+
+// Theme colors matching UI designs
+const THEME = {
+  background: '#15181D',
+  deepNavy: '#2D3748',
+  surface: '#1E2329',
+  surfaceCard: '#23272F',
+  glass: 'rgba(45, 55, 72, 0.7)',
+  glassBorder: 'rgba(255, 255, 255, 0.08)',
+  primary: '#4A6FA5',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#D1D5DB',
+  textTertiary: '#9CA3AF',
+  success: '#22C55E',
+  error: '#EF4444',
+  info: '#4A6FA5',
+};
 
 export default function EventsScreen() {
   const router = useRouter();
@@ -53,87 +71,100 @@ export default function EventsScreen() {
   const renderEventCard = ({ item }: { item: any }) => {
     const status = getStatusConfig(item.status);
     return (
-      <Card
-        marginBottom="$3"
+      <Pressable
         onPress={() => handleEventPress(item.id)}
+        style={({ pressed }) => [
+          styles.eventCard,
+          pressed && styles.eventCardPressed,
+        ]}
         testID={`event-card-${item.id}`}
       >
-        {item.hero_image_url && (
-          <Image
-            source={{ uri: item.hero_image_url }}
-            width="100%"
-            height={160}
-            borderRadius="$md"
-            marginBottom="$3"
-          />
-        )}
-        <XStack justifyContent="space-between" alignItems="flex-start">
-          <YStack flex={1} gap="$1">
-            <Text fontSize="$5" fontWeight="700" color="$textPrimary">
-              {item.title || `${item.honoree_name}'s Party`}
-            </Text>
-            <Text fontSize="$2" color="$textSecondary">
-              Celebrating {item.honoree_name}
-            </Text>
-          </YStack>
-          <Badge label={status.label} variant={status.variant} />
-        </XStack>
-        <XStack gap="$4" marginTop="$3">
-          <XStack gap="$1" alignItems="center">
-            <Ionicons name="location-outline" size={14} color="#64748B" />
-            <Text fontSize="$2" color="$textSecondary">
-              {item.city?.name || 'TBD'}
-            </Text>
-          </XStack>
-          <XStack gap="$1" alignItems="center">
-            <Ionicons name="calendar-outline" size={14} color="#64748B" />
-            <Text fontSize="$2" color="$textSecondary">
-              {item.start_date
-                ? new Date(item.start_date).toLocaleDateString('en-US', {
-                    month: 'short',
-                    day: 'numeric',
-                  })
-                : 'TBD'}
-            </Text>
-          </XStack>
-        </XStack>
-      </Card>
+        <BlurView intensity={10} tint="dark" style={styles.cardBlur}>
+          <View style={styles.cardInner}>
+            {item.hero_image_url && (
+              <Image
+                source={{ uri: item.hero_image_url }}
+                width="100%"
+                height={140}
+                borderRadius={12}
+                marginBottom={12}
+              />
+            )}
+            <XStack justifyContent="space-between" alignItems="flex-start">
+              <YStack flex={1} gap={4}>
+                <Text fontSize={18} fontWeight="700" color={THEME.textPrimary}>
+                  {item.title || `${item.honoree_name}'s Party`}
+                </Text>
+                <Text fontSize={14} color={THEME.textSecondary}>
+                  Celebrating {item.honoree_name}
+                </Text>
+              </YStack>
+              <Badge label={status.label} variant={status.variant} />
+            </XStack>
+            <XStack gap={16} marginTop={12}>
+              <XStack gap={6} alignItems="center">
+                <Ionicons name="location-outline" size={14} color={THEME.textTertiary} />
+                <Text fontSize={13} color={THEME.textSecondary}>
+                  {item.city?.name || 'TBD'}
+                </Text>
+              </XStack>
+              <XStack gap={6} alignItems="center">
+                <Ionicons name="calendar-outline" size={14} color={THEME.textTertiary} />
+                <Text fontSize={13} color={THEME.textSecondary}>
+                  {item.start_date
+                    ? new Date(item.start_date).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                      })
+                    : 'TBD'}
+                </Text>
+              </XStack>
+            </XStack>
+          </View>
+        </BlurView>
+      </Pressable>
     );
   };
 
   const renderEmptyState = () => (
-    <YStack flex={1} justifyContent="center" alignItems="center" padding="$6">
-      <YStack
-        width={120}
-        height={120}
-        borderRadius="$full"
-        backgroundColor="rgba(37, 140, 244, 0.1)"
-        justifyContent="center"
-        alignItems="center"
-        marginBottom="$4"
-      >
-        <Text fontSize={56}>🎊</Text>
-      </YStack>
-      <Text fontSize="$6" fontWeight="700" color="$textPrimary" marginBottom="$2">
+    <YStack flex={1} justifyContent="center" alignItems="center" padding={24}>
+      <View style={styles.emptyIconContainer}>
+        <LinearGradient
+          colors={[`${THEME.primary}30`, `${THEME.primary}10`]}
+          style={styles.emptyIconGradient}
+        >
+          <Text fontSize={56}>🎊</Text>
+        </LinearGradient>
+      </View>
+      <Text fontSize={24} fontWeight="800" color={THEME.textPrimary} marginBottom={8}>
         No Events Yet
       </Text>
       <Text
-        fontSize="$3"
-        color="$textSecondary"
+        fontSize={16}
+        color={THEME.textSecondary}
         textAlign="center"
-        marginBottom="$6"
+        marginBottom={24}
         maxWidth={280}
+        lineHeight={24}
       >
         Create your first event and start planning an unforgettable party!
       </Text>
-      <Button onPress={handleCreateEvent} testID="create-first-event-button">
-        Create Event
-      </Button>
+      <Pressable
+        style={({ pressed }) => [
+          styles.primaryButton,
+          pressed && styles.primaryButtonPressed,
+        ]}
+        onPress={handleCreateEvent}
+        testID="create-first-event-button"
+      >
+        <Ionicons name="add" size={20} color="#FFFFFF" />
+        <Text style={styles.primaryButtonText}>Create Event</Text>
+      </Pressable>
     </YStack>
   );
 
   const renderLoadingState = () => (
-    <YStack padding="$4" gap="$3">
+    <YStack padding={16} gap={12}>
       {[1, 2, 3].map((i) => (
         <SkeletonEventCard key={i} testID={`skeleton-event-${i}`} />
       ))}
@@ -141,36 +172,41 @@ export default function EventsScreen() {
   );
 
   return (
-    <YStack flex={1} backgroundColor="$background">
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+      {/* Background gradient */}
+      <LinearGradient
+        colors={[THEME.deepNavy, THEME.background]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Decorative blur circle */}
+      <View style={styles.decorCircle} />
+
       {/* Header */}
-      <XStack
-        paddingTop={insets.top + 8}
-        paddingHorizontal="$4"
-        paddingBottom="$3"
-        alignItems="center"
-        justifyContent="space-between"
-        backgroundColor="$surface"
-        borderBottomWidth={1}
-        borderBottomColor="$borderColor"
-      >
-        <YStack>
-          <Text fontSize="$2" color="$textSecondary">
-            Welcome back,
-          </Text>
-          <Text fontSize="$5" fontWeight="700" color="$textPrimary">
-            {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Guest'}
-          </Text>
-        </YStack>
-        <XStack gap="$2">
+      <BlurView intensity={15} tint="dark" style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.headerInner}>
+          <YStack>
+            <Text fontSize={14} color={THEME.textSecondary}>
+              Welcome back,
+            </Text>
+            <Text fontSize={20} fontWeight="700" color={THEME.textPrimary}>
+              {user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Guest'}
+            </Text>
+          </YStack>
           <Pressable
             onPress={handleCreateEvent}
-            style={{ padding: 8 }}
+            style={({ pressed }) => [
+              styles.createButton,
+              pressed && styles.createButtonPressed,
+            ]}
             testID="create-event-button"
           >
-            <Ionicons name="add-circle" size={28} color="#258CF4" />
+            <Ionicons name="add" size={24} color="#FFFFFF" />
           </Pressable>
-        </XStack>
-      </XStack>
+        </View>
+      </BlurView>
 
       {/* Content */}
       {isLoading && !events ? (
@@ -180,13 +216,13 @@ export default function EventsScreen() {
           data={events}
           renderItem={renderEventCard}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 16 }}
+          contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 100 }}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
               onRefresh={handleRefresh}
-              tintColor="#258CF4"
-              colors={['#258CF4']}
+              tintColor={THEME.primary}
+              colors={[THEME.primary]}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -195,6 +231,103 @@ export default function EventsScreen() {
       ) : (
         renderEmptyState()
       )}
-    </YStack>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: THEME.background,
+  },
+  decorCircle: {
+    position: 'absolute',
+    top: -100,
+    right: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: `${THEME.primary}15`,
+  },
+  header: {
+    borderBottomWidth: 1,
+    borderBottomColor: THEME.glassBorder,
+  },
+  headerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    backgroundColor: THEME.glass,
+  },
+  createButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: THEME.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: THEME.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  createButtonPressed: {
+    transform: [{ scale: 0.95 }],
+    opacity: 0.9,
+  },
+  eventCard: {
+    marginBottom: 12,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: THEME.glassBorder,
+  },
+  eventCardPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
+  cardBlur: {
+    overflow: 'hidden',
+  },
+  cardInner: {
+    padding: 16,
+    backgroundColor: THEME.glass,
+  },
+  emptyIconContainer: {
+    marginBottom: 24,
+  },
+  emptyIconGradient: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: THEME.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    shadowColor: THEME.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  primaryButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+});

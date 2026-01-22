@@ -1,26 +1,128 @@
 /**
  * Tabs Layout
- * Bottom tab navigation for main app screens
+ * Bottom tab navigation with central FAB for main app screens
+ * Dark glassmorphic design matching UI specifications
  */
 
-import { Tabs } from 'expo-router';
-import { View, Text, StyleSheet } from 'react-native';
-import { colors } from '@/constants/colors';
-import { layout } from '@/constants/spacing';
+import { Tabs, useRouter } from 'expo-router';
+import { View, StyleSheet, Pressable, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+
+// Theme colors matching UI designs
+const THEME = {
+  background: '#15181D',
+  surface: '#1E2329',
+  glass: 'rgba(45, 55, 72, 0.85)',
+  glassBorder: 'rgba(255, 255, 255, 0.08)',
+  primary: '#4A6FA5',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#9CA3AF',
+};
+
+type IconName = 'calendar' | 'calendar-outline' | 'chatbubbles' | 'chatbubbles-outline' |
+  'wallet' | 'wallet-outline' | 'person' | 'person-outline' | 'add';
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    events: '🎉',
-    chat: '💬',
-    budget: '💰',
-    profile: '👤',
+  const iconMap: Record<string, { active: IconName; inactive: IconName }> = {
+    events: { active: 'calendar', inactive: 'calendar-outline' },
+    chat: { active: 'chatbubbles', inactive: 'chatbubbles-outline' },
+    budget: { active: 'wallet', inactive: 'wallet-outline' },
+    profile: { active: 'person', inactive: 'person-outline' },
   };
+
+  const icons = iconMap[name] || { active: 'calendar', inactive: 'calendar-outline' };
+  const iconName = focused ? icons.active : icons.inactive;
 
   return (
     <View style={styles.iconContainer}>
-      <Text style={[styles.icon, focused && styles.iconFocused]}>
-        {icons[name] || '📱'}
-      </Text>
+      <Ionicons
+        name={iconName}
+        size={24}
+        color={focused ? THEME.primary : THEME.textSecondary}
+      />
+    </View>
+  );
+}
+
+function FABButton() {
+  const router = useRouter();
+
+  const handlePress = () => {
+    router.push('/create-event');
+  };
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      style={({ pressed }) => [
+        styles.fabButton,
+        pressed && styles.fabButtonPressed,
+      ]}
+      testID="fab-create-event"
+    >
+      <LinearGradient
+        colors={[THEME.primary, '#3B5984']}
+        style={styles.fabGradient}
+      >
+        <Ionicons name="add" size={32} color="#FFFFFF" />
+      </LinearGradient>
+    </Pressable>
+  );
+}
+
+function CustomTabBar({ state, descriptors, navigation }: any) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={[styles.tabBarContainer, { paddingBottom: insets.bottom }]}>
+      <BlurView intensity={25} tint="dark" style={styles.tabBarBlur}>
+        <View style={styles.tabBarInner}>
+          {state.routes.map((route: any, index: number) => {
+            const { options } = descriptors[route.key];
+            const label = options.title || route.name;
+            const isFocused = state.index === index;
+
+            // Add space in the middle for FAB
+            const isLeftSide = index < 2;
+            const tabStyle = [
+              styles.tabItem,
+              isLeftSide ? styles.tabItemLeft : styles.tabItemRight,
+            ];
+
+            const onPress = () => {
+              const event = navigation.emit({
+                type: 'tabPress',
+                target: route.key,
+                canPreventDefault: true,
+              });
+
+              if (!isFocused && !event.defaultPrevented) {
+                navigation.navigate(route.name);
+              }
+            };
+
+            return (
+              <Pressable
+                key={route.key}
+                accessibilityRole="button"
+                accessibilityState={isFocused ? { selected: true } : {}}
+                accessibilityLabel={options.tabBarAccessibilityLabel}
+                testID={options.tabBarTestID || `tab-${route.name}`}
+                onPress={onPress}
+                style={tabStyle}
+              >
+                <TabIcon name={route.name} focused={isFocused} />
+              </Pressable>
+            );
+          })}
+        </View>
+      </BlurView>
+
+      {/* Central FAB */}
+      <FABButton />
     </View>
   );
 }
@@ -28,40 +130,33 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
 export default function TabsLayout() {
   return (
     <Tabs
+      tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.light.textTertiary,
-        tabBarLabelStyle: styles.tabBarLabel,
       }}
     >
       <Tabs.Screen
         name="events"
         options={{
           title: 'Events',
-          tabBarIcon: ({ focused }) => <TabIcon name="events" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="chat"
         options={{
           title: 'Chat',
-          tabBarIcon: ({ focused }) => <TabIcon name="chat" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="budget"
         options={{
           title: 'Budget',
-          tabBarIcon: ({ focused }) => <TabIcon name="budget" focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ focused }) => <TabIcon name="profile" focused={focused} />,
         }}
       />
     </Tabs>
@@ -69,27 +164,74 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabBar: {
-    height: layout.bottomNavHeight,
-    backgroundColor: colors.light.surface,
-    borderTopColor: colors.light.border,
-    borderTopWidth: 1,
-    paddingBottom: 20,
-    paddingTop: 8,
+  tabBarContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'transparent',
   },
-  tabBarLabel: {
-    fontSize: 12,
-    fontWeight: '500',
+  tabBarBlur: {
+    overflow: 'hidden',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: THEME.glassBorder,
+    marginHorizontal: 16,
+    marginBottom: Platform.OS === 'android' ? 8 : 0,
+  },
+  tabBarInner: {
+    flexDirection: 'row',
+    backgroundColor: THEME.glass,
+    paddingTop: 12,
+    paddingBottom: 8,
+    paddingHorizontal: 8,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+  },
+  tabItemLeft: {
+    marginRight: 32, // Space for FAB
+  },
+  tabItemRight: {
+    marginLeft: 32, // Space for FAB
   },
   iconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    width: 48,
+    height: 32,
   },
-  icon: {
-    fontSize: 24,
-    opacity: 0.5,
+  fabButton: {
+    position: 'absolute',
+    top: -24,
+    left: '50%',
+    marginLeft: -28,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    shadowColor: THEME.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  iconFocused: {
-    opacity: 1,
+  fabButtonPressed: {
+    transform: [{ scale: 0.95 }],
+    opacity: 0.9,
+  },
+  fabGradient: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: THEME.background,
   },
 });

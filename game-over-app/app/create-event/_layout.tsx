@@ -5,6 +5,7 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { Alert } from 'react-native';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -86,9 +87,28 @@ export default function CreateEventLayout() {
   const progress = (currentStep / STEPS.length) * 100;
 
   const handleClose = () => {
-    // TODO: Show confirmation dialog if dirty
-    clearDraft();
-    router.back();
+    const isDirty = useWizardStore.getState().isDirty;
+
+    if (isDirty) {
+      Alert.alert(
+        'Discard Draft?',
+        'You have unsaved changes. Are you sure you want to discard them?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Discard',
+            style: 'destructive',
+            onPress: () => {
+              clearDraft();
+              router.back();
+            },
+          },
+        ]
+      );
+    } else {
+      clearDraft();
+      router.back();
+    }
   };
 
   return (

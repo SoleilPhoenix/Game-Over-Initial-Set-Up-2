@@ -1,19 +1,15 @@
 /**
  * EventCard Component
  * Card displaying event with image, title, date, status, and progress
+ * Memoized for performance in lists
  */
 
-import React from 'react';
-import { styled, YStack, XStack, Text, Image } from 'tamagui';
+import React, { memo } from 'react';
+import { styled, YStack, XStack, Text } from 'tamagui';
 import { Badge } from '../ui/Badge';
 import { ProgressBar } from '../ui/ProgressBar';
 import { Card } from '../ui/Card';
-
-const EventImage = styled(Image, {
-  width: '100%',
-  height: 140,
-  borderRadius: '$md',
-});
+import { OptimizedImage } from '../ui/OptimizedImage';
 
 const RoleBadge = styled(XStack, {
   position: 'absolute',
@@ -55,7 +51,7 @@ const paymentConfig = {
   refunded: { label: 'Refunded', variant: 'info' as const },
 };
 
-export function EventCard({
+export const EventCard = memo(function EventCard({
   title,
   honoreeName,
   cityName,
@@ -78,9 +74,10 @@ export function EventCard({
   return (
     <Card onPress={onPress} testID={testID} padding="$3" gap="$3">
       <YStack position="relative">
-        <EventImage
+        <OptimizedImage
           source={{ uri: heroImageUrl || 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=400' }}
-          resizeMode="cover"
+          height={140}
+          borderRadius={8}
         />
         <RoleBadge>
           <Text color="white" fontSize={10} fontWeight="700" textTransform="uppercase">
@@ -114,6 +111,6 @@ export function EventCard({
       </YStack>
     </Card>
   );
-}
+});
 
 export default EventCard;

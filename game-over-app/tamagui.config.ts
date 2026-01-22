@@ -83,38 +83,45 @@ const bodyFont = createInterFont({
   },
 });
 
-// Custom tokens matching the app's design system
+// Custom tokens matching the app's design system (updated to match UI designs)
 const customTokens = createTokens({
   ...defaultTokens,
   color: {
     ...defaultTokens.color,
-    // Primary colors
-    primary: '#258CF4',
-    primaryLight: '#5AA5F7',
-    primaryDark: '#1A6BC4',
+    // Primary colors - Updated to match UI designs
+    primary: '#4A6FA5',
+    primaryLight: '#5A7EB0',
+    primaryDark: '#3B5984',
 
     // Semantic colors
-    success: '#47B881',
-    warning: '#FF8551',
-    error: '#E12D39',
+    success: '#22C55E',
+    warning: '#EAB308',
+    error: '#EF4444',
     info: '#7B68EE',
 
     // Light mode
-    lightBackground: '#F5F7F8',
+    lightBackground: '#F6F7F7',
     lightSurface: '#FFFFFF',
     lightTextPrimary: '#1A202C',
     lightTextSecondary: '#64748B',
     lightTextTertiary: '#94A3B8',
     lightBorder: '#E2E8F0',
 
-    // Dark mode
-    darkBackground: '#101922',
-    darkSurface: '#1B2127',
+    // Dark mode - Updated to match UI designs exactly
+    darkBackground: '#15181D',
+    darkSurface: '#1E2329',
+    darkSurfaceCard: '#23272F',
     darkDeepNavy: '#2D3748',
     darkTextPrimary: '#FFFFFF',
-    darkTextSecondary: '#9CABBA',
-    darkTextTertiary: '#6B7785',
-    darkBorder: '#283039',
+    darkTextSecondary: '#D1D5DB',
+    darkTextTertiary: '#9CA3AF',
+    darkBorder: 'rgba(255, 255, 255, 0.08)',
+    darkBorderLight: 'rgba(255, 255, 255, 0.05)',
+
+    // Glassmorphic colors
+    glassBackground: 'rgba(45, 55, 72, 0.7)',
+    glassBackgroundLight: 'rgba(45, 55, 72, 0.6)',
+    glassBorder: 'rgba(255, 255, 255, 0.08)',
 
     // Common
     white: '#FFFFFF',
@@ -255,11 +262,11 @@ const lightTheme = {
   shadowColorStrong: 'rgba(0, 0, 0, 0.2)',
 };
 
-// Dark theme
+// Dark theme - Updated to match UI designs exactly
 const darkTheme = {
   background: customTokens.color.darkBackground,
   backgroundHover: customTokens.color.darkSurface,
-  backgroundPress: customTokens.color.darkBorder,
+  backgroundPress: customTokens.color.darkDeepNavy,
   backgroundFocus: customTokens.color.darkSurface,
   backgroundStrong: customTokens.color.darkDeepNavy,
   backgroundTransparent: 'transparent',
@@ -283,11 +290,17 @@ const darkTheme = {
   primaryPress: customTokens.color.primaryDark,
 
   surface: customTokens.color.darkSurface,
+  surfaceCard: customTokens.color.darkSurfaceCard,
   surfaceHover: customTokens.color.darkDeepNavy,
 
   textPrimary: customTokens.color.darkTextPrimary,
   textSecondary: customTokens.color.darkTextSecondary,
   textMuted: customTokens.color.darkTextTertiary,
+
+  // Glassmorphic
+  glass: customTokens.color.glassBackground,
+  glassLight: customTokens.color.glassBackgroundLight,
+  glassBorder: customTokens.color.glassBorder,
 
   success: customTokens.color.success,
   warning: customTokens.color.warning,

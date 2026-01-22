@@ -1,6 +1,6 @@
 /**
  * Sign Up Screen
- * Email/password registration with validation
+ * Dark glassmorphic design matching UI specifications
  */
 
 import React from 'react';
@@ -8,7 +8,6 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   KeyboardAvoidingView,
   Platform,
@@ -19,13 +18,27 @@ import { Link, router } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Button } from '@/components/ui/Button';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Input } from '@/components/ui/Input';
-import { colors } from '@/constants/colors';
-import { spacing, layout } from '@/constants/spacing';
-import { textStyles } from '@/constants/typography';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
+
+// Theme colors matching UI designs
+const THEME = {
+  background: '#15181D',
+  deepNavy: '#2D3748',
+  glass: 'rgba(45, 55, 72, 0.7)',
+  glassBorder: 'rgba(255, 255, 255, 0.08)',
+  primary: '#4A6FA5',
+  textPrimary: '#FFFFFF',
+  textSecondary: '#D1D5DB',
+  textTertiary: '#9CA3AF',
+  error: '#EF4444',
+  success: '#22C55E',
+};
 
 const signupSchema = z
   .object({
@@ -48,6 +61,7 @@ type SignupFormData = z.infer<typeof signupSchema>;
 
 export default function SignupScreen() {
   const [isLoading, setIsLoading] = React.useState(false);
+  const insets = useSafeAreaInsets();
   const { setError, error, clearError } = useAuthStore();
 
   const {
@@ -80,8 +94,6 @@ export default function SignupScreen() {
       });
 
       if (error) throw error;
-
-      // Navigation will be handled by auth state change listener
     } catch (error: any) {
       setError(error.message || 'Failed to create account');
     } finally {
@@ -90,229 +102,415 @@ export default function SignupScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} testID="signup-screen">
-      <StatusBar barStyle="dark-content" />
+    <View style={styles.container} testID="signup-screen">
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+      {/* Background gradient */}
+      <LinearGradient
+        colors={[THEME.deepNavy, THEME.background]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Decorative blur circles */}
+      <View style={styles.decorCircle1} />
+      <View style={styles.decorCircle2} />
+
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* Back Button */}
-          <Pressable
-            onPress={() => router.back()}
-            style={styles.backButton}
-            hitSlop={10}
-            testID="back-button"
-          >
-            <Text style={styles.backButtonText}>← Back</Text>
-          </Pressable>
-
-          {/* Header */}
+          {/* Header with back button */}
           <View style={styles.header}>
+            <Pressable
+              onPress={() => router.back()}
+              style={styles.backButton}
+              hitSlop={10}
+              testID="back-button"
+            >
+              <Ionicons name="arrow-back" size={24} color={THEME.textPrimary} />
+            </Pressable>
+          </View>
+
+          {/* Title Section */}
+          <View style={styles.titleSection}>
             <Text style={styles.title}>Create Account</Text>
             <Text style={styles.subtitle}>
               Join Game Over and start planning unforgettable parties
             </Text>
           </View>
 
-          {/* Error Message */}
-          {error && (
-            <View style={styles.errorContainer} testID="error-message">
-              <Text style={styles.errorText}>{error}</Text>
+          {/* Glassmorphic Form Card */}
+          <BlurView intensity={15} tint="dark" style={styles.glassCard}>
+            <View style={styles.glassCardInner}>
+              {/* Error Message */}
+              {error && (
+                <View style={styles.errorContainer} testID="error-message">
+                  <Ionicons name="alert-circle" size={18} color={THEME.error} />
+                  <Text style={styles.errorText}>{error}</Text>
+                </View>
+              )}
+
+              {/* Form */}
+              <View style={styles.form}>
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>Full Name</Text>
+                  <Controller
+                    control={control}
+                    name="fullName"
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <View style={[styles.inputContainer, errors.fullName && styles.inputError]}>
+                        <Ionicons name="person-outline" size={20} color={THEME.textTertiary} />
+                        <View style={styles.inputInner}>
+                          <Input
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            placeholder="Enter your full name"
+                            placeholderTextColor={THEME.textTertiary}
+                            autoCapitalize="words"
+                            autoComplete="name"
+                            textContentType="name"
+                            testID="input-full-name"
+                            style={styles.darkInput}
+                          />
+                        </View>
+                      </View>
+                    )}
+                  />
+                  {errors.fullName && (
+                    <Text style={styles.fieldError}>{errors.fullName.message}</Text>
+                  )}
+                </View>
+
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>Email</Text>
+                  <Controller
+                    control={control}
+                    name="email"
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <View style={[styles.inputContainer, errors.email && styles.inputError]}>
+                        <Ionicons name="mail-outline" size={20} color={THEME.textTertiary} />
+                        <View style={styles.inputInner}>
+                          <Input
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            placeholder="Enter your email"
+                            placeholderTextColor={THEME.textTertiary}
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                            autoComplete="email"
+                            textContentType="emailAddress"
+                            testID="input-email"
+                            style={styles.darkInput}
+                          />
+                        </View>
+                      </View>
+                    )}
+                  />
+                  {errors.email && (
+                    <Text style={styles.fieldError}>{errors.email.message}</Text>
+                  )}
+                </View>
+
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>Password</Text>
+                  <Controller
+                    control={control}
+                    name="password"
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <View style={[styles.inputContainer, errors.password && styles.inputError]}>
+                        <Ionicons name="lock-closed-outline" size={20} color={THEME.textTertiary} />
+                        <View style={styles.inputInner}>
+                          <Input
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            placeholder="Create a password"
+                            placeholderTextColor={THEME.textTertiary}
+                            secureTextEntry
+                            autoComplete="password-new"
+                            textContentType="newPassword"
+                            testID="input-password"
+                            style={styles.darkInput}
+                          />
+                        </View>
+                      </View>
+                    )}
+                  />
+                  {errors.password ? (
+                    <Text style={styles.fieldError}>{errors.password.message}</Text>
+                  ) : (
+                    <Text style={styles.fieldHint}>
+                      Min 8 chars with uppercase, lowercase, and number
+                    </Text>
+                  )}
+                </View>
+
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>Confirm Password</Text>
+                  <Controller
+                    control={control}
+                    name="confirmPassword"
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <View style={[styles.inputContainer, errors.confirmPassword && styles.inputError]}>
+                        <Ionicons name="shield-checkmark-outline" size={20} color={THEME.textTertiary} />
+                        <View style={styles.inputInner}>
+                          <Input
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            placeholder="Confirm your password"
+                            placeholderTextColor={THEME.textTertiary}
+                            secureTextEntry
+                            autoComplete="password-new"
+                            textContentType="newPassword"
+                            testID="input-confirm-password"
+                            style={styles.darkInput}
+                          />
+                        </View>
+                      </View>
+                    )}
+                  />
+                  {errors.confirmPassword && (
+                    <Text style={styles.fieldError}>{errors.confirmPassword.message}</Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Submit Button */}
+              <Pressable
+                style={({ pressed }) => [
+                  styles.primaryButton,
+                  pressed && styles.primaryButtonPressed,
+                  isLoading && styles.primaryButtonDisabled,
+                ]}
+                onPress={handleSubmit(onSubmit)}
+                disabled={isLoading}
+                testID="signup-submit-button"
+              >
+                {isLoading ? (
+                  <Text style={styles.primaryButtonText}>Creating Account...</Text>
+                ) : (
+                  <>
+                    <Text style={styles.primaryButtonText}>Create Account</Text>
+                    <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                  </>
+                )}
+              </Pressable>
+
+              {/* Terms */}
+              <Text style={styles.terms}>
+                By creating an account, you agree to our{' '}
+                <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
+                <Text style={styles.termsLink}>Privacy Policy</Text>
+              </Text>
             </View>
-          )}
-
-          {/* Form */}
-          <View style={styles.form}>
-            <Controller
-              control={control}
-              name="fullName"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Full Name"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  error={errors.fullName?.message}
-                  autoCapitalize="words"
-                  autoComplete="name"
-                  textContentType="name"
-                  testID="input-full-name"
-                />
-              )}
-            />
-
-            <View style={styles.inputSpacing} />
-
-            <Controller
-              control={control}
-              name="email"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Email"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  error={errors.email?.message}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  textContentType="emailAddress"
-                  testID="input-email"
-                />
-              )}
-            />
-
-            <View style={styles.inputSpacing} />
-
-            <Controller
-              control={control}
-              name="password"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Password"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  error={errors.password?.message}
-                  hint="Min 8 chars with uppercase, lowercase, and number"
-                  secureTextEntry
-                  autoComplete="password-new"
-                  textContentType="newPassword"
-                  testID="input-password"
-                />
-              )}
-            />
-
-            <View style={styles.inputSpacing} />
-
-            <Controller
-              control={control}
-              name="confirmPassword"
-              render={({ field: { onChange, onBlur, value } }) => (
-                <Input
-                  label="Confirm Password"
-                  value={value}
-                  onChangeText={onChange}
-                  onBlur={onBlur}
-                  error={errors.confirmPassword?.message}
-                  secureTextEntry
-                  autoComplete="password-new"
-                  textContentType="newPassword"
-                  testID="input-confirm-password"
-                />
-              )}
-            />
-          </View>
-
-          {/* Submit Button */}
-          <Button
-            variant="primary"
-            fullWidth
-            loading={isLoading}
-            onPress={handleSubmit(onSubmit)}
-            testID="signup-submit-button"
-          >
-            Create Account
-          </Button>
-
-          {/* Terms */}
-          <Text style={styles.terms}>
-            By creating an account, you agree to our{' '}
-            <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
-            <Text style={styles.termsLink}>Privacy Policy</Text>
-          </Text>
+          </BlurView>
 
           {/* Login Link */}
           <View style={styles.loginLink}>
             <Text style={styles.loginText}>Already have an account? </Text>
             <Link href="/(auth)/login" asChild>
-              <Text style={styles.loginLinkText} testID="login-link">Log In</Text>
+              <Pressable testID="login-link">
+                <Text style={styles.loginLinkText}>Log In</Text>
+              </Pressable>
             </Link>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.light.background,
+    backgroundColor: THEME.background,
+  },
+  decorCircle1: {
+    position: 'absolute',
+    top: -100,
+    right: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: `${THEME.primary}20`,
+  },
+  decorCircle2: {
+    position: 'absolute',
+    bottom: 100,
+    left: -150,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: `${THEME.primary}10`,
   },
   keyboardView: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: layout.screenPaddingHorizontal,
-    paddingVertical: layout.screenPaddingVertical,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: spacing.xs,
-  },
-  backButtonText: {
-    ...textStyles.body,
-    color: colors.primary,
-    fontWeight: '600',
+    paddingHorizontal: 24,
   },
   header: {
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleSection: {
+    marginTop: 24,
+    marginBottom: 24,
   },
   title: {
-    ...textStyles.h1,
-    color: colors.light.textPrimary,
-    marginBottom: spacing.xs,
+    fontSize: 32,
+    fontWeight: '800',
+    color: THEME.textPrimary,
+    marginBottom: 8,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    ...textStyles.body,
-    color: colors.light.textSecondary,
+    fontSize: 16,
+    color: THEME.textSecondary,
+    lineHeight: 24,
+  },
+  glassCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: THEME.glassBorder,
+  },
+  glassCardInner: {
+    backgroundColor: THEME.glass,
+    padding: 24,
+    gap: 20,
   },
   errorContainer: {
-    backgroundColor: 'rgba(225, 45, 57, 0.1)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: `${THEME.error}15`,
     borderRadius: 8,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: `${THEME.error}30`,
   },
   errorText: {
-    ...textStyles.bodySmall,
-    color: colors.error,
+    flex: 1,
+    fontSize: 14,
+    color: THEME.error,
   },
   form: {
-    marginBottom: spacing.xl,
+    gap: 16,
   },
-  inputSpacing: {
-    height: spacing.md,
+  inputWrapper: {
+    gap: 8,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: THEME.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.2)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    paddingHorizontal: 16,
+    minHeight: 52,
+  },
+  inputError: {
+    borderColor: THEME.error,
+  },
+  inputInner: {
+    flex: 1,
+  },
+  darkInput: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    color: THEME.textPrimary,
+    fontSize: 16,
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    minHeight: 'auto' as any,
+  },
+  fieldError: {
+    fontSize: 12,
+    color: THEME.error,
+    marginTop: 4,
+  },
+  fieldHint: {
+    fontSize: 12,
+    color: THEME.textTertiary,
+    marginTop: 4,
+  },
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: THEME.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
+    shadowColor: THEME.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  primaryButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
+  primaryButtonDisabled: {
+    opacity: 0.7,
+  },
+  primaryButtonText: {
+    color: THEME.textPrimary,
+    fontSize: 16,
+    fontWeight: '700',
   },
   terms: {
-    ...textStyles.caption,
-    color: colors.light.textTertiary,
+    fontSize: 12,
+    color: THEME.textTertiary,
     textAlign: 'center',
-    marginTop: spacing.lg,
+    lineHeight: 18,
   },
   termsLink: {
-    color: colors.primary,
+    color: THEME.primary,
   },
   loginLink: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: spacing.lg,
-    marginBottom: spacing.lg,
+    marginTop: 24,
   },
   loginText: {
-    ...textStyles.body,
-    color: colors.light.textSecondary,
+    fontSize: 14,
+    color: THEME.textSecondary,
   },
   loginLinkText: {
-    ...textStyles.body,
-    color: colors.primary,
-    fontWeight: '600',
+    fontSize: 14,
+    color: THEME.primary,
+    fontWeight: '700',
   },
 });

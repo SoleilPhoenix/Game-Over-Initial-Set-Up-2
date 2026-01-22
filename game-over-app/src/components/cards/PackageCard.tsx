@@ -1,19 +1,15 @@
 /**
  * PackageCard Component
  * Card displaying package with price, rating, features, and match badge
+ * Memoized for performance in lists
  */
 
-import React from 'react';
-import { styled, YStack, XStack, Text, Image } from 'tamagui';
+import React, { memo } from 'react';
+import { styled, YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
-
-const PackageImage = styled(Image, {
-  width: '100%',
-  height: 160,
-  borderRadius: '$md',
-});
+import { OptimizedImage } from '../ui/OptimizedImage';
 
 const BestMatchBadge = styled(XStack, {
   position: 'absolute',
@@ -49,7 +45,7 @@ const tierConfig = {
   grand: { label: 'Grand', color: '$warning' },
 };
 
-export function PackageCard({
+export const PackageCard = memo(function PackageCard({
   name,
   tier,
   basePriceCents,
@@ -77,9 +73,10 @@ export function PackageCard({
   return (
     <Card onPress={onPress} testID={testID} padding="$3" gap="$3">
       <YStack position="relative">
-        <PackageImage
+        <OptimizedImage
           source={{ uri: heroImageUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400' }}
-          resizeMode="cover"
+          height={160}
+          borderRadius={8}
         />
         {isBestMatch && (
           <BestMatchBadge>
@@ -143,6 +140,6 @@ export function PackageCard({
       </YStack>
     </Card>
   );
-}
+});
 
 export default PackageCard;
