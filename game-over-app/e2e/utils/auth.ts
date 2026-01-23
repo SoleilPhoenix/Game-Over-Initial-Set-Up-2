@@ -107,3 +107,72 @@ export async function isLoggedIn(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Create a test event with optional participants
+ */
+export async function createTestEvent(options: {
+  withParticipants?: boolean;
+  participantCount?: number;
+} = {}): Promise<void> {
+  const { withParticipants = false, participantCount = 3 } = options;
+
+  // Navigate to events tab
+  await element(by.id('tab-events')).tap();
+  await waitFor(element(by.id('create-event-button')))
+    .toBeVisible()
+    .withTimeout(5000);
+
+  // Start event creation
+  await element(by.id('create-event-button')).tap();
+
+  // Fill wizard quickly
+  await element(by.id('party-type-bachelor')).tap();
+  await element(by.id('honoree-name-input')).typeText('TestEvent');
+
+  try {
+    await element(by.id('city-chip-las-vegas')).tap();
+  } catch {
+    await element(by.id('city-chips')).tap();
+  }
+
+  await element(by.id('wizard-next-button')).tap();
+
+  // Step 2
+  await element(by.id('gathering-size-small_group')).tap();
+  await element(by.id('energy-level-moderate')).tap();
+  await element(by.id('wizard-next-button')).tap();
+
+  // Step 3
+  await element(by.id('age-range-26-30')).tap();
+  await element(by.id('wizard-next-button')).tap();
+
+  // Step 4 - skip package
+  await element(by.id('wizard-next-button')).tap();
+
+  // Step 5 - create
+  await element(by.id('create-event-button')).tap();
+
+  // Wait for event to be created
+  await waitFor(element(by.id('event-summary-screen')))
+    .toBeVisible()
+    .withTimeout(15000);
+
+  // Add participants if requested
+  if (withParticipants) {
+    await element(by.id('manage-participants-button')).tap();
+
+    for (let i = 0; i < participantCount; i++) {
+      await element(by.id('add-participant-button')).tap();
+      await element(by.id('participant-email-input')).typeText(
+        `participant${i}@test.com`
+      );
+      await element(by.id('send-invite-button')).tap();
+      await waitFor(element(by.text('Invite sent')))
+        .toBeVisible()
+        .withTimeout(3000);
+    }
+
+    await element(by.id('close-participants-modal')).tap();
+  }
+}

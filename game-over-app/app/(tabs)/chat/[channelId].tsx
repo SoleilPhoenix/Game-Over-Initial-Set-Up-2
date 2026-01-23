@@ -172,6 +172,7 @@ export default function ChatChannelScreen() {
       style={{ flex: 1, backgroundColor: colors.light.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
+      testID="chat-channel-screen"
     >
       <YStack flex={1} backgroundColor="$background">
         {/* Header */}
@@ -241,6 +242,7 @@ export default function ChatChannelScreen() {
           data={messages}
           keyExtractor={(item) => item.id}
           renderItem={renderMessage}
+          testID="chat-messages-list"
           contentContainerStyle={{
             paddingVertical: 16,
             flexGrow: 1,

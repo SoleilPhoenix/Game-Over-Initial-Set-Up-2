@@ -65,7 +65,7 @@ export default function ChatScreen() {
   // Empty state - no events
   if (!eventsLoading && activeEvents.length === 0) {
     return (
-      <YStack flex={1} backgroundColor="$background">
+      <YStack flex={1} backgroundColor="$background" testID="chat-screen">
         <YStack
           paddingTop={insets.top + 8}
           paddingHorizontal="$4"
@@ -109,7 +109,7 @@ export default function ChatScreen() {
   }
 
   return (
-    <YStack flex={1} backgroundColor="$background">
+    <YStack flex={1} backgroundColor="$background" testID="chat-screen">
       {/* Header */}
       <YStack
         paddingTop={insets.top + 8}
@@ -185,6 +185,7 @@ export default function ChatScreen() {
         <FlatList
           data={channels}
           keyExtractor={(item) => item.id}
+          testID="channel-list"
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
@@ -193,11 +194,11 @@ export default function ChatScreen() {
               tintColor={colors.light.primary}
             />
           }
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <ChannelListItem
               channel={item}
               onPress={() => handleChannelPress(item.id)}
-              testID={`channel-${item.id}`}
+              testID={`channel-item-${index}`}
             />
           )}
           ListHeaderComponent={

@@ -88,7 +88,7 @@ export function MessageInput({
         pressStyle={{ scale: 0.95, opacity: 0.8 }}
         onPress={handleSend}
         disabled={!canSend}
-        testID="send-button"
+        testID="send-message-button"
       >
         {isLoading ? (
           <Spinner size="small" color="white" />

@@ -46,6 +46,7 @@ function MessageBubbleComponent({
       justifyContent={isOwnMessage ? 'flex-end' : 'flex-start'}
       paddingHorizontal="$3"
       paddingVertical="$1"
+      testID={isOwnMessage ? 'message-bubble-sent' : 'message-bubble-received'}
     >
       <XStack
         maxWidth="80%"
@@ -115,6 +116,7 @@ function MessageBubbleComponent({
               marginTop="$1"
               textAlign={isOwnMessage ? 'right' : 'left'}
               marginHorizontal="$2"
+              testID="message-timestamp"
             >
               {formatTime(message.created_at)}
             </Text>
