@@ -122,7 +122,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
             <Ionicons name={categoryConfig.icon} size={20} color={categoryConfig.color} />
           </YStack>
           <YStack flex={1}>
-            <Text fontSize={16} fontWeight="600" color={DARK_THEME.textPrimary}>
+            <Text fontSize={16} fontWeight="600" color={DARK_THEME.textPrimary} testID="poll-title">
               {poll.title}
             </Text>
             {poll.description && (
@@ -134,7 +134,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
         </XStack>
 
         {/* Status Badge */}
-        <View style={[styles.badge, { backgroundColor: statusConfig.bgColor, borderColor: statusConfig.borderColor }]}>
+        <View style={[styles.badge, { backgroundColor: statusConfig.bgColor, borderColor: statusConfig.borderColor }]} testID="poll-status-badge">
           <Text style={{ fontSize: 10, fontWeight: '700', color: statusConfig.color, textTransform: 'uppercase', letterSpacing: 0.5 }}>
             {statusConfig.label}
           </Text>
@@ -182,6 +182,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
                     isUserVote && styles.optionSelected,
                     pressed && canVote && styles.optionPressed,
                   ]}
+                  testID={`poll-option-${option.id}`}
                 >
                   {/* Progress bar background */}
                   {showResults && (
@@ -248,6 +249,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
                           fontSize={12}
                           fontWeight="700"
                           color={isUserVote ? DARK_THEME.primary : DARK_THEME.textTertiary}
+                          testID={isUserVote ? `poll-vote-count-${option.id}` : `poll-percentage-${option.id}`}
                         >
                           {isUserVote ? `${option.vote_count} votes` : `${percentage}%`}
                         </Text>
@@ -268,13 +270,13 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
             borderTopWidth={1}
             borderTopColor={DARK_THEME.border}
           >
-            <Text fontSize={10} color={DARK_THEME.textTertiary} fontWeight="500">
+            <Text fontSize={10} color={DARK_THEME.textTertiary} fontWeight="500" testID="poll-vote-count">
               {poll.total_votes} vote{poll.total_votes !== 1 ? 's' : ''} cast
               {poll.ends_at && ` • Ends in ${formatDeadline()}`}
             </Text>
 
             {hasVoted && !isClosed ? (
-              <XStack gap="$1" alignItems="center">
+              <XStack gap="$1" alignItems="center" testID="poll-voted-indicator">
                 <Ionicons name="checkmark-circle" size={14} color="#22C55E" />
                 <Text fontSize={10} color="#22C55E" fontWeight="500">
                   You voted

@@ -120,6 +120,7 @@ export function CreatePollModal({
       animationType="slide"
       presentationStyle="pageSheet"
       onRequestClose={handleClose}
+      testID="create-poll-modal"
     >
       <YStack flex={1} backgroundColor="$background">
         {/* Header */}
@@ -132,7 +133,7 @@ export function CreatePollModal({
           borderBottomWidth={1}
           borderBottomColor="$borderColor"
         >
-          <Pressable onPress={handleClose} style={styles.headerButton}>
+          <Pressable onPress={handleClose} style={styles.headerButton} testID="cancel-poll-button">
             <Text color="$primary" fontSize="$3">
               Cancel
             </Text>
@@ -182,6 +183,7 @@ export function CreatePollModal({
                     category === cat.value && styles.categoryChipSelected,
                   ]}
                   onPress={() => setCategory(cat.value)}
+                  testID={`category-${cat.value}`}
                 >
                   <Ionicons
                     name={cat.icon}
@@ -238,6 +240,7 @@ export function CreatePollModal({
                   <Pressable
                     onPress={() => handleRemoveOption(index)}
                     style={styles.removeButton}
+                    testID={`remove-option-${index}`}
                   >
                     <Ionicons name="close-circle" size={24} color={colors.light.error} />
                   </Pressable>
@@ -246,7 +249,7 @@ export function CreatePollModal({
             ))}
 
             {options.length < 6 && (
-              <Pressable style={styles.addOptionButton} onPress={handleAddOption}>
+              <Pressable style={styles.addOptionButton} onPress={handleAddOption} testID="add-option-button">
                 <Ionicons name="add" size={20} color={colors.light.primary} />
                 <Text color="$primary" fontWeight="500">
                   Add Option
