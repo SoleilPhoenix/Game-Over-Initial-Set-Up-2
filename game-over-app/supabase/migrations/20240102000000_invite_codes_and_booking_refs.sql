@@ -6,7 +6,7 @@
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS invite_codes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   code TEXT NOT NULL UNIQUE,
   created_by UUID NOT NULL REFERENCES auth.users(id),
@@ -31,7 +31,7 @@ CREATE POLICY "Event organizers can create invite codes"
   WITH CHECK (
     auth.uid() = created_by AND
     EXISTS (
-      SELECT 1 FROM events WHERE id = event_id AND organizer_id = auth.uid()
+      SELECT 1 FROM events WHERE id = event_id AND created_by = auth.uid()
     )
   );
 
@@ -39,7 +39,7 @@ CREATE POLICY "Event organizers can view their invite codes"
   ON invite_codes FOR SELECT
   USING (
     EXISTS (
-      SELECT 1 FROM events WHERE id = event_id AND organizer_id = auth.uid()
+      SELECT 1 FROM events WHERE id = event_id AND created_by = auth.uid()
     )
   );
 
@@ -47,7 +47,7 @@ CREATE POLICY "Event organizers can update their invite codes"
   ON invite_codes FOR UPDATE
   USING (
     EXISTS (
-      SELECT 1 FROM events WHERE id = event_id AND organizer_id = auth.uid()
+      SELECT 1 FROM events WHERE id = event_id AND created_by = auth.uid()
     )
   );
 

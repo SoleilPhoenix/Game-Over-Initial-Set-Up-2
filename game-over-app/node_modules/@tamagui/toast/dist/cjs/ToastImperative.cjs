@@ -1,0 +1,100 @@
+var __create = Object.create;
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __getProtoOf = Object.getPrototypeOf,
+  __hasOwnProp = Object.prototype.hasOwnProperty;
+var __export = (target, all) => {
+    for (var name in all) __defProp(target, name, {
+      get: all[name],
+      enumerable: !0
+    });
+  },
+  __copyProps = (to, from, except, desc) => {
+    if (from && typeof from == "object" || typeof from == "function") for (let key of __getOwnPropNames(from)) !__hasOwnProp.call(to, key) && key !== except && __defProp(to, key, {
+      get: () => from[key],
+      enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable
+    });
+    return to;
+  };
+var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
+  // If the importer is in node compatibility mode or this is not an ESM
+  // file that has been converted to a CommonJS file using a Babel-
+  // compatible transform (i.e. "__esModule" has not been set), then set
+  // "default" to the CommonJS "module.exports" for node compatibility.
+  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", {
+    value: mod,
+    enumerable: !0
+  }) : target, mod)),
+  __toCommonJS = mod => __copyProps(__defProp({}, "__esModule", {
+    value: !0
+  }), mod);
+var ToastImperative_exports = {};
+__export(ToastImperative_exports, {
+  ToastImperativeProvider: () => ToastImperativeProvider,
+  useToast: () => useToast,
+  useToastController: () => useToastController,
+  useToastState: () => useToastState
+});
+module.exports = __toCommonJS(ToastImperative_exports);
+var import_core = require("@tamagui/core"),
+  import_react = __toESM(require("react"), 1),
+  import_createNativeToast = require("./createNativeToast.cjs"),
+  import_jsx_runtime = require("react/jsx-runtime");
+const ToastContext = import_react.default.createContext({}),
+  ToastCurrentContext = import_react.default.createContext(null),
+  useToastController = () => import_react.default.useContext(ToastContext),
+  useToastState = () => import_react.default.useContext(ToastCurrentContext),
+  useToast = () => ({
+    ...useToastController(),
+    currentToast: useToastState()
+  }),
+  ToastImperativeProvider = ({
+    children,
+    options
+  }) => {
+    const counterRef = import_react.default.useRef(0),
+      [toast, setToast] = import_react.default.useState(null),
+      [lastNativeToastRef, setLastNativeToastRef] = import_react.default.useState(null),
+      show = import_react.default.useCallback((title, showOptions) => {
+        const native = showOptions?.native ?? options.native,
+          isWebNative = Array.isArray(native) ? native.includes("web") : native === "web",
+          isMobileNative = Array.isArray(native) ? native.includes("mobile") : native === "mobile",
+          isAndroidNative = isMobileNative || (Array.isArray(native) ? native.includes("android") : native === "android"),
+          isIosNative = isMobileNative || (Array.isArray(native) ? native.includes("ios") : native === "ios"),
+          isHandledNatively = native === !0 || import_core.isWeb && isWebNative || !import_core.isWeb && isMobileNative || import_core.isAndroid && isAndroidNative || import_core.isIos && isIosNative;
+        if (isHandledNatively) {
+          const nativeToastResult = (0, import_createNativeToast.createNativeToast)(title, showOptions ?? {});
+          typeof nativeToastResult == "object" && nativeToastResult.nativeToastRef && setLastNativeToastRef(nativeToastResult.nativeToastRef);
+        }
+        return counterRef.current++, setToast({
+          ...showOptions?.customData,
+          ...showOptions,
+          viewportName: showOptions?.viewportName ?? "default",
+          title,
+          id: counterRef.current.toString(),
+          isHandledNatively
+        }), !0;
+      }, [setToast, JSON.stringify(options.native || null)]),
+      hide = import_react.default.useCallback(() => {
+        lastNativeToastRef?.close(), setToast(prev => prev ? {
+          ...prev,
+          hide: !0
+        } : null), setTimeout(() => {
+          setToast(null);
+        }, 100);
+      }, [setToast, lastNativeToastRef]),
+      contextValue = import_react.default.useMemo(() => ({
+        show,
+        hide,
+        nativeToast: lastNativeToastRef,
+        options
+      }), [show, hide, lastNativeToastRef, JSON.stringify(options || null)]);
+    return /* @__PURE__ */(0, import_jsx_runtime.jsx)(ToastContext.Provider, {
+      value: contextValue,
+      children: /* @__PURE__ */(0, import_jsx_runtime.jsx)(ToastCurrentContext.Provider, {
+        value: toast,
+        children
+      })
+    });
+  };

@@ -1,0 +1,4 @@
+› Using --device D36BEA92-6A83-4525-AA6B-6567EA33B0D5
+› Your computer requires some additional setup before you can build onto physical iOS devices.
+  Learn more: https://expo.fyi/setup-xcode-signing
+CommandError: No code signing certificates are available to use.

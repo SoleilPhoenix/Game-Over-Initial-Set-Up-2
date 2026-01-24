@@ -287,9 +287,8 @@ describe('Chat Polls', () => {
       await typeInInput('poll-question-input', createdPollQuestion);
       await typeInInput('poll-option-0', 'Vote Option A');
       await typeInInput('poll-option-1', 'Vote Option B');
-      await typeInInput('poll-option-2', 'Vote Option C');
 
-      // Need to add the third option first
+      // Add third option before typing in it
       await tap('add-option-button');
       await waitForElement('poll-option-2', 3000);
       await typeInInput('poll-option-2', 'Vote Option C');

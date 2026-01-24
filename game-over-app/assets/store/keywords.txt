@@ -1,0 +1,9 @@
+# App Store Keywords (100 characters max, comma-separated)
+
+bachelor,bachelorette,party,planning,wedding,events,nightlife,vegas,miami,travel,group,celebration
+
+# Additional Keywords for ASO
+
+Primary: bachelor party, bachelorette party, party planning, event planning
+Secondary: vegas party, miami party, nashville party, group travel
+Long-tail: bachelor party planner app, bachelorette weekend planning, group party coordination

@@ -270,7 +270,7 @@ export function CreatePollModal({
           <Button
             onPress={handleSubmit}
             disabled={isSubmitting}
-            testID="create-poll-button"
+            testID="submit-poll-button"
           >
             {isSubmitting ? (
               <XStack gap="$2" alignItems="center">

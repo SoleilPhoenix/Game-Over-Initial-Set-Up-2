@@ -172,7 +172,7 @@ export default function ChatChannelScreen() {
       style={{ flex: 1, backgroundColor: colors.light.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
-      testID="chat-channel-screen"
+      testID="chat-screen"
     >
       <YStack flex={1} backgroundColor="$background">
         {/* Header */}

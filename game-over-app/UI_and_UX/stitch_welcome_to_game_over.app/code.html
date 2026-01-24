@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Game-Over.app - Welcome</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Config -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#4a6fa5",
+                        "background-light": "#f6f7f7",
+                        "background-dark": "#15181d",
+                        "deep-navy": "#2D3748", // Added based on request for card background
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings:
+            'FILL' 1,
+            'wght' 400,
+            'GRAD' 0,
+            'opsz' 24
+        }
+        /* Custom scrollbar hiding for clean mobile view */
+        ::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display antialiased">
+<!-- Main Container -->
+<div class="relative flex h-screen w-full flex-col overflow-hidden bg-background-dark">
+<!-- Background Hero Image -->
+<!-- Using absolute positioning to make it a full-screen background -->
+<div class="absolute inset-0 z-0 h-full w-full">
+<div class="h-full w-full bg-cover bg-center bg-no-repeat transition-transform duration-[10s] hover:scale-105" data-alt="Group of friends toasting drinks at a rooftop party at night with city lights in background" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDsapvMicPjFdKxSuZUGPjTqDcVXcxsnPTF4UFIKKgtn86Sl5Un9P1vPGt2fp1eEVcvxFoK-bw5pxQd7OSkueGQ3MR1XxN17rylqSWAyveNXHl4lpE7bexy9GRZKjFYNNE5yiVjattcN461Q3qJz7wtU-Dmpo-padO7qZrQ0BQnIkeMIYDVsf_FLum_12kfQDBDMml0fXulGSw2BOCHxdU_zt8DV5FIUnD2qkyCRtA4jnGfpTMUGIJXPzml8XUgBzODNGtOlaWw-Rc");'></div>
+<!-- Gradient Overlay for readability -->
+<div class="absolute inset-0 bg-gradient-to-b from-black/40 via-transparent to-[#15181d] opacity-90"></div>
+</div>
+<!-- Content Wrapper -->
+<div class="relative z-10 flex h-full flex-col justify-between">
+<!-- Top App Bar -->
+<div class="flex items-center justify-between p-6 pt-12 safe-top">
+<div class="flex items-center gap-2 rounded-full bg-black/20 px-3 py-1.5 backdrop-blur-sm border border-white/5">
+<span class="material-symbols-outlined text-primary text-2xl">sports_esports</span>
+<span class="text-white text-sm font-bold tracking-wide">Game-Over.app</span>
+</div>
+<!-- Optional Menu Icon -->
+<button class="flex items-center justify-center text-white/80 hover:text-white">
+<span class="material-symbols-outlined">menu</span>
+</button>
+</div>
+<!-- Spacer to push main content to bottom -->
+<div class="flex-1"></div>
+<!-- Bottom Action Area -->
+<div class="flex flex-col gap-4 p-4 pb-8 safe-bottom">
+<!-- Glassmorphic Card (ActionPanel adapted) -->
+<div class="overflow-hidden rounded-xl border border-white/10 bg-deep-navy/80 backdrop-blur-md shadow-2xl p-6 @container">
+<div class="flex flex-col gap-5">
+<div class="flex flex-col gap-2">
+<h1 class="text-white text-3xl font-extrabold leading-tight tracking-tight">
+                                Bachelor parties without the drama.
+                            </h1>
+<p class="text-gray-300 text-base font-normal leading-relaxed">
+                                Let AI plan an unforgettable night that everyone enjoys—and remembers fondly.
+                            </p>
+</div>
+<div class="flex flex-col gap-3 pt-2">
+<!-- Primary CTA -->
+<button class="group relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-xl bg-primary py-4 text-white shadow-lg transition-all hover:bg-primary/90 active:scale-[0.98]">
+<span class="text-base font-bold">Get Started</span>
+<span class="material-symbols-outlined text-lg transition-transform group-hover:translate-x-1">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Secondary Action (SingleButton adapted) -->
+<div class="flex justify-center px-4">
+<button class="flex w-full max-w-[480px] cursor-pointer items-center justify-center gap-2 rounded-xl py-3 text-white/70 transition-colors hover:text-white">
+<span class="text-sm font-medium">Already have an account?</span>
+<span class="text-sm font-bold text-primary underline decoration-primary/50 underline-offset-4">Log In</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</body></html>

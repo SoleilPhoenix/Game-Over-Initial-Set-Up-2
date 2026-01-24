@@ -16,12 +16,13 @@ ON CONFLICT (id) DO NOTHING;
 -- =============================================================================
 -- SEED PACKAGES - Las Vegas
 -- =============================================================================
-INSERT INTO packages (id, name, tier, city_id, base_price_cents, price_per_person_cents, description, features, premium_highlights, rating, review_count, ideal_gathering_size, ideal_energy_level, ideal_vibe, is_active) VALUES
+INSERT INTO packages (id, name, tier, city_id, base_price_cents, price_per_person_cents, description, features, premium_highlights, hero_image_url, rating, review_count, ideal_gathering_size, ideal_energy_level, ideal_vibe) VALUES
 -- Las Vegas Essential
 ('660e8400-e29b-41d4-a716-446655440001', 'Vegas Starter', 'essential', '550e8400-e29b-41d4-a716-446655440001',
  49900, 7500, 'Perfect introduction to Vegas nightlife',
  '["Club entry for group", "One bottle service", "Party bus pickup", "Professional photographer (1 hr)"]'::jsonb,
  '["Skip-the-line entry", "Dedicated host"]'::jsonb,
+ NULL,
  4.5, 128, ARRAY['intimate', 'small_group'], ARRAY['moderate', 'high_energy'], ARRAY['party', 'nightlife']),
 
 -- Las Vegas Classic
@@ -29,6 +30,7 @@ INSERT INTO packages (id, name, tier, city_id, base_price_cents, price_per_perso
  129900, 12500, 'The ultimate Vegas party package',
  '["VIP club entry", "Premium bottle service", "Luxury limo service", "Professional photographer (3 hrs)", "Pool party access", "Dinner reservation"]'::jsonb,
  '["Private cabana", "Meet & greet with DJ", "Custom party favors"]'::jsonb,
+ NULL,
  4.8, 256, ARRAY['small_group', 'party'], ARRAY['high_energy'], ARRAY['luxury', 'party', 'nightlife']),
 
 -- Las Vegas Grand
@@ -36,6 +38,7 @@ INSERT INTO packages (id, name, tier, city_id, base_price_cents, price_per_perso
  249900, 20000, 'No-limits Vegas experience',
  '["Presidential suite access", "Unlimited bottle service", "Private jet arrival", "24/7 concierge", "VIP everywhere", "Private chef dinner", "Spa day package"]'::jsonb,
  '["Celebrity meet & greet", "Private pool party", "Custom itinerary planning"]'::jsonb,
+ NULL,
  4.9, 64, ARRAY['party'], ARRAY['high_energy'], ARRAY['luxury', 'exclusive', 'party']),
 
 -- =============================================================================
@@ -46,6 +49,7 @@ INSERT INTO packages (id, name, tier, city_id, base_price_cents, price_per_perso
  44900, 6500, 'Classic South Beach experience',
  '["Beach day setup", "Club entry", "Welcome drinks", "Group dinner"]'::jsonb,
  '["Beachside service", "Local guide"]'::jsonb,
+ NULL,
  4.4, 96, ARRAY['intimate', 'small_group'], ARRAY['moderate'], ARRAY['beach', 'relaxed', 'nightlife']),
 
 -- Miami Classic
@@ -53,6 +57,7 @@ INSERT INTO packages (id, name, tier, city_id, base_price_cents, price_per_perso
  119900, 11500, 'Full Miami experience',
  '["Yacht charter (4 hrs)", "VIP club access", "Cabana at day club", "Professional photography", "Group brunch", "Spa treatments"]'::jsonb,
  '["Private yacht DJ", "Chef on board", "Water toys included"]'::jsonb,
+ NULL,
  4.7, 184, ARRAY['small_group', 'party'], ARRAY['high_energy'], ARRAY['luxury', 'beach', 'party']),
 
 -- =============================================================================
@@ -63,6 +68,7 @@ INSERT INTO packages (id, name, tier, city_id, base_price_cents, price_per_perso
  39900, 5500, 'Nashville honky-tonk adventure',
  '["Bar crawl guide", "VIP bar access", "Cowboy boots rental", "Group photo session"]'::jsonb,
  '["Local insider tips", "Custom playlist"]'::jsonb,
+ NULL,
  4.6, 112, ARRAY['intimate', 'small_group'], ARRAY['moderate', 'high_energy'], ARRAY['country', 'party', 'music']),
 
 -- Nashville Classic
@@ -70,6 +76,7 @@ INSERT INTO packages (id, name, tier, city_id, base_price_cents, price_per_perso
  99900, 10000, 'Premium Nashville experience',
  '["Party bus tour", "Private songwriter session", "VIP at top venues", "BBQ dinner", "Professional photos", "Matching outfits"]'::jsonb,
  '["Recording studio session", "Meet local artists", "Custom song written"]'::jsonb,
+ NULL,
  4.8, 156, ARRAY['small_group', 'party'], ARRAY['high_energy'], ARRAY['country', 'music', 'party'])
 
 ON CONFLICT (id) DO NOTHING;

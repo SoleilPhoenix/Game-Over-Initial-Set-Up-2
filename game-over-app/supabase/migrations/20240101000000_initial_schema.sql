@@ -3,6 +3,7 @@
 
 -- Enable required extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- =============================================================================
 -- PROFILES TABLE
@@ -42,7 +43,7 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
 -- CITIES TABLE
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS cities (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   country TEXT DEFAULT 'USA',
   is_active BOOLEAN DEFAULT true,
@@ -57,7 +58,7 @@ CREATE TYPE party_type AS ENUM ('bachelor', 'bachelorette');
 CREATE TYPE event_status AS ENUM ('draft', 'planning', 'booked', 'completed', 'cancelled');
 
 CREATE TABLE IF NOT EXISTS events (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   created_by UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   party_type party_type NOT NULL,
@@ -88,7 +89,7 @@ CREATE TYPE age_range AS ENUM ('21-25', '26-30', '31-35', '35+');
 CREATE TYPE group_cohesion AS ENUM ('close_friends', 'mixed_group', 'strangers');
 
 CREATE TABLE IF NOT EXISTS event_preferences (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE UNIQUE,
   gathering_size gathering_size,
   social_approach social_approach,
@@ -109,7 +110,7 @@ CREATE TYPE participant_role AS ENUM ('organizer', 'guest', 'honoree');
 CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'refunded');
 
 CREATE TABLE IF NOT EXISTS event_participants (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   role participant_role NOT NULL,
@@ -129,7 +130,7 @@ CREATE INDEX idx_event_participants_user_id ON event_participants(user_id);
 CREATE TYPE package_tier AS ENUM ('essential', 'classic', 'grand');
 
 CREATE TABLE IF NOT EXISTS packages (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   tier package_tier NOT NULL,
   city_id UUID NOT NULL REFERENCES cities(id),
@@ -159,7 +160,7 @@ CREATE INDEX idx_packages_is_active ON packages(is_active);
 CREATE TYPE booking_payment_status AS ENUM ('pending', 'processing', 'completed', 'failed', 'refunded');
 
 CREATE TABLE IF NOT EXISTS bookings (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE UNIQUE,
   package_id UUID NOT NULL REFERENCES packages(id),
   package_base_cents INTEGER NOT NULL,
@@ -184,7 +185,7 @@ CREATE INDEX idx_bookings_package_id ON bookings(package_id);
 CREATE TYPE channel_category AS ENUM ('general', 'accommodation', 'activities', 'budget');
 
 CREATE TABLE IF NOT EXISTS chat_channels (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   category channel_category NOT NULL,
@@ -199,7 +200,7 @@ CREATE INDEX idx_chat_channels_event_id ON chat_channels(event_id);
 -- MESSAGES TABLE
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS messages (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   channel_id UUID NOT NULL REFERENCES chat_channels(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
@@ -217,7 +218,7 @@ CREATE TYPE poll_category AS ENUM ('accommodation', 'activities', 'budget', 'gen
 CREATE TYPE poll_status AS ENUM ('draft', 'active', 'closing_soon', 'closed');
 
 CREATE TABLE IF NOT EXISTS polls (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   channel_id UUID REFERENCES chat_channels(id) ON DELETE SET NULL,
   category poll_category NOT NULL,
@@ -236,7 +237,7 @@ CREATE INDEX idx_polls_status ON polls(status);
 -- POLL OPTIONS TABLE
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS poll_options (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   poll_id UUID NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
   label TEXT NOT NULL,
   vote_count INTEGER DEFAULT 0,
@@ -249,7 +250,7 @@ CREATE INDEX idx_poll_options_poll_id ON poll_options(poll_id);
 -- POLL VOTES TABLE
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS poll_votes (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   poll_id UUID NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
   option_id UUID NOT NULL REFERENCES poll_options(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -264,7 +265,7 @@ CREATE INDEX idx_poll_votes_user_id ON poll_votes(user_id);
 -- NOTIFICATIONS TABLE
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS notifications (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   event_id UUID REFERENCES events(id) ON DELETE CASCADE,
   type TEXT NOT NULL,

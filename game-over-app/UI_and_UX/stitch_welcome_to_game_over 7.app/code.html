@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Communication Center - Voting</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Poppins:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#4a6fa5",
+                        "primary-dark": "#3b5984",
+                        "background-light": "#f6f7f7",
+                        "background-dark": "#15181d",
+                        "surface-dark": "#1e2329",
+                        "surface-card": "#23272f",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "heading": ["Poppins", "sans-serif"],
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "2xl": "1rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-nav {
+            background: rgba(21, 24, 29, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }.no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-gray-900 dark:text-white font-display antialiased selection:bg-primary selection:text-white">
+<div class="relative flex h-full min-h-screen w-full flex-col overflow-x-hidden pb-24">
+<div class="sticky top-0 z-30 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md px-4 py-3 pb-2 flex items-center justify-between border-b border-gray-200 dark:border-white/5">
+<div class="flex items-center gap-3">
+<button class="text-gray-400 hover:text-white transition-colors">
+<span class="material-symbols-outlined">arrow_back_ios_new</span>
+</button>
+<div class="flex flex-col">
+<h2 class="text-white text-lg font-heading font-bold leading-tight tracking-tight">Ethan's Bachelor Party</h2>
+<span class="text-xs text-gray-400 font-medium">Communication Center</span>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center justify-center rounded-full size-10 bg-surface-card hover:bg-white/10 transition-colors text-white relative">
+<span class="material-symbols-outlined !text-[24px]">search</span>
+</button>
+<div class="relative">
+<div class="bg-center bg-no-repeat bg-cover rounded-full size-9 border border-white/10 shadow-sm" data-alt="User profile portrait" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBpEe9cx_urXpTopsPMsrNafpz9QiEje_c2PqsAMWhrcLx7wQmMMHnGjXh6DI9fKQYH5yi9grElW2I_5qAgE0QDC_Y2ePVmQoaKXgVPy9ulPGcrsrdXNKtSBQ0HHRmGuJWwoEPeSWB7MuMpruBVaCI1S8RETj0lUpvceWl0NuhqzvNFT9pnc6dnZ8I07MiMVsOck2PHRjbN1fpf-Acqx_fPYj-fJiA71cwdUyOqnbbOKA3tITPOFyCOZ5B6UeTHmwxlIH-MrLQkPRM");'></div>
+</div>
+</div>
+</div>
+<div class="px-4 py-4 sticky top-[60px] z-20 bg-background-light dark:bg-background-dark pb-2">
+<div class="flex h-12 w-full items-center justify-center rounded-xl bg-surface-dark p-1 shadow-inner">
+<label class="group flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-lg px-2 transition-all duration-200 has-[:checked]:bg-primary has-[:checked]:shadow-md has-[:checked]:text-white text-gray-400">
+<span class="truncate text-sm font-medium font-heading tracking-wide">Chat</span>
+<input class="invisible w-0 fixed" name="view-tab" type="radio" value="Chat"/>
+</label>
+<label class="group flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-lg px-2 transition-all duration-200 has-[:checked]:bg-primary has-[:checked]:shadow-md has-[:checked]:text-white text-gray-400">
+<span class="truncate text-sm font-medium font-heading tracking-wide">Voting</span>
+<input checked="" class="invisible w-0 fixed" name="view-tab" type="radio" value="Voting"/>
+</label>
+<label class="group flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-lg px-2 transition-all duration-200 has-[:checked]:bg-primary has-[:checked]:shadow-md has-[:checked]:text-white text-gray-400">
+<span class="truncate text-sm font-medium font-heading tracking-wide">Decisions</span>
+<input class="invisible w-0 fixed" name="view-tab" type="radio" value="Decisions"/>
+</label>
+</div>
+</div>
+<div class="flex flex-col gap-6 px-4">
+<div class="space-y-3">
+<div class="flex items-center justify-between px-1">
+<h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 font-heading">Accommodation</h3>
+<button class="text-primary hover:text-white transition-colors flex items-center gap-1 text-xs font-medium">
+<span>New Poll</span>
+<span class="material-symbols-outlined !text-[16px]">add_circle</span>
+</button>
+</div>
+<div class="group relative flex flex-col gap-3 rounded-2xl bg-surface-card p-5 shadow-lg ring-1 ring-white/5 hover:ring-primary/30 transition-all duration-300">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400 border border-blue-500/20">
+<span class="material-symbols-outlined !text-[20px]">villa</span>
+</div>
+<div>
+<h4 class="text-white text-base font-heading font-semibold">Base Camp Location</h4>
+<p class="text-[11px] text-gray-400">Decide where we crash for the weekend</p>
+</div>
+</div>
+<span class="px-2 py-1 rounded-md bg-green-500/10 text-green-400 text-[10px] font-bold uppercase tracking-wide border border-green-500/20">Active</span>
+</div>
+<div class="space-y-2 mt-1">
+<button class="relative w-full overflow-hidden rounded-xl bg-surface-dark border border-white/5 hover:border-primary/50 transition-colors group/option">
+<div class="absolute left-0 top-0 h-full bg-primary/20 w-[65%] transition-all duration-500"></div>
+<div class="relative z-10 flex w-full items-center justify-between px-4 py-3">
+<div class="flex items-center gap-3">
+<div class="size-4 rounded-full border border-gray-500 group-hover/option:border-primary flex items-center justify-center"></div>
+<span class="text-sm font-medium text-white">Luxury Villa (Pool)</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex -space-x-1.5">
+<div class="size-5 rounded-full ring-2 ring-surface-dark bg-cover" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBpEe9cx_urXpTopsPMsrNafpz9QiEje_c2PqsAMWhrcLx7wQmMMHnGjXh6DI9fKQYH5yi9grElW2I_5qAgE0QDC_Y2ePVmQoaKXgVPy9ulPGcrsrdXNKtSBQ0HHRmGuJWwoEPeSWB7MuMpruBVaCI1S8RETj0lUpvceWl0NuhqzvNFT9pnc6dnZ8I07MiMVsOck2PHRjbN1fpf-Acqx_fPYj-fJiA71cwdUyOqnbbOKA3tITPOFyCOZ5B6UeTHmwxlIH-MrLQkPRM");'></div>
+<div class="size-5 rounded-full ring-2 ring-surface-dark bg-cover" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBXbF60o0Jfm_8MhoA0LAQpGRHYch2cEJZrsWpZKoyewR1r1ohuRDEVV5fmQ3BWipgj8_FxUDEx8Cphcxz3iWtO-p2iUrtl4p-qwIZnIEsPMfDi88YGMaoTv2mke4jUkSOEBYX7KHRrE2RuMMDi1tLvtsNBUQKyaClF7TSZHXlxwCtGqU7SPw6bbmVCeb7MoO2Goddt2xOos108NRaLez9Ia17hp_wcp01YkCTeoHOXtStqLQGO5Jy6pB_hB9LzROaLgSNMFszQwJc");'></div>
+<div class="size-5 rounded-full ring-2 ring-surface-dark bg-gray-600 flex items-center justify-center text-[8px] text-white font-bold">+2</div>
+</div>
+<span class="text-xs font-bold text-white">65%</span>
+</div>
+</div>
+</button>
+<button class="relative w-full overflow-hidden rounded-xl bg-surface-dark border border-white/5 hover:border-primary/50 transition-colors group/option">
+<div class="absolute left-0 top-0 h-full bg-gray-700/30 w-[35%] transition-all duration-500"></div>
+<div class="relative z-10 flex w-full items-center justify-between px-4 py-3">
+<div class="flex items-center gap-3">
+<div class="size-4 rounded-full border border-gray-500 group-hover/option:border-primary flex items-center justify-center"></div>
+<span class="text-sm font-medium text-gray-300">Downtown Hotel Suites</span>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex -space-x-1.5">
+<div class="size-5 rounded-full ring-2 ring-surface-dark bg-gray-500 flex items-center justify-center text-[10px] text-white">JM</div>
+<div class="size-5 rounded-full ring-2 ring-surface-dark bg-gray-600 flex items-center justify-center text-[10px] text-white">AL</div>
+</div>
+<span class="text-xs font-bold text-gray-400">35%</span>
+</div>
+</div>
+</button>
+</div>
+<div class="flex items-center justify-between mt-1 pt-2 border-t border-white/5">
+<span class="text-[10px] text-gray-500 font-medium">6 votes cast • Ends in 24h</span>
+<span class="text-[10px] text-primary font-medium">Tap option to vote</span>
+</div>
+</div>
+</div>
+<div class="space-y-3">
+<div class="flex items-center justify-between px-1">
+<h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 font-heading">Activities</h3>
+<button class="text-primary hover:text-white transition-colors">
+<span class="material-symbols-outlined !text-[18px]">add</span>
+</button>
+</div>
+<div class="group relative flex flex-col gap-3 rounded-2xl bg-surface-card p-5 shadow-lg ring-1 ring-white/5 hover:ring-primary/30 transition-all duration-300">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-xl bg-orange-500/10 flex items-center justify-center text-orange-400 border border-orange-500/20">
+<span class="material-symbols-outlined !text-[20px]">local_activity</span>
+</div>
+<div>
+<h4 class="text-white text-base font-heading font-semibold">Saturday Afternoon</h4>
+<p class="text-[11px] text-gray-400">What's the plan for 2PM - 6PM?</p>
+</div>
+</div>
+<span class="px-2 py-1 rounded-md bg-yellow-500/10 text-yellow-500 text-[10px] font-bold uppercase tracking-wide border border-yellow-500/20">Closing Soon</span>
+</div>
+<div class="space-y-2 mt-1">
+<button class="relative w-full overflow-hidden rounded-xl bg-surface-dark border border-primary ring-1 ring-primary/50 transition-colors">
+<div class="absolute left-0 top-0 h-full bg-primary/20 w-[80%] transition-all duration-500"></div>
+<div class="relative z-10 flex w-full items-center justify-between px-4 py-3">
+<div class="flex items-center gap-3">
+<div class="size-4 rounded-full bg-primary border border-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-white !text-[12px]">check</span>
+</div>
+<span class="text-sm font-medium text-white">Go-Kart Racing</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-xs font-bold text-primary">8 votes</span>
+</div>
+</div>
+</button>
+<button class="relative w-full overflow-hidden rounded-xl bg-surface-dark border border-white/5 hover:border-primary/50 transition-colors group/option">
+<div class="absolute left-0 top-0 h-full bg-gray-700/30 w-[20%] transition-all duration-500"></div>
+<div class="relative z-10 flex w-full items-center justify-between px-4 py-3">
+<div class="flex items-center gap-3">
+<div class="size-4 rounded-full border border-gray-500 group-hover/option:border-primary flex items-center justify-center"></div>
+<span class="text-sm font-medium text-gray-300">Top Golf</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-xs font-bold text-gray-500">2 votes</span>
+</div>
+</div>
+</button>
+</div>
+<div class="flex items-center justify-between mt-1 pt-2 border-t border-white/5">
+<span class="text-[10px] text-gray-500 font-medium">10 votes cast • Ends in 2h</span>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-green-400 !text-[14px]">check_circle</span>
+<span class="text-[10px] text-green-400 font-medium">You voted</span>
+</div>
+</div>
+</div>
+</div>
+<div class="space-y-3 mb-6">
+<div class="flex items-center justify-between px-1">
+<h3 class="text-xs font-bold uppercase tracking-wider text-gray-400 font-heading">Budget</h3>
+<button class="text-primary hover:text-white transition-colors">
+<span class="material-symbols-outlined !text-[18px]">add</span>
+</button>
+</div>
+<div class="group relative flex flex-col gap-3 rounded-2xl bg-surface-card p-5 shadow-lg ring-1 ring-white/5 hover:ring-primary/30 transition-all duration-300">
+<div class="flex items-start justify-between">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-xl bg-green-500/10 flex items-center justify-center text-green-400 border border-green-500/20">
+<span class="material-symbols-outlined !text-[20px]">attach_money</span>
+</div>
+<div>
+<h4 class="text-white text-base font-heading font-semibold">Steakhouse Budget</h4>
+<p class="text-[11px] text-gray-400">Target spend per person for Sat dinner</p>
+</div>
+</div>
+<span class="px-2 py-1 rounded-md bg-surface-dark text-gray-400 text-[10px] font-bold uppercase tracking-wide border border-white/5">Draft</span>
+</div>
+<div class="mt-2 py-4 border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center text-center gap-2">
+<p class="text-xs text-gray-400 max-w-[200px]">This poll is currently in draft mode. Options are being finalized.</p>
+<button class="text-xs text-primary font-bold hover:text-white transition-colors">Add Suggestion</button>
+</div>
+</div>
+</div>
+</div>
+<div class="fixed bottom-0 left-0 w-full glass-nav z-40 pb-safe">
+<div class="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
+<button class="flex flex-col items-center justify-center w-16 gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+<span class="material-symbols-outlined !text-[26px]">event_note</span>
+<span class="text-[10px] font-medium">Events</span>
+</button>
+<button class="flex flex-col items-center justify-center w-16 gap-1 text-primary transition-colors">
+<span class="material-symbols-outlined !text-[26px]">chat_bubble</span>
+<span class="text-[10px] font-medium">Chat</span>
+</button>
+<div class="relative -top-5">
+<button class="flex items-center justify-center size-14 bg-primary rounded-full shadow-[0_4px_14px_0_rgba(74,111,165,0.39)] text-white hover:bg-primary-dark transition-colors border-4 border-background-dark">
+<span class="material-symbols-outlined !text-[28px]">add</span>
+</button>
+</div>
+<button class="flex flex-col items-center justify-center w-16 gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+<span class="material-symbols-outlined !text-[26px]">account_balance_wallet</span>
+<span class="text-[10px] font-medium">Budget</span>
+</button>
+<button class="flex flex-col items-center justify-center w-16 gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+<span class="material-symbols-outlined !text-[26px]">person</span>
+<span class="text-[10px] font-medium">Profile</span>
+</button>
+</div>
+<div class="h-5 w-full"></div>
+</div>
+</div>
+
+</body></html>
