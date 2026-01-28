@@ -149,7 +149,7 @@ export default function ProfileScreen() {
           textAlign="center"
           marginBottom="$6"
         >
-          Settings
+          User Settings
         </Text>
 
         {/* Profile Card */}
@@ -198,7 +198,7 @@ export default function ProfileScreen() {
               icon="notifications"
               iconColor="#60A5FA"
               iconBgColor="rgba(96, 165, 250, 0.2)"
-              label="Notification Preferences"
+              label="Unified Feed"
               showBadge
               onPress={() => router.push('/profile/notifications')}
               testID="menu-notifications"

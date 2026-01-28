@@ -210,7 +210,27 @@ export default function WelcomeScreen() {
                   </Text>
                 </View>
 
-                {/* Social Sign-In Buttons */}
+                {/* Primary CTA - First per mockup */}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    pressed && styles.primaryButtonPressed,
+                  ]}
+                  onPress={handleGetStarted}
+                  testID="get-started-button"
+                >
+                  <Text style={styles.primaryButtonText}>Get Started</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                </Pressable>
+
+                {/* Divider */}
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>or continue with</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+
+                {/* Social Sign-In Buttons - Below CTA */}
                 <View style={styles.socialButtons}>
                   <SocialButton
                     provider="apple"
@@ -234,26 +254,6 @@ export default function WelcomeScreen() {
                     testID="social-button-facebook"
                   />
                 </View>
-
-                {/* Divider */}
-                <View style={styles.divider}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>or</Text>
-                  <View style={styles.dividerLine} />
-                </View>
-
-                {/* Primary CTA */}
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    pressed && styles.primaryButtonPressed,
-                  ]}
-                  onPress={handleGetStarted}
-                  testID="get-started-button"
-                >
-                  <Text style={styles.primaryButtonText}>Get Started</Text>
-                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-                </Pressable>
               </View>
             </BlurView>
 

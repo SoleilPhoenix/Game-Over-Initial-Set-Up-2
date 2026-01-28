@@ -15,8 +15,14 @@ npm run ios            # Run on iOS simulator
 npm run android        # Run on Android emulator
 npm run web            # Run web version
 
+# iOS Native Build (after prebuild or for debugging)
+cd ios && pod install  # Install CocoaPods dependencies (required after npm install)
+xcodebuild -workspace ios/GameOver.xcworkspace -scheme GameOver \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build
+
 # Testing
 npm test               # Run unit tests with Vitest
+npm test -- path/to/file.test.ts  # Run single test file
 npm run test:e2e       # Run Detox E2E tests (iOS simulator)
 npm run typecheck      # TypeScript type checking
 
@@ -24,6 +30,15 @@ npm run typecheck      # TypeScript type checking
 npm run lint           # ESLint
 npm run lint:fix       # ESLint with auto-fix
 npm run format         # Prettier formatting
+
+# Supabase
+npx supabase functions deploy <function-name>  # Deploy edge function
+npx supabase gen types typescript --project-id stdbvehmjpmqbjyiodqg > src/lib/supabase/types.ts
+```
+
+**Important:** Always use `--legacy-peer-deps` when installing packages due to `@testing-library/react-native` peer dependency conflicts:
+```bash
+npm install <package> --legacy-peer-deps
 ```
 
 ### E2E Testing Configurations
@@ -278,16 +293,13 @@ Displayed on confirmation screen with copy-to-clipboard functionality.
 ## Troubleshooting
 
 ### npm Dependency Conflicts
-If `npx expo install` fails with peer dependency errors:
-```bash
-npm install <package> --legacy-peer-deps
-```
-This is due to `@testing-library/react-native` peer dependency conflicts.
+Always use `--legacy-peer-deps` flag when installing packages.
 
-### Supabase Type Generation
-After schema changes:
+### iOS Build Issues
 ```bash
-npx supabase gen types typescript --project-id stdbvehmjpmqbjyiodqg > src/lib/supabase/types.ts
+# Clean and rebuild
+rm -rf ios/build
+cd ios && pod install
 ```
 
 ### Detox Build Issues
@@ -303,5 +315,8 @@ Additional documentation in `docs/`:
 - `DOMAIN_CONFIGURATION.md` - Domain setup and universal links guide
 - `ADMIN_GUIDE.md` - Admin features and management
 - `SESSION_SUMMARY_*.md` - Development session summaries
+- `plans/` - Implementation design documents
 
+UI reference designs: `UI_and_UX/` folder (mockups for all screens)
+UI audit report: `audit/UI_AUDIT_REPORT.md` (screen-by-screen comparison)
 Production checklist: `GO_LIVE_CHECKLIST.md`

@@ -13,13 +13,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { DARK_THEME } from '@/constants/theme';
 
 type IconName = 'calendar' | 'calendar-outline' | 'chatbubbles' | 'chatbubbles-outline' |
-  'wallet' | 'wallet-outline' | 'person' | 'person-outline' | 'add';
+  'bar-chart' | 'bar-chart-outline' | 'person' | 'person-outline' | 'add';
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   const iconMap: Record<string, { active: IconName; inactive: IconName }> = {
     events: { active: 'calendar', inactive: 'calendar-outline' },
     chat: { active: 'chatbubbles', inactive: 'chatbubbles-outline' },
-    budget: { active: 'wallet', inactive: 'wallet-outline' },
+    budget: { active: 'bar-chart', inactive: 'bar-chart-outline' },
     profile: { active: 'person', inactive: 'person-outline' },
   };
 
