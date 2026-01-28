@@ -61,7 +61,7 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <View flex={1} backgroundColor={DARK_THEME.background}>
+    <View flex={1} backgroundColor={DARK_THEME.background} testID="edit-profile-screen">
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

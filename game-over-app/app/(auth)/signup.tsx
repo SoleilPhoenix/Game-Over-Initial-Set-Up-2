@@ -82,7 +82,16 @@ export default function SignupScreen() {
 
       if (error) throw error;
     } catch (error: any) {
-      setError(error.message || 'Failed to create account');
+      // Provide user-friendly error messages for common Supabase errors
+      let errorMessage = error.message || 'Failed to create account';
+
+      if (error.message?.includes('rate limit')) {
+        errorMessage = 'Too many attempts. Please wait a minute and try again.';
+      } else if (error.message?.includes('already registered')) {
+        errorMessage = 'An account with this email already exists. Try logging in instead.';
+      }
+
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -435,7 +444,7 @@ const styles = StyleSheet.create({
   darkInput: {
     backgroundColor: 'transparent',
     borderWidth: 0,
-    color: DARK_THEME.textPrimary,
+    color: '#1A202C', // Dark text for visibility on light input backgrounds
     fontSize: 16,
     paddingVertical: 0,
     paddingHorizontal: 0,

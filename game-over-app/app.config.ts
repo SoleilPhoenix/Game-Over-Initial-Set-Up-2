@@ -57,7 +57,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   web: {
     bundler: 'metro',
-    output: 'static',
+    output: 'single',
     favicon: './assets/favicon.png',
   },
   plugins: [
@@ -65,6 +65,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-secure-store',
     'expo-apple-authentication',
     'expo-calendar',
+    [
+      '@stripe/stripe-react-native',
+      {
+        merchantIdentifier: 'merchant.app.gameover',
+        enableGooglePay: true,
+      },
+    ],
   ],
   experiments: {
     typedRoutes: true,

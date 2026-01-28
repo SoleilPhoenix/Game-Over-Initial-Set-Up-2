@@ -235,7 +235,7 @@ export default function BudgetDashboardScreen() {
         ) : (
           <>
             {/* Total Budget Card */}
-            <View style={styles.glassCard}>
+            <View style={styles.glassCard} testID="budget-summary-card">
               {/* Gradient blur effect */}
               <View style={styles.gradientBlur} />
 

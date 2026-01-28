@@ -131,7 +131,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View flex={1} backgroundColor={DARK_THEME.background}>
+    <View flex={1} backgroundColor={DARK_THEME.background} testID="profile-screen">
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -139,6 +139,7 @@ export default function ProfileScreen() {
           paddingTop: insets.top + 16,
         }}
         showsVerticalScrollIndicator={false}
+        testID="profile-scroll-view"
       >
         {/* Header Title */}
         <Text
@@ -181,10 +182,11 @@ export default function ProfileScreen() {
             fontWeight="700"
             color={DARK_THEME.textPrimary}
             marginTop="$4"
+            testID="profile-user-name"
           >
             {userName}
           </Text>
-          <Text fontSize={14} color={DARK_THEME.textSecondary}>
+          <Text fontSize={14} color={DARK_THEME.textSecondary} testID="profile-user-email">
             {userEmail}
           </Text>
         </YStack>

@@ -77,8 +77,8 @@ export default function InviteScreen() {
   // Loading state
   if (isLoading || !user) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
-        <Spinner size="large" color="$primary" />
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background" testID="invite-loading-screen">
+        <Spinner size="large" color="$primary" testID="loading-indicator" />
         <Text marginTop="$4" color="$textSecondary">
           Validating invite...
         </Text>

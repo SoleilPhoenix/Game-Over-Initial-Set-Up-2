@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
   darkInput: {
     backgroundColor: 'transparent',
     borderWidth: 0,
-    color: DARK_THEME.textPrimary,
+    color: '#1A202C', // Dark text for visibility on light input backgrounds
     fontSize: 16,
     paddingVertical: 0,
     paddingHorizontal: 0,

@@ -211,11 +211,17 @@ This document tracks all tasks that must be completed before launching the Game 
 ### Supabase Configuration
 **Status:** ⏸️ Pending
 
-- [ ] **Enable email confirmations** (currently disabled for development)
-  - Go to Supabase Dashboard > Authentication > Settings
-  - Under "Email Auth", enable "Enable email confirmations"
+- [ ] **⚠️ CRITICAL: Re-enable email confirmations** (DISABLED for development!)
+  - Go to Supabase Dashboard > Authentication > Providers > Email
+  - Toggle ON "Confirm email"
   - Configure email templates for confirmation emails
-  - **Note:** Currently disabled in `supabase/config.toml` for easier development
+  - **Current Status:** DISABLED to bypass rate limits during development
+  - **Security Risk:** Without email confirmation, anyone can create accounts with any email
+- [ ] **Set up Custom SMTP Provider** (Required for production email limits)
+  - Current built-in Supabase email has ~4 emails/hour limit
+  - Recommended: Resend, SendGrid, or Amazon SES
+  - Go to Supabase Dashboard > Project Settings > Auth > SMTP Settings
+  - Configure custom SMTP to remove rate limits
 - [ ] **Set up rate limiting for auth endpoints**
   - Go to Supabase Dashboard > Authentication > Rate Limits
   - Configure limits for:
