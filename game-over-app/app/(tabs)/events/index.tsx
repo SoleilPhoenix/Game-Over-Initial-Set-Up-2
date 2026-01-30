@@ -225,10 +225,10 @@ export default function EventsScreen() {
         color={DARK_THEME.textSecondary}
         textAlign="center"
         marginBottom={24}
-        maxWidth={280}
+        maxWidth={300}
         lineHeight={24}
       >
-        Create your first event and start planning an unforgettable party!
+        Create your first event and start{'\n'}planning an unforgettable party!
       </Text>
       <Pressable
         style={({ pressed }) => [
@@ -348,9 +348,7 @@ export default function EventsScreen() {
       </View>
 
       {/* Content */}
-      {isLoading && !events ? (
-        renderLoadingState()
-      ) : filteredEvents && filteredEvents.length > 0 ? (
+      {filteredEvents && filteredEvents.length > 0 ? (
         <FlatList
           data={filteredEvents}
           renderItem={renderEventCard}

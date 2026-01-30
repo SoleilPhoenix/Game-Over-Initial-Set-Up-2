@@ -1,67 +1,69 @@
 /**
- * Budget Dashboard Screen (Phase 9)
- * Budget tracking, contributions, and payment status
- * Matches the dark theme glassmorphic design from UI specifications
+ * Budget Screen
+ * Budget tracking with Overview, Expenses, and Contributors tabs
+ * Dark glassmorphic design matching Events/Chat screens
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { ScrollView, RefreshControl, Pressable, StyleSheet, Alert, View, Image } from 'react-native';
+import { ScrollView, RefreshControl, Pressable, StyleSheet, Alert, View, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
-import { YStack, XStack, Text, Spinner } from 'tamagui';
+import { YStack, XStack, Text, Image } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { useParticipants } from '@/hooks/queries/useParticipants';
+import { useUser } from '@/stores/authStore';
+import { DARK_THEME } from '@/constants/theme';
 import type { Database } from '@/lib/supabase/types';
 
 type Event = Database['public']['Tables']['events']['Row'] & {
   city?: { name: string } | null;
 };
 
-// Dark theme colors
-const DARK_THEME = {
-  backgroundDark: '#2D3748',
-  surfaceDark: 'rgba(45, 55, 72, 0.95)',
-  glassCard: 'rgba(45, 55, 72, 0.6)',
-  primary: '#4A6FA5',
-  primaryLight: '#5A7EB0',
-  border: 'rgba(255, 255, 255, 0.08)',
-  borderLight: 'rgba(255, 255, 255, 0.05)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#D1D5DB',
-  textTertiary: '#9CA3AF',
-  success: '#22C55E',
-  warning: '#EAB308',
-  error: '#EF4444',
-  orange: '#F97316',
-};
+type TabType = 'overview' | 'expenses' | 'contributors';
 
 // Avatar colors for initials
 const AVATAR_COLORS = [
-  'rgba(139, 92, 246, 0.2)', // purple
-  'rgba(20, 184, 166, 0.2)', // teal
-  'rgba(236, 72, 153, 0.2)', // pink
-  'rgba(59, 130, 246, 0.2)', // blue
-  'rgba(249, 115, 22, 0.2)', // orange
+  'rgba(139, 92, 246, 0.2)',
+  'rgba(20, 184, 166, 0.2)',
+  'rgba(236, 72, 153, 0.2)',
+  'rgba(59, 130, 246, 0.2)',
+  'rgba(249, 115, 22, 0.2)',
 ];
 
-export default function BudgetDashboardScreen() {
+export default function BudgetScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const user = useUser();
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Get user avatar
+  const avatarUrl = user?.user_metadata?.avatar_url;
+  const userInitials = useMemo(() => {
+    const name = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'U';
+    return name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+  }, [user]);
 
   // Fetch user's events
   const {
     data: events,
     isLoading: eventsLoading,
     refetch: refetchEvents,
-    isRefetching,
   } = useEvents();
 
-  // Filter booked events
+  // Filter booked events (events that have budget data)
   const bookedEvents = useMemo(() => {
     return (events || []).filter((e: Event) => e.status === 'booked' || e.status === 'completed');
+  }, [events]);
+
+  // Check if user has any events at all
+  const hasAnyEvents = useMemo(() => {
+    return (events || []).length > 0;
   }, [events]);
 
   // Auto-select first booked event
@@ -78,8 +80,6 @@ export default function BudgetDashboardScreen() {
   const { data: participants, isLoading: participantsLoading } = useParticipants(
     selectedEventId || undefined
   );
-
-  const selectedEvent = bookedEvents.find((e: Event) => e.id === selectedEventId);
 
   // Calculate budget stats
   const budgetStats = useMemo(() => {
@@ -126,378 +126,537 @@ export default function BudgetDashboardScreen() {
     }).format(cents / 100);
   };
 
-  // Handle remind all
-  const handleRemindAll = useCallback(() => {
-    Alert.alert(
-      'Send Reminders',
-      `Send payment reminders to ${budgetStats.pendingCount} participant${budgetStats.pendingCount !== 1 ? 's' : ''}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Send',
-          onPress: () => {
-            Alert.alert('Success', 'Payment reminders sent!');
-          },
-        },
-      ]
-    );
-  }, [budgetStats.pendingCount]);
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refetchEvents();
+    setIsRefreshing(false);
+  };
 
-  // Handle refresh
-  const handleRefresh = useCallback(() => {
-    refetchEvents();
-  }, [refetchEvents]);
+  // Check if we're in empty state (no events at all)
+  // Also show empty state while loading to avoid flash
+  const hasNoEvents = eventsLoading || !hasAnyEvents;
 
-  const isLoading = eventsLoading || bookingLoading || participantsLoading;
+  // Check if we have events but no booked events (no budget data yet)
+  const hasEventsButNoBudget = !eventsLoading && hasAnyEvents && bookedEvents.length === 0;
 
-  // Empty state - no booked events
-  if (!eventsLoading && bookedEvents.length === 0) {
+  // Check if we have booked events but no actual booking data
+  // Also include loading state to avoid showing $0.00 card
+  const hasBookedEventsButNoData = !eventsLoading && bookedEvents.length > 0 && (bookingLoading || !booking);
+
+  // Empty state content configuration per tab
+  const emptyStateConfig = {
+    overview: {
+      emoji: '💰',
+      title: 'No Budget Yet',
+      subtitleLine1: 'Create your first event and',
+      subtitleLine2: 'start tracking your budget!',
+    },
+    expenses: {
+      emoji: '🧾',
+      title: 'No Expenses Yet',
+      subtitleLine1: 'Create your first event and',
+      subtitleLine2: 'start tracking expenses!',
+    },
+    contributors: {
+      emoji: '👥',
+      title: 'No Contributors Yet',
+      subtitleLine1: 'Create your first event and',
+      subtitleLine2: 'start inviting contributors!',
+    },
+  };
+
+  // Render empty state content - matches Events/Chat screens exactly
+  const renderEmptyState = () => {
+    const config = emptyStateConfig[activeTab];
     return (
-      <YStack flex={1} backgroundColor={DARK_THEME.backgroundDark}>
-        <XStack
-          paddingTop={insets.top + 16}
-          paddingHorizontal="$4"
-          paddingBottom="$2"
-          alignItems="center"
-          backgroundColor={DARK_THEME.surfaceDark}
-        >
-          <Pressable style={styles.headerButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
-          </Pressable>
-          <Text flex={1} textAlign="center" fontSize={18} fontWeight="700" color={DARK_THEME.textPrimary}>
-            Budget Dashboard
-          </Text>
-          <View style={styles.headerButton} />
-        </XStack>
-        <YStack flex={1} justifyContent="center" alignItems="center" padding="$6">
-          <YStack
-            width={80}
-            height={80}
-            borderRadius={40}
-            backgroundColor={`${DARK_THEME.primary}20`}
-            alignItems="center"
-            justifyContent="center"
-            marginBottom="$4"
+      <YStack flex={1} justifyContent="center" alignItems="center" padding={24}>
+        <View style={styles.emptyIconContainer}>
+          <LinearGradient
+            colors={[`${DARK_THEME.primary}30`, `${DARK_THEME.primary}10`]}
+            style={styles.emptyIconGradient}
           >
-            <Ionicons name="wallet-outline" size={40} color={DARK_THEME.primary} />
-          </YStack>
-          <Text fontSize={18} fontWeight="600" color={DARK_THEME.textPrimary} textAlign="center" marginBottom="$2">
-            No Budget Yet
-          </Text>
-          <Text fontSize={14} color={DARK_THEME.textTertiary} textAlign="center" marginBottom="$4">
-            Book a package to track your event budget
-          </Text>
-          <Pressable style={styles.primaryButton} onPress={() => router.push('/(tabs)/events')}>
-            <Ionicons name="calendar" size={20} color="white" />
-            <Text color="white" fontWeight="600">View Events</Text>
-          </Pressable>
-        </YStack>
+            <Text fontSize={56}>{config.emoji}</Text>
+          </LinearGradient>
+        </View>
+        <Text fontSize={24} fontWeight="800" color={DARK_THEME.textPrimary} marginBottom={8}>
+          {config.title}
+        </Text>
+        <Text
+          fontSize={16}
+          color={DARK_THEME.textSecondary}
+          textAlign="center"
+          marginBottom={24}
+          maxWidth={280}
+          lineHeight={24}
+        >
+          {config.subtitleLine1}{'\n'}{config.subtitleLine2}
+        </Text>
+        <Pressable
+          style={({ pressed }) => [
+            styles.primaryButton,
+            pressed && styles.primaryButtonPressed,
+          ]}
+          onPress={() => router.push('/create-event')}
+          testID="create-event-button"
+        >
+          <Ionicons name="add" size={20} color="#FFFFFF" />
+          <Text style={styles.primaryButtonText}>Create Event</Text>
+        </Pressable>
       </YStack>
     );
-  }
+  };
 
-  return (
-    <YStack flex={1} backgroundColor={DARK_THEME.backgroundDark} testID="budget-screen">
-      {/* Header */}
-      <XStack
-        paddingTop={insets.top + 16}
-        paddingHorizontal="$4"
-        paddingBottom="$2"
-        alignItems="center"
-        backgroundColor={DARK_THEME.surfaceDark}
-      >
-        <Pressable style={styles.headerButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
-        </Pressable>
-        <Text flex={1} textAlign="center" fontSize={18} fontWeight="700" color={DARK_THEME.textPrimary}>
-          Budget Dashboard
+  // Render "has events but no budget" state
+  const renderNoBudgetState = () => {
+    return (
+      <YStack flex={1} justifyContent="center" alignItems="center" padding={24}>
+        <View style={styles.emptyIconContainer}>
+          <LinearGradient
+            colors={[`${DARK_THEME.primary}30`, `${DARK_THEME.primary}10`]}
+            style={styles.emptyIconGradient}
+          >
+            <Text fontSize={56}>📊</Text>
+          </LinearGradient>
+        </View>
+        <Text fontSize={24} fontWeight="800" color={DARK_THEME.textPrimary} marginBottom={8}>
+          No Budget Data
         </Text>
-        <Pressable style={styles.headerButton}>
-          <Ionicons name="options" size={24} color={DARK_THEME.textSecondary} />
+        <Text
+          fontSize={16}
+          color={DARK_THEME.textSecondary}
+          textAlign="center"
+          marginBottom={24}
+          maxWidth={280}
+          lineHeight={24}
+        >
+          Book a package for your event to{'\n'}start tracking your budget!
+        </Text>
+        <Pressable
+          style={({ pressed }) => [
+            styles.primaryButton,
+            pressed && styles.primaryButtonPressed,
+          ]}
+          onPress={() => router.push('/(tabs)/events')}
+          testID="view-events-button"
+        >
+          <Ionicons name="calendar" size={20} color="#FFFFFF" />
+          <Text style={styles.primaryButtonText}>View Events</Text>
         </Pressable>
-      </XStack>
+      </YStack>
+    );
+  };
 
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={handleRefresh}
-            tintColor={DARK_THEME.primary}
-          />
-        }
-      >
-        {isLoading ? (
-          <YStack flex={1} justifyContent="center" alignItems="center" padding="$8">
-            <Spinner size="large" color={DARK_THEME.primary} />
-          </YStack>
-        ) : (
-          <>
-            {/* Total Budget Card */}
-            <View style={styles.glassCard} testID="budget-summary-card">
-              {/* Gradient blur effect */}
-              <View style={styles.gradientBlur} />
+  // Render budget content
+  const renderBudgetContent = () => {
+    if (bookingLoading || participantsLoading) {
+      return (
+        <YStack flex={1} justifyContent="center" alignItems="center" padding={24}>
+          <Text color={DARK_THEME.textSecondary}>Loading budget data...</Text>
+        </YStack>
+      );
+    }
 
-              <YStack gap="$2" style={{ position: 'relative', zIndex: 1 }}>
-                <XStack justifyContent="space-between" alignItems="flex-start" marginBottom="$1">
-                  <Text fontSize={14} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.5}>
-                    Total Budget
-                  </Text>
-                  <View style={styles.statusBadge}>
-                    <Text style={styles.statusText}>On Track</Text>
-                  </View>
-                </XStack>
+    return (
+      <>
+        {/* Total Budget Card */}
+        <View style={styles.glassCard} testID="budget-summary-card">
+          <View style={styles.gradientBlur} />
+          <YStack gap="$2" style={{ position: 'relative', zIndex: 1 }}>
+            <XStack justifyContent="space-between" alignItems="flex-start" marginBottom="$1">
+              <Text fontSize={14} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.5}>
+                Total Budget
+              </Text>
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusText}>On Track</Text>
+              </View>
+            </XStack>
 
-                <XStack alignItems="baseline" gap="$2" marginBottom="$4">
-                  <Text fontSize={36} fontWeight="700" color={DARK_THEME.textPrimary} letterSpacing={-1}>
-                    {formatCurrency(budgetStats.collected)}
-                  </Text>
-                  <Text fontSize={14} fontWeight="500" color={DARK_THEME.textTertiary}>
-                    of {formatCurrency(budgetStats.totalBudget)}
-                  </Text>
-                </XStack>
+            <XStack alignItems="baseline" gap="$2" marginBottom="$4">
+              <Text fontSize={36} fontWeight="700" color={DARK_THEME.textPrimary} letterSpacing={-1}>
+                {formatCurrency(budgetStats.collected)}
+              </Text>
+              <Text fontSize={14} fontWeight="500" color={DARK_THEME.textTertiary}>
+                of {formatCurrency(budgetStats.totalBudget)}
+              </Text>
+            </XStack>
 
-                {/* Progress Bar */}
-                <View style={styles.progressContainer}>
-                  <View
-                    style={[styles.progressBar, { width: `${budgetStats.percentage}%`, backgroundColor: DARK_THEME.primary }]}
-                  />
-                </View>
-
-                {/* Stats Row */}
-                <XStack
-                  justifyContent="space-between"
-                  alignItems="center"
-                  paddingTop="$3"
-                  marginTop="$1"
-                  borderTopWidth={1}
-                  borderTopColor={DARK_THEME.borderLight}
-                >
-                  <XStack alignItems="center" gap="$1.5">
-                    <View style={styles.statDot} />
-                    <Text fontSize={12} fontWeight="500" color={DARK_THEME.textSecondary}>
-                      Spent ({budgetStats.percentage}%)
-                    </Text>
-                  </XStack>
-                  <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary}>
-                    {formatCurrency(budgetStats.pending)} Remaining
-                  </Text>
-                </XStack>
-              </YStack>
+            {/* Progress Bar */}
+            <View style={styles.progressContainer}>
+              <View
+                style={[styles.progressBar, { width: `${budgetStats.percentage}%` }]}
+              />
             </View>
 
-            {/* Group Contributions */}
-            <YStack marginBottom="$4">
-              <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
-                <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
-                  Group Contributions
+            {/* Stats Row */}
+            <XStack
+              justifyContent="space-between"
+              alignItems="center"
+              paddingTop="$3"
+              marginTop="$1"
+              borderTopWidth={1}
+              borderTopColor={DARK_THEME.glassBorder}
+            >
+              <XStack alignItems="center" gap="$1.5">
+                <View style={styles.statDot} />
+                <Text fontSize={12} fontWeight="500" color={DARK_THEME.textSecondary}>
+                  Collected ({budgetStats.percentage}%)
                 </Text>
-                {budgetStats.pendingCount > 0 && (
-                  <Pressable onPress={handleRemindAll}>
-                    <Text fontSize={12} fontWeight="500" color={DARK_THEME.primary}>
-                      Remind All
-                    </Text>
-                  </Pressable>
-                )}
               </XStack>
+              <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary}>
+                {formatCurrency(budgetStats.pending)} Remaining
+              </Text>
+            </XStack>
+          </YStack>
+        </View>
 
-              <View style={styles.glassCard}>
-                {participants?.map((participant, index) => {
-                  const isPaid = participant.payment_status === 'paid';
-                  const isPending = participant.payment_status === 'pending';
-                  const perPerson = booking?.per_person_cents || 0;
-                  const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
-                  const initials = (participant.profile?.full_name || 'U')
-                    .split(' ')
-                    .map(n => n[0])
-                    .join('')
-                    .toUpperCase()
-                    .slice(0, 2);
-                  const isCurrentUser = index === 0; // Simplified - would check actual user
+        {/* Contributors Section */}
+        {activeTab === 'contributors' && participants && participants.length > 0 && (
+          <YStack marginBottom="$4">
+            <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
+              <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
+                Group Contributions
+              </Text>
+            </XStack>
 
-                  return (
-                    <Pressable
-                      key={participant.id}
-                      style={[
-                        styles.contributionRow,
-                        index !== (participants?.length || 0) - 1 && styles.contributionRowBorder,
-                      ]}
-                    >
-                      <XStack alignItems="center" gap="$3" flex={1}>
-                        {/* Avatar */}
-                        {participant.profile?.avatar_url ? (
-                          <View style={styles.avatarGradient}>
-                            <Image
-                              source={{ uri: participant.profile.avatar_url }}
-                              style={styles.avatar}
-                            />
-                          </View>
-                        ) : (
-                          <View style={[styles.avatarInitials, { backgroundColor: avatarColor }]}>
-                            <Text style={styles.initialsText}>{initials}</Text>
-                          </View>
-                        )}
+            <View style={styles.glassCard}>
+              {participants.map((participant, index) => {
+                const isPaid = participant.payment_status === 'paid';
+                const perPerson = booking?.per_person_cents || 0;
+                const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
+                const initials = (participant.profile?.full_name || 'U')
+                  .split(' ')
+                  .map(n => n[0])
+                  .join('')
+                  .toUpperCase()
+                  .slice(0, 2);
 
-                        {/* Info */}
-                        <YStack>
-                          <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
-                            {participant.profile?.full_name || 'Unknown'}
-                            {isCurrentUser && ' (You)'}
-                          </Text>
-                          <Text fontSize={12} color={DARK_THEME.textTertiary}>
-                            {isPending
-                              ? `${formatCurrency(perPerson - (participant.contribution_amount_cents || 0))} Remaining`
-                              : `${formatCurrency(perPerson)} Contribution`
-                            }
-                          </Text>
-                        </YStack>
-                      </XStack>
-
-                      {/* Status Badge */}
-                      <View style={[
-                        styles.paymentBadge,
-                        isPaid && styles.paidBadge,
-                        isPending && styles.pendingBadge,
-                      ]}>
-                        <Ionicons
-                          name={isPaid ? 'checkmark' : 'time-outline'}
-                          size={12}
-                          color={isPaid ? DARK_THEME.success : DARK_THEME.warning}
-                        />
-                        <Text style={[
-                          styles.paymentBadgeText,
-                          { color: isPaid ? DARK_THEME.success : DARK_THEME.warning }
-                        ]}>
-                          {isPaid ? 'Paid' : 'Pending'}
-                        </Text>
+                return (
+                  <View
+                    key={participant.id}
+                    style={[
+                      styles.contributionRow,
+                      index !== (participants?.length || 0) - 1 && styles.contributionRowBorder,
+                    ]}
+                  >
+                    <XStack alignItems="center" gap="$3" flex={1}>
+                      <View style={[styles.avatarInitials, { backgroundColor: avatarColor }]}>
+                        <Text style={styles.initialsText}>{initials}</Text>
                       </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </YStack>
-
-            {/* Hidden Cost Alerts */}
-            <YStack marginBottom="$4">
-              <Text
-                fontSize={12}
-                fontWeight="700"
-                color={DARK_THEME.textTertiary}
-                textTransform="uppercase"
-                letterSpacing={0.8}
-                marginBottom="$3"
-                marginLeft="$1"
-              >
-                Hidden Cost Alerts
-              </Text>
-              <View style={[styles.glassCard, styles.emptyStateCard]}>
-                <View style={styles.emptyStateIcon}>
-                  <Ionicons name="shield-checkmark" size={24} color="rgba(52, 211, 153, 0.8)" />
-                </View>
-                <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary} marginBottom="$1">
-                  No hidden costs detected
-                </Text>
-                <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" maxWidth={220} lineHeight={18}>
-                  Great job! All expenses are accounted for within the agreed budget.
-                </Text>
-              </View>
-            </YStack>
-
-            {/* Refund Tracking */}
-            <YStack marginBottom="$6">
-              <Text
-                fontSize={12}
-                fontWeight="700"
-                color={DARK_THEME.textTertiary}
-                textTransform="uppercase"
-                letterSpacing={0.8}
-                marginBottom="$3"
-                marginLeft="$1"
-              >
-                Refund Tracking
-              </Text>
-              <View style={styles.glassCard}>
-                {/* Example refund items */}
-                <Pressable style={[styles.refundRow, styles.contributionRowBorder]}>
-                  <XStack alignItems="center" gap="$3" flex={1}>
-                    <View style={styles.refundIcon}>
-                      <Ionicons name="home-outline" size={18} color={DARK_THEME.textSecondary} />
-                    </View>
-                    <YStack>
-                      <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
-                        Airbnb Deposit
+                      <YStack>
+                        <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
+                          {participant.profile?.full_name || 'Unknown'}
+                        </Text>
+                        <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                          {formatCurrency(perPerson)} Contribution
+                        </Text>
+                      </YStack>
+                    </XStack>
+                    <View style={[styles.paymentBadge, isPaid ? styles.paidBadge : styles.pendingBadge]}>
+                      <Ionicons
+                        name={isPaid ? 'checkmark' : 'time-outline'}
+                        size={12}
+                        color={isPaid ? '#22C55E' : '#EAB308'}
+                      />
+                      <Text style={[styles.paymentBadgeText, { color: isPaid ? '#22C55E' : '#EAB308' }]}>
+                        {isPaid ? 'Paid' : 'Pending'}
                       </Text>
-                      <Text fontSize={12} color={DARK_THEME.textTertiary}>
-                        Security Hold
-                      </Text>
-                    </YStack>
-                  </XStack>
-                  <YStack alignItems="flex-end">
-                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
-                      +$500.00
-                    </Text>
-                    <View style={styles.processingBadge}>
-                      <Text style={styles.processingText}>Processing</Text>
                     </View>
-                  </YStack>
-                </Pressable>
-
-                <Pressable style={styles.refundRow}>
-                  <XStack alignItems="center" gap="$3" flex={1}>
-                    <View style={styles.refundIcon}>
-                      <Ionicons name="car-outline" size={18} color={DARK_THEME.textSecondary} />
-                    </View>
-                    <YStack>
-                      <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
-                        Uber Adjustment
-                      </Text>
-                      <Text fontSize={12} color={DARK_THEME.textTertiary}>
-                        Overcharge
-                      </Text>
-                    </YStack>
-                  </XStack>
-                  <YStack alignItems="flex-end">
-                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
-                      +$12.50
-                    </Text>
-                    <View style={styles.receivedBadge}>
-                      <Text style={styles.receivedText}>Received</Text>
-                    </View>
-                  </YStack>
-                </Pressable>
-              </View>
-            </YStack>
-
-            {/* Footer */}
-            <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" marginTop="$2">
-              Data updated just now
-            </Text>
-          </>
+                  </View>
+                );
+              })}
+            </View>
+          </YStack>
         )}
-      </ScrollView>
-    </YStack>
+      </>
+    );
+  };
+
+  return (
+    <View style={styles.container} testID="budget-screen">
+      <StatusBar barStyle="light-content" />
+      <LinearGradient
+        colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
+        style={StyleSheet.absoluteFill}
+      />
+
+      {/* Header - Matching Events/Chat screen structure exactly */}
+      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View style={styles.headerInner}>
+          {/* Left: Avatar (navigates to profile) + Title */}
+          <XStack alignItems="center" gap={12}>
+            <Pressable
+              onPress={() => router.push('/(tabs)/profile')}
+              style={({ pressed }) => [
+                styles.avatarContainer,
+                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+              ]}
+              testID="avatar-profile-button"
+            >
+              <LinearGradient
+                colors={[DARK_THEME.primary, '#60A5FA']}
+                style={styles.avatarGradient}
+              >
+                <View style={styles.avatarInner}>
+                  {avatarUrl ? (
+                    <Image
+                      source={{ uri: avatarUrl }}
+                      width={36}
+                      height={36}
+                      borderRadius={18}
+                    />
+                  ) : (
+                    <Text fontSize={14} fontWeight="700" color={DARK_THEME.textPrimary}>
+                      {userInitials}
+                    </Text>
+                  )}
+                </View>
+              </LinearGradient>
+              <View style={styles.onlineIndicator} />
+            </Pressable>
+            <Text fontSize={20} fontWeight="700" color={DARK_THEME.textPrimary}>
+              Budget
+            </Text>
+          </XStack>
+
+          {/* Right: Notification bell */}
+          <Pressable
+            onPress={() => router.push('/notifications')}
+            style={({ pressed }) => [
+              styles.bellButton,
+              pressed && styles.bellButtonPressed,
+            ]}
+            testID="notifications-button"
+          >
+            <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
+            <View style={styles.notificationDot} />
+          </Pressable>
+        </View>
+
+        {/* Tab Filters: Overview / Expenses / Contributors - INSIDE header like Events */}
+        <View style={styles.tabFiltersContainer}>
+          <BlurView intensity={10} tint="dark" style={styles.tabFiltersBlur}>
+            <View style={styles.tabFiltersInner}>
+              {(['overview', 'expenses', 'contributors'] as TabType[]).map((tab) => (
+                <Pressable
+                  key={tab}
+                  onPress={() => setActiveTab(tab)}
+                  style={[
+                    styles.tabFilter,
+                    activeTab === tab && styles.tabFilterActive,
+                  ]}
+                  testID={`filter-tab-${tab}`}
+                >
+                  <Text
+                    fontSize={13}
+                    fontWeight="600"
+                    color={activeTab === tab ? DARK_THEME.textPrimary : DARK_THEME.textSecondary}
+                  >
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </BlurView>
+        </View>
+      </View>
+
+      {/* Content */}
+      {hasNoEvents ? (
+        <ScrollView
+          contentContainerStyle={styles.emptyScrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={DARK_THEME.primary}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {renderEmptyState()}
+        </ScrollView>
+      ) : hasEventsButNoBudget || hasBookedEventsButNoData ? (
+        <ScrollView
+          contentContainerStyle={styles.emptyScrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={DARK_THEME.primary}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {renderNoBudgetState()}
+        </ScrollView>
+      ) : (
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: insets.bottom + 100 },
+          ]}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={DARK_THEME.primary}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {renderBudgetContent()}
+        </ScrollView>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  headerButton: {
-    width: 48,
-    height: 48,
+  container: {
+    flex: 1,
+    backgroundColor: DARK_THEME.background,
+  },
+  header: {
+    borderBottomWidth: 1,
+    borderBottomColor: DARK_THEME.glassBorder,
+  },
+  headerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  avatarContainer: {
+    position: 'relative',
+  },
+  avatarGradient: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    padding: 2,
+  },
+  avatarInner: {
+    flex: 1,
+    borderRadius: 18,
+    backgroundColor: '#374151',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#10B981',
+    borderWidth: 2,
+    borderColor: DARK_THEME.background,
+  },
+  bellButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: DARK_THEME.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: DARK_THEME.glassBorder,
+    position: 'relative',
+  },
+  bellButtonPressed: {
+    transform: [{ scale: 0.95 }],
+    opacity: 0.9,
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#EF4444',
+  },
+  tabFiltersContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  tabFiltersBlur: {
+    borderRadius: 25,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: DARK_THEME.glassBorder,
+  },
+  tabFiltersInner: {
+    flexDirection: 'row',
+    backgroundColor: DARK_THEME.glass,
+    padding: 4,
+  },
+  tabFilter: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 20,
+  },
+  tabFilterActive: {
+    backgroundColor: DARK_THEME.primary,
+  },
+  scrollView: {
+    flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    paddingBottom: 120,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+  },
+  emptyScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyIconContainer: {
+    marginBottom: 24,
+  },
+  emptyIconGradient: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  primaryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: DARK_THEME.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    shadowColor: DARK_THEME.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  primaryButtonPressed: {
+    transform: [{ scale: 0.98 }],
+    opacity: 0.9,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
   },
   glassCard: {
-    backgroundColor: DARK_THEME.glassCard,
-    borderRadius: 12,
-    padding: 24,
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 16,
+    padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: DARK_THEME.glassBorder,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -517,7 +676,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: DARK_THEME.borderLight,
+    borderColor: DARK_THEME.glassBorder,
   },
   statusText: {
     fontSize: 10,
@@ -534,6 +693,7 @@ const styles = StyleSheet.create({
   progressBar: {
     height: '100%',
     borderRadius: 6,
+    backgroundColor: DARK_THEME.primary,
   },
   statDot: {
     width: 8,
@@ -545,25 +705,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    paddingVertical: 12,
   },
   contributionRowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.borderLight,
-  },
-  avatarGradient: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    padding: 2,
-    backgroundColor: `${DARK_THEME.primary}50`,
-  },
-  avatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: DARK_THEME.backgroundDark,
+    borderBottomColor: DARK_THEME.glassBorder,
   },
   avatarInitials: {
     width: 40,
@@ -572,7 +718,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: DARK_THEME.borderLight,
+    borderColor: DARK_THEME.glassBorder,
   },
   initialsText: {
     fontSize: 14,
@@ -589,82 +735,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   paidBadge: {
-    backgroundColor: `${DARK_THEME.success}1A`,
-    borderColor: `${DARK_THEME.success}33`,
+    backgroundColor: 'rgba(34, 197, 94, 0.1)',
+    borderColor: 'rgba(34, 197, 94, 0.2)',
   },
   pendingBadge: {
-    backgroundColor: `${DARK_THEME.warning}1A`,
-    borderColor: `${DARK_THEME.warning}33`,
+    backgroundColor: 'rgba(234, 179, 8, 0.1)',
+    borderColor: 'rgba(234, 179, 8, 0.2)',
   },
   paymentBadgeText: {
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-  emptyStateCard: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-    borderStyle: 'dashed',
-    backgroundColor: 'rgba(255, 255, 255, 0.02)',
-  },
-  emptyStateIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  refundRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
-  },
-  refundIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: DARK_THEME.borderLight,
-  },
-  processingBadge: {
-    backgroundColor: `${DARK_THEME.orange}1A`,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginTop: 2,
-  },
-  processingText: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: 'rgba(249, 115, 22, 0.8)',
-  },
-  receivedBadge: {
-    backgroundColor: `${DARK_THEME.success}1A`,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginTop: 2,
-  },
-  receivedText: {
-    fontSize: 10,
-    fontWeight: '500',
-    color: 'rgba(34, 197, 94, 0.8)',
-  },
-  primaryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: DARK_THEME.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
   },
 });

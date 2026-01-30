@@ -92,6 +92,9 @@ export function Skeleton({
       })
     : 1;
 
+  // Use dark theme colors for skeleton
+  const skeletonBgColor = '#2D3748'; // Dark gray matching DARK_THEME.secondary
+
   return (
     <View testID={testID} style={[styles.container, { width, height }]}>
       <Animated.View
@@ -99,7 +102,7 @@ export function Skeleton({
           styles.skeleton,
           {
             opacity,
-            backgroundColor: theme.backgroundHover?.val || '#E2E8F0',
+            backgroundColor: skeletonBgColor,
             borderRadius: variant === 'circular' ? 9999 : variant === 'rounded' ? 12 : 8,
           },
         ]}
@@ -189,26 +192,23 @@ export function SkeletonCard({ testID }: { testID?: string }) {
 export function SkeletonEventCard({ testID }: { testID?: string }) {
   return (
     <YStack
-      backgroundColor="$surface"
-      borderRadius="$lg"
+      backgroundColor="#1E2329"
+      borderRadius={16}
       overflow="hidden"
       borderWidth={1}
-      borderColor="$borderColor"
+      borderColor="rgba(255, 255, 255, 0.08)"
       testID={testID}
     >
-      <Skeleton variant="rectangular" width="100%" height={160} animation="wave" />
-      <YStack padding="$4" gap="$3">
+      <Skeleton variant="rectangular" width="100%" height={80} animation="pulse" />
+      <YStack padding={16} gap={12}>
         <XStack justifyContent="space-between" alignItems="flex-start">
-          <YStack flex={1} gap="$2">
-            <Skeleton variant="text" width="80%" height={22} />
+          <YStack flex={1} gap={8}>
+            <Skeleton variant="text" width="80%" height={18} />
             <Skeleton variant="text" width="50%" height={14} />
           </YStack>
           <Skeleton variant="rounded" width={70} height={24} />
         </XStack>
-        <XStack gap="$4">
-          <Skeleton variant="text" width={100} height={14} />
-          <Skeleton variant="text" width={80} height={14} />
-        </XStack>
+        <Skeleton variant="rounded" width="100%" height={8} />
       </YStack>
     </YStack>
   );
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     width: 100,
   },
 });

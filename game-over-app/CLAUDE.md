@@ -16,9 +16,12 @@ npm run android        # Run on Android emulator
 npm run web            # Run web version
 
 # iOS Native Build (after prebuild or for debugging)
-cd ios && pod install  # Install CocoaPods dependencies (required after npm install)
+cd ios && RCT_NEW_ARCH_ENABLED=1 pod install  # REQUIRED: New Architecture flag
 xcodebuild -workspace ios/GameOver.xcworkspace -scheme GameOver \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro' build
+
+# Run on physical iPhone
+npx expo run:ios --device  # Lists connected devices
 
 # Testing
 npm test               # Run unit tests with Vitest
@@ -57,7 +60,7 @@ npm install <package> --legacy-peer-deps
 ### Routing (Expo Router)
 File-based routing in `/app` with route groups:
 - `(auth)/` - Authentication screens (welcome, login, signup, forgot-password)
-- `(tabs)/` - Main app tabs (events, chat, budget, profile)
+- `(tabs)/` - Main app tabs (events, chat/Kommunikation, budget, profile)
 - Root `_layout.tsx` handles auth state redirects via `useAuthStore`
 
 **Auth Flow:**
@@ -138,6 +141,7 @@ const lastSavedAt = useWizardStore((state) => state.lastSavedAt);
 - `20240101000001_rls_policies.sql` - Row-level security policies
 - `20240101000002_seed_data.sql` - Cities and packages seed data
 - `20240102000000_invite_codes_and_booking_refs.sql` - Invite system
+- `20240103000000_avatar_storage.sql` - Avatar storage bucket with RLS
 - `20240103000000_avatar_storage.sql` - Avatar storage bucket with RLS
 
 **Storage Buckets:**
@@ -307,10 +311,17 @@ Always use `--legacy-peer-deps` flag when installing packages.
 
 ### iOS Build Issues
 ```bash
-# Clean and rebuild
-rm -rf ios/build
-cd ios && pod install
+# Clean and rebuild (New Architecture REQUIRED for react-native-reanimated 4.x)
+rm -rf ios/build ios/Pods ios/Podfile.lock
+cd ios && RCT_NEW_ARCH_ENABLED=1 pod install
 ```
+
+### New Architecture Requirement
+`react-native-reanimated` 4.x requires the New Architecture. If you see:
+```
+[Reanimated] Reanimated requires the New Architecture to be enabled.
+```
+Always run pod install with the flag: `RCT_NEW_ARCH_ENABLED=1 pod install`
 
 ### Detox Build Issues
 If E2E tests fail to build:

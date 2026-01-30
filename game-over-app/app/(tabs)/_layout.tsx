@@ -5,34 +5,45 @@
  */
 
 import { Tabs, useRouter } from 'expo-router';
-import { View, StyleSheet, Pressable, Platform } from 'react-native';
+import { View, StyleSheet, Pressable, Platform, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DARK_THEME } from '@/constants/theme';
 
-type IconName = 'calendar' | 'calendar-outline' | 'chatbubbles' | 'chatbubbles-outline' |
-  'bar-chart' | 'bar-chart-outline' | 'person' | 'person-outline' | 'add';
+type IconName = 'newspaper' | 'newspaper-outline' | 'chatbubble' | 'chatbubble-outline' |
+  'wallet' | 'wallet-outline' | 'person' | 'person-outline' | 'add';
 
 function TabIcon({ name, focused }: { name: string; focused: boolean }) {
-  const iconMap: Record<string, { active: IconName; inactive: IconName }> = {
-    events: { active: 'calendar', inactive: 'calendar-outline' },
-    chat: { active: 'chatbubbles', inactive: 'chatbubbles-outline' },
-    budget: { active: 'bar-chart', inactive: 'bar-chart-outline' },
-    profile: { active: 'person', inactive: 'person-outline' },
+  // Handle both direct names and nested route names (e.g., "events" or "events/index")
+  const routeKey = name.split('/')[0];
+
+  const iconMap: Record<string, { active: IconName; inactive: IconName; label: string }> = {
+    'events/index': { active: 'newspaper', inactive: 'newspaper-outline', label: 'Events' },
+    'events': { active: 'newspaper', inactive: 'newspaper-outline', label: 'Events' },
+    'chat': { active: 'chatbubble', inactive: 'chatbubble-outline', label: 'Kommunikation' },
+    'budget/index': { active: 'wallet', inactive: 'wallet-outline', label: 'Budget' },
+    'budget': { active: 'wallet', inactive: 'wallet-outline', label: 'Budget' },
+    'profile': { active: 'person', inactive: 'person-outline', label: 'Profile' },
   };
 
-  const icons = iconMap[name] || { active: 'calendar', inactive: 'calendar-outline' };
+  const icons = iconMap[routeKey] || iconMap[name] || { active: 'newspaper', inactive: 'newspaper-outline', label: name };
   const iconName = focused ? icons.active : icons.inactive;
 
   return (
     <View style={styles.iconContainer}>
       <Ionicons
         name={iconName}
-        size={24}
-        color={focused ? DARK_THEME.primary : DARK_THEME.textSecondary}
+        size={26}
+        color={focused ? '#FFFFFF' : DARK_THEME.primary}
       />
+      <Text style={[
+        styles.tabLabel,
+        { color: focused ? '#FFFFFF' : DARK_THEME.primary }
+      ]}>
+        {icons.label}
+      </Text>
     </View>
   );
 }
@@ -126,7 +137,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen
-        name="events"
+        name="events/index"
         options={{
           title: 'Events',
         }}
@@ -138,7 +149,7 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="budget"
+        name="budget/index"
         options={{
           title: 'Budget',
         }}
@@ -194,8 +205,13 @@ const styles = StyleSheet.create({
   iconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 48,
-    height: 32,
+    width: 64,
+    height: 44,
+    gap: 2,
+  },
+  tabLabel: {
+    fontSize: 10,
+    fontWeight: '500',
   },
   fabButton: {
     position: 'absolute',
