@@ -6,7 +6,7 @@
  */
 
 import React, { useCallback, useState, useMemo } from 'react';
-import { FlatList, RefreshControl, Pressable, StatusBar, StyleSheet, View } from 'react-native';
+import { FlatList, RefreshControl, Pressable, StatusBar, StyleSheet, View, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -31,7 +31,8 @@ export default function EventsScreen() {
 
   const { data: events, isLoading, refetch } = useEvents();
 
-  // Get user initials for avatar
+  // Get user avatar and initials
+  const avatarUrl = user?.user_metadata?.avatar_url;
   const userInitials = useMemo(() => {
     const name = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'U';
     return name
@@ -267,21 +268,37 @@ export default function EventsScreen() {
       {/* Header - Matching mockup v3: Avatar + "My Events" + Bell */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
         <View style={styles.headerInner}>
-          {/* Left: Avatar with online indicator */}
+          {/* Left: Avatar (navigates to profile) + Title */}
           <XStack alignItems="center" gap={12}>
-            <View style={styles.avatarContainer}>
+            <Pressable
+              onPress={() => router.push('/(tabs)/profile')}
+              style={({ pressed }) => [
+                styles.avatarContainer,
+                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
+              ]}
+              testID="avatar-profile-button"
+            >
               <LinearGradient
                 colors={[DARK_THEME.primary, '#60A5FA']}
                 style={styles.avatarGradient}
               >
                 <View style={styles.avatarInner}>
-                  <Text fontSize={14} fontWeight="700" color={DARK_THEME.textPrimary}>
-                    {userInitials}
-                  </Text>
+                  {avatarUrl ? (
+                    <Image
+                      source={{ uri: avatarUrl }}
+                      width={36}
+                      height={36}
+                      borderRadius={18}
+                    />
+                  ) : (
+                    <Text fontSize={14} fontWeight="700" color={DARK_THEME.textPrimary}>
+                      {userInitials}
+                    </Text>
+                  )}
                 </View>
               </LinearGradient>
               <View style={styles.onlineIndicator} />
-            </View>
+            </Pressable>
             <Text fontSize={20} fontWeight="700" color={DARK_THEME.textPrimary}>
               My Events
             </Text>
@@ -368,7 +385,40 @@ export default function EventsScreen() {
           }
         />
       ) : (
-        renderEmptyState()
+        <ScrollView
+          contentContainerStyle={styles.emptyScrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={DARK_THEME.primary}
+              colors={[DARK_THEME.primary]}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          {renderEmptyState()}
+        </ScrollView>
+      )}
+
+      {/* Floating Action Button - always visible when events exist */}
+      {filteredEvents && filteredEvents.length > 0 && (
+        <Pressable
+          style={({ pressed }) => [
+            styles.fab,
+            { bottom: insets.bottom + 80 },
+            pressed && styles.fabPressed,
+          ]}
+          onPress={handleCreateEvent}
+          testID="fab-create-event"
+        >
+          <LinearGradient
+            colors={[DARK_THEME.primary, '#60A5FA']}
+            style={styles.fabGradient}
+          >
+            <Ionicons name="add" size={28} color="#FFFFFF" />
+          </LinearGradient>
+        </Pressable>
       )}
     </View>
   );
@@ -414,6 +464,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#374151',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   onlineIndicator: {
     position: 'absolute',
@@ -542,6 +593,34 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     backgroundColor: DARK_THEME.glass,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    shadowColor: DARK_THEME.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  fabPressed: {
+    transform: [{ scale: 0.92 }],
+    opacity: 0.9,
+  },
+  fabGradient: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },

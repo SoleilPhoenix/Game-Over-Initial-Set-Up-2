@@ -9,6 +9,8 @@ import { View, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import { decode } from 'base64-arraybuffer';
 import { supabase } from '@/lib/supabase/client';
 
 interface AvatarUploadProps {
@@ -87,16 +89,17 @@ export function AvatarUpload({
     setIsUploading(true);
     try {
       const fileName = `${userId}-${Date.now()}.jpg`;
-      const filePath = `avatars/${fileName}`;
+      const filePath = fileName;
 
-      // Convert URI to blob for upload
-      const response = await fetch(uri);
-      const blob = await response.blob();
+      // Read file as base64 (fetch/blob doesn't work for local URIs in React Native)
+      const base64 = await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
 
       // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, blob, {
+        .upload(filePath, decode(base64), {
           contentType: 'image/jpeg',
           upsert: true,
         });

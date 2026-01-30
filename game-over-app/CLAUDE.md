@@ -134,9 +134,14 @@ const lastSavedAt = useWizardStore((state) => state.lastSavedAt);
 - Regenerate with: `npx supabase gen types typescript --project-id stdbvehmjpmqbjyiodqg > src/lib/supabase/types.ts`
 
 **Migrations:** `supabase/migrations/`
-- `20240101000000_initial_schema.sql` - Main schema with all tables, RLS policies, triggers
+- `20240101000000_initial_schema.sql` - Main schema with all tables, triggers
+- `20240101000001_rls_policies.sql` - Row-level security policies
 - `20240101000002_seed_data.sql` - Cities and packages seed data
 - `20240102000000_invite_codes_and_booking_refs.sql` - Invite system
+- `20240103000000_avatar_storage.sql` - Avatar storage bucket with RLS
+
+**Storage Buckets:**
+- `avatars` - Public bucket for user profile pictures (5MB limit, JPEG/PNG/WebP)
 
 **Key Database Patterns:**
 - **RLS Policies:** Row-level security enforced on all tables
@@ -177,6 +182,11 @@ Multi-provider auth implementation in `src/lib/auth/`:
 4. Validate JWT format before `setSession()`
 
 **Token Storage:** `src/lib/auth/storage.ts` uses `expo-secure-store` (OS-level encryption)
+
+**Avatar Upload:** `src/components/profile/AvatarUpload.tsx`
+- Uses `expo-file-system/legacy` for reading local files as base64
+- Converts to ArrayBuffer via `base64-arraybuffer` for Supabase upload
+- Avatar URL stored in `user_metadata.avatar_url` via `supabase.auth.updateUser()`
 
 ### Path Aliases
 Configured in `tsconfig.json`:

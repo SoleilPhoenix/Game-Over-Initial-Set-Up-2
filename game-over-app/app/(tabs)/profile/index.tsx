@@ -4,7 +4,7 @@
  */
 
 import React from 'react';
-import { Alert, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { Alert, Pressable, StyleSheet, ScrollView, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, View } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -108,6 +108,7 @@ export default function ProfileScreen() {
 
   const userName = user?.user_metadata?.full_name || 'User';
   const userEmail = user?.email || '';
+  const avatarUrl = user?.user_metadata?.avatar_url;
   const userInitials = userName
     .split(' ')
     .map((n: string) => n[0])
@@ -167,9 +168,16 @@ export default function ProfileScreen() {
                 style={styles.avatarGradient}
               >
                 <View style={styles.avatarInner}>
-                  <Text fontSize={24} fontWeight="700" color={DARK_THEME.textPrimary}>
-                    {userInitials}
-                  </Text>
+                  {avatarUrl ? (
+                    <Image
+                      source={{ uri: avatarUrl }}
+                      style={styles.avatarImage}
+                    />
+                  ) : (
+                    <Text fontSize={24} fontWeight="700" color={DARK_THEME.textPrimary}>
+                      {userInitials}
+                    </Text>
+                  )}
                 </View>
               </LinearGradient>
               <View style={styles.editBadge}>
@@ -321,6 +329,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#374151',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
   },
   editBadge: {
     position: 'absolute',
