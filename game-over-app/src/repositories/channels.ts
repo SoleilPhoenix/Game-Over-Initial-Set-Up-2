@@ -133,6 +133,6 @@ export const channelsRepository = {
       .eq('event_id', eventId);
 
     if (error) throw error;
-    return (data || []).reduce((sum, ch) => sum + ch.unread_count, 0);
+    return (data || []).reduce((sum, ch) => sum + (ch.unread_count ?? 0), 0);
   },
 };

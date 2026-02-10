@@ -41,6 +41,7 @@ export function useChannel(channelId: string | undefined) {
     queryKey: chatKeys.channel(channelId || ''),
     queryFn: () => channelsRepository.getById(channelId!),
     enabled: !!channelId,
+    staleTime: 5 * 60 * 1000, // 5 minutes - use cached data
   });
 }
 
@@ -56,6 +57,7 @@ export function useMessages(channelId: string | undefined) {
     getNextPageParam: (lastPage, allPages) =>
       lastPage.hasMore ? allPages.length : undefined,
     initialPageParam: 0,
+    staleTime: 2 * 60 * 1000, // 2 minutes - use cached data
   });
 }
 

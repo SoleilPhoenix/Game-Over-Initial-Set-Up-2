@@ -21,6 +21,8 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -38,8 +40,8 @@ export function usePushNotifications() {
   });
   const [isRegistering, setIsRegistering] = useState(false);
 
-  const notificationListener = useRef<Notifications.Subscription>();
-  const responseListener = useRef<Notifications.Subscription>();
+  const notificationListener = useRef<Notifications.Subscription | null>(null);
+  const responseListener = useRef<Notifications.Subscription | null>(null);
 
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -80,7 +82,12 @@ export function usePushNotifications() {
                        Constants.easConfig?.projectId;
 
       if (!projectId) {
-        console.warn('No project ID found for push notifications');
+        console.warn('No projectId found — push notifications require an EAS project ID. Skipping token registration.');
+        setState(prev => ({
+          ...prev,
+          error: new Error('Push notifications are not available in Expo Go without an EAS project ID. Build with EAS to enable.'),
+        }));
+        return null;
       }
 
       const token = await Notifications.getExpoPushTokenAsync({
@@ -121,7 +128,8 @@ export function usePushNotifications() {
     if (!user?.id) return;
 
     try {
-      await supabase
+      // Note: user_push_tokens table may need to be created in Supabase
+      await (supabase as any)
         .from('user_push_tokens')
         .upsert({
           user_id: user.id,
@@ -173,10 +181,10 @@ export function usePushNotifications() {
 
     return () => {
       if (notificationListener.current) {
-        Notifications.removeNotificationSubscription(notificationListener.current);
+        notificationListener.current.remove();
       }
       if (responseListener.current) {
-        Notifications.removeNotificationSubscription(responseListener.current);
+        responseListener.current.remove();
       }
     };
   }, [registerForPushNotifications, savePushToken, handleNotificationResponse]);

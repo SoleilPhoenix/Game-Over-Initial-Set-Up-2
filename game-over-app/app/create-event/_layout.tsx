@@ -11,14 +11,14 @@ import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWizardStore, useWizardLastSavedAt, useWizardIsDirty } from '@/stores/wizardStore';
-import { ProgressBar } from '@/components/ui/ProgressBar';
+import { useTranslation, getTranslation } from '@/i18n';
+import { DARK_THEME } from '@/constants/theme';
 
 const STEPS = [
   { path: '/create-event', label: 'Key Details' },
   { path: '/create-event/preferences', label: 'Preferences' },
-  { path: '/create-event/participants', label: 'Group' },
-  { path: '/create-event/packages', label: 'Package' },
-  { path: '/create-event/review', label: 'Review' },
+  { path: '/create-event/participants', label: 'Participants' },
+  { path: '/create-event/packages', label: 'Package Selection' },
 ];
 
 /**
@@ -62,8 +62,49 @@ function DraftSavedIndicator() {
         color="#64748B"
       />
       <Text fontSize="$1" color="$textSecondary">
-        {isDirty ? 'Saving...' : `Draft saved ${timeText}`}
+        {isDirty ? getTranslation().wizard.saving : `${getTranslation().wizard.draftSaved.replace('{{time}}', timeText)}`}
       </Text>
+    </XStack>
+  );
+}
+
+/**
+ * Segmented Progress Indicator
+ * Shows 4 pill-shaped segments matching mockup design
+ */
+function SegmentedProgress({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
+  return (
+    <XStack gap="$2" width="100%">
+      {Array.from({ length: totalSteps }).map((_, index) => {
+        const stepNumber = index + 1;
+        const isCompleted = stepNumber < currentStep;
+        const isCurrent = stepNumber === currentStep;
+        const isUpcoming = stepNumber > currentStep;
+
+        return (
+          <YStack
+            key={stepNumber}
+            flex={1}
+            height={6}
+            borderRadius="$full"
+            backgroundColor={
+              isCompleted
+                ? `${DARK_THEME.primary}40` // 40% opacity
+                : isCurrent
+                ? DARK_THEME.primary
+                : DARK_THEME.surface
+            }
+            borderWidth={isUpcoming ? 1 : 0}
+            borderColor={isUpcoming ? 'rgba(255, 255, 255, 0.05)' : 'transparent'}
+            {...(isCurrent && {
+              shadowColor: DARK_THEME.primary,
+              shadowOffset: { width: 0, height: 0 },
+              shadowOpacity: 0.6,
+              shadowRadius: 8,
+            })}
+          />
+        );
+      })}
     </XStack>
   );
 }
@@ -72,7 +113,8 @@ export default function CreateEventLayout() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { clearDraft, startAutoSave, stopAutoSave, hasDraft } = useWizardStore();
+  const { clearDraft, saveDraft, startAutoSave, stopAutoSave, hasDraft, partyType, goToStep } = useWizardStore();
+  const { t } = useTranslation();
 
   // Start auto-save when wizard mounts, stop when unmounts
   useEffect(() => {
@@ -84,60 +126,129 @@ export default function CreateEventLayout() {
 
   const currentStepIndex = STEPS.findIndex(s => s.path === pathname);
   const currentStep = currentStepIndex >= 0 ? currentStepIndex + 1 : 1;
-  const progress = (currentStep / STEPS.length) * 100;
 
-  const handleClose = () => {
-    const isDirty = useWizardStore.getState().isDirty;
+  // Sync store's currentStep with actual navigation so drafts save the correct step
+  useEffect(() => {
+    if (currentStepIndex >= 0) {
+      goToStep(currentStepIndex + 1);
+    }
+  }, [currentStepIndex, goToStep]);
+  const stepLabelsTranslated: string[] = [t.wizard.keyDetails, t.wizard.preferences, t.wizard.participants, t.wizard.packageSelection];
+  let currentStepLabel: string = currentStepIndex >= 0 ? stepLabelsTranslated[currentStepIndex] : t.wizard.keyDetails;
+  // Dynamic label for step 2 based on party type
+  if (currentStep === 2) {
+    currentStepLabel = partyType === 'bachelor' ? t.wizard.groomPreferences : t.wizard.bridePreferences;
+  } else if (currentStep === 3) {
+    currentStepLabel = t.wizard.participantsPreferences;
+  }
 
-    if (isDirty) {
-      Alert.alert(
-        'Discard Draft?',
-        'You have unsaved changes. Are you sure you want to discard them?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Discard',
-            style: 'destructive',
-            onPress: () => {
-              clearDraft();
-              router.back();
+  const handleBack = () => {
+    if (currentStepIndex === 0) {
+      // On first step, save draft and go back (user can resume from Events)
+      const state = useWizardStore.getState();
+      if (state.hasDraft()) {
+        const tr = getTranslation();
+        Alert.alert(
+          tr.wizard.saveDraftTitle,
+          tr.wizard.saveDraftMessage,
+          [
+            {
+              text: tr.wizard.discard,
+              style: 'destructive',
+              onPress: () => {
+                clearDraft();
+                router.navigate('/(tabs)/events');
+              },
             },
-          },
-        ]
-      );
+            {
+              text: tr.wizard.saveExit,
+              onPress: () => {
+                saveDraft();
+                router.navigate('/(tabs)/events');
+              },
+            },
+          ]
+        );
+      } else {
+        router.back();
+      }
     } else {
-      clearDraft();
+      // Go to previous step
       router.back();
     }
+  };
+
+  const handleMenu = () => {
+    const tr = getTranslation();
+    Alert.alert(
+      tr.wizard.optionsTitle,
+      tr.wizard.optionsMessage,
+      [
+        { text: tr.wizard.cancel, style: 'cancel' },
+        {
+          text: tr.wizard.saveDraftExit,
+          onPress: () => {
+            saveDraft();
+            router.navigate('/(tabs)/events');
+          },
+        },
+        {
+          text: tr.wizard.discardDraft,
+          style: 'destructive',
+          onPress: () => {
+            clearDraft();
+            router.navigate('/(tabs)/events');
+          },
+        },
+      ]
+    );
   };
 
   return (
     <YStack flex={1} backgroundColor="$background">
       {/* Header */}
-      <YStack paddingTop={insets.top} backgroundColor="$surface">
-        <XStack paddingHorizontal="$4" paddingVertical="$3" alignItems="center" justifyContent="space-between">
+      <YStack paddingTop={insets.top} backgroundColor="$surface" zIndex={20}>
+        {/* Navigation + Step Label */}
+        <XStack paddingHorizontal="$4" paddingTop="$1" paddingBottom="$1" alignItems="center" justifyContent="space-between">
           <XStack
-            width={40}
-            height={40}
+            width={36}
+            height={36}
             borderRadius="$full"
             alignItems="center"
             justifyContent="center"
-            pressStyle={{ opacity: 0.7 }}
-            onPress={handleClose}
-            testID="wizard-close-button"
+            pressStyle={{ opacity: 0.7, backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
+            onPress={handleBack}
+            testID="wizard-back-button"
           >
-            <Ionicons name="close" size={24} color="#64748B" />
+            <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
           </XStack>
 
-          <Text fontSize="$3" fontWeight="600" color="$textPrimary">
-            Step {currentStep} of {STEPS.length}
-          </Text>
+          <YStack alignItems="center" flex={1}>
+            <Text fontSize={15} fontWeight="700" color="$textPrimary" numberOfLines={1}>
+              {currentStepLabel}
+            </Text>
+            <Text fontSize={10} fontWeight="500" color="$primary" textTransform="uppercase" letterSpacing={0.5}>
+              {t.wizard.stepOf.replace('{{current}}', String(currentStep)).replace('{{total}}', String(STEPS.length))}
+            </Text>
+          </YStack>
 
-          <YStack width={40} />
+          <XStack
+            width={36}
+            height={36}
+            borderRadius="$full"
+            alignItems="center"
+            justifyContent="center"
+            pressStyle={{ opacity: 0.7, backgroundColor: 'rgba(255, 255, 255, 0.05)' }}
+            onPress={handleMenu}
+            testID="wizard-menu-button"
+          >
+            <Ionicons name="ellipsis-horizontal" size={22} color="rgba(255, 255, 255, 0.7)" />
+          </XStack>
         </XStack>
 
-        <YStack paddingHorizontal="$4" paddingBottom="$3">
-          <ProgressBar value={progress} size="sm" />
+        {/* Progress Bar */}
+        <YStack paddingHorizontal="$4" paddingBottom="$1.5">
+          <SegmentedProgress currentStep={currentStep} totalSteps={STEPS.length} />
         </YStack>
       </YStack>
 
@@ -147,7 +258,6 @@ export default function CreateEventLayout() {
         <Stack.Screen name="preferences" />
         <Stack.Screen name="participants" />
         <Stack.Screen name="packages" />
-        <Stack.Screen name="review" />
       </Stack>
     </YStack>
   );

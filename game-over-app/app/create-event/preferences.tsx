@@ -1,52 +1,95 @@
 /**
- * Wizard Step 2: Honoree Preferences
- * Gathering size, social approach, energy level
+ * Wizard Step 2: Honoree Preferences (Mockup 7.2)
+ * Gathering size, social approach, energy level, participation style, entertainment
  */
 
 import React from 'react';
 import { ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { YStack, XStack, Text } from 'tamagui';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { YStack, Text } from 'tamagui';
 import { useWizardStore } from '@/stores/wizardStore';
-import { Button } from '@/components/ui/Button';
 import { Chip, ChipGroup } from '@/components/ui/Chip';
-
-const GATHERING_SIZES = [
-  { value: 'intimate', label: 'Intimate (2-6)', emoji: '👥' },
-  { value: 'small_group', label: 'Small Group (7-12)', emoji: '👨‍👩‍👧‍👦' },
-  { value: 'party', label: 'Big Party (13+)', emoji: '🎉' },
-];
+import { GlassPanel } from '@/components/ui/GlassPanel';
+import { WizardFooter } from '@/components/ui/WizardFooter';
+import { useTranslation } from '@/i18n';
 
 const SOCIAL_APPROACHES = [
-  { value: 'wallflower', label: 'Wallflower', desc: 'Prefers observing' },
-  { value: 'mingler', label: 'Mingler', desc: 'Enjoys small talk' },
-  { value: 'butterfly', label: 'Social Butterfly', desc: 'Life of the party' },
-  { value: 'observer', label: 'Observer', desc: 'Selective socializer' },
+  { value: 'wallflower', label: 'Wallflower' },
+  { value: 'butterfly', label: 'Butterfly' },
+  { value: 'observer', label: 'Observer' },
+  { value: 'mingler', label: 'Mingler' },
 ];
 
-const ENERGY_LEVELS = [
-  { value: 'low_key', label: 'Low Key', emoji: '😌' },
-  { value: 'moderate', label: 'Moderate', emoji: '😊' },
-  { value: 'high_energy', label: 'High Energy', emoji: '🔥' },
-];
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <Text
+      fontSize="$1"
+      fontWeight="600"
+      color="rgba(255, 255, 255, 0.6)"
+      textTransform="uppercase"
+      letterSpacing={1}
+      marginBottom="$3"
+    >
+      {children}
+    </Text>
+  );
+}
 
 export default function WizardStep2() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const {
     partyType,
     gatheringSize,
     socialApproach,
     energyLevel,
+    participationStyle,
+    venuePreference,
+    publicAttention,
     setGatheringSize,
     setSocialApproach,
     setEnergyLevel,
+    setParticipationStyle,
+    setVenuePreference,
+    setPublicAttention,
     isStepValid,
   } = useWizardStore();
 
   const canProceed = isStepValid(2);
-  const honoreeTitle = partyType === 'bachelor' ? "Groom's" : "Bride's";
+
+  const GATHERING_SIZES = [
+    { value: 'intimate', label: t.wizard.intimate },
+    { value: 'small_group', label: t.wizard.smallGroup },
+    { value: 'party', label: t.wizard.party },
+  ];
+
+  const ENERGY_LEVELS = [
+    { value: 'low_key', label: t.wizard.relaxed },
+    { value: 'moderate', label: t.wizard.moderate },
+    { value: 'high_energy', label: t.wizard.highEnergy },
+    { value: 'extreme', label: t.wizard.extreme },
+  ];
+
+  const PARTICIPATION_STYLES = [
+    { value: 'active', label: t.wizard.active },
+    { value: 'passive', label: t.wizard.passive },
+    { value: 'competitive', label: t.wizard.competitive },
+    { value: 'cooperative', label: t.wizard.cooperative },
+  ];
+
+  const VENUE_PREFERENCES = [
+    { value: 'indoors', label: t.wizard.indoors },
+    { value: 'outdoors', label: t.wizard.outdoors },
+    { value: 'rooftop', label: t.wizard.rooftop },
+    { value: 'dive_bar', label: t.wizard.diveBar },
+    { value: 'club', label: t.wizard.club },
+  ];
+
+  const PUBLIC_ATTENTION_LEVELS = [
+    { value: 'low_key', label: t.wizard.lowKey },
+    { value: 'moderate', label: t.wizard.moderate },
+    { value: 'center_stage', label: t.wizard.centerStage },
+  ];
 
   const handleNext = () => {
     if (canProceed) {
@@ -60,117 +103,120 @@ export default function WizardStep2() {
 
   return (
     <YStack flex={1} backgroundColor="$background">
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
-        <Text fontSize="$6" fontWeight="700" color="$textPrimary" marginBottom="$6">
-          {honoreeTitle} Preferences
-        </Text>
-
-        {/* Gathering Size */}
-        <YStack gap="$3" marginBottom="$6">
-          <Text fontSize="$4" fontWeight="600" color="$textSecondary" textTransform="uppercase">
-            Gathering Size
-          </Text>
-          <YStack gap="$2">
-            {GATHERING_SIZES.map(size => (
-              <XStack
-                key={size.value}
-                padding="$4"
-                borderRadius="$lg"
-                backgroundColor={gatheringSize === size.value ? '$primary' : '$surface'}
-                borderWidth={2}
-                borderColor={gatheringSize === size.value ? '$primary' : '$borderColor'}
-                alignItems="center"
-                gap="$3"
-                pressStyle={{ scale: 0.98 }}
-                onPress={() => setGatheringSize(size.value as any)}
-                testID={`gathering-size-${size.value}`}
-              >
-                <Text fontSize={24}>{size.emoji}</Text>
-                <Text
-                  fontWeight="600"
-                  color={gatheringSize === size.value ? 'white' : '$textPrimary'}
-                >
-                  {size.label}
-                </Text>
-              </XStack>
-            ))}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+        {/* Social Energy Panel */}
+        <GlassPanel icon="people" title={t.wizard.gatheringSize} testID="panel-social-energy">
+          {/* Gathering Size */}
+          <YStack marginBottom="$5">
+            <SectionLabel>{t.wizard.gatheringSize}</SectionLabel>
+            <ChipGroup testID="gathering-size-chips">
+              {GATHERING_SIZES.map(size => (
+                <Chip
+                  key={size.value}
+                  label={size.label}
+                  selected={gatheringSize === size.value}
+                  onPress={() => setGatheringSize(size.value as any)}
+                  testID={`gathering-size-${size.value}`}
+                />
+              ))}
+            </ChipGroup>
           </YStack>
-        </YStack>
 
-        {/* Social Approach */}
-        <YStack gap="$3" marginBottom="$6">
-          <Text fontSize="$4" fontWeight="600" color="$textSecondary" textTransform="uppercase">
-            Social Approach
-          </Text>
-          <ChipGroup testID="social-approach-chips">
-            {SOCIAL_APPROACHES.map(approach => (
-              <Chip
-                key={approach.value}
-                label={approach.label}
-                selected={socialApproach === approach.value}
-                onPress={() => setSocialApproach(approach.value as any)}
-                testID={`social-approach-${approach.value}`}
-              />
-            ))}
-          </ChipGroup>
-        </YStack>
+          {/* Social Approach */}
+          <YStack>
+            <SectionLabel>Social Approach</SectionLabel>
+            <ChipGroup testID="social-approach-chips">
+              {SOCIAL_APPROACHES.map(approach => (
+                <Chip
+                  key={approach.value}
+                  label={approach.label}
+                  selected={socialApproach === approach.value}
+                  onPress={() => setSocialApproach(approach.value as any)}
+                  testID={`social-approach-${approach.value}`}
+                />
+              ))}
+            </ChipGroup>
+          </YStack>
+        </GlassPanel>
 
-        {/* Energy Level */}
-        <YStack gap="$3">
-          <Text fontSize="$4" fontWeight="600" color="$textSecondary" textTransform="uppercase">
-            Energy Level
-          </Text>
-          <XStack gap="$2">
-            {ENERGY_LEVELS.map(energy => (
-              <YStack
-                key={energy.value}
-                flex={1}
-                padding="$3"
-                borderRadius="$lg"
-                backgroundColor={energyLevel === energy.value ? '$primary' : '$surface'}
-                borderWidth={2}
-                borderColor={energyLevel === energy.value ? '$primary' : '$borderColor'}
-                alignItems="center"
-                gap="$1"
-                pressStyle={{ scale: 0.98 }}
-                onPress={() => setEnergyLevel(energy.value as any)}
-                testID={`energy-level-${energy.value}`}
-              >
-                <Text fontSize={24}>{energy.emoji}</Text>
-                <Text
-                  fontSize="$2"
-                  fontWeight="600"
-                  color={energyLevel === energy.value ? 'white' : '$textPrimary'}
-                  textAlign="center"
-                >
-                  {energy.label}
-                </Text>
-              </YStack>
-            ))}
-          </XStack>
-        </YStack>
+        {/* Activity Panel */}
+        <GlassPanel icon="flash" title={t.wizard.energyLevel} testID="panel-activity">
+          {/* Energy Level */}
+          <YStack marginBottom="$5">
+            <SectionLabel>{t.wizard.energyLevel}</SectionLabel>
+            <ChipGroup testID="energy-level-chips">
+              {ENERGY_LEVELS.map(energy => (
+                <Chip
+                  key={energy.value}
+                  label={energy.label}
+                  selected={energyLevel === energy.value}
+                  onPress={() => setEnergyLevel(energy.value as any)}
+                  testID={`energy-level-${energy.value}`}
+                />
+              ))}
+            </ChipGroup>
+          </YStack>
+
+          {/* Participation Style */}
+          <YStack>
+            <SectionLabel>{t.wizard.participationStyle}</SectionLabel>
+            <ChipGroup testID="participation-style-chips">
+              {PARTICIPATION_STYLES.map(style => (
+                <Chip
+                  key={style.value}
+                  label={style.label}
+                  selected={participationStyle === style.value}
+                  onPress={() => setParticipationStyle(style.value as any)}
+                  testID={`participation-style-${style.value}`}
+                />
+              ))}
+            </ChipGroup>
+          </YStack>
+        </GlassPanel>
+
+        {/* Entertainment Panel */}
+        <GlassPanel icon="musical-notes" title={t.wizard.venuePreference} testID="panel-entertainment">
+          {/* Venue Preference */}
+          <YStack marginBottom="$5">
+            <SectionLabel>{t.wizard.venuePreference}</SectionLabel>
+            <ChipGroup testID="venue-preference-chips">
+              {VENUE_PREFERENCES.map(venue => (
+                <Chip
+                  key={venue.value}
+                  label={venue.label}
+                  selected={venuePreference === venue.value}
+                  onPress={() => setVenuePreference(venue.value as any)}
+                  testID={`venue-preference-${venue.value}`}
+                />
+              ))}
+            </ChipGroup>
+          </YStack>
+
+          {/* Public Attention */}
+          <YStack>
+            <SectionLabel>{t.wizard.publicAttention}</SectionLabel>
+            <ChipGroup testID="public-attention-chips">
+              {PUBLIC_ATTENTION_LEVELS.map(level => (
+                <Chip
+                  key={level.value}
+                  label={level.label}
+                  selected={publicAttention === level.value}
+                  onPress={() => setPublicAttention(level.value as any)}
+                  testID={`public-attention-${level.value}`}
+                />
+              ))}
+            </ChipGroup>
+          </YStack>
+        </GlassPanel>
       </ScrollView>
 
       {/* Footer */}
-      <XStack
-        position="absolute"
-        bottom={0}
-        left={0}
-        right={0}
-        padding="$4"
-        paddingBottom={insets.bottom + 16}
-        backgroundColor="$surface"
-        borderTopWidth={1}
-        borderTopColor="$borderColor"
-        gap="$3"
-      >
-        <Button flex={1} variant="outline" onPress={handleBack} testID="wizard-back-button">
-          Back
-        </Button>
-        <Button flex={1} onPress={handleNext} disabled={!canProceed} testID="wizard-next-button">
-          Continue
-        </Button>
-      </XStack>
+      <WizardFooter
+        onBack={handleBack}
+        onNext={handleNext}
+        nextLabel={`${t.wizard.nextStep} →`}
+        nextDisabled={!canProceed}
+      />
     </YStack>
   );
 }

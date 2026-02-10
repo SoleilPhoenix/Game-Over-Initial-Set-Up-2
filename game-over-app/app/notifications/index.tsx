@@ -18,6 +18,7 @@ import {
   useUnreadNotificationsCount,
 } from '@/hooks/queries/useNotifications';
 import { NotificationItem } from '@/components/notifications';
+import { useTranslation } from '@/i18n';
 import type { Database } from '@/lib/supabase/types';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
@@ -36,6 +37,7 @@ const DARK_THEME = {
 export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   // Fetch notifications
   const {
@@ -71,21 +73,21 @@ export default function NotificationsScreen() {
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
 
-    const todayNotifs = notifications.filter((n) => new Date(n.created_at) >= today);
+    const todayNotifs = notifications.filter((n) => n.created_at && new Date(n.created_at) >= today);
     const yesterdayNotifs = notifications.filter(
-      (n) => new Date(n.created_at) >= yesterday && new Date(n.created_at) < today
+      (n) => n.created_at && new Date(n.created_at) >= yesterday && new Date(n.created_at) < today
     );
-    const earlierNotifs = notifications.filter((n) => new Date(n.created_at) < yesterday);
+    const earlierNotifs = notifications.filter((n) => n.created_at && new Date(n.created_at) < yesterday);
 
     const sections = [];
     if (todayNotifs.length > 0) {
-      sections.push({ title: 'Today', data: todayNotifs });
+      sections.push({ title: t.notifications.today, data: todayNotifs });
     }
     if (yesterdayNotifs.length > 0) {
-      sections.push({ title: 'Yesterday', data: yesterdayNotifs });
+      sections.push({ title: t.notifications.yesterday, data: yesterdayNotifs });
     }
     if (earlierNotifs.length > 0) {
-      sections.push({ title: 'Earlier', data: earlierNotifs });
+      sections.push({ title: t.notifications.earlier, data: earlierNotifs });
     }
 
     return sections;
@@ -176,7 +178,7 @@ export default function NotificationsScreen() {
           color={DARK_THEME.textPrimary}
           letterSpacing={-0.3}
         >
-          Notifications
+          {t.notifications.title}
         </Text>
 
         {/* Mark all as read */}
@@ -236,10 +238,10 @@ export default function NotificationsScreen() {
             <Ionicons name="checkmark-done" size={40} color="#34D399" />
           </YStack>
           <Text fontSize={16} fontWeight="600" color={DARK_THEME.textPrimary} marginBottom="$2">
-            All Caught Up!
+            {t.notifications.allCaughtUp}
           </Text>
           <Text fontSize={13} color={DARK_THEME.textTertiary} textAlign="center">
-            You have no new notifications
+            {t.notifications.noNewNotifications}
           </Text>
         </YStack>
       )}

@@ -73,6 +73,61 @@
 
 ---
 
+### Commit 2: TypeScript Fixes (2026-01-31)
+
+**Type:** Code Quality Fix
+**Message:** `fix: resolve TypeScript errors with null handling and type assertions`
+
+#### Changes Summary
+| Category | Files Changed | Description |
+|----------|--------------|-------------|
+| TypeScript Config | 1 | Excluded supabase/functions, disabled typedRoutes |
+| Supabase Types | 1 | Regenerated from current schema |
+| UI Components | 5 | Null coalescing for nullable fields |
+| Repositories | 6 | Type assertions for schema drift |
+| Hooks | 2 | Null handling for DB fields |
+
+#### Detailed Changes
+
+**1. Updated `tsconfig.json`**
+- Excluded `supabase/functions/**` (Deno edge functions)
+- Disabled typed routes to prevent stale route types
+
+**2. Regenerated `src/lib/supabase/types.ts`**
+- Command: `npx supabase gen types typescript --project-id stdbvehmjpmqbjyiodqg`
+- Updated to PostgrestVersion 14.1
+- Now reflects actual nullable fields in DB schema
+
+**3. Fixed null handling in components:**
+- `Skeleton.tsx`: Updated `DimensionValue` types
+- `Button.tsx`: Omitted conflicting `icon` prop from base type
+- `PollCard.tsx`: Added `?? 0` for nullable `vote_count`
+- `ChannelListItem.tsx`: Added `?? 0` for nullable `unread_count`
+- `MessageBubble.tsx`, `NotificationItem.tsx`: Null guards on `created_at`
+
+**4. Added type assertions for schema drift:**
+- `messages.ts`, `participants.ts`: Profile relation casts
+- `invites.ts`, `polls.ts`: RPC function casts
+- `usePushNotifications.ts`: Table cast for `user_push_tokens`
+- `useBookingFlow.ts`: Property cast for `selected_package_id`
+
+**5. Fixed application logic:**
+- `notifications.tsx`: Boolean null coalescing
+- `events.ts`: Array type guards for relations
+- `authStore.ts`: Updated return type to include cleanup function
+- `packages.tsx`: Fixed preferences field names (camelCase to snake_case)
+- `review.tsx`: Added null guard for `getEventData()`
+- `CreatePollModal.tsx`: Removed invalid 'dining' category
+
+#### Test Evidence
+| Test | Command | Result |
+|------|---------|--------|
+| TypeScript | `npm run typecheck` | PASS (0 errors) |
+| Unit Tests | `npm test -- --run` | PASS (32/32) |
+| JS Bundle | `npx expo export --platform ios` | PASS (6.52 MB) |
+
+---
+
 ## Items NOT Changed (Quarantine/Keep)
 
 ### Kept - Design Assets
@@ -99,18 +154,20 @@
 
 ## Test Matrix
 
-### Pre-Change Tests
+### Pre-Audit Baseline (2026-01-30)
 | Test | Command | Result |
 |------|---------|--------|
 | Unit Tests | `npm test -- --run` | PASS (32/32) |
-| TypeScript | `npm run typecheck` | FAIL (50+ errors) - pre-existing |
-| ESLint | `npm run lint` | WARN (46 warnings) - pre-existing |
+| TypeScript | `npm run typecheck` | FAIL (50+ errors) |
+| ESLint | `npm run lint` | WARN (46 warnings) |
 | JS Bundle | `npx expo export --platform ios` | PASS (6.52 MB) |
 
-### Post-Change Tests
+### Post-Audit Status (2026-01-31)
 | Test | Command | Result |
 |------|---------|--------|
 | Unit Tests | `npm test -- --run` | PASS (32/32) |
+| TypeScript | `npm run typecheck` | PASS (0 errors) |
+| JS Bundle | `npx expo export --platform ios` | PASS (6.52 MB) |
 
 ### Verification
 - Functionality preserved: Unit tests pass before and after
@@ -158,4 +215,5 @@ The following credentials were previously committed to git and should be conside
 
 ---
 
-*Audit completed: 2026-01-30*
+*Audit started: 2026-01-30*
+*TypeScript fixes: 2026-01-31*

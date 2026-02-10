@@ -23,9 +23,9 @@ export const DARK_THEME = {
   glassOverlay: colors.glass.overlay,      // 'rgba(255, 255, 255, 0.05)'
 
   // Primary accent
-  primary: colors.primary,                 // '#4A6FA5'
-  primaryLight: colors.primaryLight,       // '#5A7EB0'
-  primaryDark: colors.primaryDark,         // '#3B5984'
+  primary: colors.primary,                 // '#5A7EB0'
+  primaryLight: colors.primaryLight,       // '#7A9BC4'
+  primaryDark: colors.primaryDark,         // '#456A9C'
 
   // Text colors
   textPrimary: colors.dark.textPrimary,    // '#FFFFFF'

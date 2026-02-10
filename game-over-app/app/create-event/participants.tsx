@@ -1,16 +1,17 @@
 /**
- * Wizard Step 3: Participant/Group Preferences
- * Age range, group cohesion, vibe preferences
+ * Wizard Step 3: Participants Preferences (Mockup 7.3)
+ * Group dynamics, shared interests, organization
  */
 
 import React from 'react';
 import { ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { YStack, XStack, Text } from 'tamagui';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { YStack, Text } from 'tamagui';
 import { useWizardStore } from '@/stores/wizardStore';
-import { Button } from '@/components/ui/Button';
 import { Chip, ChipGroup } from '@/components/ui/Chip';
+import { GlassPanel } from '@/components/ui/GlassPanel';
+import { WizardFooter } from '@/components/ui/WizardFooter';
+import { useTranslation } from '@/i18n';
 
 const AGE_RANGES = [
   { value: '21-25', label: '21-25' },
@@ -19,155 +20,195 @@ const AGE_RANGES = [
   { value: '35+', label: '35+' },
 ];
 
-const GROUP_COHESIONS = [
-  { value: 'close_friends', label: 'Close Friends', desc: 'Known each other for years' },
-  { value: 'mixed_group', label: 'Mixed Group', desc: 'Some know each other well' },
-  { value: 'strangers', label: 'New Connections', desc: 'Many meeting for first time' },
-];
-
-const VIBE_OPTIONS = [
-  'Adventure', 'Relaxation', 'Nightlife', 'Fine Dining', 'Outdoor Activities',
-  'Spa & Wellness', 'Sports', 'Cultural', 'Beach', 'Urban Exploration',
-];
+function SectionLabel({ children }: { children: string }) {
+  return (
+    <Text
+      fontSize="$1"
+      fontWeight="600"
+      color="rgba(255, 255, 255, 0.6)"
+      textTransform="uppercase"
+      letterSpacing={1}
+      marginBottom="$3"
+    >
+      {children}
+    </Text>
+  );
+}
 
 export default function WizardStep3() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const {
     averageAge,
     groupCohesion,
     vibePreferences,
+    activityLevel,
+    travelDistance,
+    eventDuration,
     setAverageAge,
     setGroupCohesion,
     toggleVibePreference,
-    isStepValid,
+    setActivityLevel,
+    setTravelDistance,
+    setEventDuration,
   } = useWizardStore();
 
-  const canProceed = isStepValid(3);
+  const GROUP_COHESIONS = [
+    { value: 'close_friends', label: t.wizard.closeFriends },
+    { value: 'mixed_group', label: t.wizard.mixedGroup },
+    { value: 'strangers', label: t.wizard.strangers },
+  ];
+
+  const VIBE_OPTIONS = [
+    { value: 'Sports & Action', label: t.wizard.sportsAction },
+    { value: 'Culture', label: t.wizard.culture },
+    { value: 'Nightlife', label: t.wizard.nightlife },
+    { value: 'Chill', label: t.wizard.chill },
+  ];
+
+  const ACTIVITY_LEVELS = [
+    { value: 'relaxed', label: t.wizard.relaxed },
+    { value: 'moderate', label: t.wizard.moderate },
+    { value: 'high_paced', label: t.wizard.highPaced },
+  ];
+
+  const TRAVEL_DISTANCES = [
+    { value: 'local', label: t.wizard.local },
+    { value: 'domestic', label: t.wizard.domestic },
+    { value: 'international', label: t.wizard.international },
+  ];
+
+  const EVENT_DURATIONS = [
+    { value: '1_day', label: t.wizard.oneNight, disabled: false },
+    { value: '2_days', label: t.wizard.twoDays, disabled: true },
+    { value: '3_plus_days', label: t.wizard.threePlusDays, disabled: true },
+  ];
 
   const handleNext = () => {
-    if (canProceed) {
-      router.push('/create-event/packages');
-    }
+    router.push('/create-event/packages');
   };
 
   const handleBack = () => {
     router.back();
   };
 
-  const handleSkip = () => {
-    router.push('/create-event/packages');
-  };
-
   return (
     <YStack flex={1} backgroundColor="$background">
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
-        <Text fontSize="$6" fontWeight="700" color="$textPrimary" marginBottom="$6">
-          Group Preferences
-        </Text>
-
-        {/* Age Range */}
-        <YStack gap="$3" marginBottom="$6">
-          <Text fontSize="$4" fontWeight="600" color="$textSecondary" textTransform="uppercase">
-            Average Age Range
-          </Text>
-          <XStack gap="$2" flexWrap="wrap">
-            {AGE_RANGES.map(age => (
-              <Chip
-                key={age.value}
-                label={age.label}
-                selected={averageAge === age.value}
-                onPress={() => setAverageAge(age.value as any)}
-                testID={`age-range-${age.value}`}
-              />
-            ))}
-          </XStack>
-        </YStack>
-
-        {/* Group Cohesion */}
-        <YStack gap="$3" marginBottom="$6">
-          <Text fontSize="$4" fontWeight="600" color="$textSecondary" textTransform="uppercase">
-            Group Cohesion
-          </Text>
-          <YStack gap="$2">
-            {GROUP_COHESIONS.map(cohesion => (
-              <XStack
-                key={cohesion.value}
-                padding="$4"
-                borderRadius="$lg"
-                backgroundColor={groupCohesion === cohesion.value ? '$primary' : '$surface'}
-                borderWidth={2}
-                borderColor={groupCohesion === cohesion.value ? '$primary' : '$borderColor'}
-                alignItems="center"
-                justifyContent="space-between"
-                pressStyle={{ scale: 0.98 }}
-                onPress={() => setGroupCohesion(cohesion.value as any)}
-                testID={`group-cohesion-${cohesion.value}`}
-              >
-                <YStack>
-                  <Text
-                    fontWeight="600"
-                    color={groupCohesion === cohesion.value ? 'white' : '$textPrimary'}
-                  >
-                    {cohesion.label}
-                  </Text>
-                  <Text
-                    fontSize="$2"
-                    color={groupCohesion === cohesion.value ? 'rgba(255,255,255,0.8)' : '$textSecondary'}
-                  >
-                    {cohesion.desc}
-                  </Text>
-                </YStack>
-              </XStack>
-            ))}
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+        {/* Group Dynamics Panel */}
+        <GlassPanel icon="people-circle" title={t.wizard.groupCohesion} testID="panel-group-dynamics">
+          {/* Average Age */}
+          <YStack marginBottom="$5">
+            <SectionLabel>{t.wizard.averageAge}</SectionLabel>
+            <ChipGroup testID="age-range-chips">
+              {AGE_RANGES.map(age => (
+                <Chip
+                  key={age.value}
+                  label={age.label}
+                  selected={averageAge === age.value}
+                  onPress={() => setAverageAge(age.value as any)}
+                  testID={`age-range-${age.value}`}
+                />
+              ))}
+            </ChipGroup>
           </YStack>
-        </YStack>
 
-        {/* Vibe Preferences */}
-        <YStack gap="$3">
-          <Text fontSize="$4" fontWeight="600" color="$textSecondary" textTransform="uppercase">
-            Vibe Preferences (Optional)
-          </Text>
-          <Text fontSize="$2" color="$textMuted" marginBottom="$2">
-            Select all that apply
-          </Text>
-          <ChipGroup testID="vibe-preferences-chips">
-            {VIBE_OPTIONS.map(vibe => (
-              <Chip
-                key={vibe}
-                label={vibe}
-                selected={vibePreferences.includes(vibe)}
-                onPress={() => toggleVibePreference(vibe)}
-                testID={`vibe-${vibe.toLowerCase().replace(/\s/g, '-')}`}
-              />
-            ))}
-          </ChipGroup>
-        </YStack>
+          {/* Group Cohesion */}
+          <YStack>
+            <SectionLabel>{t.wizard.groupCohesion}</SectionLabel>
+            <ChipGroup testID="group-cohesion-chips">
+              {GROUP_COHESIONS.map(cohesion => (
+                <Chip
+                  key={cohesion.value}
+                  label={cohesion.label}
+                  selected={groupCohesion === cohesion.value}
+                  onPress={() => setGroupCohesion(cohesion.value as any)}
+                  testID={`group-cohesion-${cohesion.value}`}
+                />
+              ))}
+            </ChipGroup>
+          </YStack>
+        </GlassPanel>
+
+        {/* Shared Interests Panel */}
+        <GlassPanel icon="heart" title={t.wizard.vibePreference} testID="panel-shared-interests">
+          {/* Vibe Preference */}
+          <YStack marginBottom="$5">
+            <SectionLabel>{t.wizard.vibePreference}</SectionLabel>
+            <ChipGroup testID="vibe-preferences-chips">
+              {VIBE_OPTIONS.map(vibe => (
+                <Chip
+                  key={vibe.value}
+                  label={vibe.label}
+                  selected={vibePreferences.includes(vibe.value)}
+                  onPress={() => toggleVibePreference(vibe.value)}
+                  testID={`vibe-${vibe.value.toLowerCase().replace(/\s+/g, '-')}`}
+                />
+              ))}
+            </ChipGroup>
+          </YStack>
+
+          {/* Activity Level */}
+          <YStack>
+            <SectionLabel>{t.wizard.activityLevel}</SectionLabel>
+            <ChipGroup testID="activity-level-chips">
+              {ACTIVITY_LEVELS.map(level => (
+                <Chip
+                  key={level.value}
+                  label={level.label}
+                  selected={activityLevel === level.value}
+                  onPress={() => setActivityLevel(level.value as any)}
+                  testID={`activity-level-${level.value}`}
+                />
+              ))}
+            </ChipGroup>
+          </YStack>
+        </GlassPanel>
+
+        {/* Organization Panel */}
+        <GlassPanel icon="compass" title={t.wizard.travelDistance} testID="panel-organization">
+          {/* Travel Distance */}
+          <YStack marginBottom="$5">
+            <SectionLabel>{t.wizard.travelDistance}</SectionLabel>
+            <ChipGroup testID="travel-distance-chips">
+              {TRAVEL_DISTANCES.map(dist => (
+                <Chip
+                  key={dist.value}
+                  label={dist.label}
+                  selected={travelDistance === dist.value}
+                  onPress={() => setTravelDistance(dist.value as any)}
+                  testID={`travel-distance-${dist.value}`}
+                />
+              ))}
+            </ChipGroup>
+          </YStack>
+
+          {/* Event Duration */}
+          <YStack>
+            <SectionLabel>{t.wizard.eventDuration}</SectionLabel>
+            <ChipGroup testID="event-duration-chips">
+              {EVENT_DURATIONS.map(dur => (
+                <Chip
+                  key={dur.value}
+                  label={dur.disabled ? `${dur.label} (${t.wizard.comingSoonBadge})` : dur.label}
+                  selected={eventDuration === dur.value}
+                  disabled={dur.disabled}
+                  onPress={() => setEventDuration(dur.value as any)}
+                  showCheckmark={!dur.disabled}
+                  testID={`event-duration-${dur.value}`}
+                />
+              ))}
+            </ChipGroup>
+          </YStack>
+        </GlassPanel>
       </ScrollView>
 
       {/* Footer */}
-      <XStack
-        position="absolute"
-        bottom={0}
-        left={0}
-        right={0}
-        padding="$4"
-        paddingBottom={insets.bottom + 16}
-        backgroundColor="$surface"
-        borderTopWidth={1}
-        borderTopColor="$borderColor"
-        gap="$3"
-      >
-        <Button flex={1} variant="outline" onPress={handleBack} testID="wizard-back-button">
-          Back
-        </Button>
-        <Button flex={1} variant="ghost" onPress={handleSkip} testID="wizard-skip-button">
-          Skip
-        </Button>
-        <Button flex={1} onPress={handleNext} disabled={!canProceed} testID="wizard-next-button">
-          Continue
-        </Button>
-      </XStack>
+      <WizardFooter
+        onBack={handleBack}
+        onNext={handleNext}
+        nextLabel={`${t.wizard.nextStep} →`}
+      />
     </YStack>
   );
 }

@@ -74,7 +74,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
   const canVote = poll.status === 'active' && !hasVoted;
 
   const categoryConfig = CATEGORY_CONFIG[poll.category || 'general'] || CATEGORY_CONFIG.general;
-  const statusConfig = STATUS_CONFIG[poll.status] || STATUS_CONFIG.draft;
+  const statusConfig = STATUS_CONFIG[poll.status || 'draft'] || STATUS_CONFIG.draft;
 
   const formatDeadline = () => {
     if (!poll.ends_at) return null;
@@ -94,7 +94,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
   const winningOption = useMemo(() => {
     if (!isClosed || poll.options.length === 0) return null;
     return poll.options.reduce((max, opt) =>
-      opt.vote_count > max.vote_count ? opt : max
+      (opt.vote_count ?? 0) > (max.vote_count ?? 0) ? opt : max
     );
   }, [isClosed, poll.options]);
 
@@ -165,8 +165,9 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
           {/* Options */}
           <YStack gap="$2" marginTop="$1">
             {poll.options.map((option) => {
+              const voteCount = option.vote_count ?? 0;
               const percentage = poll.total_votes > 0
-                ? Math.round((option.vote_count / poll.total_votes) * 100)
+                ? Math.round((voteCount / poll.total_votes) * 100)
                 : 0;
               const isUserVote = option.id === poll.user_vote;
               const isWinner = isClosed && winningOption?.id === option.id;
@@ -225,18 +226,18 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
 
                     <XStack gap="$2" alignItems="center">
                       {/* Voter avatars */}
-                      {showResults && option.vote_count > 0 && (
+                      {showResults && voteCount > 0 && (
                         <XStack style={styles.avatarStack}>
                           {/* Show up to 2 avatar placeholders */}
                           <View style={[styles.avatar, { backgroundColor: '#6B7280' }]}>
                             <Text style={styles.avatarText}>
-                              {option.vote_count > 2 ? '+' : ''}
+                              {voteCount > 2 ? '+' : ''}
                             </Text>
                           </View>
-                          {option.vote_count > 1 && (
+                          {voteCount > 1 && (
                             <View style={[styles.avatar, { backgroundColor: '#4B5563', marginLeft: -6 }]}>
                               <Text style={styles.avatarText}>
-                                {option.vote_count > 2 ? `${option.vote_count - 1}` : ''}
+                                {voteCount > 2 ? `${voteCount - 1}` : ''}
                               </Text>
                             </View>
                           )}

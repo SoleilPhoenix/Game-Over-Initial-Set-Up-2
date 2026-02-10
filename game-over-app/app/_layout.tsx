@@ -6,13 +6,15 @@
 import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useColorScheme } from 'react-native';
+import { Image, StyleSheet } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TamaguiProvider, Theme, Spinner, YStack } from 'tamagui';
 import { ToastProvider, ToastViewport } from '@tamagui/toast';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { LinearGradient } from 'expo-linear-gradient';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import { useAuthStore } from '@/stores/authStore';
+import { DARK_THEME } from '@/constants/theme';
 import config from '../tamagui.config';
 
 // Stripe publishable key from environment
@@ -54,22 +56,33 @@ function RootLayoutNav() {
 
   if (!isInitialized || isLoading) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
-        <Spinner size="large" color="$primary" />
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={DARK_THEME.background}>
+        <LinearGradient
+          colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
+          style={StyleSheet.absoluteFill}
+        />
+        {/* Game Over Logo */}
+        <Image
+          source={require('../assets/icon.png')}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        {/* Loading Spinner below logo */}
+        <Spinner size="large" color={DARK_THEME.primary} style={{ marginTop: 24 }} />
       </YStack>
     );
   }
 
   return (
     <>
-      <StatusBar style="auto" />
+      <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen
           name="create-event"
           options={{
-            presentation: 'modal',
+            presentation: 'fullScreenModal',
             animation: 'slide_from_bottom',
           }}
         />
@@ -83,8 +96,16 @@ function RootLayoutNav() {
   );
 }
 
+const styles = StyleSheet.create({
+  logo: {
+    width: 150,
+    height: 150,
+  },
+});
+
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  // Force dark theme - Game Over is a dark-mode-only app
+  const colorScheme = 'dark';
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -93,8 +114,8 @@ export default function RootLayout() {
         merchantIdentifier="merchant.com.gameover.app"
         urlScheme="gameover"
       >
-        <TamaguiProvider config={config} defaultTheme={colorScheme ?? 'light'}>
-          <Theme name={colorScheme ?? 'light'}>
+        <TamaguiProvider config={config} defaultTheme="dark">
+          <Theme name="dark">
             <ToastProvider>
               <QueryClientProvider client={queryClient}>
                 <RootLayoutNav />

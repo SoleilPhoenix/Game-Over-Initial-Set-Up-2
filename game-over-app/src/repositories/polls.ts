@@ -53,7 +53,7 @@ export const pollsRepository = {
     return (data || []).map(poll => ({
       ...poll,
       options: poll.options || [],
-      total_votes: (poll.options || []).reduce((sum, opt) => sum + opt.vote_count, 0),
+      total_votes: (poll.options || []).reduce((sum, opt) => sum + (opt.vote_count ?? 0), 0),
       user_vote: userVotes[poll.id],
     }));
   },
@@ -91,7 +91,7 @@ export const pollsRepository = {
     return {
       ...data,
       options: data.options || [],
-      total_votes: (data.options || []).reduce((sum, opt) => sum + opt.vote_count, 0),
+      total_votes: (data.options || []).reduce((sum, opt) => sum + (opt.vote_count ?? 0), 0),
       user_vote: userVote,
     };
   },
@@ -153,7 +153,8 @@ export const pollsRepository = {
     if (error) throw error;
 
     // Increment vote count
-    await supabase.rpc('increment_vote_count', { option_id: optionId });
+    // Note: increment_vote_count RPC function may need to be created in Supabase
+    await (supabase.rpc as any)('increment_vote_count', { option_id: optionId });
 
     return data;
   },

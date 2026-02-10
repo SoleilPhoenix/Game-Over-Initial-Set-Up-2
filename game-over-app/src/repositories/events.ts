@@ -52,7 +52,7 @@ export const eventsRepository = {
           .from('event_participants')
           .select('event_id')
           .eq('user_id', userId)
-          .neq('role', 'organizer')
+          .neq('role', 'organizer') as unknown as string[]
       )
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
@@ -66,8 +66,8 @@ export const eventsRepository = {
     return uniqueEvents.map(event => ({
       ...event,
       city: event.city as EventWithDetails['city'],
-      preferences: event.preferences?.[0] || null,
-      participant_count: event.participants?.[0]?.count || 0,
+      preferences: Array.isArray(event.preferences) ? event.preferences[0] || null : event.preferences || null,
+      participant_count: Array.isArray(event.participants) ? event.participants[0]?.count || 0 : 0,
     }));
   },
 
@@ -95,8 +95,8 @@ export const eventsRepository = {
     return {
       ...data,
       city: data.city as EventWithDetails['city'],
-      preferences: data.preferences?.[0] || null,
-      participant_count: data.participants?.[0]?.count || 0,
+      preferences: Array.isArray(data.preferences) ? data.preferences[0] || null : data.preferences || null,
+      participant_count: Array.isArray(data.participants) ? data.participants[0]?.count || 0 : 0,
     };
   },
 

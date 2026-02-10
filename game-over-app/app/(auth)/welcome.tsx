@@ -21,6 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SocialButton } from '@/components/ui/SocialButton';
 import { DARK_THEME } from '@/constants/theme';
+import { useTranslation } from '@/i18n';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 import * as AppleAuthentication from 'expo-apple-authentication';
@@ -47,6 +48,7 @@ export default function WelcomeScreen() {
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
   const insets = useSafeAreaInsets();
   const setError = useAuthStore((state) => state.setError);
+  const { t } = useTranslation();
 
   const handleAppleSignIn = async () => {
     try {
@@ -203,34 +205,14 @@ export default function WelcomeScreen() {
                 {/* Headlines */}
                 <View style={styles.headlines}>
                   <Text style={styles.title}>
-                    Bachelor parties without the drama.
+                    {t.auth.welcomeHeadline}
                   </Text>
                   <Text style={styles.subtitle}>
-                    Let AI plan an unforgettable night that everyone enjoys—and remembers fondly.
+                    {t.auth.welcomeBody}
                   </Text>
                 </View>
 
-                {/* Primary CTA - First per mockup */}
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    pressed && styles.primaryButtonPressed,
-                  ]}
-                  onPress={handleGetStarted}
-                  testID="get-started-button"
-                >
-                  <Text style={styles.primaryButtonText}>Get Started</Text>
-                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-                </Pressable>
-
-                {/* Divider */}
-                <View style={styles.divider}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>or continue with</Text>
-                  <View style={styles.dividerLine} />
-                </View>
-
-                {/* Social Sign-In Buttons - Below CTA */}
+                {/* Social Sign-In Buttons */}
                 <View style={styles.socialButtons}>
                   <SocialButton
                     provider="apple"
@@ -254,6 +236,26 @@ export default function WelcomeScreen() {
                     testID="social-button-facebook"
                   />
                 </View>
+
+                {/* Divider */}
+                <View style={styles.divider}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>{t.auth.or}</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+
+                {/* Primary CTA */}
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    pressed && styles.primaryButtonPressed,
+                  ]}
+                  onPress={handleGetStarted}
+                  testID="get-started-button"
+                >
+                  <Text style={styles.primaryButtonText}>{t.auth.getStarted}</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                </Pressable>
               </View>
             </BlurView>
 
@@ -263,15 +265,15 @@ export default function WelcomeScreen() {
               onPress={() => router.push('/(auth)/login')}
               testID="login-link"
             >
-              <Text style={styles.loginText}>Already have an account? </Text>
-              <Text style={styles.loginLinkText}>Log In</Text>
+              <Text style={styles.loginText}>{t.auth.hasAccount} </Text>
+              <Text style={styles.loginLinkText}>{t.auth.logIn}</Text>
             </Pressable>
 
             {/* Terms */}
             <Text style={styles.terms}>
-              By continuing, you agree to our{' '}
-              <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
-              <Text style={styles.termsLink}>Privacy Policy</Text>
+              {t.auth.termsPrefix}{' '}
+              <Text style={styles.termsLink}>{t.auth.termsOfService}</Text> {t.auth.and}{' '}
+              <Text style={styles.termsLink}>{t.auth.privacyPolicy}</Text>
             </Text>
           </View>
         </View>

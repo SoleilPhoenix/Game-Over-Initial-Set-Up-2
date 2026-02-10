@@ -4,11 +4,11 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { MMKV } from 'react-native-mmkv';
+import { createStorage } from '../storage';
 import type { Database } from './types';
 
-// MMKV Storage for Supabase session persistence
-const storage = new MMKV({ id: 'supabase-storage' });
+// Create storage adapter (works in both Expo Go and dev builds)
+const supabaseStorage = createStorage('supabase-storage');
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
@@ -20,26 +20,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// Custom storage adapter for MMKV
-const mmkvStorage = {
-  getItem: (key: string): string | null => {
-    const value = storage.getString(key);
-    return value ?? null;
-  },
-  setItem: (key: string, value: string): void => {
-    storage.set(key, value);
-  },
-  removeItem: (key: string): void => {
-    storage.delete(key);
-  },
-};
-
 export const supabase = createClient<Database>(
   supabaseUrl,
   supabaseAnonKey,
   {
     auth: {
-      storage: mmkvStorage,
+      storage: supabaseStorage,
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,

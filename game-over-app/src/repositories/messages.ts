@@ -42,9 +42,10 @@ export const messagesRepository = {
 
     if (error) throw error;
 
+    // Note: messages->profiles relation may need FK in Supabase
     const messages = (data || []).map(m => ({
       ...m,
-      author: m.author as MessageWithAuthor['author'],
+      author: (m as any).author as MessageWithAuthor['author'],
     }));
 
     // Reverse to show oldest first in UI
@@ -100,7 +101,7 @@ export const messagesRepository = {
 
     return (data || []).map(m => ({
       ...m,
-      author: m.author as MessageWithAuthor['author'],
+      author: (m as any).author as MessageWithAuthor['author'],
     }));
   },
 

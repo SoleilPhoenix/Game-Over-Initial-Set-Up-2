@@ -95,7 +95,7 @@ const StyledButton = styled(TamaguiButton, {
 
 type StyledButtonProps = GetProps<typeof StyledButton>;
 
-export interface ButtonProps extends Omit<StyledButtonProps, 'disabled'> {
+export interface ButtonProps extends Omit<StyledButtonProps, 'disabled' | 'icon'> {
   loading?: boolean;
   disabled?: boolean;
   icon?: React.ReactNode;

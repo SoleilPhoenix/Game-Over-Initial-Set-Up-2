@@ -12,20 +12,33 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
+import { useWizardStore } from '@/stores/wizardStore';
 import { addEventToCalendarWithFeedback } from '@/utils/calendar';
+import { useTranslation, getTranslation } from '@/i18n';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
+const CITY_NAMES: Record<string, string> = { berlin: 'Berlin', hamburg: 'Hamburg', hannover: 'Hannover' };
+const FALLBACK_PKG_NAMES: Record<string, string> = {
+  'berlin-classic': 'Berlin Classic', 'berlin-essential': 'Berlin Essential', 'berlin-grand': 'Berlin Grand',
+  'hamburg-classic': 'Hamburg Classic', 'hamburg-essential': 'Hamburg Essential', 'hamburg-grand': 'Hamburg Grand',
+  'hannover-classic': 'Hannover Classic', 'hannover-essential': 'Hannover Essential', 'hannover-grand': 'Hannover Grand',
+};
+
 export default function BookingConfirmationScreen() {
-  const { eventId } = useLocalSearchParams<{ eventId: string }>();
+  const { eventId, packageId, cityId, participants, total } = useLocalSearchParams<{
+    eventId: string; packageId?: string; cityId?: string; participants?: string; total?: string;
+  }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [copied, setCopied] = useState(false);
+  const isDraft = eventId === 'draft';
+  const { t } = useTranslation();
 
-  const { data: event, isLoading: eventLoading } = useEvent(eventId);
-  const { data: booking, isLoading: bookingLoading } = useBooking(eventId);
+  const { data: event, isLoading: eventLoading } = useEvent(isDraft ? undefined : eventId);
+  const { data: booking, isLoading: bookingLoading } = useBooking(isDraft ? undefined : eventId);
 
-  if (eventLoading || bookingLoading) {
+  if (!isDraft && (eventLoading || bookingLoading)) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
         <Spinner size="large" color="$primary" />
@@ -33,7 +46,9 @@ export default function BookingConfirmationScreen() {
     );
   }
 
-  const bookingReference = booking?.reference_number || `GO-${booking?.id?.slice(0, 6).toUpperCase()}`;
+  // Draft mode: generate a demo reference
+  const draftRef = `GO-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  const bookingReference = isDraft ? draftRef : (booking?.reference_number || `GO-${booking?.id?.slice(0, 6).toUpperCase()}`);
 
   const formatPrice = (cents: number) => {
     return (cents / 100).toLocaleString('en-US', {
@@ -54,6 +69,11 @@ export default function BookingConfirmationScreen() {
   };
 
   const handleAddToCalendar = async () => {
+    if (isDraft) {
+      const tr = getTranslation();
+      Alert.alert(tr.booking.demoMode, tr.booking.demoCalendarMessage);
+      return;
+    }
     if (!event) return;
 
     await addEventToCalendarWithFeedback({
@@ -67,10 +87,16 @@ export default function BookingConfirmationScreen() {
   };
 
   const handleViewEvent = () => {
+    useWizardStore.getState().clearDraft();
+    if (isDraft) {
+      router.replace('/(tabs)/events');
+      return;
+    }
     router.replace(`/event/${eventId}`);
   };
 
   const handleGoHome = () => {
+    useWizardStore.getState().clearDraft();
     router.replace('/(tabs)/events');
   };
 
@@ -101,68 +127,66 @@ export default function BookingConfirmationScreen() {
 
         {/* Success Message */}
         <Text fontSize="$7" fontWeight="800" color="$textPrimary" textAlign="center" marginBottom="$2">
-          Booking Confirmed!
+          {t.booking.confirmationTitle}
         </Text>
         <Text fontSize="$3" color="$textSecondary" textAlign="center" marginBottom="$6">
-          Your package has been booked successfully
+          {t.booking.confirmationSubtitle}
         </Text>
 
         {/* Booking Details Card */}
         <Card width="100%" marginBottom="$6" testID="booking-details-card">
           <YStack gap="$4">
             <XStack justifyContent="space-between" alignItems="center">
-              <Text color="$textSecondary">Event</Text>
+              <Text color="$textSecondary">{t.booking.packageLabel}</Text>
               <Text fontWeight="600" color="$textPrimary">
-                {event?.title || `${event?.honoree_name}'s Party`}
+                {isDraft ? (packageId ? FALLBACK_PKG_NAMES[packageId] || packageId : 'Selected Package') : (event?.title || `${event?.honoree_name}'s Party`)}
               </Text>
             </XStack>
 
             <XStack justifyContent="space-between" alignItems="center">
-              <Text color="$textSecondary">Destination</Text>
+              <Text color="$textSecondary">{t.booking.destination}</Text>
               <Text fontWeight="600" color="$textPrimary">
-                {event?.city?.name}
+                {isDraft ? (cityId ? CITY_NAMES[cityId] || cityId : 'Unknown') : event?.city?.name}
               </Text>
             </XStack>
 
-            <XStack justifyContent="space-between" alignItems="center">
-              <Text color="$textSecondary">Date</Text>
-              <Text fontWeight="600" color="$textPrimary">
-                {event?.start_date && new Date(event.start_date).toLocaleDateString('en-US', {
-                  month: 'long',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}
-              </Text>
-            </XStack>
-
-            {booking && (
-              <>
-                <YStack height={1} backgroundColor="$borderColor" />
-
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text color="$textSecondary">Booking Reference</Text>
-                  <Pressable onPress={handleCopyReference} testID="copy-reference-button">
-                    <XStack gap="$2" alignItems="center">
-                      <Text fontWeight="700" color="$primary" fontFamily="$mono">
-                        {bookingReference}
-                      </Text>
-                      <Ionicons
-                        name={copied ? 'checkmark-circle' : 'copy-outline'}
-                        size={18}
-                        color={copied ? '#47B881' : '#258CF4'}
-                      />
-                    </XStack>
-                  </Pressable>
-                </XStack>
-
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text color="$textSecondary">Total Paid</Text>
-                  <Text fontSize="$5" fontWeight="800" color="$primary">
-                    {formatPrice(booking.total_amount_cents)}
-                  </Text>
-                </XStack>
-              </>
+            {!isDraft && event?.start_date && (
+              <XStack justifyContent="space-between" alignItems="center">
+                <Text color="$textSecondary">{t.booking.date}</Text>
+                <Text fontWeight="600" color="$textPrimary">
+                  {new Date(event.start_date).toLocaleDateString('en-US', {
+                    month: 'long',
+                    day: 'numeric',
+                    year: 'numeric',
+                  })}
+                </Text>
+              </XStack>
             )}
+
+            <YStack height={1} backgroundColor="$borderColor" />
+
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text color="$textSecondary">{t.booking.bookingReference}</Text>
+              <Pressable onPress={handleCopyReference} testID="copy-reference-button">
+                <XStack gap="$2" alignItems="center">
+                  <Text fontWeight="700" color="$primary" fontFamily="$body">
+                    {bookingReference}
+                  </Text>
+                  <Ionicons
+                    name={copied ? 'checkmark-circle' : 'copy-outline'}
+                    size={18}
+                    color={copied ? '#47B881' : '#258CF4'}
+                  />
+                </XStack>
+              </Pressable>
+            </XStack>
+
+            <XStack justifyContent="space-between" alignItems="center">
+              <Text color="$textSecondary">{t.booking.totalPaid}</Text>
+              <Text fontSize="$5" fontWeight="800" color="$primary">
+                {isDraft && total ? formatPrice(parseInt(total, 10)) : booking ? formatPrice(booking.total_amount_cents) : '---'}
+              </Text>
+            </XStack>
           </YStack>
         </Card>
 
@@ -170,24 +194,24 @@ export default function BookingConfirmationScreen() {
         <Card width="100%" backgroundColor="rgba(37, 140, 244, 0.1)" borderWidth={0}>
           <YStack gap="$3">
             <Text fontSize="$4" fontWeight="700" color="$primary">
-              What's Next?
+              {t.booking.whatsNext}
             </Text>
             <XStack gap="$2" alignItems="flex-start">
               <Ionicons name="mail-outline" size={18} color="#258CF4" style={{ marginTop: 2 }} />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
-                You'll receive a confirmation email with all the details
+                {t.booking.confirmationEmail}
               </Text>
             </XStack>
             <XStack gap="$2" alignItems="flex-start">
               <Ionicons name="people-outline" size={18} color="#258CF4" style={{ marginTop: 2 }} />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
-                Invite your guests and split the cost
+                {t.booking.inviteGuests}
               </Text>
             </XStack>
             <XStack gap="$2" alignItems="flex-start">
               <Ionicons name="chatbubbles-outline" size={18} color="#258CF4" style={{ marginTop: 2 }} />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
-                Use the group chat to coordinate with everyone
+                {t.booking.useGroupChat}
               </Text>
             </XStack>
           </YStack>
@@ -212,7 +236,7 @@ export default function BookingConfirmationScreen() {
           <XStack gap="$2" alignItems="center">
             <Ionicons name="calendar-outline" size={20} color="#258CF4" />
             <Text color="$primary" fontWeight="600">
-              Add to Calendar
+              {t.booking.addToCalendar}
             </Text>
           </XStack>
         </Button>
@@ -220,11 +244,13 @@ export default function BookingConfirmationScreen() {
         {/* Navigation Buttons */}
         <XStack gap="$3">
           <Button flex={1} variant="outline" onPress={handleGoHome} testID="go-home-button">
-            Go Home
+            {t.booking.goHome}
           </Button>
-          <Button flex={1} onPress={handleViewEvent} testID="view-event-button">
-            View Event
-          </Button>
+          {!isDraft && (
+            <Button flex={1} onPress={handleViewEvent} testID="view-event-button">
+              {t.booking.viewEvent}
+            </Button>
+          )}
         </XStack>
       </YStack>
     </YStack>

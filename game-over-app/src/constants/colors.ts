@@ -5,10 +5,10 @@
  */
 
 export const colors = {
-  // Primary Colors - Updated to match UI designs
-  primary: '#4A6FA5',
-  primaryLight: '#5A7EB0',
-  primaryDark: '#3B5984',
+  // Primary Colors - Unified active blue across all screens
+  primary: '#5A7EB0',
+  primaryLight: '#7A9BC4',
+  primaryDark: '#456A9C',
 
   // Semantic Colors
   success: '#22C55E',
@@ -24,7 +24,7 @@ export const colors = {
     textSecondary: '#64748B',
     textTertiary: '#94A3B8',
     border: '#E2E8F0',
-    primary: '#4A6FA5',
+    primary: '#5A7EB0',
     success: '#22C55E',
     warning: '#EAB308',
     error: '#EF4444',
@@ -66,16 +66,16 @@ export const colors = {
 
   // Gradients
   gradients: {
-    primary: ['#258CF4', '#1A6BC4'],
+    primary: ['#5A7EB0', '#456A9C'],
     surfaceLight: ['#FFFFFF', '#F0F2F5'],
     surfaceDark: ['#1B2127', '#222A33'],
   },
 
   // Transparent variants
   transparent: {
-    primary10: 'rgba(37, 140, 244, 0.1)',
-    primary20: 'rgba(37, 140, 244, 0.2)',
-    primary30: 'rgba(37, 140, 244, 0.3)',
+    primary10: 'rgba(90, 126, 176, 0.1)',
+    primary20: 'rgba(90, 126, 176, 0.2)',
+    primary30: 'rgba(90, 126, 176, 0.3)',
     black10: 'rgba(0, 0, 0, 0.1)',
     black50: 'rgba(0, 0, 0, 0.5)',
     white10: 'rgba(255, 255, 255, 0.1)',

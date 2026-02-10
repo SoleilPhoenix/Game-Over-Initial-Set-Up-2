@@ -24,6 +24,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Input } from '@/components/ui/Input';
 import { DARK_THEME } from '@/constants/theme';
+import { useTranslation } from '@/i18n';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 
@@ -50,6 +51,7 @@ export default function SignupScreen() {
   const [isLoading, setIsLoading] = React.useState(false);
   const insets = useSafeAreaInsets();
   const { setError, error, clearError } = useAuthStore();
+  const { t } = useTranslation();
 
   const {
     control,
@@ -137,9 +139,9 @@ export default function SignupScreen() {
 
           {/* Title Section */}
           <View style={styles.titleSection}>
-            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.title}>{t.auth.createAccount}</Text>
             <Text style={styles.subtitle}>
-              Join Game Over and start planning unforgettable parties
+              {t.auth.signUpSubtitle}
             </Text>
           </View>
 
@@ -157,7 +159,7 @@ export default function SignupScreen() {
               {/* Form */}
               <View style={styles.form}>
                 <View style={styles.inputWrapper}>
-                  <Text style={styles.inputLabel}>Full Name</Text>
+                  <Text style={styles.inputLabel}>{t.auth.fullName}</Text>
                   <Controller
                     control={control}
                     name="fullName"
@@ -169,7 +171,7 @@ export default function SignupScreen() {
                             value={value}
                             onChangeText={onChange}
                             onBlur={onBlur}
-                            placeholder="Enter your full name"
+                            placeholder={t.auth.enterFullName}
                             placeholderTextColor={DARK_THEME.textTertiary}
                             autoCapitalize="words"
                             autoComplete="name"
@@ -187,7 +189,7 @@ export default function SignupScreen() {
                 </View>
 
                 <View style={styles.inputWrapper}>
-                  <Text style={styles.inputLabel}>Email</Text>
+                  <Text style={styles.inputLabel}>{t.auth.email}</Text>
                   <Controller
                     control={control}
                     name="email"
@@ -199,7 +201,7 @@ export default function SignupScreen() {
                             value={value}
                             onChangeText={onChange}
                             onBlur={onBlur}
-                            placeholder="Enter your email"
+                            placeholder={t.auth.enterEmail}
                             placeholderTextColor={DARK_THEME.textTertiary}
                             keyboardType="email-address"
                             autoCapitalize="none"
@@ -218,7 +220,7 @@ export default function SignupScreen() {
                 </View>
 
                 <View style={styles.inputWrapper}>
-                  <Text style={styles.inputLabel}>Password</Text>
+                  <Text style={styles.inputLabel}>{t.auth.password}</Text>
                   <Controller
                     control={control}
                     name="password"
@@ -230,7 +232,7 @@ export default function SignupScreen() {
                             value={value}
                             onChangeText={onChange}
                             onBlur={onBlur}
-                            placeholder="Create a password"
+                            placeholder={t.auth.createPassword}
                             placeholderTextColor={DARK_THEME.textTertiary}
                             secureTextEntry
                             autoComplete="password-new"
@@ -246,13 +248,13 @@ export default function SignupScreen() {
                     <Text style={styles.fieldError}>{errors.password.message}</Text>
                   ) : (
                     <Text style={styles.fieldHint}>
-                      Min 8 chars with uppercase, lowercase, and number
+                      {t.auth.passwordHint}
                     </Text>
                   )}
                 </View>
 
                 <View style={styles.inputWrapper}>
-                  <Text style={styles.inputLabel}>Confirm Password</Text>
+                  <Text style={styles.inputLabel}>{t.auth.confirmPassword}</Text>
                   <Controller
                     control={control}
                     name="confirmPassword"
@@ -264,7 +266,7 @@ export default function SignupScreen() {
                             value={value}
                             onChangeText={onChange}
                             onBlur={onBlur}
-                            placeholder="Confirm your password"
+                            placeholder={t.auth.confirmYourPassword}
                             placeholderTextColor={DARK_THEME.textTertiary}
                             secureTextEntry
                             autoComplete="password-new"
@@ -294,10 +296,10 @@ export default function SignupScreen() {
                 testID="signup-submit-button"
               >
                 {isLoading ? (
-                  <Text style={styles.primaryButtonText}>Creating Account...</Text>
+                  <Text style={styles.primaryButtonText}>{t.auth.creatingAccount}</Text>
                 ) : (
                   <>
-                    <Text style={styles.primaryButtonText}>Create Account</Text>
+                    <Text style={styles.primaryButtonText}>{t.auth.createAccount}</Text>
                     <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
                   </>
                 )}
@@ -305,19 +307,19 @@ export default function SignupScreen() {
 
               {/* Terms */}
               <Text style={styles.terms}>
-                By creating an account, you agree to our{' '}
-                <Text style={styles.termsLink}>Terms of Service</Text> and{' '}
-                <Text style={styles.termsLink}>Privacy Policy</Text>
+                {t.auth.termsPrefixCreate}{' '}
+                <Text style={styles.termsLink}>{t.auth.termsOfService}</Text> {t.auth.and}{' '}
+                <Text style={styles.termsLink}>{t.auth.privacyPolicy}</Text>
               </Text>
             </View>
           </BlurView>
 
           {/* Login Link */}
           <View style={styles.loginLink}>
-            <Text style={styles.loginText}>Already have an account? </Text>
+            <Text style={styles.loginText}>{t.auth.hasAccount} </Text>
             <Link href="/(auth)/login" asChild>
               <Pressable testID="login-link">
-                <Text style={styles.loginLinkText}>Log In</Text>
+                <Text style={styles.loginLinkText}>{t.auth.logIn}</Text>
               </Pressable>
             </Link>
           </View>

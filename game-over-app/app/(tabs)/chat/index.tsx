@@ -1,105 +1,101 @@
 /**
- * Chat Screen
- * Communication Center with Chat, Voting, and Decisions tabs
- * Dark glassmorphic design matching mockup v4.1
+ * Communication Screen
+ * Chat, Voting, Decisions with organized channel sections
  */
 
-import React, { useState, useMemo } from 'react';
-import { ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar } from 'react-native';
+import React, { useState, useMemo, useEffect } from 'react';
+import { ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar, Alert, Share, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';
-import { useChannels } from '@/hooks/queries/useChat';
-import { useUser } from '@/stores/authStore';
+import { useChannels, useCreateChannel } from '@/hooks/queries/useChat';
 import { DARK_THEME } from '@/constants/theme';
+import { useTranslation, getTranslation } from '@/i18n';
+import { useUser } from '@/stores/authStore';
 import type { Database } from '@/lib/supabase/types';
 
-type Event = Database['public']['Tables']['events']['Row'] & {
-  city?: { name: string } | null;
+type CommunicationTab = 'chat' | 'voting' | 'decisions';
+type ChannelCategory = Database['public']['Enums']['channel_category'];
+
+type ChatChannel = Database['public']['Tables']['chat_channels']['Row'];
+
+type LocalChannel = {
+  id: string;
+  name: string;
 };
 
-type TabType = 'chat' | 'voting' | 'decisions';
+type LocalChannelSection = {
+  id: ChannelCategory;
+  title: string;
+  channels: LocalChannel[];
+};
 
-// Channel category configuration
-const CHANNEL_CATEGORIES = {
-  general: { label: 'GENERAL', icon: 'chatbubbles', color: '#A78BFA' },
-  accommodation: { label: 'ACCOMMODATION', icon: 'home', color: '#22D3EE' },
-  activities: { label: 'ACTIVITIES', icon: 'game-controller', color: '#FB923C' },
-  budget: { label: 'BUDGET', icon: 'cash', color: '#34D399' },
-} as const;
-
-export default function ChatScreen() {
+export default function CommunicationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useUser();
-  const [activeTab, setActiveTab] = useState<TabType>('chat');
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedTab, setSelectedTab] = useState<CommunicationTab>('chat');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const { t } = useTranslation();
 
-  // Get user avatar
-  const avatarUrl = user?.user_metadata?.avatar_url;
-  const userInitials = useMemo(() => {
-    const name = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'U';
-    return name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
-  }, [user]);
+  // Local channel storage for when no event is selected
+  const [localSections, setLocalSections] = useState<LocalChannelSection[]>([
+    { id: 'general', title: 'GENERAL', channels: [] },
+    { id: 'accommodation', title: 'ACCOMMODATION', channels: [] },
+    { id: 'activities', title: 'ACTIVITIES', channels: [] },
+    { id: 'budget', title: 'BUDGET', channels: [] },
+  ]);
 
   // Fetch user's events
-  const {
-    data: events,
-    isLoading: eventsLoading,
-    refetch: refetchEvents,
-  } = useEvents();
+  const { data: events, refetch: refetchEvents } = useEvents();
 
-  // Fetch channels for selected event
-  const {
-    data: channels,
-    isLoading: channelsLoading,
-    refetch: refetchChannels,
-  } = useChannels(selectedEventId || undefined);
-
-  // Filter to only show events with status that would have chat
-  const activeEvents = useMemo(() => {
-    return (events || []).filter(
-      (e: Event) => e.status !== 'draft' && e.status !== 'cancelled'
-    );
+  // Filter booked events
+  const bookedEvents = useMemo(() => {
+    return (events || []).filter(e => e.status === 'booked' || e.status === 'completed');
   }, [events]);
 
-  // Auto-select first event if none selected
-  React.useEffect(() => {
-    if (!selectedEventId && activeEvents.length > 0) {
-      setSelectedEventId(activeEvents[0].id);
+  // Auto-select first booked event
+  useEffect(() => {
+    if (!selectedEventId && bookedEvents.length > 0) {
+      setSelectedEventId(bookedEvents[0].id);
     }
-  }, [activeEvents, selectedEventId]);
+  }, [bookedEvents, selectedEventId]);
 
-  const selectedEvent = activeEvents.find((e: Event) => e.id === selectedEventId);
+  // Fetch channels for selected event (only if event exists)
+  const { data: dbChannels = [], refetch: refetchChannels } = useChannels(selectedEventId || undefined);
 
-  // Group channels by category
+  // Create channel mutation
+  const createChannelMutation = useCreateChannel();
+
+  // Group channels by category (use DB channels if event exists, otherwise local)
   const groupedChannels = useMemo(() => {
-    if (!channels) return {};
-    const groups: Record<string, typeof channels> = {
+    const groups: Record<ChannelCategory, Array<ChatChannel | LocalChannel>> = {
       general: [],
       accommodation: [],
       activities: [],
       budget: [],
     };
-    channels.forEach((channel: any) => {
-      const category = channel.category || 'general';
-      if (groups[category]) {
-        groups[category].push(channel);
-      } else {
-        groups.general.push(channel);
-      }
-    });
-    return groups;
-  }, [channels]);
 
-  const handleChannelPress = (channelId: string) => {
-    router.push(`/(tabs)/chat/${channelId}`);
-  };
+    if (selectedEventId && dbChannels.length > 0) {
+      // Use database channels if event is selected
+      dbChannels.forEach(channel => {
+        if (groups[channel.category]) {
+          groups[channel.category].push(channel);
+        }
+      });
+    } else {
+      // Use local channels otherwise
+      localSections.forEach(section => {
+        groups[section.id] = section.channels;
+      });
+    }
+
+    return groups;
+  }, [selectedEventId, dbChannels, localSections]);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -107,304 +103,409 @@ export default function ChatScreen() {
     setIsRefreshing(false);
   };
 
-  // Check if we're in empty state (no events)
-  // Show empty state while loading to avoid flash (better to show empty than wrong content)
-  const hasNoEvents = eventsLoading || activeEvents.length === 0;
-
-  // Empty state content configuration per tab
-  const emptyStateConfig = {
-    chat: {
-      emoji: '💬',
-      title: 'No Chats Yet',
-      subtitleLine1: 'Create your first event and',
-      subtitleLine2: 'start chatting with your group!',
-    },
-    voting: {
-      emoji: '🗳️',
-      title: 'No Votings Yet',
-      subtitleLine1: 'Create your first event and',
-      subtitleLine2: 'start voting with your group!',
-    },
-    decisions: {
-      emoji: '✅',
-      title: 'No Decisions Yet',
-      subtitleLine1: 'Create your first event and',
-      subtitleLine2: 'start deciding with your group!',
-    },
+  const handleNotifications = () => {
+    router.push('/notifications');
   };
 
-  // Render empty state content - matches Events screen exactly
-  const renderEmptyState = () => {
-    const config = emptyStateConfig[activeTab];
-    return (
-      <YStack flex={1} justifyContent="center" alignItems="center" padding={24}>
-        <View style={styles.emptyIconContainer}>
-          <LinearGradient
-            colors={[`${DARK_THEME.primary}30`, `${DARK_THEME.primary}10`]}
-            style={styles.emptyIconGradient}
-          >
-            <Text fontSize={56}>{config.emoji}</Text>
-          </LinearGradient>
-        </View>
-        <Text fontSize={24} fontWeight="800" color={DARK_THEME.textPrimary} marginBottom={8}>
-          {config.title}
-        </Text>
-        <Text
-          fontSize={16}
-          color={DARK_THEME.textSecondary}
-          textAlign="center"
-          marginBottom={24}
-          maxWidth={280}
-          lineHeight={24}
-        >
-          {config.subtitleLine1}{'\n'}{config.subtitleLine2}
-        </Text>
-        <Pressable
-          style={({ pressed }) => [
-            styles.primaryButton,
-            pressed && styles.primaryButtonPressed,
-          ]}
-          onPress={() => router.push('/create-event')}
-        >
-          <Ionicons name="add" size={20} color="#FFFFFF" />
-          <Text style={styles.primaryButtonText}>Create Event</Text>
-        </Pressable>
-      </YStack>
+  const handleInvite = () => {
+    // TODO: Replace with actual invite code and App Store links when available
+    const inviteCode = 'PARTY2024'; // Dummy invite code
+    const iosAppStoreLink = 'https://apps.apple.com/app/game-over/id123456789'; // Dummy iOS link
+    const androidPlayStoreLink = 'https://play.google.com/store/apps/details?id=com.gameover.app'; // Dummy Android link
+    const inviteUrl = `https://game-over.app/invite/${inviteCode}`;
+    const inviteMessage = `Join my party planning on Game Over! 🎉\n\nUse invite code: ${inviteCode}\n\niOS: ${iosAppStoreLink}\nAndroid: ${androidPlayStoreLink}\n\nOr visit: ${inviteUrl}`;
+
+    const tr = getTranslation();
+    Alert.alert(
+      tr.chat.shareInviteTitle,
+      tr.chat.shareInviteMessage,
+      [
+        {
+          text: 'WhatsApp',
+          onPress: () => {
+            const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(inviteMessage)}`;
+            Linking.openURL(whatsappUrl).catch(() => {
+              Alert.alert('Error', 'Could not open WhatsApp');
+            });
+          },
+        },
+        {
+          text: 'Facebook',
+          onPress: () => {
+            const facebookUrl = `fb://facewebmodal/f?href=https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(inviteUrl)}`;
+            Linking.canOpenURL(facebookUrl).then(supported => {
+              if (supported) {
+                Linking.openURL(facebookUrl);
+              } else {
+                // Fallback to web version
+                Linking.openURL(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(inviteUrl)}`);
+              }
+            });
+          },
+        },
+        {
+          text: 'Instagram',
+          onPress: () => {
+            Alert.alert(
+              'Instagram',
+              tr.chat.instagramMessage,
+              [
+                { text: tr.common.cancel, style: 'cancel' },
+                {
+                  text: tr.chat.openCamera,
+                  onPress: () => {
+                    Linking.openURL('instagram://story-camera').catch(() => {
+                      // Fallback to Instagram app
+                      Linking.openURL('instagram://').catch(() => {
+                        // Final fallback to web
+                        Linking.openURL('https://www.instagram.com/');
+                      });
+                    });
+                  },
+                },
+              ]
+            );
+          },
+        },
+        {
+          text: 'TikTok',
+          onPress: () => {
+            Linking.canOpenURL('tiktok://').then(supported => {
+              if (supported) {
+                Linking.openURL('tiktok://');
+              } else {
+                // Fallback to web version
+                Linking.openURL('https://www.tiktok.com/');
+              }
+            });
+          },
+        },
+        {
+          text: tr.chat.moreOptions,
+          onPress: async () => {
+            try {
+              await Share.share({
+                message: 'Join my party planning on Game Over! 🎉\n\nDownload the app and use this invite link to join.',
+                title: 'Join My Party Planning',
+              });
+            } catch (error) {
+              Alert.alert('Error', 'Could not share the invite');
+            }
+          },
+        },
+        {
+          text: tr.common.cancel,
+          style: 'cancel',
+        },
+      ],
+      { cancelable: true }
     );
   };
 
+  const handleAddChannel = (category: ChannelCategory) => {
+    const tr = getTranslation();
+    const categoryTitles: Record<ChannelCategory, string> = {
+      general: tr.chat.general,
+      accommodation: tr.chat.accommodation,
+      activities: tr.chat.activities,
+      budget: tr.chat.budgetCategory,
+    };
+
+    Alert.prompt(
+      tr.chat.newChannelTitle.replace('{{category}}', categoryTitles[category]),
+      tr.chat.newChannelMessage,
+      [
+        {
+          text: tr.common.cancel,
+          style: 'cancel',
+        },
+        {
+          text: tr.chat.create,
+          onPress: async (channelName) => {
+            if (channelName && channelName.trim()) {
+              if (selectedEventId) {
+                // Save to database if event exists
+                try {
+                  await createChannelMutation.mutateAsync({
+                    event_id: selectedEventId,
+                    name: channelName.trim(),
+                    category,
+                  });
+                  Alert.alert(tr.budget.success, tr.chat.channelCreated);
+                } catch (error) {
+                  console.error('Failed to create channel:', error);
+                  Alert.alert(tr.common.error, tr.chat.channelCreateFailed);
+                }
+              } else {
+                // Save locally if no event
+                setLocalSections(prevSections =>
+                  prevSections.map(section =>
+                    section.id === category
+                      ? {
+                          ...section,
+                          channels: [
+                            ...section.channels,
+                            { id: Date.now().toString(), name: channelName.trim() }
+                          ]
+                        }
+                      : section
+                  )
+                );
+              }
+            }
+          },
+        },
+      ],
+      'plain-text',
+      '',
+      'default'
+    );
+  };
+
+  const handleCreateNewTopic = () => {
+    const tr = getTranslation();
+    Alert.prompt(
+      tr.chat.newTopicLabel,
+      tr.chat.newTopicMessage,
+      [
+        {
+          text: tr.common.cancel,
+          style: 'cancel',
+        },
+        {
+          text: tr.chat.create,
+          onPress: async (topicName) => {
+            if (topicName && topicName.trim()) {
+              if (selectedEventId) {
+                // Save to database if event exists
+                try {
+                  await createChannelMutation.mutateAsync({
+                    event_id: selectedEventId,
+                    name: topicName.trim(),
+                    category: 'general',
+                  });
+                  Alert.alert(tr.budget.success, tr.chat.topicCreated);
+                } catch (error) {
+                  console.error('Failed to create topic:', error);
+                  Alert.alert(tr.common.error, tr.chat.topicCreateFailed);
+                }
+              } else {
+                // Save locally if no event
+                setLocalSections(prevSections =>
+                  prevSections.map(section =>
+                    section.id === 'general'
+                      ? {
+                          ...section,
+                          channels: [
+                            ...section.channels,
+                            { id: Date.now().toString(), name: topicName.trim() }
+                          ]
+                        }
+                      : section
+                  )
+                );
+              }
+            }
+          },
+        },
+      ],
+      'plain-text',
+      '',
+      'default'
+    );
+  };
+
+  const renderTabs = () => (
+    <View style={styles.filterContainer}>
+      <View style={styles.filterPill}>
+        {(['chat', 'voting', 'decisions'] as CommunicationTab[]).map((tab) => (
+          <Pressable
+            key={tab}
+            onPress={() => setSelectedTab(tab)}
+            style={[
+              styles.filterTab,
+              selectedTab === tab && styles.filterTabActive,
+            ]}
+            testID={`tab-${tab}`}
+          >
+            <Text
+              style={[
+                styles.filterTabText,
+                selectedTab === tab && styles.filterTabTextActive,
+              ]}
+            >
+              {tab === 'chat' ? t.chat.tabChat : tab === 'voting' ? t.chat.tabVoting : t.chat.tabDecisions}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+
+  const renderShareEventCard = () => (
+    <View style={styles.shareEventCard}>
+      <YStack flex={1} gap={2}>
+        <Text style={styles.shareEventTitle}>{t.chat.shareEvent}</Text>
+        <Text style={styles.shareEventSubtitle}>{t.chat.shareEventSubtitle}</Text>
+      </YStack>
+      <Pressable onPress={handleInvite} style={styles.inviteButton}>
+        <Text style={styles.inviteButtonText}>{t.chat.invite}</Text>
+        <Ionicons name="share-outline" size={16} color={DARK_THEME.textPrimary} />
+      </Pressable>
+    </View>
+  );
+
+  const renderChannelSection = (category: ChannelCategory, title: string) => {
+    const categoryChannels = groupedChannels[category];
+
+    return (
+      <View key={category} style={styles.channelSection}>
+        <XStack justifyContent="space-between" alignItems="center" marginBottom={12}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          <Pressable
+            onPress={() => handleAddChannel(category)}
+            style={styles.addButton}
+            hitSlop={8}
+          >
+            <Ionicons name="add" size={20} color="#5A7EB0" />
+          </Pressable>
+        </XStack>
+        {categoryChannels.length > 0 ? (
+          <YStack gap={8}>
+            {categoryChannels.map((channel) => (
+              <Pressable
+                key={channel.id}
+                style={styles.channelItem}
+                onPress={() => {
+                  router.push(`/(tabs)/chat/${channel.id}`);
+                }}
+              >
+                <Ionicons name="chatbubble-outline" size={16} color={DARK_THEME.textSecondary} />
+                <Text style={styles.channelName}>{channel.name}</Text>
+              </Pressable>
+            ))}
+          </YStack>
+        ) : (
+          <View style={styles.emptyChannelBox}>
+            <Text style={styles.emptyChannelText}>{t.chat.noChannels}</Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  // Get user avatar or initials
+  const userAvatar = user?.user_metadata?.avatar_url;
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+  const userInitial = userName.charAt(0).toUpperCase();
+
   return (
-    <View style={styles.container} testID="chat-screen">
-      <StatusBar barStyle="light-content" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+      {/* Background */}
       <LinearGradient
         colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Header - Matching Events screen structure exactly */}
+      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={styles.headerInner}>
-          {/* Left: Avatar (navigates to profile) + Title */}
+        <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
+          {/* Avatar and Title */}
           <XStack alignItems="center" gap={12}>
-            <Pressable
-              onPress={() => router.push('/(tabs)/profile')}
-              style={({ pressed }) => [
-                styles.avatarContainer,
-                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
-              ]}
-              testID="avatar-profile-button"
-            >
-              <LinearGradient
-                colors={[DARK_THEME.primary, '#60A5FA']}
-                style={styles.avatarGradient}
-              >
-                <View style={styles.avatarInner}>
-                  {avatarUrl ? (
-                    <Image
-                      source={{ uri: avatarUrl }}
-                      width={36}
-                      height={36}
-                      borderRadius={18}
-                    />
-                  ) : (
-                    <Text fontSize={14} fontWeight="700" color={DARK_THEME.textPrimary}>
-                      {userInitials}
-                    </Text>
-                  )}
+            <View style={styles.avatarContainer}>
+              {userAvatar ? (
+                <Image
+                  source={{ uri: userAvatar }}
+                  style={styles.avatar}
+                />
+              ) : (
+                <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                  <Text style={styles.avatarInitial}>{userInitial}</Text>
                 </View>
-              </LinearGradient>
+              )}
               <View style={styles.onlineIndicator} />
-            </Pressable>
-            <Text fontSize={20} fontWeight="700" color={DARK_THEME.textPrimary}>
-              Kommunikation
-            </Text>
+            </View>
+            <Text style={styles.headerTitle}>Connect</Text>
           </XStack>
 
-          {/* Right: Notification bell */}
+          {/* Notification Bell */}
           <Pressable
-            onPress={() => router.push('/notifications')}
-            style={({ pressed }) => [
-              styles.bellButton,
-              pressed && styles.bellButtonPressed,
-            ]}
+            onPress={handleNotifications}
+            style={styles.notificationButton}
             testID="notifications-button"
           >
             <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
-            {/* Notification dot */}
             <View style={styles.notificationDot} />
           </Pressable>
-        </View>
+        </XStack>
 
-        {/* Tab Filters: Chat / Voting / Decisions - INSIDE header like Events */}
-        <View style={styles.tabFiltersContainer}>
-          <BlurView intensity={10} tint="dark" style={styles.tabFiltersBlur}>
-            <View style={styles.tabFiltersInner}>
-              {(['chat', 'voting', 'decisions'] as TabType[]).map((tab) => (
-                <Pressable
-                  key={tab}
-                  onPress={() => setActiveTab(tab)}
-                  style={[
-                    styles.tabFilter,
-                    activeTab === tab && styles.tabFilterActive,
-                  ]}
-                  testID={`filter-tab-${tab}`}
-                >
-                  <Text
-                    fontSize={13}
-                    fontWeight="600"
-                    color={activeTab === tab ? DARK_THEME.textPrimary : DARK_THEME.textSecondary}
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </BlurView>
-        </View>
+        {/* Tabs */}
+        {renderTabs()}
       </View>
 
       {/* Content */}
-      {hasNoEvents ? (
-        <ScrollView
-          contentContainerStyle={styles.emptyScrollContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              tintColor={DARK_THEME.primary}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-        >
-          {renderEmptyState()}
-        </ScrollView>
-      ) : (
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={[
-            styles.scrollContent,
-            { paddingBottom: insets.bottom + 100 },
-          ]}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              tintColor={DARK_THEME.primary}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-        >
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 180 }]}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={DARK_THEME.primary}
+            colors={[DARK_THEME.primary]}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Share Event Card */}
+        {renderShareEventCard()}
+
+        {bookedEvents.length === 0 ? (
+          /* No event booked - show grayed out channels with overlay message */
           <>
-            {/* Share Event Banner */}
-            <LinearGradient
-              colors={[DARK_THEME.primary, '#3B5984']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.inviteBanner}
-            >
-              <YStack flex={1}>
-                <Text style={styles.inviteTitle}>Share Event</Text>
-                <Text style={styles.inviteSubtitle}>Invite friends to join the party planning</Text>
-              </YStack>
-              <Pressable style={styles.inviteButton}>
-                <Text style={styles.inviteButtonText}>Invite</Text>
-                <Ionicons name="share-outline" size={16} color={DARK_THEME.textPrimary} />
+          <View style={styles.lockedBanner}>
+            <Ionicons name="lock-closed-outline" size={18} color={DARK_THEME.textSecondary} />
+            <Text style={styles.lockedBannerText}>
+              {t.chat.bookToUnlock}
+            </Text>
+          </View>
+          <View style={{ opacity: 0.35, pointerEvents: 'none' as const }}>
+            {renderChannelSection('general', t.chat.general.toUpperCase())}
+            {renderChannelSection('accommodation', t.chat.accommodation.toUpperCase())}
+            {renderChannelSection('activities', t.chat.activities.toUpperCase())}
+            {renderChannelSection('budget', t.chat.budgetCategory.toUpperCase())}
+
+            <View style={styles.channelSection}>
+              <Text style={styles.sectionTitle}>{t.chat.newTopics}</Text>
+              <Pressable style={styles.newTopicButton} onPress={handleCreateNewTopic}>
+                <Ionicons name="add-circle-outline" size={24} color="#5A7EB0" />
+                <Text style={styles.newTopicText}>{t.chat.createNewTopic}</Text>
               </Pressable>
-            </LinearGradient>
-
-            {/* Chat Content */}
-            {activeTab === 'chat' && (
+            </View>
+          </View>
+          </>
+        ) : (
+          /* Event booked - show active channels */
           <>
-            {Object.entries(CHANNEL_CATEGORIES).map(([key, config]) => {
-              const categoryChannels = groupedChannels[key] || [];
-              return (
-                <View key={key} style={styles.categorySection}>
-                  <XStack justifyContent="space-between" alignItems="center" marginBottom="$3">
-                    <Text style={styles.categoryTitle}>{config.label}</Text>
-                    <Pressable style={styles.addButton}>
-                      <Ionicons name="add" size={20} color={DARK_THEME.primary} />
-                    </Pressable>
-                  </XStack>
+            {renderChannelSection('general', t.chat.general.toUpperCase())}
+            {renderChannelSection('accommodation', t.chat.accommodation.toUpperCase())}
+            {renderChannelSection('activities', t.chat.activities.toUpperCase())}
+            {renderChannelSection('budget', t.chat.budgetCategory.toUpperCase())}
 
-                  {categoryChannels.length > 0 ? (
-                    categoryChannels.map((channel: any) => (
-                      <Pressable
-                        key={channel.id}
-                        style={styles.channelItem}
-                        onPress={() => handleChannelPress(channel.id)}
-                      >
-                        <View style={[styles.channelIcon, { backgroundColor: `${config.color}20` }]}>
-                          <Ionicons name={config.icon as any} size={20} color={config.color} />
-                        </View>
-                        <YStack flex={1} gap={2}>
-                          <XStack justifyContent="space-between" alignItems="center">
-                            <Text style={styles.channelName}>{channel.name}</Text>
-                            <Text style={styles.channelTime}>
-                              {channel.last_message_at
-                                ? formatTimestamp(channel.last_message_at)
-                                : ''}
-                            </Text>
-                          </XStack>
-                          <XStack justifyContent="space-between" alignItems="center">
-                            <Text style={styles.channelPreview} numberOfLines={1}>
-                              {channel.last_message || 'No messages yet'}
-                            </Text>
-                            {channel.unread_count > 0 && (
-                              <View style={styles.unreadBadge}>
-                                <Text style={styles.unreadText}>{channel.unread_count}</Text>
-                              </View>
-                            )}
-                          </XStack>
-                        </YStack>
-                      </Pressable>
-                    ))
-                  ) : (
-                    <View style={styles.emptyCategory}>
-                      <Text style={styles.emptyCategoryText}>No channels yet</Text>
-                    </View>
-                  )}
-                </View>
-              );
-            })}
+            <View style={styles.channelSection}>
+              <Text style={styles.sectionTitle}>{t.chat.newTopics}</Text>
+              <Pressable style={styles.newTopicButton} onPress={handleCreateNewTopic}>
+                <Ionicons name="add-circle-outline" size={24} color="#5A7EB0" />
+                <Text style={styles.newTopicText}>{t.chat.createNewTopic}</Text>
+              </Pressable>
+            </View>
           </>
         )}
-
-            {/* Voting Content */}
-            {activeTab === 'voting' && (
-              <View style={styles.placeholderContent}>
-                <Ionicons name="checkbox-outline" size={48} color={DARK_THEME.textTertiary} />
-                <Text style={styles.placeholderText}>Voting features coming soon</Text>
-              </View>
-            )}
-
-            {/* Decisions Content */}
-            {activeTab === 'decisions' && (
-              <View style={styles.placeholderContent}>
-                <Ionicons name="checkmark-done-circle-outline" size={48} color={DARK_THEME.textTertiary} />
-                <Text style={styles.placeholderText}>Decisions features coming soon</Text>
-              </View>
-            )}
-          </>
-        </ScrollView>
-      )}
+      </ScrollView>
     </View>
   );
-}
-
-function formatTimestamp(timestamp: string): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-
-  if (diffDays === 0) {
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  } else if (diffDays === 1) {
-    return 'Yesterday';
-  } else if (diffDays < 7) {
-    return date.toLocaleDateString('en-US', { weekday: 'short' });
-  } else {
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  }
 }
 
 const styles = StyleSheet.create({
@@ -413,37 +514,32 @@ const styles = StyleSheet.create({
     backgroundColor: DARK_THEME.background,
   },
   header: {
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: DARK_THEME.glassBorder,
-  },
-  headerInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
   },
   avatarContainer: {
     position: 'relative',
   },
-  avatarGradient: {
+  avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    padding: 2,
   },
-  avatarInner: {
-    flex: 1,
-    borderRadius: 18,
-    backgroundColor: '#374151',
+  avatarPlaceholder: {
+    backgroundColor: DARK_THEME.surfaceCard,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+  },
+  avatarInitial: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DARK_THEME.textPrimary,
   },
   onlineIndicator: {
     position: 'absolute',
     bottom: 0,
-    right: 0,
+    left: 0,
     width: 12,
     height: 12,
     borderRadius: 6,
@@ -451,227 +547,185 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: DARK_THEME.background,
   },
-  bellButton: {
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: DARK_THEME.textPrimary,
+  },
+  notificationButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: DARK_THEME.glass,
+    backgroundColor: DARK_THEME.surfaceCard,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
-    position: 'relative',
-  },
-  bellButtonPressed: {
-    transform: [{ scale: 0.95 }],
-    opacity: 0.9,
   },
   notificationDot: {
     position: 'absolute',
     top: 10,
-    right: 10,
+    right: 12,
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#EF4444',
   },
-  tabFiltersContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  filterContainer: {
+    paddingHorizontal: 20,
+    marginTop: 16,
   },
-  tabFiltersBlur: {
-    borderRadius: 25,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
-  },
-  tabFiltersInner: {
+  filterPill: {
     flexDirection: 'row',
-    backgroundColor: DARK_THEME.glass,
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 25,
     padding: 4,
   },
-  tabFilter: {
+  filterTab: {
     flex: 1,
     paddingVertical: 10,
-    alignItems: 'center',
+    paddingHorizontal: 16,
     borderRadius: 20,
+    alignItems: 'center',
   },
-  tabFilterActive: {
-    backgroundColor: DARK_THEME.primary,
+  filterTabActive: {
+    backgroundColor: '#5A7EB0',
   },
-  scrollView: {
-    flex: 1,
+  filterTabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: DARK_THEME.textSecondary,
+  },
+  filterTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   scrollContent: {
-    paddingHorizontal: 16,
+    padding: 20,
   },
-  emptyScrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  inviteBanner: {
+  shareEventCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 24,
+    backgroundColor: '#5A7EB0',
+    borderRadius: 14,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    marginBottom: 20,
+    gap: 12,
   },
-  inviteTitle: {
+  shareEventTitle: {
     fontSize: 16,
     fontWeight: '700',
     color: DARK_THEME.textPrimary,
   },
-  inviteSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.8)',
-    marginTop: 4,
+  shareEventSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.85)',
+    lineHeight: 16,
   },
   inviteButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 4,
   },
   inviteButtonText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
     color: DARK_THEME.textPrimary,
   },
-  categorySection: {
-    marginBottom: 24,
+  channelSection: {
+    marginBottom: 20,
   },
-  categoryTitle: {
+  sectionTitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: DARK_THEME.textTertiary,
-    letterSpacing: 1,
+    color: DARK_THEME.textSecondary,
+    letterSpacing: 0.8,
+    marginBottom: 10,
   },
   addButton: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: DARK_THEME.glass,
+    backgroundColor: 'rgba(90, 126, 176, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  emptyChannelBox: {
+    backgroundColor: 'rgba(45, 55, 72, 0.3)',
+    borderRadius: 10,
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyChannelText: {
+    fontSize: 13,
+    color: DARK_THEME.textTertiary,
   },
   channelItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
     backgroundColor: DARK_THEME.surfaceCard,
-    padding: 16,
-    borderRadius: 16,
-    marginBottom: 8,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 10,
     borderWidth: 1,
     borderColor: DARK_THEME.glassBorder,
-  },
-  channelIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   channelName: {
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
     color: DARK_THEME.textPrimary,
-  },
-  channelTime: {
-    fontSize: 12,
-    color: DARK_THEME.textTertiary,
-  },
-  channelPreview: {
-    fontSize: 13,
-    color: DARK_THEME.textSecondary,
     flex: 1,
-    marginRight: 8,
   },
-  unreadBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: DARK_THEME.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  unreadText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: DARK_THEME.textPrimary,
-  },
-  emptyCategory: {
-    backgroundColor: DARK_THEME.surfaceCard,
-    padding: 20,
-    borderRadius: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
-    borderStyle: 'dashed',
-  },
-  emptyCategoryText: {
-    fontSize: 13,
-    color: DARK_THEME.textTertiary,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  emptyStateWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  emptyIconContainer: {
-    marginBottom: 24,
-  },
-  emptyIconGradient: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  primaryButton: {
+  newTopicButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: DARK_THEME.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
+    backgroundColor: DARK_THEME.surfaceCard,
     borderRadius: 12,
-    shadowColor: DARK_THEME.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    padding: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: DARK_THEME.glassBorder,
   },
-  primaryButtonPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
+  newTopicText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#5A7EB0',
   },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  placeholderContent: {
-    flex: 1,
+  lockedBanner: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 80,
+    backgroundColor: 'rgba(45, 55, 72, 0.5)',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
-  placeholderText: {
-    fontSize: 16,
-    color: DARK_THEME.textTertiary,
-    marginTop: 16,
+  lockedBannerText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: DARK_THEME.textSecondary,
+  },
+  emptyIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(45, 55, 72, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
 });

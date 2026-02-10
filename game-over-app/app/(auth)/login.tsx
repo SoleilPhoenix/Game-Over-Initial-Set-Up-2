@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { DARK_THEME } from '@/constants/theme';
+import { useTranslation } from '@/i18n';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 
@@ -39,6 +40,7 @@ export default function LoginScreen() {
   const [isLoading, setIsLoading] = React.useState(false);
   const insets = useSafeAreaInsets();
   const { setError, error, clearError } = useAuthStore();
+  const { t } = useTranslation();
 
   const {
     control,
@@ -110,9 +112,9 @@ export default function LoginScreen() {
 
           {/* Title Section */}
           <View style={styles.titleSection}>
-            <Text style={styles.title}>Welcome Back</Text>
+            <Text style={styles.title}>{t.auth.welcomeBack}</Text>
             <Text style={styles.subtitle}>
-              Sign in to continue planning your party
+              {t.auth.signInSubtitle}
             </Text>
           </View>
 
@@ -130,7 +132,7 @@ export default function LoginScreen() {
               {/* Form */}
               <View style={styles.form}>
                 <View style={styles.inputWrapper}>
-                  <Text style={styles.inputLabel}>Email</Text>
+                  <Text style={styles.inputLabel}>{t.auth.email}</Text>
                   <Controller
                     control={control}
                     name="email"
@@ -142,7 +144,7 @@ export default function LoginScreen() {
                             value={value}
                             onChangeText={onChange}
                             onBlur={onBlur}
-                            placeholder="Enter your email"
+                            placeholder={t.auth.enterEmail}
                             placeholderTextColor={DARK_THEME.textTertiary}
                             keyboardType="email-address"
                             autoCapitalize="none"
@@ -161,7 +163,7 @@ export default function LoginScreen() {
                 </View>
 
                 <View style={styles.inputWrapper}>
-                  <Text style={styles.inputLabel}>Password</Text>
+                  <Text style={styles.inputLabel}>{t.auth.password}</Text>
                   <Controller
                     control={control}
                     name="password"
@@ -173,7 +175,7 @@ export default function LoginScreen() {
                             value={value}
                             onChangeText={onChange}
                             onBlur={onBlur}
-                            placeholder="Enter your password"
+                            placeholder={t.auth.enterPassword}
                             placeholderTextColor={DARK_THEME.textTertiary}
                             secureTextEntry
                             autoComplete="password"
@@ -192,7 +194,7 @@ export default function LoginScreen() {
 
                 <Link href="/(auth)/forgot-password" asChild>
                   <Pressable style={styles.forgotPassword} testID="forgot-password-link">
-                    <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                    <Text style={styles.forgotPasswordText}>{t.auth.forgotPassword}</Text>
                   </Pressable>
                 </Link>
               </View>
@@ -209,10 +211,10 @@ export default function LoginScreen() {
                 testID="login-submit-button"
               >
                 {isLoading ? (
-                  <Text style={styles.primaryButtonText}>Signing in...</Text>
+                  <Text style={styles.primaryButtonText}>{t.auth.signingIn}</Text>
                 ) : (
                   <>
-                    <Text style={styles.primaryButtonText}>Log In</Text>
+                    <Text style={styles.primaryButtonText}>{t.auth.logIn}</Text>
                     <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
                   </>
                 )}
@@ -222,10 +224,10 @@ export default function LoginScreen() {
 
           {/* Sign Up Link */}
           <View style={styles.signupLink}>
-            <Text style={styles.signupText}>Don't have an account? </Text>
+            <Text style={styles.signupText}>{t.auth.noAccount} </Text>
             <Link href="/(auth)/signup" asChild>
               <Pressable testID="signup-link">
-                <Text style={styles.signupLinkText}>Sign Up</Text>
+                <Text style={styles.signupLinkText}>{t.auth.signUp}</Text>
               </Pressable>
             </Link>
           </View>

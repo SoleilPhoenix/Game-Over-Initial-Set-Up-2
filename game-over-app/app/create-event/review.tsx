@@ -16,6 +16,27 @@ import { usePackage } from '@/hooks/queries/usePackages';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { DARK_THEME } from '@/constants/theme';
+
+// Standard per-person pricing for fallback packages
+const TIER_PRICE_PER_PERSON: Record<string, number> = {
+  essential: 99_00,
+  classic: 149_00,
+  grand: 199_00,
+};
+
+// Fallback package lookup for local IDs that don't exist in DB
+const FALLBACK_PKG_MAP: Record<string, { name: string; tier: string; price_per_person_cents: number }> = {
+  'berlin-classic': { name: 'Classic', tier: 'classic', price_per_person_cents: 149_00 },
+  'berlin-essential': { name: 'Essential', tier: 'essential', price_per_person_cents: 99_00 },
+  'berlin-grand': { name: 'Grand', tier: 'grand', price_per_person_cents: 199_00 },
+  'hamburg-classic': { name: 'Classic', tier: 'classic', price_per_person_cents: 149_00 },
+  'hamburg-essential': { name: 'Essential', tier: 'essential', price_per_person_cents: 99_00 },
+  'hamburg-grand': { name: 'Grand', tier: 'grand', price_per_person_cents: 199_00 },
+  'hannover-classic': { name: 'Classic', tier: 'classic', price_per_person_cents: 149_00 },
+  'hannover-essential': { name: 'Essential', tier: 'essential', price_per_person_cents: 99_00 },
+  'hannover-grand': { name: 'Grand', tier: 'grand', price_per_person_cents: 199_00 },
+};
 
 export default function WizardStep5() {
   const router = useRouter();
@@ -25,9 +46,26 @@ export default function WizardStep5() {
   const wizardState = useWizardStore();
   const { mutateAsync: createEvent } = useCreateEvent();
   const { data: cities } = useCities();
-  const { data: selectedPackage } = usePackage(wizardState.selectedPackageId || '');
+  const { data: dbPackage } = usePackage(wizardState.selectedPackageId || '');
+
+  // Use DB package or fallback for local IDs
+  const fallbackPkg = wizardState.selectedPackageId ? FALLBACK_PKG_MAP[wizardState.selectedPackageId] : null;
+  const selectedPackage = dbPackage || fallbackPkg;
 
   const city = cities?.find(c => c.id === wizardState.cityId);
+
+  // Pricing calculations
+  const perPersonCents = selectedPackage
+    ? ('price_per_person_cents' in selectedPackage ? selectedPackage.price_per_person_cents : (selectedPackage as any).base_price_cents || 0)
+    : 0;
+  const participantCount = wizardState.participantCount;
+  const packageTotalCents = perPersonCents * participantCount;
+  const serviceFeeCents = Math.round(packageTotalCents * 0.10);
+  const grandTotalCents = packageTotalCents + serviceFeeCents;
+  const perPersonFinalCents = participantCount > 0 ? Math.round(grandTotalCents / participantCount) : 0;
+
+  const formatPrice = (cents: number) =>
+    '\u20AC' + (cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const handleBack = () => {
     router.back();
@@ -37,9 +75,23 @@ export default function WizardStep5() {
     setIsCreating(true);
     try {
       const eventData = wizardState.getEventData();
-      const newEvent = await createEvent(eventData);
+      if (!eventData) {
+        Alert.alert('Error', 'Please complete all required fields.');
+        return;
+      }
+      // Ensure dates have defaults for the API
+      const apiData = {
+        ...eventData,
+        event: {
+          ...eventData.event,
+          start_date: eventData.event.start_date || new Date().toISOString(),
+          end_date: eventData.event.end_date || new Date().toISOString(),
+        },
+      };
+      const newEvent = await createEvent(apiData as any);
+      const packageId = wizardState.selectedPackageId;
       wizardState.clearDraft();
-      router.replace(`/event/${newEvent.id}`);
+      router.replace(`/booking/${newEvent.id}/summary?packageId=${packageId}`);
     } catch (error) {
       console.error('Failed to create event:', error);
       Alert.alert('Error', 'Failed to create event. Please try again.');
@@ -150,10 +202,10 @@ export default function WizardStep5() {
                   {selectedPackage.name}
                 </Text>
                 <Text fontSize="$4" fontWeight="700" color="$primary">
-                  €{(selectedPackage.base_price_cents / 100).toFixed(0)}
+                  {formatPrice(perPersonCents)} per person
                 </Text>
                 <Text fontSize="$2" color="$textSecondary">
-                  Starting price • Final price depends on group size
+                  {formatPrice(grandTotalCents)} total for {participantCount} people
                 </Text>
               </YStack>
             </YStack>
@@ -168,7 +220,7 @@ export default function WizardStep5() {
           gap="$3"
           alignItems="flex-start"
         >
-          <Ionicons name="information-circle" size={24} color="#258CF4" />
+          <Ionicons name="information-circle" size={24} color="#5A7EB0" />
           <YStack flex={1}>
             <Text fontSize="$3" color="$primary" fontWeight="600">
               What happens next?

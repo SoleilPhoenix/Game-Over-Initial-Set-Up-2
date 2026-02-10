@@ -36,6 +36,7 @@ vi.mock('expo-router', () => ({
 
 vi.mock('expo-constants', () => ({
   default: {
+    executionEnvironment: 'standalone',
     expoConfig: {
       extra: {
         eas: {
@@ -43,6 +44,11 @@ vi.mock('expo-constants', () => ({
         },
       },
     },
+  },
+  ExecutionEnvironment: {
+    StoreClient: 'storeClient',
+    Standalone: 'standalone',
+    Bare: 'bare',
   },
 }));
 

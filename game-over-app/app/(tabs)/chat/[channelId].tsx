@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useRef, useEffect, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { FlatList, KeyboardAvoidingView, Platform, Keyboard, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +19,8 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { MessageBubble, MessageInput } from '@/components/chat';
 import { colors } from '@/constants/colors';
+import { DARK_THEME } from '@/constants/theme';
+import { useTranslation, getTranslation } from '@/i18n';
 import type { MessageWithAuthor } from '@/repositories/messages';
 
 export default function ChatChannelScreen() {
@@ -28,6 +30,7 @@ export default function ChatChannelScreen() {
   const flatListRef = useRef<FlatList>(null);
   const user = useAuthStore((state) => state.user);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const { t } = useTranslation();
 
   // Fetch channel info
   const { data: channel, isLoading: channelLoading } = useChannel(channelId);
@@ -105,7 +108,17 @@ export default function ChatChannelScreen() {
         setTimeout(() => {
           flatListRef.current?.scrollToEnd({ animated: true });
         }, 100);
-      } catch (error) {
+      } catch (error: any) {
+        const msg = error?.message || '';
+        const tr = getTranslation();
+        if (msg.includes('infinite recursion') || msg.includes('42P17')) {
+          Alert.alert(
+            tr.chat.dbConfigTitle,
+            tr.chat.dbConfigMessage
+          );
+        } else {
+          Alert.alert(tr.common.error, tr.chat.sendFailed);
+        }
         console.error('Failed to send message:', error);
       }
     },
@@ -159,17 +172,10 @@ export default function ChatChannelScreen() {
     }
   };
 
-  if (channelLoading || messagesLoading) {
-    return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
-        <Spinner size="large" color="$primary" />
-      </YStack>
-    );
-  }
-
+  // Remove full-screen loading - show UI immediately with loading states
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.light.background }}
+      style={{ flex: 1, backgroundColor: DARK_THEME.background }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
       testID="chat-screen"
@@ -196,21 +202,21 @@ export default function ChatChannelScreen() {
             onPress={() => router.back()}
             testID="back-button"
           >
-            <Ionicons name="arrow-back" size={24} color="#1A202C" />
+            <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
           </XStack>
 
           <YStack
             width={36}
             height={36}
             borderRadius="$md"
-            backgroundColor="rgba(37, 140, 244, 0.1)"
+            backgroundColor="rgba(90, 126, 176, 0.15)"
             alignItems="center"
             justifyContent="center"
           >
             <Ionicons
               name={getCategoryIcon(channel?.category)}
               size={18}
-              color={colors.light.primary}
+              color="#5A7EB0"
             />
           </YStack>
 
@@ -232,7 +238,7 @@ export default function ChatChannelScreen() {
             pressStyle={{ opacity: 0.7 }}
             testID="info-button"
           >
-            <Ionicons name="information-circle-outline" size={24} color="#64748B" />
+            <Ionicons name="information-circle-outline" size={24} color={DARK_THEME.textSecondary} />
           </XStack>
         </XStack>
 
@@ -245,6 +251,7 @@ export default function ChatChannelScreen() {
           testID="chat-messages-list"
           contentContainerStyle={{
             paddingVertical: 16,
+            paddingBottom: 80, // Space for input field at bottom
             flexGrow: 1,
           }}
           inverted={false}
@@ -263,18 +270,18 @@ export default function ChatChannelScreen() {
                 width={60}
                 height={60}
                 borderRadius="$full"
-                backgroundColor="rgba(37, 140, 244, 0.1)"
+                backgroundColor="rgba(90, 126, 176, 0.15)"
                 alignItems="center"
                 justifyContent="center"
                 marginBottom="$3"
               >
-                <Ionicons name="chatbubble-outline" size={28} color={colors.light.primary} />
+                <Ionicons name="chatbubble-outline" size={28} color="#5A7EB0" />
               </YStack>
               <Text fontSize="$3" fontWeight="600" color="$textPrimary" marginBottom="$1">
-                No messages yet
+                {t.chat.noMessages}
               </Text>
               <Text fontSize="$2" color="$textSecondary" textAlign="center">
-                Start the conversation!
+                {t.chat.startConversation}
               </Text>
             </YStack>
           }
@@ -284,12 +291,15 @@ export default function ChatChannelScreen() {
           showsVerticalScrollIndicator={false}
         />
 
-        {/* Message Input */}
-        <YStack paddingBottom={keyboardVisible ? 0 : insets.bottom}>
+        {/* Message Input - positioned at bottom */}
+        <YStack
+          paddingBottom={keyboardVisible ? 0 : 8}
+          paddingHorizontal="$3"
+        >
           <MessageInput
             onSend={handleSendMessage}
             isLoading={sendMessageMutation.isPending}
-            placeholder="Type a message..."
+            placeholder={t.chat.typeMessage}
           />
         </YStack>
       </YStack>

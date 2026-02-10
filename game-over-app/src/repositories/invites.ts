@@ -92,7 +92,7 @@ export const invitesRepository = {
       return { valid: false, reason: 'expired', invite };
     }
 
-    if (invite.max_uses !== null && invite.use_count >= invite.max_uses) {
+    if (invite.max_uses !== null && (invite.use_count ?? 0) >= invite.max_uses) {
       return { valid: false, reason: 'max_uses_reached', invite };
     }
 
@@ -145,7 +145,8 @@ export const invitesRepository = {
    * $$ LANGUAGE plpgsql SECURITY DEFINER;
    */
   async incrementUseCount(inviteId: string): Promise<void> {
-    const { error } = await supabase.rpc('increment_invite_use_count', {
+    // Note: increment_invite_use_count RPC function may need to be created in Supabase
+    const { error } = await (supabase.rpc as any)('increment_invite_use_count', {
       invite_id: inviteId,
     });
 

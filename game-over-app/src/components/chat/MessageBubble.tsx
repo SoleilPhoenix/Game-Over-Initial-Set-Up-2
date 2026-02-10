@@ -118,7 +118,7 @@ function MessageBubbleComponent({
               marginHorizontal="$2"
               testID="message-timestamp"
             >
-              {formatTime(message.created_at)}
+              {message.created_at && formatTime(message.created_at)}
             </Text>
           )}
         </YStack>

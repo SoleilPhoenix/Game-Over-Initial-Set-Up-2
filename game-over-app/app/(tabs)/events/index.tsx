@@ -1,56 +1,97 @@
 /**
  * Events Screen
- * Main dashboard showing user's events with pull-to-refresh
- * Dark glassmorphic design matching UI specifications
- * Updated to match mockup v3: Avatar + "My Events" + Bell, tab filters, progress cards
+ * Main dashboard showing user's events
+ * Matches UI mockup: Avatar header, filter tabs, card layout with thumbnails
  */
 
 import React, { useCallback, useState, useMemo } from 'react';
-import { FlatList, RefreshControl, Pressable, StatusBar, StyleSheet, View, ScrollView } from 'react-native';
+import {
+  FlatList,
+  RefreshControl,
+  Pressable,
+  StatusBar,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';
-import { useUser, useAuthStore } from '@/stores/authStore';
-import { Badge } from '@/components/ui/Badge';
+import { useUser } from '@/stores/authStore';
+import { useWizardStore } from '@/stores/wizardStore';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
+import { useTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
+import type { EventWithDetails } from '@/repositories';
 
 type FilterTab = 'all' | 'organizing' | 'attending';
+
+const getProgressConfig = (status: string | null): {
+  phase: string;
+  percentage: number;
+  color: string;
+  icon: 'ellipse' | 'checkmark-circle';
+} => {
+  switch (status) {
+    case 'draft':
+      return { phase: 'Planning Phase', percentage: 15, color: '#F59E0B', icon: 'ellipse' };
+    case 'planning':
+      return { phase: 'Planning Phase', percentage: 45, color: '#3B82F6', icon: 'ellipse' };
+    case 'booked':
+      return { phase: 'Budgeting', percentage: 75, color: '#F59E0B', icon: 'ellipse' };
+    case 'completed':
+      return { phase: 'All Set & Ready', percentage: 100, color: '#10B981', icon: 'checkmark-circle' };
+    default:
+      return { phase: 'Planning Phase', percentage: 25, color: '#3B82F6', icon: 'ellipse' };
+  }
+};
+
+const getDaysLeft = (startDate?: string): string | null => {
+  if (!startDate) return null;
+  const start = new Date(startDate);
+  const now = new Date();
+  const diffTime = start.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return null;
+  if (diffDays === 0) return 'Today';
+  if (diffDays === 1) return '1 day left';
+  return `${diffDays} days left`;
+};
+
+const formatDateRange = (startDate?: string, endDate?: string): string => {
+  if (!startDate) return 'TBD';
+  const start = new Date(startDate);
+  const startStr = start.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+
+  if (!endDate) return startStr;
+  const end = new Date(endDate);
+  const endStr = end.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+  return `${startStr} - ${endStr}`;
+};
 
 export default function EventsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useUser();
-  const signOut = useAuthStore((state) => state.signOut);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+  const { t } = useTranslation();
 
   const { data: events, isLoading, refetch } = useEvents();
-
-  // Get user avatar and initials
-  const avatarUrl = user?.user_metadata?.avatar_url;
-  const userInitials = useMemo(() => {
-    const name = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'U';
-    return name
-      .split(' ')
-      .map((n: string) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
-  }, [user]);
 
   // Filter events based on active tab
   const filteredEvents = useMemo(() => {
     if (!events) return [];
-    if (activeFilter === 'all') return events;
-    if (activeFilter === 'organizing') {
-      return events.filter((e: any) => e.organizer_id === user?.id);
+    switch (activeFilter) {
+      case 'organizing':
+        return events.filter((e) => e.created_by === user?.id);
+      case 'attending':
+        return events.filter((e) => e.created_by !== user?.id);
+      default:
+        return events;
     }
-    return events.filter((e: any) => e.organizer_id !== user?.id);
   }, [events, activeFilter, user?.id]);
 
   const handleRefresh = useCallback(async () => {
@@ -59,7 +100,21 @@ export default function EventsScreen() {
     setIsRefreshing(false);
   }, [refetch]);
 
+  // Draft state
+  const wizardHasDraft = useWizardStore((s) => s.hasDraft());
+  const draftHonoreeName = useWizardStore((s) => s.honoreeName);
+  const draftPartyType = useWizardStore((s) => s.partyType);
+  const draftCityId = useWizardStore((s) => s.cityId);
+  const draftCurrentStep = useWizardStore((s) => s.currentStep);
+
   const handleCreateEvent = () => {
+    // Clear any existing draft so we start fresh
+    useWizardStore.getState().clearDraft();
+    router.push('/create-event');
+  };
+
+  const handleResumeDraft = () => {
+    // Navigate to create-event — the persisted draft will load automatically
     router.push('/create-event');
   };
 
@@ -67,44 +122,56 @@ export default function EventsScreen() {
     router.push(`/event/${eventId}`);
   };
 
-  const getStatusConfig = (status: string) => {
-    const configs: Record<string, { label: string; variant: 'neutral' | 'info' | 'success' | 'error'; color: string }> = {
-      draft: { label: 'Draft', variant: 'neutral', color: '#6B7280' },
-      planning: { label: 'Planning Phase', variant: 'info', color: '#F59E0B' },
-      booked: { label: 'All Set & Ready', variant: 'success', color: '#10B981' },
-      completed: { label: 'Completed', variant: 'success', color: '#10B981' },
-      cancelled: { label: 'Cancelled', variant: 'error', color: '#EF4444' },
-    };
-    return configs[status] || configs.draft;
+  const handleNotifications = () => {
+    router.push('/notifications');
   };
 
-  const getRoleBadge = (event: any) => {
-    const isOrganizer = event.organizer_id === user?.id;
-    return {
-      label: isOrganizer ? 'ORGANIZER' : 'GUEST',
-      color: isOrganizer ? DARK_THEME.primary : '#6B7280',
-    };
+  const getUserRole = (event: EventWithDetails): 'organizer' | 'guest' => {
+    return event.created_by === user?.id ? 'organizer' : 'guest';
   };
 
-  const getProgressPercentage = (event: any) => {
-    // Calculate progress based on event status and planning stage
-    const statusProgress: Record<string, number> = {
-      draft: 15,
-      planning: 45,
-      booked: 100,
-      completed: 100,
-      cancelled: 0,
-    };
-    return statusProgress[event.status] || 0;
+  const getPaymentStatus = (event: EventWithDetails): string | null => {
+    // Check if user has paid (simplified - would need actual booking data)
+    if (event.status === 'booked' || event.status === 'completed') {
+      return 'Paid';
+    }
+    return null;
   };
 
-  const renderEventCard = ({ item }: { item: any }) => {
-    const status = getStatusConfig(item.status);
-    const role = getRoleBadge(item);
-    const progress = getProgressPercentage(item);
-    const daysLeft = item.start_date
-      ? Math.max(0, Math.ceil((new Date(item.start_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-      : null;
+  const renderFilterTabs = () => (
+    <View style={styles.filterContainer}>
+      <View style={styles.filterPill}>
+        {(['all', 'organizing', 'attending'] as FilterTab[]).map((tab) => (
+          <Pressable
+            key={tab}
+            onPress={() => setActiveFilter(tab)}
+            style={[
+              styles.filterTab,
+              activeFilter === tab && styles.filterTabActive,
+            ]}
+            testID={`filter-tab-${tab}`}
+          >
+            <Text
+              style={[
+                styles.filterTabText,
+                activeFilter === tab && styles.filterTabTextActive,
+              ]}
+            >
+              {tab === 'all' ? t.events.filterAll : tab === 'organizing' ? t.events.filterOrganizing : t.events.filterAttending}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+
+  const renderEventCard = ({ item }: { item: EventWithDetails }) => {
+    const role = getUserRole(item);
+    const progress = getProgressConfig(item.status);
+    const daysLeft = getDaysLeft(item.start_date);
+    const paymentStatus = getPaymentStatus(item);
+    const dateRange = formatDateRange(item.start_date, item.end_date);
+    const eventTitle = item.title || `${item.honoree_name}'s Bach...`;
 
     return (
       <Pressable
@@ -115,133 +182,169 @@ export default function EventsScreen() {
         ]}
         testID={`event-card-${item.id}`}
       >
-        <BlurView intensity={10} tint="dark" style={styles.cardBlur}>
-          <View style={styles.cardInner}>
-            {/* Top row: Thumbnail + Event Info */}
-            <XStack gap={12}>
-              {/* Thumbnail */}
+        <XStack flex={1}>
+          {/* Thumbnail */}
+          <View style={styles.thumbnailContainer}>
+            {item.hero_image_url ? (
               <Image
-                source={{
-                  uri: item.hero_image_url || 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=200&q=80',
-                }}
-                width={100}
-                height={80}
-                borderRadius={12}
+                source={{ uri: item.hero_image_url }}
+                style={styles.thumbnail}
+                resizeMode="cover"
               />
+            ) : (
+              <View style={[styles.thumbnail, styles.thumbnailPlaceholder]}>
+                <Ionicons name="image-outline" size={32} color={DARK_THEME.textTertiary} />
+              </View>
+            )}
+          </View>
 
-              {/* Event Info */}
-              <YStack flex={1} gap={4}>
-                <XStack justifyContent="space-between" alignItems="flex-start">
-                  <Text
-                    fontSize={16}
-                    fontWeight="700"
-                    color={DARK_THEME.textPrimary}
-                    numberOfLines={1}
-                    flex={1}
-                  >
-                    {item.title || `${item.honoree_name}'s Bachelor...`}
-                  </Text>
-                  <Pressable style={styles.moreButton} testID={`event-more-${item.id}`}>
-                    <Ionicons name="ellipsis-horizontal" size={18} color={DARK_THEME.textSecondary} />
-                  </Pressable>
-                </XStack>
-
-                {/* Date */}
-                <XStack gap={6} alignItems="center">
-                  <Ionicons name="calendar-outline" size={14} color={DARK_THEME.textTertiary} />
-                  <Text fontSize={13} color={DARK_THEME.textSecondary}>
-                    {item.start_date && item.end_date
-                      ? `${new Date(item.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(item.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-                      : item.start_date
-                      ? new Date(item.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-                      : 'TBD'}
-                  </Text>
-                </XStack>
-
-                {/* Role badge + days left */}
-                <XStack gap={8} alignItems="center">
-                  <View style={[styles.roleBadge, { backgroundColor: `${role.color}20` }]}>
-                    <Text fontSize={10} fontWeight="700" color={role.color}>
-                      {role.label}
-                    </Text>
-                  </View>
-                  {daysLeft !== null && daysLeft > 0 && (
-                    <Text fontSize={12} color={DARK_THEME.textTertiary}>
-                      • {daysLeft} days left
-                    </Text>
-                  )}
-                  {status.label === 'All Set & Ready' && (
-                    <Text fontSize={12} color={DARK_THEME.textTertiary}>
-                      • Paid
-                    </Text>
-                  )}
-                </XStack>
-              </YStack>
+          {/* Content */}
+          <YStack flex={1} marginLeft={14}>
+            {/* Title row with menu */}
+            <XStack justifyContent="space-between" alignItems="flex-start">
+              <Text
+                style={styles.eventTitle}
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {eventTitle}
+              </Text>
+              <Pressable
+                style={styles.menuButton}
+                hitSlop={8}
+                onPress={(e) => {
+                  e.stopPropagation();
+                  // TODO: Show menu
+                }}
+              >
+                <Ionicons name="ellipsis-horizontal" size={18} color={DARK_THEME.textSecondary} />
+              </Pressable>
             </XStack>
 
-            {/* Progress bar */}
-            <View style={styles.progressContainer}>
-              <XStack justifyContent="space-between" alignItems="center" marginBottom={6}>
-                <XStack gap={6} alignItems="center">
-                  <View style={[styles.statusDot, { backgroundColor: status.color }]} />
-                  <Text fontSize={12} color={status.color}>
-                    {status.label}
-                  </Text>
-                </XStack>
-                <Text fontSize={12} fontWeight="600" color={status.color}>
-                  {progress}%
+            {/* Date */}
+            <XStack alignItems="center" gap={6} marginTop={4}>
+              <Ionicons name="calendar-outline" size={14} color={DARK_THEME.textTertiary} />
+              <Text style={styles.dateText}>{dateRange}</Text>
+            </XStack>
+
+            {/* Role badge and status */}
+            <XStack alignItems="center" gap={8} marginTop={8}>
+              <View style={[
+                styles.roleBadge,
+                role === 'organizer' ? styles.roleBadgeOrganizer : styles.roleBadgeGuest
+              ]}>
+                <Text style={styles.roleBadgeText}>
+                  {role === 'organizer' ? t.events.organizer : t.events.guest}
                 </Text>
-              </XStack>
-              <View style={styles.progressTrack}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    { width: `${progress}%`, backgroundColor: status.color },
-                  ]}
-                />
               </View>
-            </View>
+              {daysLeft && (
+                <Text style={styles.statusText}>• {daysLeft}</Text>
+              )}
+              {paymentStatus && (
+                <Text style={styles.statusText}>• {paymentStatus}</Text>
+              )}
+            </XStack>
+          </YStack>
+        </XStack>
+
+        {/* Progress section */}
+        <View style={styles.progressSection}>
+          <XStack justifyContent="space-between" alignItems="center" marginBottom={6}>
+            <XStack alignItems="center" gap={6}>
+              <Ionicons
+                name={progress.icon}
+                size={10}
+                color={progress.color}
+              />
+              <Text style={[styles.progressLabel, { color: progress.color }]}>
+                {progress.phase}
+              </Text>
+            </XStack>
+            <Text style={[styles.progressPercentage, { color: progress.color }]}>
+              {progress.percentage}%
+            </Text>
+          </XStack>
+          <View style={styles.progressBarBackground}>
+            <View
+              style={[
+                styles.progressBarFill,
+                {
+                  width: `${progress.percentage}%`,
+                  backgroundColor: progress.color,
+                }
+              ]}
+            />
           </View>
-        </BlurView>
+        </View>
       </Pressable>
     );
   };
 
-  const renderEmptyState = () => (
-    <YStack flex={1} justifyContent="center" alignItems="center" padding={24}>
-      <View style={styles.emptyIconContainer}>
-        <LinearGradient
-          colors={[`${DARK_THEME.primary}30`, `${DARK_THEME.primary}10`]}
-          style={styles.emptyIconGradient}
-        >
-          <Text fontSize={56}>🎊</Text>
-        </LinearGradient>
+  const renderStartNewPlanButton = () => (
+    <Pressable
+      onPress={handleCreateEvent}
+      style={({ pressed }) => [
+        styles.startNewPlanButton,
+        pressed && styles.startNewPlanButtonPressed,
+      ]}
+      testID="start-new-plan-button"
+    >
+      <View style={styles.startNewPlanIcon}>
+        <Ionicons name="add" size={24} color={DARK_THEME.textTertiary} />
       </View>
-      <Text fontSize={24} fontWeight="800" color={DARK_THEME.textPrimary} marginBottom={8}>
-        No Events Yet
-      </Text>
-      <Text
-        fontSize={16}
-        color={DARK_THEME.textSecondary}
-        textAlign="center"
-        marginBottom={24}
-        maxWidth={300}
-        lineHeight={24}
-      >
-        Create your first event and start{'\n'}planning an unforgettable party!
-      </Text>
-      <Pressable
-        style={({ pressed }) => [
-          styles.primaryButton,
-          pressed && styles.primaryButtonPressed,
-        ]}
-        onPress={handleCreateEvent}
-        testID="create-first-event-button"
-      >
-        <Ionicons name="add" size={20} color="#FFFFFF" />
-        <Text style={styles.primaryButtonText}>Create Event</Text>
-      </Pressable>
-    </YStack>
+      <Text style={styles.startNewPlanText}>{t.events.startNewPlan}</Text>
+    </Pressable>
+  );
+
+  const renderEmptyState = () => (
+    <FlatList
+      data={[]}
+      renderItem={null}
+      contentContainerStyle={{
+        flexGrow: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+        paddingBottom: insets.bottom + 180,
+      }}
+      refreshControl={
+        <RefreshControl
+          refreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          tintColor={DARK_THEME.primary}
+          colors={[DARK_THEME.primary]}
+        />
+      }
+      showsVerticalScrollIndicator={false}
+      ListEmptyComponent={
+        <YStack justifyContent="center" alignItems="center" width="100%" paddingHorizontal={0}>
+          <View style={styles.emptyIconContainer}>
+            <LinearGradient
+              colors={[`${DARK_THEME.primary}30`, `${DARK_THEME.primary}10`]}
+              style={styles.emptyIconGradient}
+            >
+              <Text fontSize={56}>🎊</Text>
+            </LinearGradient>
+          </View>
+          <Text fontSize={24} fontWeight="800" color={DARK_THEME.textPrimary} marginBottom={8}>
+            {t.events.noEventsTitle}
+          </Text>
+          <Text
+            fontSize={16}
+            color={DARK_THEME.textSecondary}
+            textAlign="center"
+            marginBottom={24}
+            maxWidth={280}
+            lineHeight={24}
+          >
+            {t.events.noEventsSubtitle}
+          </Text>
+          <View style={{ width: '100%', paddingHorizontal: 0 }}>
+            {renderStartNewPlanButton()}
+          </View>
+        </YStack>
+      }
+    />
   );
 
   const renderLoadingState = () => (
@@ -252,108 +355,130 @@ export default function EventsScreen() {
     </YStack>
   );
 
+  const renderDraftCard = () => {
+    if (!wizardHasDraft) return null;
+    const stepLabels = [t.wizard.keyDetails, t.wizard.preferences, t.wizard.participants, t.wizard.packageSelection];
+    const draftTitle = draftHonoreeName
+      ? `${draftHonoreeName}'s ${draftPartyType === 'bachelor' ? t.events.bachelorParty : t.events.bacheloretteParty}`
+      : t.events.newEvent;
+    const stepLabel = stepLabels[draftCurrentStep - 1] || t.wizard.keyDetails;
+    const progressPct = Math.round((draftCurrentStep / 4) * 100);
+
+    return (
+      <Pressable
+        onPress={handleResumeDraft}
+        style={({ pressed }) => [
+          styles.eventCard,
+          styles.draftCard,
+          pressed && styles.eventCardPressed,
+        ]}
+        testID="draft-event-card"
+      >
+        <XStack alignItems="center" gap={12}>
+          <View style={styles.draftIcon}>
+            <Ionicons name="document-text-outline" size={24} color="#F59E0B" />
+          </View>
+          <YStack flex={1}>
+            <XStack alignItems="center" gap={8}>
+              <Text style={styles.eventTitle} numberOfLines={1}>{draftTitle}</Text>
+              <View style={styles.draftBadge}>
+                <Text style={styles.draftBadgeText}>{t.events.draft}</Text>
+              </View>
+            </XStack>
+            <Text style={styles.dateText}>
+              {draftCityId ? `${draftCityId.charAt(0).toUpperCase()}${draftCityId.slice(1)}` : t.events.noCityLabel} — {t.events.step} {draftCurrentStep}: {stepLabel}
+            </Text>
+          </YStack>
+          <Ionicons name="chevron-forward" size={20} color={DARK_THEME.textTertiary} />
+        </XStack>
+
+        <View style={styles.progressSection}>
+          <XStack justifyContent="space-between" alignItems="center" marginBottom={6}>
+            <XStack alignItems="center" gap={6}>
+              <Ionicons name="ellipse" size={10} color="#F59E0B" />
+              <Text style={[styles.progressLabel, { color: '#F59E0B' }]}>{t.events.draft} — {t.events.step} {draftCurrentStep}/4</Text>
+            </XStack>
+            <Text style={[styles.progressPercentage, { color: '#F59E0B' }]}>{progressPct}%</Text>
+          </XStack>
+          <View style={styles.progressBarBackground}>
+            <View style={[styles.progressBarFill, { width: `${progressPct}%`, backgroundColor: '#F59E0B' }]} />
+          </View>
+        </View>
+      </Pressable>
+    );
+  };
+
+  const renderListFooter = () => {
+    if (!events || events.length === 0) return null;
+    return (
+      <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>
+        {renderStartNewPlanButton()}
+      </View>
+    );
+  };
+
+  // Get user avatar or initials
+  const userAvatar = user?.user_metadata?.avatar_url;
+  const userName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'User';
+  const userInitial = userName.charAt(0).toUpperCase();
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Background gradient */}
+      {/* Background */}
       <LinearGradient
         colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
         style={StyleSheet.absoluteFill}
       />
 
-      {/* Decorative blur circle */}
-      <View style={styles.decorCircle} />
-
-      {/* Header - Matching mockup v3: Avatar + "My Events" + Bell */}
+      {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        <View style={styles.headerInner}>
-          {/* Left: Avatar (navigates to profile) + Title */}
+        <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
+          {/* Avatar and Title */}
           <XStack alignItems="center" gap={12}>
-            <Pressable
-              onPress={() => router.push('/(tabs)/profile')}
-              style={({ pressed }) => [
-                styles.avatarContainer,
-                pressed && { opacity: 0.7, transform: [{ scale: 0.95 }] },
-              ]}
-              testID="avatar-profile-button"
-            >
-              <LinearGradient
-                colors={[DARK_THEME.primary, '#60A5FA']}
-                style={styles.avatarGradient}
-              >
-                <View style={styles.avatarInner}>
-                  {avatarUrl ? (
-                    <Image
-                      source={{ uri: avatarUrl }}
-                      width={36}
-                      height={36}
-                      borderRadius={18}
-                    />
-                  ) : (
-                    <Text fontSize={14} fontWeight="700" color={DARK_THEME.textPrimary}>
-                      {userInitials}
-                    </Text>
-                  )}
+            <View style={styles.avatarContainer}>
+              {userAvatar ? (
+                <Image
+                  source={{ uri: userAvatar }}
+                  style={styles.avatar}
+                />
+              ) : (
+                <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                  <Text style={styles.avatarInitial}>{userInitial}</Text>
                 </View>
-              </LinearGradient>
+              )}
               <View style={styles.onlineIndicator} />
-            </Pressable>
-            <Text fontSize={20} fontWeight="700" color={DARK_THEME.textPrimary}>
-              My Events
-            </Text>
+            </View>
+            <Text style={styles.headerTitle}>{t.events.title}</Text>
           </XStack>
 
-          {/* Right: Notification bell */}
+          {/* Notification Bell */}
           <Pressable
-            onPress={() => router.push('/notifications')}
-            style={({ pressed }) => [
-              styles.bellButton,
-              pressed && styles.bellButtonPressed,
-            ]}
+            onPress={handleNotifications}
+            style={styles.notificationButton}
             testID="notifications-button"
           >
             <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
             {/* Notification dot */}
             <View style={styles.notificationDot} />
           </Pressable>
-        </View>
+        </XStack>
 
-        {/* Tab Filters: All / Organizing / Attending */}
-        <View style={styles.tabFiltersContainer}>
-          <BlurView intensity={10} tint="dark" style={styles.tabFiltersBlur}>
-            <View style={styles.tabFiltersInner}>
-              {(['all', 'organizing', 'attending'] as FilterTab[]).map((tab) => (
-                <Pressable
-                  key={tab}
-                  onPress={() => setActiveFilter(tab)}
-                  style={[
-                    styles.tabFilter,
-                    activeFilter === tab && styles.tabFilterActive,
-                  ]}
-                  testID={`filter-tab-${tab}`}
-                >
-                  <Text
-                    fontSize={13}
-                    fontWeight="600"
-                    color={activeFilter === tab ? DARK_THEME.textPrimary : DARK_THEME.textSecondary}
-                  >
-                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-          </BlurView>
-        </View>
+        {/* Filter Tabs */}
+        {renderFilterTabs()}
       </View>
 
-      {/* Content */}
+      {/* Content - No loading skeleton, show empty state immediately */}
       {filteredEvents && filteredEvents.length > 0 ? (
         <FlatList
           data={filteredEvents}
           renderItem={renderEventCard}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 100 }}
+          contentContainerStyle={{
+            padding: 16,
+            paddingBottom: insets.bottom + 180
+          }}
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
@@ -363,60 +488,38 @@ export default function EventsScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={renderDraftCard}
+          ListFooterComponent={renderListFooter}
           testID="events-list"
-          ListFooterComponent={
-            <Pressable
-              style={({ pressed }) => [
-                styles.startNewPlanButton,
-                pressed && styles.startNewPlanButtonPressed,
-              ]}
-              onPress={handleCreateEvent}
-              testID="start-new-plan-button"
-            >
-              <View style={styles.startNewPlanIcon}>
-                <Ionicons name="add" size={20} color={DARK_THEME.textTertiary} />
+        />
+      ) : wizardHasDraft ? (
+        <FlatList
+          data={[]}
+          renderItem={null}
+          contentContainerStyle={{
+            padding: 16,
+            paddingBottom: insets.bottom + 180,
+          }}
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefreshing}
+              onRefresh={handleRefresh}
+              tintColor={DARK_THEME.primary}
+              colors={[DARK_THEME.primary]}
+            />
+          }
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <>
+              {renderDraftCard()}
+              <View style={{ marginTop: 12 }}>
+                {renderStartNewPlanButton()}
               </View>
-              <Text fontSize={14} fontWeight="500" color={DARK_THEME.textTertiary}>
-                Start New Plan
-              </Text>
-            </Pressable>
+            </>
           }
         />
       ) : (
-        <ScrollView
-          contentContainerStyle={styles.emptyScrollContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              tintColor={DARK_THEME.primary}
-              colors={[DARK_THEME.primary]}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-        >
-          {renderEmptyState()}
-        </ScrollView>
-      )}
-
-      {/* Floating Action Button - always visible when events exist */}
-      {filteredEvents && filteredEvents.length > 0 && (
-        <Pressable
-          style={({ pressed }) => [
-            styles.fab,
-            { bottom: insets.bottom + 80 },
-            pressed && styles.fabPressed,
-          ]}
-          onPress={handleCreateEvent}
-          testID="fab-create-event"
-        >
-          <LinearGradient
-            colors={[DARK_THEME.primary, '#60A5FA']}
-            style={styles.fabGradient}
-          >
-            <Ionicons name="add" size={28} color="#FFFFFF" />
-          </LinearGradient>
-        </Pressable>
+        renderEmptyState()
       )}
     </View>
   );
@@ -427,47 +530,33 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: DARK_THEME.background,
   },
-  decorCircle: {
-    position: 'absolute',
-    top: -100,
-    right: -100,
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: `${DARK_THEME.primary}15`,
-  },
   header: {
+    paddingBottom: 16,
     borderBottomWidth: 1,
     borderBottomColor: DARK_THEME.glassBorder,
-  },
-  headerInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingBottom: 12,
   },
   avatarContainer: {
     position: 'relative',
   },
-  avatarGradient: {
+  avatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    padding: 2,
   },
-  avatarInner: {
-    flex: 1,
-    borderRadius: 18,
-    backgroundColor: '#374151',
+  avatarPlaceholder: {
+    backgroundColor: DARK_THEME.surfaceCard,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
+  },
+  avatarInitial: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DARK_THEME.textPrimary,
   },
   onlineIndicator: {
     position: 'absolute',
     bottom: 0,
-    right: 0,
+    left: 0,
     width: 12,
     height: 12,
     borderRadius: 6,
@@ -475,152 +564,173 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: DARK_THEME.background,
   },
-  bellButton: {
+  headerTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: DARK_THEME.textPrimary,
+  },
+  notificationButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: DARK_THEME.glass,
+    backgroundColor: DARK_THEME.surfaceCard,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
-    position: 'relative',
-  },
-  bellButtonPressed: {
-    transform: [{ scale: 0.95 }],
-    opacity: 0.9,
   },
   notificationDot: {
     position: 'absolute',
     top: 10,
-    right: 10,
+    right: 12,
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#EF4444',
   },
-  tabFiltersContainer: {
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+  filterContainer: {
+    paddingHorizontal: 20,
+    marginTop: 16,
   },
-  tabFiltersBlur: {
-    borderRadius: 25,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
-  },
-  tabFiltersInner: {
+  filterPill: {
     flexDirection: 'row',
-    backgroundColor: DARK_THEME.glass,
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 25,
     padding: 4,
   },
-  tabFilter: {
+  filterTab: {
     flex: 1,
     paddingVertical: 10,
-    alignItems: 'center',
+    paddingHorizontal: 16,
     borderRadius: 20,
+    alignItems: 'center',
   },
-  tabFilterActive: {
-    backgroundColor: DARK_THEME.primary,
+  filterTabActive: {
+    backgroundColor: '#5A7EB0',
+  },
+  filterTabText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: DARK_THEME.textSecondary,
+  },
+  filterTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   eventCard: {
-    marginBottom: 12,
+    backgroundColor: DARK_THEME.surfaceCard,
     borderRadius: 16,
-    overflow: 'hidden',
+    padding: 16,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: DARK_THEME.glassBorder,
   },
   eventCardPressed: {
-    transform: [{ scale: 0.98 }],
     opacity: 0.9,
+    transform: [{ scale: 0.98 }],
   },
-  cardBlur: {
+  thumbnailContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: 12,
     overflow: 'hidden',
   },
-  cardInner: {
-    padding: 16,
-    backgroundColor: DARK_THEME.glass,
+  thumbnail: {
+    width: '100%',
+    height: '100%',
   },
-  moreButton: {
+  thumbnailPlaceholder: {
+    backgroundColor: DARK_THEME.deepNavy,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eventTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DARK_THEME.textPrimary,
+    flex: 1,
+    marginRight: 8,
+  },
+  menuButton: {
     padding: 4,
   },
-  roleBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
+  dateText: {
+    fontSize: 14,
+    color: DARK_THEME.textSecondary,
   },
-  progressContainer: {
-    marginTop: 12,
-    paddingTop: 12,
+  roleBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  roleBadgeOrganizer: {
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+  },
+  roleBadgeGuest: {
+    backgroundColor: 'rgba(20, 184, 166, 0.2)',
+  },
+  roleBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: DARK_THEME.primary,
+    letterSpacing: 0.5,
+  },
+  statusText: {
+    fontSize: 13,
+    color: DARK_THEME.textSecondary,
+  },
+  progressSection: {
+    marginTop: 14,
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: DARK_THEME.glassBorder,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  progressLabel: {
+    fontSize: 13,
+    fontWeight: '500',
   },
-  progressTrack: {
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 2,
+  progressPercentage: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  progressBarBackground: {
+    height: 6,
+    backgroundColor: DARK_THEME.deepNavy,
+    borderRadius: 3,
     overflow: 'hidden',
   },
-  progressFill: {
+  progressBarFill: {
     height: '100%',
-    borderRadius: 2,
+    borderRadius: 3,
   },
   startNewPlanButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    paddingVertical: 20,
-    marginTop: 8,
+    paddingVertical: 24,
+    paddingHorizontal: 24,
+    marginHorizontal: 0,
     borderRadius: 16,
     borderWidth: 2,
     borderStyle: 'dashed',
     borderColor: DARK_THEME.glassBorder,
+    backgroundColor: 'transparent',
   },
   startNewPlanButtonPressed: {
     opacity: 0.7,
     backgroundColor: DARK_THEME.glass,
   },
   startNewPlanIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: DARK_THEME.glass,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: DARK_THEME.surfaceCard,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyScrollContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fab: {
-    position: 'absolute',
-    right: 20,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    shadowColor: DARK_THEME.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  fabPressed: {
-    transform: [{ scale: 0.92 }],
-    opacity: 0.9,
-  },
-  fabGradient: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+  startNewPlanText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: DARK_THEME.textTertiary,
   },
   emptyIconContainer: {
     marginBottom: 24,
@@ -632,28 +742,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  primaryButton: {
-    flexDirection: 'row',
+  draftCard: {
+    borderColor: '#F59E0B40',
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  draftIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: DARK_THEME.primary,
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    shadowColor: DARK_THEME.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
   },
-  primaryButtonPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
+  draftBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(245, 158, 11, 0.2)',
   },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  draftBadgeText: {
+    fontSize: 10,
     fontWeight: '700',
+    color: '#F59E0B',
+    letterSpacing: 0.5,
   },
 });

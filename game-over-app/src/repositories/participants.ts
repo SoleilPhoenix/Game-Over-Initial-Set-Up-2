@@ -30,9 +30,10 @@ export const participantsRepository = {
 
     if (error) throw error;
 
+    // Note: event_participants->profiles relation may need FK in Supabase
     return (data || []).map(p => ({
       ...p,
-      profile: p.profile as ParticipantWithProfile['profile'],
+      profile: (p as any).profile as ParticipantWithProfile['profile'],
     }));
   },
 

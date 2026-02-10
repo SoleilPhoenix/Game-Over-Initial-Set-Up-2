@@ -17,7 +17,7 @@ interface AuthState {
   error: string | null;
 
   // Actions
-  initialize: () => Promise<void>;
+  initialize: () => Promise<(() => void) | void>;
   setSession: (session: Session | null) => void;
   setUser: (user: User | null) => void;
   setError: (error: string | null) => void;

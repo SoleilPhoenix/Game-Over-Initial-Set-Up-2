@@ -3,14 +3,16 @@
  * User settings hub with dark glassmorphic theme
  */
 
-import React from 'react';
-import { Alert, Pressable, StyleSheet, ScrollView, Image } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Pressable, StyleSheet, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, View } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useUser, useAuthStore } from '@/stores/authStore';
+import { useFavoritesStore } from '@/stores/favoritesStore';
+import { useTranslation, getTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
 
 interface MenuItemProps {
@@ -100,15 +102,22 @@ function MenuSection({ title, children }: MenuSectionProps) {
   );
 }
 
+const TIER_LABELS: Record<string, string> = { essential: 'Essential (S)', classic: 'Classic (M)', grand: 'Grand (L)' };
+
+const LANGUAGE_LABELS: Record<string, string> = { en: 'English', de: 'Deutsch' };
+
 export default function ProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useUser();
   const signOut = useAuthStore((state) => state.signOut);
+  const favorites = useFavoritesStore((s) => s.favorites);
+  const [imageLoading, setImageLoading] = useState(true);
+  const { t, language } = useTranslation();
 
   const userName = user?.user_metadata?.full_name || 'User';
   const userEmail = user?.email || '';
-  const avatarUrl = user?.user_metadata?.avatar_url;
+  const userAvatar = user?.user_metadata?.avatar_url;
   const userInitials = userName
     .split(' ')
     .map((n: string) => n[0])
@@ -117,13 +126,14 @@ export default function ProfileScreen() {
     .slice(0, 2);
 
   const handleLogout = () => {
+    const tr = getTranslation();
     Alert.alert(
-      'Log Out',
-      'Are you sure you want to log out?',
+      tr.profile.logOutConfirmTitle,
+      tr.profile.logOutConfirmMessage,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: tr.profile.cancel, style: 'cancel' },
         {
-          text: 'Log Out',
+          text: tr.profile.logOut,
           style: 'destructive',
           onPress: signOut,
         },
@@ -131,16 +141,19 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleLanguagePress = () => {
+    router.push('/profile/language');
+  };
+
   return (
-    <View flex={1} backgroundColor={DARK_THEME.background} testID="profile-screen">
+    <View flex={1} backgroundColor={DARK_THEME.background}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
-          paddingBottom: insets.bottom + 100,
+          paddingBottom: insets.bottom + 180,
           paddingTop: insets.top + 16,
         }}
         showsVerticalScrollIndicator={false}
-        testID="profile-scroll-view"
       >
         {/* Header Title */}
         <Text
@@ -150,7 +163,7 @@ export default function ProfileScreen() {
           textAlign="center"
           marginBottom="$6"
         >
-          User Settings
+          {t.profile.title}
         </Text>
 
         {/* Profile Card */}
@@ -168,11 +181,21 @@ export default function ProfileScreen() {
                 style={styles.avatarGradient}
               >
                 <View style={styles.avatarInner}>
-                  {avatarUrl ? (
-                    <Image
-                      source={{ uri: avatarUrl }}
-                      style={styles.avatarImage}
-                    />
+                  {userAvatar ? (
+                    <>
+                      <Image
+                        source={{ uri: userAvatar, cache: 'force-cache' }}
+                        style={styles.avatarImage}
+                        onLoadStart={() => setImageLoading(true)}
+                        onLoad={() => setImageLoading(false)}
+                        onError={() => setImageLoading(false)}
+                      />
+                      {imageLoading && (
+                        <View style={styles.avatarLoader}>
+                          <ActivityIndicator size="small" color={DARK_THEME.primary} />
+                        </View>
+                      )}
+                    </>
                   ) : (
                     <Text fontSize={24} fontWeight="700" color={DARK_THEME.textPrimary}>
                       {userInitials}
@@ -190,36 +213,85 @@ export default function ProfileScreen() {
             fontWeight="700"
             color={DARK_THEME.textPrimary}
             marginTop="$4"
-            testID="profile-user-name"
           >
             {userName}
           </Text>
-          <Text fontSize={14} color={DARK_THEME.textSecondary} testID="profile-user-email">
+          <Text fontSize={14} color={DARK_THEME.textSecondary}>
             {userEmail}
           </Text>
         </YStack>
 
         <YStack paddingHorizontal="$4">
           {/* Notifications Section */}
-          <MenuSection title="Notifications">
+          <MenuSection title={t.profile.notifications}>
             <MenuItem
               icon="notifications"
               iconColor="#60A5FA"
               iconBgColor="rgba(96, 165, 250, 0.2)"
-              label="Unified Feed"
-              showBadge
+              label={t.profile.notificationPreferences}
               onPress={() => router.push('/profile/notifications')}
               testID="menu-notifications"
             />
           </MenuSection>
 
+          {/* Saved Packages Section */}
+          {favorites.length > 0 && (
+            <YStack marginBottom="$5">
+              <Text
+                fontSize={11}
+                fontWeight="600"
+                color={DARK_THEME.textSecondary}
+                textTransform="uppercase"
+                letterSpacing={1}
+                marginBottom="$3"
+                marginLeft="$1"
+              >
+                {t.profile.savedPackages} ({favorites.length})
+              </Text>
+              <View style={styles.glassCard}>
+                {favorites.map((fav, index) => (
+                  <React.Fragment key={fav.id}>
+                    {index > 0 && <View style={styles.separator} />}
+                    <Pressable
+                      style={styles.menuItem}
+                      onPress={() => router.push(`/package/${fav.id}`)}
+                      testID={`saved-package-${index}`}
+                    >
+                      <XStack alignItems="center" gap="$3">
+                        <View
+                          width={32}
+                          height={32}
+                          borderRadius={16}
+                          backgroundColor="rgba(239, 68, 68, 0.2)"
+                          alignItems="center"
+                          justifyContent="center"
+                        >
+                          <Ionicons name="heart" size={16} color="#EF4444" />
+                        </View>
+                        <YStack flex={1}>
+                          <Text color={DARK_THEME.textPrimary} fontSize={14} fontWeight="500">
+                            {fav.cityName} {TIER_LABELS[fav.tier] || fav.name}
+                          </Text>
+                          <Text color={DARK_THEME.textSecondary} fontSize={11}>
+                            {'\u20AC'}{(fav.pricePerPersonCents / 100).toFixed(0)} {t.profile.perPerson}
+                          </Text>
+                        </YStack>
+                      </XStack>
+                      <Ionicons name="chevron-forward" size={20} color="#6B7280" />
+                    </Pressable>
+                  </React.Fragment>
+                ))}
+              </View>
+            </YStack>
+          )}
+
           {/* Account Section */}
-          <MenuSection title="Account">
+          <MenuSection title={t.profile.account}>
             <MenuItem
               icon="person"
               iconColor="#A78BFA"
               iconBgColor="rgba(167, 139, 250, 0.2)"
-              label="Edit Profile"
+              label={t.profile.editProfile}
               onPress={() => router.push('/profile/edit')}
               testID="menu-edit-profile"
             />
@@ -228,7 +300,7 @@ export default function ProfileScreen() {
               icon="lock-closed"
               iconColor="#34D399"
               iconBgColor="rgba(52, 211, 153, 0.2)"
-              label="Password & Security"
+              label={t.profile.passwordSecurity}
               onPress={() => router.push('/profile/security')}
               testID="menu-security"
             />
@@ -237,21 +309,21 @@ export default function ProfileScreen() {
               icon="language"
               iconColor="#FB923C"
               iconBgColor="rgba(251, 146, 60, 0.2)"
-              label="Language"
-              value="English (US)"
-              onPress={() => {/* Future: Language picker */}}
+              label={t.profile.language}
+              value={LANGUAGE_LABELS[language]}
+              onPress={handleLanguagePress}
               testID="menu-language"
             />
           </MenuSection>
 
           {/* Wellness & Support Section */}
-          <MenuSection title="Wellness & Support">
+          <MenuSection title={t.profile.wellnessSupport}>
             <MenuItem
               icon="heart"
               iconColor="#F472B6"
               iconBgColor="rgba(244, 114, 182, 0.2)"
-              label="Relationship Health Center"
-              onPress={() => Alert.alert('Coming Soon', 'This feature will be available in a future update.')}
+              label={t.profile.relationshipHealthCenter}
+              onPress={() => Alert.alert(t.profile.comingSoon, t.profile.comingSoonMessage)}
               testID="menu-wellness"
             />
             <View style={styles.separator} />
@@ -259,8 +331,8 @@ export default function ProfileScreen() {
               icon="help-circle"
               iconColor="#9CA3AF"
               iconBgColor="rgba(156, 163, 175, 0.2)"
-              label="Support & FAQ"
-              onPress={() => {/* Future: Support screen */}}
+              label={t.profile.supportFAQ}
+              onPress={() => router.push('/profile/support')}
               testID="menu-support"
             />
           </MenuSection>
@@ -276,7 +348,7 @@ export default function ProfileScreen() {
           >
             <Ionicons name="log-out-outline" size={18} color="#F87171" />
             <Text color="#F87171" fontSize={14} fontWeight="600">
-              Log Out
+              {t.profile.logOut}
             </Text>
           </Pressable>
 
@@ -287,7 +359,7 @@ export default function ProfileScreen() {
             textAlign="center"
             marginTop="$6"
           >
-            Version 1.0.0 (Build 1)
+            {t.profile.version} 1.0.0 (Build 1)
           </Text>
         </YStack>
       </ScrollView>
@@ -329,12 +401,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#374151',
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
   avatarImage: {
-    width: 90,
-    height: 90,
+    width: '100%',
+    height: '100%',
     borderRadius: 45,
+  },
+  avatarLoader: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#374151',
+    borderRadius: 45,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   editBadge: {
     position: 'absolute',

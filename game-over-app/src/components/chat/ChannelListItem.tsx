@@ -49,7 +49,7 @@ const getCategoryColor = (category: ChatChannel['category']): string => {
 };
 
 export function ChannelListItem({ channel, onPress, testID }: ChannelListItemProps) {
-  const hasUnread = channel.unread_count > 0;
+  const hasUnread = (channel.unread_count ?? 0) > 0;
   const categoryColor = getCategoryColor(channel.category);
 
   const formatLastMessage = () => {
@@ -129,7 +129,7 @@ export function ChannelListItem({ channel, onPress, testID }: ChannelListItemPro
                 alignItems="center"
               >
                 <Text fontSize={11} fontWeight="700" color="white">
-                  {channel.unread_count > 99 ? '99+' : channel.unread_count}
+                  {(channel.unread_count ?? 0) > 99 ? '99+' : channel.unread_count}
                 </Text>
               </YStack>
             )}

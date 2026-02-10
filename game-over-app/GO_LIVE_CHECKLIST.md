@@ -194,10 +194,14 @@ This document tracks all tasks that must be completed before launching the Game 
 
 ## Legal & Compliance
 
-**Status:** ⏸️ Pending
+**Status:** 🟡 In Progress — Draft legal pages created, pending legal review
 
-- [ ] Create Privacy Policy
-- [ ] Create Terms of Service
+- [x] Create Privacy Policy (draft in `app/(tabs)/profile/privacy.tsx`)
+- [x] Create Terms of Service (draft in `app/(tabs)/profile/terms.tsx`)
+- [x] Create Impressum (draft in `app/(tabs)/profile/impressum.tsx`)
+- [ ] **IMPORTANT: Have Terms of Service reviewed and finalized by a lawyer/legal expert**
+- [ ] **IMPORTANT: Have Privacy Policy reviewed and finalized by a lawyer/legal expert**
+- [ ] **IMPORTANT: Update Impressum with correct company address and contact details**
 - [ ] Add privacy policy URL to Facebook App settings
 - [ ] Add privacy policy URL to Apple App Store listing
 - [ ] Add privacy policy URL to Google Play Store listing

@@ -1,35 +1,100 @@
 /**
- * Booking Summary Screen (Phase 6)
- * Payment summary with pricing breakdown
+ * Booking Summary Screen (Mockup 8.1)
+ * Payment summary matching the design specification
+ * Supports both real events and draft mode (when event creation is skipped)
  */
 
-import React from 'react';
-import { ScrollView } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { ScrollView, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner, Switch } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBookingFlow } from '@/hooks/useBookingFlow';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { useWizardStore } from '@/stores/wizardStore';
 import { Button } from '@/components/ui/Button';
+import { DARK_THEME } from '@/constants/theme';
+import { useTranslation } from '@/i18n';
+
+const TIER_LABELS: Record<string, string> = {
+  essential: 'Essential (S)',
+  classic: 'Classic (M)',
+  grand: 'Grand (L)',
+};
+
+// Fallback package data for draft mode
+const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; price_per_person_cents: number; hero_image_url: string }> = {
+  'berlin-classic': { id: 'berlin-classic', name: 'Berlin Classic', tier: 'classic', price_per_person_cents: 149_00, hero_image_url: 'https://images.unsplash.com/photo-1560969184-10fe8719e047?w=400' },
+  'berlin-essential': { id: 'berlin-essential', name: 'Berlin Essential', tier: 'essential', price_per_person_cents: 99_00, hero_image_url: 'https://images.unsplash.com/photo-1587330979470-3595ac045ab0?w=400' },
+  'berlin-grand': { id: 'berlin-grand', name: 'Berlin Grand', tier: 'grand', price_per_person_cents: 199_00, hero_image_url: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=400' },
+  'hamburg-classic': { id: 'hamburg-classic', name: 'Hamburg Classic', tier: 'classic', price_per_person_cents: 149_00, hero_image_url: 'https://images.unsplash.com/photo-1567359781514-3b964e2b04d6?w=400' },
+  'hamburg-essential': { id: 'hamburg-essential', name: 'Hamburg Essential', tier: 'essential', price_per_person_cents: 99_00, hero_image_url: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=400' },
+  'hamburg-grand': { id: 'hamburg-grand', name: 'Hamburg Grand', tier: 'grand', price_per_person_cents: 199_00, hero_image_url: 'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=400' },
+  'hannover-classic': { id: 'hannover-classic', name: 'Hannover Classic', tier: 'classic', price_per_person_cents: 149_00, hero_image_url: 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=400' },
+  'hannover-essential': { id: 'hannover-essential', name: 'Hannover Essential', tier: 'essential', price_per_person_cents: 99_00, hero_image_url: 'https://images.unsplash.com/photo-1528605248644-14dd04022da1?w=400' },
+  'hannover-grand': { id: 'hannover-grand', name: 'Hannover Grand', tier: 'grand', price_per_person_cents: 199_00, hero_image_url: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400' },
+};
+
+const CITY_NAMES: Record<string, string> = {
+  berlin: 'Berlin',
+  hamburg: 'Hamburg',
+  hannover: 'Hannover',
+};
+
+const SERVICE_FEE_RATE = 0.10;
+const MIN_SERVICE_FEE_CENTS = 5000;
 
 export default function BookingSummaryScreen() {
-  const { eventId } = useLocalSearchParams<{ eventId: string }>();
+  const { eventId, packageId, cityId: paramCityId, participants: paramParticipants } = useLocalSearchParams<{ eventId: string; packageId?: string; cityId?: string; participants?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const isDraft = eventId === 'draft';
+  const { t } = useTranslation();
 
-  const {
-    event,
-    participants,
-    package: pkg,
-    excludeHonoree,
-    setExcludeHonoree,
-    pricing,
-    isLoading,
-  } = useBookingFlow(eventId);
+  // For real events, use the booking flow hook
+  const bookingFlow = useBookingFlow(isDraft ? undefined : eventId, packageId);
 
-  if (isLoading || !event || !pkg || !pricing) {
+  // For draft mode, get data from wizard store
+  const wizardCityId = useWizardStore((s) => s.cityId);
+  const wizardParticipantCount = useWizardStore((s) => s.participantCount);
+
+  // Resolve package data
+  const draftPkg = packageId ? FALLBACK_PKG[packageId] : null;
+  const pkg = isDraft ? draftPkg : (bookingFlow.package || draftPkg);
+
+  // Local exclude honoree state
+  const [draftExcludeHonoree, setDraftExcludeHonoree] = useState(true);
+  const excludeHonoree = isDraft ? draftExcludeHonoree : bookingFlow.excludeHonoree;
+  const setExcludeHonoree = isDraft ? setDraftExcludeHonoree : bookingFlow.setExcludeHonoree;
+
+  // Calculate pricing for draft mode
+  const urlParticipantCount = paramParticipants ? parseInt(paramParticipants, 10) : null;
+  const draftPricing = useMemo(() => {
+    if (!draftPkg) return null;
+    const totalParticipants = urlParticipantCount || wizardParticipantCount || 10;
+    const honoreeCount = draftExcludeHonoree ? 1 : 0;
+    const payingCount = Math.max(1, totalParticipants - honoreeCount);
+    const perPersonPrice = draftPkg.price_per_person_cents;
+    // Package Base is ALWAYS price × total participants (fixed amount)
+    const packagePrice = perPersonPrice * totalParticipants;
+    const serviceFee = Math.max(Math.round(packagePrice * SERVICE_FEE_RATE), MIN_SERVICE_FEE_CENTS);
+    const total = packagePrice + serviceFee;
+    // Only per-person cost changes based on exclude honoree toggle
+    const perPerson = Math.ceil(total / payingCount);
+    return {
+      packagePriceCents: packagePrice,
+      serviceFeeCents: serviceFee,
+      totalCents: total,
+      perPersonCents: perPerson,
+      payingParticipantCount: payingCount,
+    };
+  }, [draftPkg, urlParticipantCount, wizardParticipantCount, draftExcludeHonoree]);
+
+  const pricing = isDraft ? draftPricing : bookingFlow.pricing;
+  const isLoading = isDraft ? false : bookingFlow.isLoading;
+
+  // For draft mode, we don't need event data — just package + pricing
+  if (isLoading || !pkg || !pricing) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
         <Spinner size="large" color="$primary" />
@@ -38,28 +103,51 @@ export default function BookingSummaryScreen() {
   }
 
   const formatPrice = (cents: number) => {
-    return (cents / 100).toLocaleString('en-US', {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: 0,
+    return '\u20AC' + (cents / 100).toLocaleString('de-DE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     });
   };
 
   const handleProceedToPayment = () => {
-    router.push(`/booking/${eventId}/payment`);
+    const params = new URLSearchParams();
+    if (packageId) params.set('packageId', packageId);
+    if (paramCityId) params.set('cityId', paramCityId);
+    if (paramParticipants) params.set('participants', paramParticipants);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    router.push(`/booking/${eventId}/payment${qs}`);
   };
 
+  const tierLabel = TIER_LABELS[pkg.tier] || pkg.name;
+  const heroImage = pkg.hero_image_url || null;
+
+  // City name: from URL params > wizard store > event data
+  const effectiveCityId = paramCityId || wizardCityId;
+  const cityName = isDraft
+    ? (effectiveCityId ? CITY_NAMES[effectiveCityId] || effectiveCityId : 'Unknown')
+    : (bookingFlow.event?.city?.name || bookingFlow.event?.city_id || 'Unknown');
+
+  // Guest count: from URL params > wizard store > participants > event
+  const paramParticipantCount = paramParticipants ? parseInt(paramParticipants, 10) : null;
+  const guestCount = isDraft
+    ? (paramParticipantCount || wizardParticipantCount || 10)
+    : ((bookingFlow.participants && bookingFlow.participants.length > 0)
+      ? bookingFlow.participants.length
+      : (bookingFlow.event?.participant_count || pricing.payingParticipantCount));
+
+  const honoreePaysCents = excludeHonoree ? 0 : pricing.perPersonCents;
+
   return (
-    <YStack flex={1} backgroundColor="$background">
+    <YStack flex={1} backgroundColor={DARK_THEME.background}>
       {/* Header */}
       <XStack
-        paddingTop={insets.top + 8}
+        paddingTop={insets.top + 4}
         paddingHorizontal="$4"
-        paddingBottom="$3"
+        paddingBottom="$2"
         alignItems="center"
-        backgroundColor="$surface"
+        backgroundColor={DARK_THEME.surface}
         borderBottomWidth={1}
-        borderBottomColor="$borderColor"
+        borderBottomColor={DARK_THEME.glassBorder}
       >
         <XStack
           width={40}
@@ -71,157 +159,171 @@ export default function BookingSummaryScreen() {
           onPress={() => router.back()}
           testID="back-button"
         >
-          <Ionicons name="arrow-back" size={24} color="#1A202C" />
+          <Ionicons name="chevron-back" size={24} color="white" />
         </XStack>
-        <Text flex={1} fontSize="$5" fontWeight="700" color="$textPrimary" textAlign="center">
-          Payment Summary
+        <Text flex={1} fontSize={17} fontWeight="700" color="white" textAlign="center">
+          {t.booking.paymentSummary}
         </Text>
         <YStack width={40} />
       </XStack>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
-        {/* Package Card */}
-        <Card marginBottom="$4" testID="package-summary-card">
-          <XStack gap="$3" alignItems="flex-start">
-            <YStack
-              width={60}
-              height={60}
-              borderRadius="$md"
-              backgroundColor="$backgroundHover"
-              alignItems="center"
-              justifyContent="center"
-            >
-              <Ionicons name="gift" size={28} color="#258CF4" />
-            </YStack>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 140 }}>
+        {/* Selected Package Card */}
+        <YStack
+          backgroundColor={DARK_THEME.surfaceCard}
+          borderRadius={16}
+          padding="$4"
+          marginBottom="$5"
+          borderWidth={1}
+          borderColor={DARK_THEME.glassBorder}
+          testID="package-summary-card"
+        >
+          <XStack gap="$3" alignItems="center">
             <YStack flex={1}>
-              <Badge label={pkg.tier} variant="primary" size="sm" marginBottom="$1" />
-              <Text fontSize="$4" fontWeight="700" color="$textPrimary">
-                {pkg.name}
+              <Text fontSize={11} fontWeight="700" color={DARK_THEME.primary} textTransform="uppercase" letterSpacing={1} marginBottom={4}>
+                {t.booking.selectedPackageLabel}
               </Text>
-              <Text fontSize="$2" color="$textSecondary">
-                {event.city?.name}
+              <Text fontSize={20} fontWeight="800" color="white">
+                The {tierLabel}
+              </Text>
+              <Text fontSize={13} color={DARK_THEME.textSecondary} marginTop={4}>
+                {cityName} {'\u2022'} {t.booking.nights.replace('{{count}}', '2')} {'\u2022'} {t.booking.guests.replace('{{count}}', String(guestCount))}
               </Text>
             </YStack>
+            {heroImage && (
+              <Image
+                source={{ uri: heroImage }}
+                style={{ width: 80, height: 80, borderRadius: 12 }}
+                resizeMode="cover"
+              />
+            )}
           </XStack>
-        </Card>
+        </YStack>
 
-        {/* Exclude Honoree Toggle */}
-        <Card marginBottom="$4" testID="exclude-honoree-card">
+        {/* Cost Breakdown */}
+        <Text fontSize={11} fontWeight="700" color={DARK_THEME.textSecondary} textTransform="uppercase" letterSpacing={1} marginBottom="$2" marginLeft="$1">
+          Cost Breakdown
+        </Text>
+        <YStack
+          backgroundColor={DARK_THEME.surfaceCard}
+          borderRadius={16}
+          padding="$4"
+          marginBottom="$5"
+          borderWidth={1}
+          borderColor={DARK_THEME.glassBorder}
+          testID="cost-breakdown-card"
+        >
+          <XStack justifyContent="space-between" marginBottom="$3">
+            <Text fontSize={14} color={DARK_THEME.textSecondary}>Package Base</Text>
+            <Text fontSize={14} fontWeight="600" color="white">
+              {formatPrice(pricing.packagePriceCents)}
+            </Text>
+          </XStack>
+
+          <XStack justifyContent="space-between" marginBottom="$3">
+            <XStack gap="$1" alignItems="center">
+              <Text fontSize={14} color={DARK_THEME.textSecondary}>{t.booking.serviceFee}</Text>
+              <Ionicons name="information-circle-outline" size={14} color={DARK_THEME.textTertiary} />
+            </XStack>
+            <Text fontSize={14} fontWeight="600" color="white">
+              {formatPrice(pricing.serviceFeeCents)}
+            </Text>
+          </XStack>
+
+          <YStack height={1} backgroundColor={DARK_THEME.glassBorder} marginVertical="$2" />
+
+          <XStack justifyContent="space-between">
+            <Text fontSize={15} fontWeight="600" color={DARK_THEME.textSecondary}>{t.booking.totalGroupCost}</Text>
+            <Text fontSize={16} fontWeight="800" color={DARK_THEME.primary}>
+              {formatPrice(pricing.totalCents)}
+            </Text>
+          </XStack>
+        </YStack>
+
+        {/* Exclude Honoree */}
+        <YStack
+          backgroundColor={DARK_THEME.surfaceCard}
+          borderRadius={16}
+          padding="$4"
+          marginBottom="$5"
+          borderWidth={1}
+          borderColor={DARK_THEME.glassBorder}
+          testID="exclude-honoree-card"
+        >
           <XStack justifyContent="space-between" alignItems="center">
             <YStack flex={1}>
-              <Text fontSize="$3" fontWeight="600" color="$textPrimary">
-                Exclude Guest of Honor
+              <Text fontSize={15} fontWeight="600" color="white">
+                {t.booking.excludeHonoreeLabel}
               </Text>
-              <Text fontSize="$2" color="$textSecondary">
-                {event.honoree_name} won't pay for the package
+              <Text fontSize={13} color={DARK_THEME.textSecondary}>
+                {t.booking.honoreePays.replace('{{amount}}', formatPrice(honoreePaysCents))}
               </Text>
             </YStack>
             <Switch
               checked={excludeHonoree}
               onCheckedChange={setExcludeHonoree}
-              backgroundColor={excludeHonoree ? '$primary' : '$borderColor'}
+              backgroundColor={excludeHonoree ? DARK_THEME.primary : DARK_THEME.glassBorder}
               testID="exclude-honoree-toggle"
             >
               <Switch.Thumb animation="quick" backgroundColor="white" />
             </Switch>
           </XStack>
-        </Card>
+        </YStack>
 
-        {/* Cost Breakdown */}
-        <Card marginBottom="$4" testID="cost-breakdown-card">
-          <YStack gap="$3">
-            <Text fontSize="$4" fontWeight="700" color="$textPrimary">
-              Cost Breakdown
-            </Text>
-
-            <XStack justifyContent="space-between">
-              <Text color="$textSecondary">Package Price</Text>
-              <Text fontWeight="600" color="$textPrimary">
-                {formatPrice(pricing.packagePriceCents)}
-              </Text>
-            </XStack>
-
-            <XStack justifyContent="space-between">
-              <XStack gap="$1" alignItems="center">
-                <Text color="$textSecondary">Service Fee (10%)</Text>
-                <Ionicons name="information-circle-outline" size={14} color="#64748B" />
-              </XStack>
-              <Text fontWeight="600" color="$textPrimary">
-                {formatPrice(pricing.serviceFeeCents)}
-              </Text>
-            </XStack>
-
-            <YStack
-              height={1}
-              backgroundColor="$borderColor"
-              marginVertical="$2"
-            />
-
-            <XStack justifyContent="space-between">
-              <Text fontSize="$4" fontWeight="700" color="$textPrimary">
-                Total
-              </Text>
-              <Text fontSize="$5" fontWeight="800" color="$primary">
-                {formatPrice(pricing.totalCents)}
-              </Text>
-            </XStack>
-          </YStack>
-        </Card>
-
-        {/* Per Person Card */}
-        <Card
-          variant="filled"
-          backgroundColor="rgba(37, 140, 244, 0.1)"
-          borderWidth={0}
-          marginBottom="$4"
+        {/* Cost Per Person Highlight */}
+        <YStack
+          backgroundColor={DARK_THEME.surfaceCard}
+          borderRadius={16}
+          padding="$4"
+          marginBottom="$5"
+          borderWidth={1}
+          borderColor={DARK_THEME.glassBorder}
           testID="per-person-card"
         >
-          <YStack alignItems="center" gap="$1">
-            <Text fontSize="$2" color="$primary" fontWeight="600">
-              Per Person ({pricing.payingParticipantCount} paying)
-            </Text>
-            <Text fontSize="$7" fontWeight="800" color="$primary">
-              {formatPrice(pricing.perPersonCents)}
-            </Text>
-          </YStack>
-        </Card>
-
-        {/* Participants Summary */}
-        <Card marginBottom="$4" testID="participants-summary-card">
-          <XStack justifyContent="space-between" alignItems="center">
+          <XStack justifyContent="space-between" alignItems="flex-start">
             <YStack>
-              <Text fontSize="$3" fontWeight="600" color="$textPrimary">
-                {participants.length} Participants
+              <Text fontSize={11} fontWeight="700" color={DARK_THEME.textSecondary} textTransform="uppercase" letterSpacing={1}>
+                {t.booking.costPerPersonLabel.replace('{{count}}', String(pricing.payingParticipantCount))}
               </Text>
-              <Text fontSize="$2" color="$textSecondary">
-                {pricing.payingParticipantCount} paying
-                {excludeHonoree && ` (excluding ${event.honoree_name})`}
-              </Text>
+              <XStack alignItems="baseline" gap="$2" marginTop="$2">
+                <Text fontSize={36} fontWeight="800" color={DARK_THEME.primary}>
+                  {formatPrice(pricing.perPersonCents)}
+                </Text>
+                <Text fontSize={14} color={DARK_THEME.textSecondary}>{t.booking.slashPerson}</Text>
+              </XStack>
+              <XStack alignItems="center" gap="$1" marginTop="$1">
+                <Ionicons name="checkmark-circle" size={14} color="#47B881" />
+                <Text fontSize={12} fontWeight="600" color="#47B881">
+                  {t.booking.includesTaxes}
+                </Text>
+              </XStack>
             </YStack>
-            <XStack
-              pressStyle={{ opacity: 0.7 }}
-              onPress={() => router.push(`/event/${eventId}/participants`)}
-            >
-              <Text color="$primary" fontWeight="600">
-                Manage →
-              </Text>
-            </XStack>
+            <Ionicons name="camera-outline" size={28} color={DARK_THEME.textTertiary} />
           </XStack>
-        </Card>
+        </YStack>
 
-        {/* Security Info */}
+        {/* Stripe Security */}
         <XStack
           padding="$3"
-          backgroundColor="$backgroundHover"
-          borderRadius="$lg"
+          backgroundColor={DARK_THEME.surfaceCard}
+          borderRadius={12}
           gap="$2"
           alignItems="center"
+          justifyContent="center"
+          marginBottom="$4"
+          borderWidth={1}
+          borderColor={DARK_THEME.glassBorder}
         >
-          <Ionicons name="shield-checkmark" size={20} color="#47B881" />
-          <Text fontSize="$2" color="$textSecondary" flex={1}>
-            Secured by Stripe. Your payment information is encrypted.
+          <Ionicons name="lock-closed" size={16} color={DARK_THEME.textTertiary} />
+          <Text fontSize={13} color={DARK_THEME.textSecondary}>
+            {t.booking.securePaymentStripe}
           </Text>
         </XStack>
+
+        {/* Cancellation Policy */}
+        <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" lineHeight={18} paddingHorizontal="$2">
+          {t.booking.cancellationSummary}
+        </Text>
       </ScrollView>
 
       {/* Footer */}
@@ -232,16 +334,19 @@ export default function BookingSummaryScreen() {
         right={0}
         padding="$4"
         paddingBottom={insets.bottom + 16}
-        backgroundColor="$surface"
+        backgroundColor={DARK_THEME.surface}
         borderTopWidth={1}
-        borderTopColor="$borderColor"
+        borderTopColor={DARK_THEME.glassBorder}
       >
         <Button
           flex={1}
           onPress={handleProceedToPayment}
           testID="proceed-to-payment-button"
         >
-          Proceed to Payment
+          <XStack alignItems="center" gap="$2">
+            <Text fontSize={16} fontWeight="700" color="white">{t.booking.proceedToPayment}</Text>
+            <Ionicons name="arrow-forward" size={18} color="white" />
+          </XStack>
         </Button>
       </XStack>
     </YStack>

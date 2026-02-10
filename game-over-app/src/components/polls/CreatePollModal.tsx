@@ -29,7 +29,6 @@ interface CreatePollModalProps {
 const CATEGORIES: { value: PollCategory; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { value: 'activities', label: 'Activities', icon: 'bicycle' },
   { value: 'accommodation', label: 'Accommodation', icon: 'bed' },
-  { value: 'dining', label: 'Dining', icon: 'restaurant' },
   { value: 'budget', label: 'Budget', icon: 'wallet' },
   { value: 'general', label: 'General', icon: 'help-circle' },
 ];

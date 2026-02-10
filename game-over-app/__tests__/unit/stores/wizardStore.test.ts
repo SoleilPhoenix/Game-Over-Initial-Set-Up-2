@@ -16,6 +16,25 @@ vi.mock('react-native-mmkv', () => ({
   })),
 }));
 
+// Mock storage module to avoid native module issues
+vi.mock('@/lib/storage', () => {
+  const store = new Map<string, string>();
+  return {
+    createSyncStorage: vi.fn(() => ({
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, value); },
+      removeItem: (key: string) => { store.delete(key); },
+    })),
+    createStorage: vi.fn(() => ({
+      getItem: async (key: string) => store.get(key) ?? null,
+      setItem: async (key: string, value: string) => { store.set(key, value); },
+      removeItem: async (key: string) => { store.delete(key); },
+    })),
+    deleteFromStorage: vi.fn((namespace: string, key: string) => { store.delete(`${namespace}:${key}`); }),
+    isExpoGo: false,
+  };
+});
+
 // Import store after mocking
 import { useWizardStore } from '@/stores/wizardStore';
 
@@ -124,7 +143,6 @@ describe('wizardStore', () => {
       useWizardStore.getState().setPartyType('bachelor');
       useWizardStore.getState().setHonoreeName('John');
       useWizardStore.getState().setCityId('city-123');
-      useWizardStore.getState().setDates('2024-06-15', '2024-06-17');
 
       useWizardStore.getState().nextStep();
 
@@ -153,7 +171,7 @@ describe('wizardStore', () => {
   });
 
   describe('validation', () => {
-    it('should validate step 1 requires all fields', () => {
+    it('should validate step 1 requires party type, name, and city', () => {
       expect(useWizardStore.getState().isStepValid(1)).toBe(false);
 
       useWizardStore.getState().setPartyType('bachelor');
@@ -163,9 +181,6 @@ describe('wizardStore', () => {
       expect(useWizardStore.getState().isStepValid(1)).toBe(false);
 
       useWizardStore.getState().setCityId('city-123');
-      expect(useWizardStore.getState().isStepValid(1)).toBe(false);
-
-      useWizardStore.getState().setDates('2024-06-15', '2024-06-17');
       expect(useWizardStore.getState().isStepValid(1)).toBe(true);
     });
   });

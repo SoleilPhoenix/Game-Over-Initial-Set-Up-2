@@ -8,11 +8,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   orientation: 'portrait',
   icon: './assets/icon.png',
   scheme: 'gameover',
-  userInterfaceStyle: 'automatic',
+  userInterfaceStyle: 'dark', // Force dark mode to match app
   splash: {
     image: './assets/splash.png',
     resizeMode: 'contain',
-    backgroundColor: '#101922',
+    backgroundColor: '#15181D', // Match DARK_THEME.background
   },
   assetBundlePatterns: ['**/*'],
   ios: {
@@ -20,8 +20,18 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     bundleIdentifier: 'app.gameover.ios',
     usesAppleSignIn: true,
     associatedDomains: ['applinks:gameover.app'],
-    newArchEnabled: false,
+    splash: {
+      image: './assets/splash.png',
+      resizeMode: 'contain',
+      backgroundColor: '#15181D',
+      dark: {
+        image: './assets/splash.png',
+        resizeMode: 'contain',
+        backgroundColor: '#15181D',
+      },
+    },
     infoPlist: {
+      UILaunchStoryboardName: 'SplashScreen',
       CFBundleURLTypes: [
         {
           CFBundleURLSchemes: ['gameover'],
@@ -74,15 +84,16 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
   ],
   experiments: {
-    typedRoutes: true,
+    typedRoutes: false,
   },
   extra: {
     router: {
       origin: false,
     },
-    eas: {
-      projectId: 'your-project-id',
-    },
+    // EAS project ID will be set when building with EAS
+    // eas: {
+    //   projectId: 'your-project-id',
+    // },
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
     googleClientIdIos: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS,

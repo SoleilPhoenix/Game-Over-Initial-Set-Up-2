@@ -17,6 +17,11 @@ export default function ProfileLayout() {
       <Stack.Screen name="edit" />
       <Stack.Screen name="security" />
       <Stack.Screen name="notifications" />
+      <Stack.Screen name="support" />
+      <Stack.Screen name="language" />
+      <Stack.Screen name="terms" />
+      <Stack.Screen name="privacy" />
+      <Stack.Screen name="impressum" />
     </Stack>
   );
 }

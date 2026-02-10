@@ -266,7 +266,7 @@ export function NotificationItem({
               {notification.title}
             </Text>
             <Text fontSize={10} color={DARK_THEME.textTertiary} fontWeight="500">
-              {formatTime(notification.created_at)}
+              {notification.created_at && formatTime(notification.created_at)}
             </Text>
           </XStack>
 

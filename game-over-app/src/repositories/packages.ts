@@ -84,7 +84,7 @@ export const packagesRepository = {
 
     // Mark best match
     if (scoredPackages.length > 0) {
-      scoredPackages[0].is_best_match = true;
+      (scoredPackages[0] as PackageWithMatch).is_best_match = true;
     }
 
     return scoredPackages;
@@ -149,16 +149,18 @@ function calculateMatchScore(
   }
 
   // Rating bonus
-  if (pkg.rating >= 4.5) {
+  const rating = pkg.rating ?? 0;
+  if (rating >= 4.5) {
     score += 5;
-  } else if (pkg.rating >= 4.0) {
+  } else if (rating >= 4.0) {
     score += 3;
   }
 
   // Review count bonus (social proof)
-  if (pkg.review_count >= 100) {
+  const reviewCount = pkg.review_count ?? 0;
+  if (reviewCount >= 100) {
     score += 5;
-  } else if (pkg.review_count >= 50) {
+  } else if (reviewCount >= 50) {
     score += 3;
   }
 

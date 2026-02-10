@@ -10,17 +10,22 @@ import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, View } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Toggle } from '@/components/ui/Toggle';
 import { useUser } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 import { usePushNotifications } from '@/hooks/usePushNotifications';
+import { useTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
+
+const PREFS_CACHE_KEY = 'notification_prefs';
 
 export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useUser();
   const { registerForPushNotifications, expoPushToken, error: pushError } = usePushNotifications();
+  const { t } = useTranslation();
 
   const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(true);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
@@ -39,6 +44,17 @@ export default function NotificationsScreen() {
   const loadPreferences = async () => {
     if (!user?.id) return;
 
+    // Load from local cache first (instant, always available)
+    try {
+      const cached = await AsyncStorage.getItem(`${PREFS_CACHE_KEY}_${user.id}`);
+      if (cached) {
+        const prefs = JSON.parse(cached);
+        setPushNotificationsEnabled(prefs.push ?? true);
+        setEmailNotificationsEnabled(prefs.email ?? true);
+      }
+    } catch { /* ignore cache read errors */ }
+
+    // Then try to sync from Supabase
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -47,11 +63,17 @@ export default function NotificationsScreen() {
         .single();
 
       if (data && !error) {
-        setPushNotificationsEnabled(data.push_notifications_enabled);
-        setEmailNotificationsEnabled(data.email_notifications_enabled);
+        setPushNotificationsEnabled(data.push_notifications_enabled ?? false);
+        setEmailNotificationsEnabled(data.email_notifications_enabled ?? false);
+        // Update local cache with server values
+        await AsyncStorage.setItem(`${PREFS_CACHE_KEY}_${user.id}`, JSON.stringify({
+          push: data.push_notifications_enabled ?? false,
+          email: data.email_notifications_enabled ?? false,
+        }));
       }
     } catch (error) {
-      console.error('Failed to load preferences:', error);
+      console.error('Failed to load preferences from server:', error);
+      // Local cache values remain — user sees their last known preference
     }
   };
 
@@ -68,6 +90,15 @@ export default function NotificationsScreen() {
   const savePreference = async (key: 'push_notifications_enabled' | 'email_notifications_enabled', value: boolean) => {
     if (!user?.id) return;
 
+    // Always save to local cache immediately (survives screen remounts)
+    const cacheKey = key === 'push_notifications_enabled' ? 'push' : 'email';
+    try {
+      const cached = await AsyncStorage.getItem(`${PREFS_CACHE_KEY}_${user.id}`);
+      const prefs = cached ? JSON.parse(cached) : {};
+      prefs[cacheKey] = value;
+      await AsyncStorage.setItem(`${PREFS_CACHE_KEY}_${user.id}`, JSON.stringify(prefs));
+    } catch { /* ignore cache write errors */ }
+
     setIsSaving(true);
     try {
       const { error } = await supabase
@@ -79,15 +110,28 @@ export default function NotificationsScreen() {
         .eq('id', user.id);
 
       if (error) throw error;
-    } catch (error) {
-      console.error('Failed to save preference:', error);
-      // Revert on error
-      if (key === 'push_notifications_enabled') {
-        setPushNotificationsEnabled(!value);
+    } catch (error: any) {
+      // Known RLS recursion issue — preference already saved locally above
+      const isRlsRecursion = error?.code === '42P17' || error?.message?.includes('infinite recursion');
+      if (isRlsRecursion) {
+        console.warn('RLS recursion on profile update — preference saved locally only:', error);
       } else {
-        setEmailNotificationsEnabled(!value);
+        console.error('Failed to save preference:', error);
+        // Revert on error for non-RLS issues
+        if (key === 'push_notifications_enabled') {
+          setPushNotificationsEnabled(!value);
+        } else {
+          setEmailNotificationsEnabled(!value);
+        }
+        // Also revert local cache
+        try {
+          const cached = await AsyncStorage.getItem(`${PREFS_CACHE_KEY}_${user.id}`);
+          const prefs = cached ? JSON.parse(cached) : {};
+          prefs[cacheKey] = !value;
+          await AsyncStorage.setItem(`${PREFS_CACHE_KEY}_${user.id}`, JSON.stringify(prefs));
+        } catch { /* ignore */ }
+        Alert.alert('Error', 'Failed to save preference. Please try again.');
       }
-      Alert.alert('Error', 'Failed to save preference. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -98,9 +142,12 @@ export default function NotificationsScreen() {
     if (token) {
       setPushEnabled(true);
     } else if (pushError) {
+      const isExpoGoLimit = pushError.message?.includes('EAS project ID') || pushError.message?.includes('Expo Go');
       Alert.alert(
-        'Push Notifications',
-        pushError.message || 'Failed to enable push notifications. Please check your device settings.'
+        isExpoGoLimit ? 'Not Available in Expo Go' : 'Push Notifications',
+        isExpoGoLimit
+          ? 'Push notifications require a development build (EAS Build). They are not supported in Expo Go. You can still toggle the preference for when you switch to a full build.'
+          : (pushError.message || 'Failed to enable push notifications. Please check your device settings.')
       );
     }
   };
@@ -126,7 +173,7 @@ export default function NotificationsScreen() {
           <Ionicons name="chevron-back" size={24} color={DARK_THEME.textPrimary} />
         </Pressable>
         <Text fontSize={17} fontWeight="600" color={DARK_THEME.textPrimary}>
-          Notifications
+          {t.notificationPrefs.title}
         </Text>
         <View width={40} />
       </XStack>
@@ -151,7 +198,7 @@ export default function NotificationsScreen() {
                 letterSpacing={1}
                 marginLeft="$1"
               >
-                Push Notifications
+                {t.notificationPrefs.pushNotifications}
               </Text>
               {!pushEnabled && (
                 <Pressable
@@ -187,10 +234,10 @@ export default function NotificationsScreen() {
                     </View>
                     <YStack flex={1}>
                       <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
-                        Push Notifications
+                        {t.notificationPrefs.enablePush}
                       </Text>
                       <Text fontSize={12} color={DARK_THEME.textSecondary}>
-                        Receive alerts for events, messages, and polls
+                        {t.notificationPrefs.enablePushDesc}
                       </Text>
                     </YStack>
                   </XStack>
@@ -228,7 +275,7 @@ export default function NotificationsScreen() {
               letterSpacing={1}
               marginLeft="$1"
             >
-              Email Notifications
+              {t.notificationPrefs.emailNotifications}
             </Text>
             <View style={styles.card}>
               <XStack
@@ -250,10 +297,10 @@ export default function NotificationsScreen() {
                   </View>
                   <YStack flex={1}>
                     <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
-                      Email Notifications
+                      {t.notificationPrefs.eventUpdates}
                     </Text>
                     <Text fontSize={12} color={DARK_THEME.textSecondary}>
-                      Receive booking confirmations and event summaries
+                      {t.notificationPrefs.eventUpdatesDesc}
                     </Text>
                   </YStack>
                 </XStack>

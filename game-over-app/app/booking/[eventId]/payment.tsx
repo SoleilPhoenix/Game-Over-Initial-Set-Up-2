@@ -3,8 +3,8 @@
  * Stripe Payment Sheet integration for package bookings
  */
 
-import React, { useState } from 'react';
-import { Alert } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { Alert, ScrollView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,8 +12,26 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBookingFlow } from '@/hooks/useBookingFlow';
 import { usePaymentSheet } from '@/hooks/usePaymentSheet';
 import { useCreateBooking, useUpdatePaymentStatus } from '@/hooks/queries/useBookings';
+import { useWizardStore } from '@/stores/wizardStore';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { useTranslation, getTranslation } from '@/i18n';
+
+// Fallback packages for draft mode
+const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; price_per_person_cents: number }> = {
+  'berlin-classic': { id: 'berlin-classic', name: 'Berlin Classic', tier: 'classic', price_per_person_cents: 149_00 },
+  'berlin-essential': { id: 'berlin-essential', name: 'Berlin Essential', tier: 'essential', price_per_person_cents: 99_00 },
+  'berlin-grand': { id: 'berlin-grand', name: 'Berlin Grand', tier: 'grand', price_per_person_cents: 199_00 },
+  'hamburg-classic': { id: 'hamburg-classic', name: 'Hamburg Classic', tier: 'classic', price_per_person_cents: 149_00 },
+  'hamburg-essential': { id: 'hamburg-essential', name: 'Hamburg Essential', tier: 'essential', price_per_person_cents: 99_00 },
+  'hamburg-grand': { id: 'hamburg-grand', name: 'Hamburg Grand', tier: 'grand', price_per_person_cents: 199_00 },
+  'hannover-classic': { id: 'hannover-classic', name: 'Hannover Classic', tier: 'classic', price_per_person_cents: 149_00 },
+  'hannover-essential': { id: 'hannover-essential', name: 'Hannover Essential', tier: 'essential', price_per_person_cents: 99_00 },
+  'hannover-grand': { id: 'hannover-grand', name: 'Hannover Grand', tier: 'grand', price_per_person_cents: 199_00 },
+};
+const CITY_NAMES: Record<string, string> = { berlin: 'Berlin', hamburg: 'Hamburg', hannover: 'Hannover' };
+const SERVICE_FEE_RATE = 0.10;
+const MIN_SERVICE_FEE_CENTS = 5000;
 
 // In E2E mode, we mock the payment
 const IS_E2E = process.env.EXPO_PUBLIC_E2E_MODE === 'true';
@@ -21,24 +39,52 @@ const IS_E2E = process.env.EXPO_PUBLIC_E2E_MODE === 'true';
 type PaymentStep = 'ready' | 'creating_booking' | 'processing_payment' | 'confirming';
 
 export default function PaymentScreen() {
-  const { eventId } = useLocalSearchParams<{ eventId: string }>();
+  const { eventId, packageId, cityId: paramCityId, participants: paramParticipants } = useLocalSearchParams<{ eventId: string; packageId?: string; cityId?: string; participants?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('ready');
+  const isDraft = eventId === 'draft';
+  const { t } = useTranslation();
 
-  const {
-    event,
-    package: pkg,
-    pricing,
-    excludeHonoree,
-    isLoading,
-  } = useBookingFlow(eventId);
+  // For real events, use the booking flow hook
+  const bookingFlow = useBookingFlow(isDraft ? undefined : eventId, packageId);
+
+  // Wizard store data for draft mode
+  const wizardCityId = useWizardStore((s) => s.cityId);
+  const wizardParticipantCount = useWizardStore((s) => s.participantCount);
+  const wizardHonoreeName = useWizardStore((s) => s.honoreeName);
+
+  // Resolve package
+  const draftPkg = packageId ? FALLBACK_PKG[packageId] : null;
+  const pkg = isDraft ? draftPkg : (bookingFlow.package || draftPkg);
+
+  // Draft pricing
+  const urlParticipantCount = paramParticipants ? parseInt(paramParticipants, 10) : null;
+  const draftPricing = useMemo(() => {
+    if (!draftPkg) return null;
+    const totalParticipants = urlParticipantCount || wizardParticipantCount || 10;
+    const payingCount = Math.max(1, totalParticipants - 1);
+    const perPersonPrice = draftPkg.price_per_person_cents;
+    // Package Base is ALWAYS price × total participants (fixed amount)
+    const packagePrice = perPersonPrice * totalParticipants;
+    const serviceFee = Math.max(Math.round(packagePrice * SERVICE_FEE_RATE), MIN_SERVICE_FEE_CENTS);
+    const total = packagePrice + serviceFee;
+    // Only per-person cost changes based on exclude honoree toggle
+    const perPerson = Math.ceil(total / payingCount);
+    return { packagePriceCents: packagePrice, serviceFeeCents: serviceFee, totalCents: total, perPersonCents: perPerson, payingParticipantCount: payingCount };
+  }, [draftPkg, urlParticipantCount, wizardParticipantCount]);
+
+  const effectiveCityId = paramCityId || wizardCityId;
+  const event = isDraft ? { city: { name: effectiveCityId ? CITY_NAMES[effectiveCityId] || effectiveCityId : 'Unknown' }, honoree_name: wizardHonoreeName || 'Guest' } : bookingFlow.event;
+  const pricing = isDraft ? draftPricing : bookingFlow.pricing;
+  const excludeHonoree = isDraft ? true : bookingFlow.excludeHonoree;
+  const isLoading = isDraft ? false : bookingFlow.isLoading;
 
   const createBookingMutation = useCreateBooking();
   const updatePaymentMutation = useUpdatePaymentStatus();
   const { processPayment, isLoading: isPaymentLoading, showError } = usePaymentSheet();
 
-  if (isLoading || !event || !pkg || !pricing) {
+  if (isLoading || !pkg || !pricing) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
         <Spinner size="large" color="$primary" />
@@ -57,13 +103,13 @@ export default function PaymentScreen() {
   const getStepMessage = () => {
     switch (paymentStep) {
       case 'creating_booking':
-        return 'Creating your booking...';
+        return t.booking.creatingBooking;
       case 'processing_payment':
-        return 'Processing payment...';
+        return t.booking.processingPayment;
       case 'confirming':
-        return 'Confirming your booking...';
+        return t.booking.confirmingBooking;
       default:
-        return 'Preparing...';
+        return t.booking.preparing;
     }
   };
 
@@ -71,7 +117,42 @@ export default function PaymentScreen() {
     if (!eventId) return;
 
     try {
-      // Step 1: Create booking record
+      // Draft mode or E2E: prompt user then simulate payment flow
+      if (isDraft || IS_E2E) {
+        const tr = getTranslation();
+        const confirmed = await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            'Demo Mode',
+            'In production, Stripe\'s payment sheet would open here for card details. Continue with simulated payment?',
+            [
+              { text: tr.wizard.cancel, style: 'cancel', onPress: () => resolve(false) },
+              { text: 'Continue', onPress: () => resolve(true) },
+            ]
+          );
+        });
+        if (!confirmed) return;
+
+        setPaymentStep('creating_booking');
+        await new Promise(resolve => setTimeout(resolve, 800));
+
+        setPaymentStep('processing_payment');
+        await new Promise(resolve => setTimeout(resolve, 1200));
+
+        setPaymentStep('confirming');
+        await new Promise(resolve => setTimeout(resolve, 600));
+
+        // Navigate to confirmation with package info via URL params
+        const confirmParams = new URLSearchParams();
+        if (packageId) confirmParams.set('packageId', packageId);
+        if (paramCityId) confirmParams.set('cityId', paramCityId);
+        if (paramParticipants) confirmParams.set('participants', paramParticipants);
+        confirmParams.set('total', String(pricing.totalCents));
+        const qs = confirmParams.toString() ? `?${confirmParams.toString()}` : '';
+        router.replace(`/booking/${eventId}/confirmation${qs}`);
+        return;
+      }
+
+      // Real event: create actual booking record
       setPaymentStep('creating_booking');
       const booking = await createBookingMutation.mutateAsync({
         event_id: eventId,
@@ -84,22 +165,7 @@ export default function PaymentScreen() {
         per_person_cents: pricing.perPersonCents,
       });
 
-      if (IS_E2E) {
-        // In E2E mode, simulate successful payment
-        setPaymentStep('processing_payment');
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        setPaymentStep('confirming');
-        await updatePaymentMutation.mutateAsync({
-          bookingId: booking.id,
-          status: 'completed',
-        });
-
-        router.replace(`/booking/${eventId}/confirmation`);
-        return;
-      }
-
-      // Step 2: Process payment with Stripe
+      // Process payment with Stripe
       setPaymentStep('processing_payment');
       const { success, error } = await processPayment({
         bookingId: booking.id,
@@ -109,34 +175,32 @@ export default function PaymentScreen() {
 
       if (!success) {
         if (error === 'Payment cancelled') {
-          // User cancelled - reset to ready state
           setPaymentStep('ready');
-          // Keep booking in pending state for retry
           return;
         }
         throw new Error(error || 'Payment failed');
       }
 
-      // Step 3: Confirm booking (webhook will also handle this, but we update locally for UX)
+      // Confirm booking
       setPaymentStep('confirming');
       await updatePaymentMutation.mutateAsync({
         bookingId: booking.id,
         status: 'completed',
       });
 
-      // Navigate to confirmation
       router.replace(`/booking/${eventId}/confirmation`);
     } catch (error) {
       console.error('Payment failed:', error);
       setPaymentStep('ready');
 
       const errorMessage = error instanceof Error ? error.message : 'Payment failed';
+      const tr = getTranslation();
       Alert.alert(
-        'Payment Failed',
+        tr.booking.paymentFailed,
         errorMessage === 'Payment cancelled'
-          ? 'You cancelled the payment. You can try again when ready.'
-          : `There was an error processing your payment: ${errorMessage}. Please try again.`,
-        [{ text: 'OK' }]
+          ? tr.booking.paymentCancelled
+          : tr.booking.paymentErrorDetail.replace('{{error}}', errorMessage),
+        [{ text: tr.common.ok }]
       );
     }
   };
@@ -166,23 +230,31 @@ export default function PaymentScreen() {
           opacity={isProcessing ? 0.5 : 1}
           testID="back-button"
         >
-          <Ionicons name="arrow-back" size={24} color="#1A202C" />
+          <Ionicons name="arrow-back" size={24} color="white" />
         </XStack>
         <Text flex={1} fontSize="$5" fontWeight="700" color="$textPrimary" textAlign="center">
-          Payment
+          {t.booking.paymentTitle}
         </Text>
         <YStack width={40} />
       </XStack>
 
-      <YStack flex={1} padding="$4" justifyContent="center" alignItems="center">
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: isProcessing ? 16 : 120,
+          ...(isProcessing ? { flex: 1, justifyContent: 'center', alignItems: 'center' } : {}),
+        }}
+        showsVerticalScrollIndicator={false}
+      >
         {isProcessing ? (
-          <YStack alignItems="center" gap="$4">
+          <YStack flex={1} justifyContent="center" alignItems="center" gap="$4">
             <Spinner size="large" color="$primary" />
             <Text fontSize="$4" fontWeight="600" color="$textPrimary">
               {getStepMessage()}
             </Text>
             <Text fontSize="$2" color="$textSecondary" textAlign="center">
-              Please wait while we process your payment.{'\n'}Do not close this screen.
+              {t.booking.pleaseWait}{'\n'}{t.booking.doNotClose}
             </Text>
 
             {/* Progress indicator */}
@@ -217,13 +289,13 @@ export default function PaymentScreen() {
             <Card testID="payment-amount-card">
               <YStack alignItems="center" gap="$2">
                 <Text fontSize="$2" color="$textSecondary">
-                  Total Amount
+                  {t.booking.totalAmount}
                 </Text>
                 <Text fontSize="$9" fontWeight="800" color="$primary">
                   {formatPrice(pricing.totalCents)}
                 </Text>
                 <Text fontSize="$2" color="$textSecondary">
-                  {formatPrice(pricing.perPersonCents)} per person × {pricing.payingParticipantCount} guests
+                  {t.booking.perPersonGuests.replace('{{price}}', formatPrice(pricing.perPersonCents)).replace('{{count}}', String(pricing.payingParticipantCount))}
                 </Text>
               </YStack>
             </Card>
@@ -232,7 +304,7 @@ export default function PaymentScreen() {
             <Card testID="payment-method-card">
               <YStack gap="$3">
                 <Text fontSize="$4" fontWeight="700" color="$textPrimary">
-                  Payment Method
+                  {t.booking.paymentMethod}
                 </Text>
 
                 {/* Card Payment */}
@@ -247,30 +319,37 @@ export default function PaymentScreen() {
                   <Ionicons name="card" size={24} color="#258CF4" />
                   <YStack flex={1}>
                     <Text fontWeight="600" color="$textPrimary">
-                      Credit or Debit Card
+                      {t.booking.creditOrDebit}
                     </Text>
                     <Text fontSize="$2" color="$textSecondary">
-                      Visa, Mastercard, Amex
+                      {t.booking.visaMastercard}
                     </Text>
                   </YStack>
                   <Ionicons name="checkmark-circle" size={24} color="#258CF4" />
                 </XStack>
 
-                {/* Apple Pay / Google Pay info */}
+                {/* Platform-specific Pay — Coming Soon */}
                 <XStack
                   padding="$3"
                   backgroundColor="$backgroundHover"
                   borderRadius="$lg"
                   alignItems="center"
                   gap="$3"
+                  opacity={0.5}
                 >
-                  <XStack gap="$2">
-                    <Ionicons name="logo-apple" size={20} color="#1A202C" />
-                    <Ionicons name="logo-google" size={20} color="#1A202C" />
-                  </XStack>
-                  <Text fontSize="$2" color="$textSecondary" flex={1}>
-                    Apple Pay and Google Pay also available
-                  </Text>
+                  <Ionicons
+                    name={Platform.OS === 'ios' ? 'logo-apple' : 'logo-google'}
+                    size={22}
+                    color="white"
+                  />
+                  <YStack flex={1}>
+                    <Text fontSize="$3" fontWeight="600" color="$textPrimary">
+                      {Platform.OS === 'ios' ? 'Apple Pay' : 'Google Pay'}
+                    </Text>
+                    <Text fontSize="$1" color="$textSecondary">
+                      Coming Soon
+                    </Text>
+                  </YStack>
                 </XStack>
               </YStack>
             </Card>
@@ -309,7 +388,7 @@ export default function PaymentScreen() {
             >
               <Ionicons name="lock-closed" size={18} color="#47B881" />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
-                Your payment is secured with 256-bit SSL encryption via Stripe
+                {t.booking.secureEncryption}
               </Text>
             </XStack>
 
@@ -323,12 +402,12 @@ export default function PaymentScreen() {
             >
               <Ionicons name="information-circle-outline" size={18} color="#64748B" style={{ marginTop: 2 }} />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
-                Free cancellation up to 48 hours before the event. After that, a 50% cancellation fee applies.
+                {t.booking.cancellationPayment}
               </Text>
             </XStack>
           </YStack>
         )}
-      </YStack>
+      </ScrollView>
 
       {/* Footer */}
       {!isProcessing && (
@@ -348,7 +427,7 @@ export default function PaymentScreen() {
             onPress={handlePayment}
             testID="pay-now-button"
           >
-            Pay {formatPrice(pricing.totalCents)}
+            {t.booking.payButtonLabel.replace('{{amount}}', formatPrice(pricing.totalCents))}
           </Button>
         </XStack>
       )}

@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { styled, XStack, Text, GetProps } from 'tamagui';
+import { Ionicons } from '@expo/vector-icons';
 
 const StyledChip = styled(XStack, {
   name: 'Chip',
@@ -97,6 +98,7 @@ export interface ChipProps extends Omit<StyledChipProps, 'children'> {
   label: string;
   icon?: React.ReactNode;
   iconPosition?: 'left' | 'right';
+  showCheckmark?: boolean; // Show checkmark icon when selected
   onPress?: () => void;
   testID?: string;
 }
@@ -105,6 +107,7 @@ export function Chip({
   label,
   icon,
   iconPosition = 'left',
+  showCheckmark = true,
   selected = false,
   disabled = false,
   size = 'md',
@@ -112,6 +115,9 @@ export function Chip({
   testID,
   ...props
 }: ChipProps) {
+  // Icon size based on chip size
+  const iconSize = size === 'sm' ? 14 : size === 'lg' ? 18 : 16;
+
   return (
     <StyledChip
       {...props}
@@ -129,6 +135,14 @@ export function Chip({
         {label}
       </StyledChipText>
       {icon && iconPosition === 'right' && icon}
+      {showCheckmark && (
+        <Ionicons
+          name="checkmark-circle"
+          size={iconSize}
+          color={selected ? 'white' : 'transparent'}
+          style={{ marginLeft: 2 }}
+        />
+      )}
     </StyledChip>
   );
 }
