@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Event Summary</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=Poppins:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#4a6fa5",
+                        "secondary": "#2D3748", // Deep Navy/Charcoal requested
+                        "background-light": "#f6f7f7",
+                        "background-dark": "#15181d", // Default base, but we will override main bg as per request
+                        "glass": "rgba(255, 255, 255, 0.05)",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "heading": ["Poppins", "sans-serif"],
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem", // 16px approx
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(45, 55, 72, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-overlay {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 100%);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-secondary text-white font-display antialiased selection:bg-primary selection:text-white">
+<div class="relative flex h-full min-h-screen w-full flex-col overflow-x-hidden max-w-md mx-auto shadow-2xl bg-secondary">
+<header class="flex items-center p-4 pt-6 pb-2 justify-between sticky top-0 z-20 bg-secondary/95 backdrop-blur-sm">
+<div class="text-white flex size-12 shrink-0 items-center justify-start cursor-pointer hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-2xl">arrow_back</span>
+</div>
+<h2 class="text-white text-lg font-heading font-bold leading-tight tracking-[-0.015em] flex-1 text-center">Event Summary</h2>
+<div class="flex w-12 items-center justify-end">
+<button class="flex size-10 items-center justify-center rounded-full hover:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-white">edit</span>
+</button>
+</div>
+</header>
+<main class="flex-1 px-4 pb-24">
+<div class="mt-4 mb-6">
+<h1 class="font-heading text-3xl font-bold text-white mb-1">Sarah's Bachelorette</h1>
+<p class="text-gray-400 text-sm">Let's make memories, not mistakes.</p>
+</div>
+<div class="glass-card rounded-lg p-5 mb-8 shadow-lg relative overflow-hidden group">
+<div class="absolute inset-0 glass-overlay pointer-events-none"></div>
+<div class="flex items-center justify-between py-3 border-b border-white/10">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">location_on</span>
+</div>
+<div>
+<p class="text-gray-400 text-xs font-medium uppercase tracking-wider">Location</p>
+<p class="text-white font-heading font-semibold">Las Vegas, NV</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-gray-500 text-sm">chevron_right</span>
+</div>
+<div class="flex items-center justify-between py-3 border-b border-white/10">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">calendar_month</span>
+</div>
+<div>
+<p class="text-gray-400 text-xs font-medium uppercase tracking-wider">Dates</p>
+<p class="text-white font-heading font-semibold">Nov 12 - Nov 14</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-gray-500 text-sm">chevron_right</span>
+</div>
+<div class="flex items-center justify-between py-3 pt-4">
+<div class="flex items-center gap-3">
+<div class="size-10 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined">nightlife</span>
+</div>
+<div>
+<p class="text-gray-400 text-xs font-medium uppercase tracking-wider">Vibe</p>
+<p class="text-white font-heading font-semibold">High Energy / Nightlife</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-gray-500 text-sm">chevron_right</span>
+</div>
+</div>
+<div class="mb-4">
+<h3 class="font-heading text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                    Planning Tools
+                </h3>
+<div class="grid grid-cols-2 gap-4">
+<button class="glass-card rounded-lg p-4 flex flex-col gap-3 items-start text-left hover:bg-white/5 transition-colors relative overflow-hidden h-40">
+<div class="absolute top-0 right-0 p-3">
+<span class="material-symbols-outlined text-gray-500">arrow_outward</span>
+</div>
+<div class="size-12 rounded-full bg-pink-500/20 flex items-center justify-center text-pink-400 mb-auto">
+<span class="material-symbols-outlined">diversity_3</span>
+</div>
+<div>
+<h4 class="text-white font-heading font-semibold text-sm leading-tight">Manage Invitations</h4>
+<p class="text-xs text-green-400 mt-1 font-medium">8/10 Confirmed</p>
+</div>
+</button>
+<button class="glass-card rounded-lg p-4 flex flex-col gap-3 items-start text-left hover:bg-white/5 transition-colors relative overflow-hidden h-40">
+<div class="absolute top-3 right-3 flex size-2.5">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+<span class="relative inline-flex rounded-full size-2.5 bg-red-500"></span>
+</div>
+<div class="size-12 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 mb-auto">
+<span class="material-symbols-outlined">forum</span>
+</div>
+<div>
+<h4 class="text-white font-heading font-semibold text-sm leading-tight">Group Chat</h4>
+<p class="text-xs text-gray-400 mt-1">2 Unread Polls</p>
+</div>
+</button>
+<button class="glass-card rounded-lg p-4 flex flex-col gap-3 items-start text-left hover:bg-white/5 transition-colors relative overflow-hidden h-40">
+<div class="size-12 rounded-full bg-green-500/20 flex items-center justify-center text-green-400 mb-auto">
+<span class="material-symbols-outlined">attach_money</span>
+</div>
+<div>
+<h4 class="text-white font-heading font-semibold text-sm leading-tight">Budget</h4>
+<p class="text-xs text-gray-400 mt-1">$450/person est.</p>
+</div>
+</button>
+<button class="glass-card rounded-lg p-4 flex flex-col gap-3 items-start text-left hover:bg-white/5 transition-colors relative overflow-hidden h-40">
+<div class="size-12 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 mb-auto">
+<span class="material-symbols-outlined">stars</span>
+</div>
+<div>
+<h4 class="text-white font-heading font-semibold text-sm leading-tight">Packages</h4>
+<p class="text-xs text-gray-400 mt-1">VIP Tables Selected</p>
+</div>
+</button>
+</div>
+</div>
+<div class="relative w-full h-32 rounded-lg overflow-hidden mt-6 mb-20 group">
+<img alt="Las Vegas strip at night neon lights" class="w-full h-full object-cover opacity-60 group-hover:opacity-80 transition-opacity duration-500" data-alt="Nighttime cityscape with bright neon lights" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCbKEBzpvvDvy4Nqn0UQWoZLIaVXfbtRonDXRj47Esd-_s9v6yzmw4mqlRODRhjJVMM4o1oIqZBP363ojfQGQYHCxjva72QwC55lz0OugTlZwFhVnJQCCJuAD530wyP5mwJ0JbZtWjkLQa6RBMQKYIa2cMdsaleatXPdorCMs-_AZAqFsGODAo_Hqp_BzkROP8UDx2lg2ceSnxlsoAKjuy_bfBIewNP_y0Rp0vYneBycTfo-VsI-B_R43aLMzrbgRlpgJ4AmIJaRX0"/>
+<div class="absolute bottom-0 left-0 p-4 bg-gradient-to-t from-black/80 to-transparent w-full">
+<p class="text-xs font-bold text-white uppercase tracking-widest mb-1">Destination Guide</p>
+<div class="flex items-center justify-between">
+<span class="text-sm font-medium text-gray-200">Top Rated Spots in Vegas</span>
+<span class="material-symbols-outlined text-white text-sm">arrow_forward</span>
+</div>
+</div>
+</div>
+</main>
+<nav class="fixed bottom-0 left-0 right-0 z-40 border-t border-white/5 bg-secondary/95 backdrop-blur-md px-2 pb-6 pt-2 safe-area-bottom max-w-md mx-auto">
+<div class="flex items-center justify-between px-2">
+<a class="flex flex-col items-center justify-center gap-1 text-primary w-14 group" href="#">
+<div class="group-hover:bg-primary/10 rounded-full px-2 py-1 transition-colors">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">event</span>
+</div>
+<span class="text-[10px] font-medium tracking-wide">Events</span>
+</a>
+<a class="flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-white transition-colors w-14 group" href="#">
+<div class="group-hover:bg-white/5 rounded-full px-2 py-1 transition-colors">
+<span class="material-symbols-outlined text-[24px]">chat_bubble</span>
+</div>
+<span class="text-[10px] font-medium tracking-wide">Chat</span>
+</a>
+<div class="relative flex items-center justify-center w-14">
+<button class="flex items-center justify-center size-12 rounded-full bg-primary text-white shadow-lg shadow-primary/40 hover:scale-105 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[32px]">add</span>
+</button>
+</div>
+<a class="flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-white transition-colors w-14 group" href="#">
+<div class="group-hover:bg-white/5 rounded-full px-2 py-1 transition-colors">
+<span class="material-symbols-outlined text-[24px]">attach_money</span>
+</div>
+<span class="text-[10px] font-medium tracking-wide">Budget</span>
+</a>
+<a class="flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-white transition-colors w-14 group" href="#">
+<div class="group-hover:bg-white/5 rounded-full px-2 py-1 transition-colors">
+<span class="material-symbols-outlined text-[24px]">person</span>
+</div>
+<span class="text-[10px] font-medium tracking-wide">Profile</span>
+</a>
+</div>
+</nav>
+</div>
+</body></html>

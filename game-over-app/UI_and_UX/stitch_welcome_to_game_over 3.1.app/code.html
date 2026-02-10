@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Upcoming Events Dashboard</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Poppins:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#4a6fa5",
+                        "primary-dark": "#3b5984",
+                        "background-light": "#f6f7f7",
+                        "background-dark": "#15181d",
+                        "surface-dark": "#1e2329",
+                        "surface-card": "#23272f",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "heading": ["Poppins", "sans-serif"],
+                    },
+                    borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "2xl": "2rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .glass-nav {
+            background: rgba(21, 24, 29, 0.85);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        /* Custom scrollbar hiding */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-gray-900 dark:text-white font-display antialiased selection:bg-primary selection:text-white">
+<div class="relative flex h-full min-h-screen w-full flex-col overflow-x-hidden pb-24">
+<!-- Top App Bar -->
+<div class="sticky top-0 z-30 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md px-4 py-3 pb-2 flex items-center justify-between border-b border-gray-200 dark:border-white/5">
+<div class="flex items-center gap-3">
+<div class="relative">
+<div class="bg-center bg-no-repeat bg-cover rounded-full size-10 border-2 border-white/10 shadow-sm" data-alt="User profile portrait" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBpEe9cx_urXpTopsPMsrNafpz9QiEje_c2PqsAMWhrcLx7wQmMMHnGjXh6DI9fKQYH5yi9grElW2I_5qAgE0QDC_Y2ePVmQoaKXgVPy9ulPGcrsrdXNKtSBQ0HHRmGuJWwoEPeSWB7MuMpruBVaCI1S8RETj0lUpvceWl0NuhqzvNFT9pnc6dnZ8I07MiMVsOck2PHRjbN1fpf-Acqx_fPYj-fJiA71cwdUyOqnbbOKA3tITPOFyCOZ5B6UeTHmwxlIH-MrLQkPRM");'></div>
+<div class="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full border-2 border-background-dark"></div>
+</div>
+<h2 class="text-white text-xl font-heading font-bold leading-tight tracking-tight">My Events</h2>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center justify-center rounded-full size-10 bg-surface-card hover:bg-white/10 transition-colors text-white relative">
+<span class="material-symbols-outlined !text-[24px]">notifications</span>
+<span class="absolute top-2 right-2.5 size-2 bg-red-500 rounded-full"></span>
+</button>
+</div>
+</div>
+<!-- Filter Segmented Buttons -->
+<div class="px-4 py-4">
+<div class="flex h-12 w-full items-center justify-center rounded-xl bg-surface-dark p-1 shadow-inner">
+<label class="group flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-lg px-2 transition-all duration-200 has-[:checked]:bg-primary has-[:checked]:shadow-md has-[:checked]:text-white text-gray-400">
+<span class="truncate text-sm font-medium font-heading tracking-wide">All</span>
+<input checked="" class="invisible w-0 fixed" name="event-filter" type="radio" value="All"/>
+</label>
+<label class="group flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-lg px-2 transition-all duration-200 has-[:checked]:bg-primary has-[:checked]:shadow-md has-[:checked]:text-white text-gray-400">
+<span class="truncate text-sm font-medium font-heading tracking-wide">Organizing</span>
+<input class="invisible w-0 fixed" name="event-filter" type="radio" value="Organizing"/>
+</label>
+<label class="group flex cursor-pointer h-full flex-1 items-center justify-center overflow-hidden rounded-lg px-2 transition-all duration-200 has-[:checked]:bg-primary has-[:checked]:shadow-md has-[:checked]:text-white text-gray-400">
+<span class="truncate text-sm font-medium font-heading tracking-wide">Attending</span>
+<input class="invisible w-0 fixed" name="event-filter" type="radio" value="Attending"/>
+</label>
+</div>
+</div>
+<!-- Main Content List -->
+<div class="flex flex-col gap-4 px-4">
+<!-- Card 1: Organizer (Active Planning) -->
+<div class="group relative flex flex-col gap-3 rounded-2xl bg-surface-card p-4 shadow-lg ring-1 ring-white/5 hover:ring-primary/50 transition-all duration-300">
+<div class="flex gap-4">
+<!-- Image -->
+<div class="relative shrink-0 overflow-hidden rounded-xl h-24 w-24 shadow-md group-hover:scale-105 transition-transform duration-500">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
+<div class="bg-center bg-no-repeat bg-cover h-full w-full" data-alt="Casino night party setup" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuARmTdvP6sdVb3ID3tZocBWu9Qquh4TFqmKOsLbauYifTBEQz_LvEwVmML_TUPPoLmsH9adCTyQKiijLKfwpR2HbMcNroJA3zxlinekdUcQ8up85R5C2K2d1c84DxD-5119FVdRSnU-YojYsd597lW7oZNRHfSAFHI5Vw1AZbnprn9grfRHU3oGAoTy-o9Jg3CbG7S7hdCg1TbBfebmD4VAfhHjFOBV0PO20iki8I1a_ajgbAqRbv0GHvOQaqnW-foY9Lv62VD7ywE");'></div>
+</div>
+<!-- Content -->
+<div class="flex flex-1 flex-col justify-between py-0.5">
+<div>
+<div class="flex justify-between items-start">
+<h3 class="text-white text-lg font-heading font-bold leading-tight line-clamp-1">Ethan’s Bachelor Party</h3>
+<button class="text-gray-400 hover:text-white transition-colors">
+<span class="material-symbols-outlined !text-[20px]">more_horiz</span>
+</button>
+</div>
+<div class="flex items-center gap-1.5 mt-1 text-gray-400 text-xs font-medium">
+<span class="material-symbols-outlined !text-[14px]">calendar_today</span>
+<span>Nov 12 - Nov 14</span>
+</div>
+</div>
+<div class="flex items-center gap-2 mt-2">
+<span class="inline-flex items-center rounded-lg bg-primary/20 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-200 border border-primary/30">
+                                Organizer
+                            </span>
+<span class="text-[10px] font-medium text-gray-400">• 3 days left</span>
+</div>
+</div>
+</div>
+<!-- Progress Section -->
+<div class="mt-1 space-y-2 bg-surface-dark/50 p-3 rounded-xl border border-white/5">
+<div class="flex justify-between items-center text-xs">
+<span class="text-gray-300 font-medium flex items-center gap-1.5">
+<span class="size-2 rounded-full bg-yellow-500 animate-pulse"></span>
+                            Planning Phase
+                        </span>
+<span class="text-primary font-bold">45%</span>
+</div>
+<div class="h-2 w-full rounded-full bg-gray-700/50 overflow-hidden">
+<div class="h-full rounded-full bg-gradient-to-r from-primary to-blue-400 shadow-[0_0_10px_rgba(74,111,165,0.5)]" style="width: 45%;"></div>
+</div>
+</div>
+</div>
+<!-- Card 2: Guest (Complete) -->
+<div class="group relative flex flex-col gap-3 rounded-2xl bg-surface-card p-4 shadow-lg ring-1 ring-white/5 hover:ring-primary/50 transition-all duration-300">
+<div class="flex gap-4">
+<!-- Image -->
+<div class="relative shrink-0 overflow-hidden rounded-xl h-24 w-24 shadow-md group-hover:scale-105 transition-transform duration-500">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
+<div class="bg-center bg-no-repeat bg-cover h-full w-full" data-alt="Tropical beach vacation scenery" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBlGEvIV1KmTTyc1ieTsjG1xyphPaq2oX8rM5kpge2pySOcDOE2MltUt39f7UeHzk_4J9fcVTZLjW-XC76r1XBMY1Cv0b7uJ9IvA5-ylOrXNBrBjXyIQQCKiTvJQHCiLd_0pIIZttwV1iwJOvoz94FaduPc2suUDIR3pFKQaHfpuVpL2Frm-_7DS5hk3-VNfEvg8RyS7dj-pg16dj5y4DtF3NTfb0RzvWaoTiEweL4tK-wj65gD-hZBhGKs2hkuCHEZxcnEdb_VC8E");'></div>
+</div>
+<!-- Content -->
+<div class="flex flex-1 flex-col justify-between py-0.5">
+<div>
+<div class="flex justify-between items-start">
+<h3 class="text-white text-lg font-heading font-bold leading-tight line-clamp-1">Sarah's Bach Weekend</h3>
+<button class="text-gray-400 hover:text-white transition-colors">
+<span class="material-symbols-outlined !text-[20px]">more_horiz</span>
+</button>
+</div>
+<div class="flex items-center gap-1.5 mt-1 text-gray-400 text-xs font-medium">
+<span class="material-symbols-outlined !text-[14px]">calendar_today</span>
+<span>Dec 05 - Dec 08</span>
+</div>
+</div>
+<div class="flex items-center gap-2 mt-2">
+<span class="inline-flex items-center rounded-lg bg-gray-700/50 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-300 border border-white/10">
+                                Guest
+                            </span>
+<span class="text-[10px] font-medium text-gray-400">• Paid</span>
+</div>
+</div>
+</div>
+<!-- Status Section (Ready) -->
+<div class="mt-1 flex items-center justify-between bg-green-900/10 p-3 rounded-xl border border-green-500/20">
+<span class="text-xs text-green-400 font-medium flex items-center gap-1.5">
+<span class="material-symbols-outlined !text-[16px] text-green-400">check_circle</span>
+                        All Set &amp; Ready
+                    </span>
+<span class="text-green-400 text-xs font-bold">100%</span>
+</div>
+</div>
+<!-- Card 3: Organizer (Early Stage) -->
+<div class="group relative flex flex-col gap-3 rounded-2xl bg-surface-card p-4 shadow-lg ring-1 ring-white/5 hover:ring-primary/50 transition-all duration-300">
+<div class="flex gap-4">
+<!-- Image -->
+<div class="relative shrink-0 overflow-hidden rounded-xl h-24 w-24 shadow-md group-hover:scale-105 transition-transform duration-500">
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
+<div class="bg-center bg-no-repeat bg-cover h-full w-full" data-alt="Dark moody poker cards background" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBXbF60o0Jfm_8MhoA0LAQpGRHYch2cEJZrsWpZKoyewR1r1ohuRDEVV5fmQ3BWipgj8_FxUDEx8Cphcxz3iWtO-p2iUrtl4p-qwIZnIEsPMfDi88YGMaoTv2mke4jUkSOEBYX7KHRrE2RuMMDi1tLvtsNBUQKyaClF7TSZHXlxwCtGqU7SPw6bbmVCeb7MoO2Goddt2xOos108NRaLez9Ia17hp_wcp01YkCTeoHOXtStqLQGO5Jy6pB_hB9LzROaLgSNMFszQwJc");'></div>
+</div>
+<!-- Content -->
+<div class="flex flex-1 flex-col justify-between py-0.5">
+<div>
+<div class="flex justify-between items-start">
+<h3 class="text-white text-lg font-heading font-bold leading-tight line-clamp-1">Mike's Poker Night</h3>
+<button class="text-gray-400 hover:text-white transition-colors">
+<span class="material-symbols-outlined !text-[20px]">more_horiz</span>
+</button>
+</div>
+<div class="flex items-center gap-1.5 mt-1 text-gray-400 text-xs font-medium">
+<span class="material-symbols-outlined !text-[14px]">calendar_today</span>
+<span>Jan 20 - Jan 21</span>
+</div>
+</div>
+<div class="flex items-center gap-2 mt-2">
+<span class="inline-flex items-center rounded-lg bg-primary/20 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-blue-200 border border-primary/30">
+                                Organizer
+                            </span>
+</div>
+</div>
+</div>
+<!-- Progress Section -->
+<div class="mt-1 space-y-2 bg-surface-dark/50 p-3 rounded-xl border border-white/5">
+<div class="flex justify-between items-center text-xs">
+<span class="text-gray-300 font-medium flex items-center gap-1.5">
+<span class="size-2 rounded-full bg-red-400"></span>
+                            Budgeting
+                        </span>
+<span class="text-gray-400 font-bold">15%</span>
+</div>
+<div class="h-2 w-full rounded-full bg-gray-700/50 overflow-hidden">
+<div class="h-full rounded-full bg-gray-500" style="width: 15%;"></div>
+</div>
+</div>
+</div>
+<!-- Create New Event CTA -->
+<button class="flex w-full items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-gray-700 bg-transparent p-6 text-gray-400 hover:border-primary hover:bg-surface-card hover:text-primary transition-all duration-300 group mt-2 mb-6">
+<div class="flex size-10 items-center justify-center rounded-full bg-gray-800 group-hover:bg-primary/20 transition-colors">
+<span class="material-symbols-outlined group-hover:text-primary">add</span>
+</div>
+<span class="text-sm font-semibold font-heading">Start New Plan</span>
+</button>
+</div>
+<!-- Bottom Navigation (Glassmorphism) -->
+<div class="fixed bottom-0 left-0 w-full glass-nav z-40 pb-safe">
+<div class="flex items-center justify-around h-16 max-w-lg mx-auto px-2">
+<button class="flex flex-col items-center justify-center w-16 gap-1 text-primary">
+<span class="material-symbols-outlined !text-[26px]">event_note</span>
+<span class="text-[10px] font-medium">Events</span>
+</button>
+<button class="flex flex-col items-center justify-center w-16 gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+<span class="material-symbols-outlined !text-[26px]">chat_bubble_outline</span>
+<span class="text-[10px] font-medium">Chat</span>
+</button>
+<div class="relative -top-5">
+<button class="flex items-center justify-center size-14 bg-primary rounded-full shadow-[0_4px_14px_0_rgba(74,111,165,0.39)] text-white hover:bg-primary-dark transition-colors border-4 border-background-dark">
+<span class="material-symbols-outlined !text-[28px]">add</span>
+</button>
+</div>
+<button class="flex flex-col items-center justify-center w-16 gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+<span class="material-symbols-outlined !text-[26px]">account_balance_wallet</span>
+<span class="text-[10px] font-medium">Budget</span>
+</button>
+<button class="flex flex-col items-center justify-center w-16 gap-1 text-gray-500 hover:text-gray-300 transition-colors">
+<span class="material-symbols-outlined !text-[26px]">person</span>
+<span class="text-[10px] font-medium">Profile</span>
+</button>
+</div>
+<!-- Safe area spacing for mobile -->
+<div class="h-5 w-full"></div>
+</div>
+</div>
+</body></html>

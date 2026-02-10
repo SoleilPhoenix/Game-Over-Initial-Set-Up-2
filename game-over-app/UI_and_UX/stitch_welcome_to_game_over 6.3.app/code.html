@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Account Settings</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;family=Poppins:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#4a6fa5",
+                        "secondary": "#2D3748", // Deep Navy/Charcoal requested
+                        "background-light": "#f6f7f7",
+                        "background-dark": "#15181d", 
+                        "glass": "rgba(255, 255, 255, 0.05)",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "heading": ["Poppins", "sans-serif"],
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem", // 16px approx
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-card {
+            background: rgba(45, 55, 72, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .glass-overlay {
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 100%);
+        }.toggle-checkbox:checked {
+            right: 0;
+            border-color: #4a6fa5;
+        }
+    </style>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-secondary text-white font-display antialiased selection:bg-primary selection:text-white">
+<div class="relative flex h-full min-h-screen w-full flex-col overflow-x-hidden max-w-md mx-auto shadow-2xl bg-secondary">
+<header class="flex items-center p-4 pt-6 pb-2 justify-between sticky top-0 z-20 bg-secondary/95 backdrop-blur-sm">
+<div class="text-white flex size-12 shrink-0 items-center justify-start cursor-pointer hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-2xl">arrow_back</span>
+</div>
+<h2 class="text-white text-lg font-heading font-bold leading-tight tracking-[-0.015em] flex-1 text-center">Account Settings</h2>
+<div class="flex w-12 items-center justify-end">
+</div>
+</header>
+<main class="flex-1 px-4 pb-24">
+<div class="flex flex-col items-center justify-center mt-6 mb-8">
+<div class="relative group cursor-pointer">
+<div class="size-24 rounded-full p-1 bg-gradient-to-br from-primary/50 to-transparent">
+<img alt="Profile" class="w-full h-full rounded-full object-cover border-2 border-secondary" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCm7lpj48GLsAWZaCU8kHKC-C0jAruoVJPchEo__hj6UlO16CklakZfx6F9HlvuMVzx1tlsMemAmxXWcR8Wiu8P6--fL5NlFpA4FWxqNRA7Fq6_l8Ls7aSPwTj0JCoivxvHHSMnnApp5Z_91siLzBSZ6m-BhLsSfdI7uqYy634WffdxTX6ZLlXAt2mReEjDjZHMUsA1MTHtnqD_KpHDdWa2DK44kTgqz_i1nrLPttYkOH2KfOgmXpNHgc1YgBm1igLKxzkhl3TfST0"/>
+</div>
+<div class="absolute bottom-0 right-0 bg-primary text-white rounded-full p-1.5 shadow-lg border-2 border-secondary group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-[16px] leading-none block">edit</span>
+</div>
+</div>
+<h1 class="font-heading text-xl font-bold text-white mt-4">Sarah Jenkins</h1>
+<p class="text-gray-400 text-sm">sarah.jenkins@example.com</p>
+</div>
+<div class="mb-6">
+<h3 class="text-gray-400 text-xs font-bold uppercase tracking-wider ml-1 mb-3">General</h3>
+<div class="glass-card rounded-lg overflow-hidden">
+<button class="w-full flex items-center justify-between p-4 border-b border-white/5 hover:bg-white/5 transition-colors text-left group">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded-full bg-white/5 flex items-center justify-center text-gray-300 group-hover:bg-primary/20 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">person</span>
+</div>
+<span class="text-white font-medium">Edit Profile</span>
+</div>
+<span class="material-symbols-outlined text-gray-500 text-sm">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between p-4 border-b border-white/5 hover:bg-white/5 transition-colors text-left group">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded-full bg-white/5 flex items-center justify-center text-gray-300 group-hover:bg-primary/20 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">lock</span>
+</div>
+<span class="text-white font-medium">Change Password</span>
+</div>
+<span class="material-symbols-outlined text-gray-500 text-sm">chevron_right</span>
+</button>
+<button class="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors text-left group">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded-full bg-white/5 flex items-center justify-center text-gray-300 group-hover:bg-primary/20 group-hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">language</span>
+</div>
+<span class="text-white font-medium">Language</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-gray-400 text-sm">English</span>
+<span class="material-symbols-outlined text-gray-500 text-sm">chevron_right</span>
+</div>
+</button>
+</div>
+</div>
+<div class="mb-6">
+<h3 class="text-gray-400 text-xs font-bold uppercase tracking-wider ml-1 mb-3">Notifications</h3>
+<div class="glass-card rounded-lg overflow-hidden">
+<div class="flex items-center justify-between p-4 border-b border-white/5">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded-full bg-white/5 flex items-center justify-center text-gray-300">
+<span class="material-symbols-outlined text-lg">notifications</span>
+</div>
+<div>
+<p class="text-white font-medium leading-tight">Push Notifications</p>
+<p class="text-gray-500 text-xs mt-0.5">Party updates &amp; alerts</p>
+</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary border border-gray-600 peer-checked:border-primary"></div>
+</label>
+</div>
+<div class="flex items-center justify-between p-4">
+<div class="flex items-center gap-3">
+<div class="size-8 rounded-full bg-white/5 flex items-center justify-center text-gray-300">
+<span class="material-symbols-outlined text-lg">mail</span>
+</div>
+<div>
+<p class="text-white font-medium leading-tight">Email Notifications</p>
+<p class="text-gray-500 text-xs mt-0.5">Digest &amp; summaries</p>
+</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary border border-gray-600 peer-checked:border-primary"></div>
+</label>
+</div>
+</div>
+</div>
+<div class="mb-8">
+<div class="glass-card rounded-lg overflow-hidden">
+<button class="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors text-left group">
+<div class="flex items-center gap-3">
+<span class="text-red-400 font-medium ml-1">Log Out</span>
+</div>
+<span class="material-symbols-outlined text-gray-500 text-sm">logout</span>
+</button>
+</div>
+<p class="text-center text-gray-600 text-xs mt-6 font-heading">Version 2.4.0</p>
+</div>
+</main>
+<nav class="fixed bottom-0 left-0 right-0 z-40 border-t border-white/5 bg-secondary/95 backdrop-blur-md px-4 pb-6 pt-3 safe-area-bottom max-w-md mx-auto">
+<div class="flex items-center justify-between gap-1">
+<a class="flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-white flex-1 group transition-colors" href="#">
+<div class="group-hover:bg-white/5 rounded-full px-3 py-1 transition-colors">
+<span class="material-symbols-outlined text-[24px]">calendar_month</span>
+</div>
+<span class="text-[10px] font-medium tracking-wide">Events</span>
+</a>
+<a class="flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-white flex-1 group transition-colors" href="#">
+<div class="group-hover:bg-white/5 rounded-full px-3 py-1 transition-colors">
+<span class="material-symbols-outlined text-[24px]">chat_bubble</span>
+</div>
+<span class="text-[10px] font-medium tracking-wide">Chat</span>
+</a>
+<div class="flex flex-col items-center justify-center flex-1">
+<button class="bg-primary text-white rounded-full size-12 flex items-center justify-center shadow-lg shadow-primary/30 hover:scale-105 active:scale-95 transition-all">
+<span class="material-symbols-outlined text-[28px]">add</span>
+</button>
+</div>
+<a class="flex flex-col items-center justify-center gap-1 text-gray-400 hover:text-white flex-1 group transition-colors" href="#">
+<div class="group-hover:bg-white/5 rounded-full px-3 py-1 transition-colors">
+<span class="material-symbols-outlined text-[24px]">payments</span>
+</div>
+<span class="text-[10px] font-medium tracking-wide">Budget</span>
+</a>
+<a class="flex flex-col items-center justify-center gap-1 text-primary flex-1 group" href="#">
+<div class="group-hover:bg-primary/10 rounded-full px-3 py-1 transition-colors">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">person</span>
+</div>
+<span class="text-[10px] font-medium tracking-wide">Profile</span>
+</a>
+</div>
+</nav>
+</div>
+</body></html>

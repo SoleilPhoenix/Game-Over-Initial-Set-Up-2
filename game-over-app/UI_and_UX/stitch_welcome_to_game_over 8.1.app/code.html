@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Booking &amp; Payment Summary</title>
+<!-- Google Fonts & Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Theme Configuration -->
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#258cf4",
+              "background-light": "#f5f7f8",
+              "background-dark": "#101922",
+              "surface-light": "#ffffff",
+              "surface-dark": "#1b2127",
+            },
+            fontFamily: {
+              "display": ["Inter", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "1rem", "xl": "1.5rem", "2xl": "2rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        /* Custom scrollbar hiding for cleaner mobile look */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-display bg-background-light dark:bg-background-dark text-slate-900 dark:text-white antialiased selection:bg-primary selection:text-white">
+<div class="relative flex min-h-screen w-full flex-col overflow-hidden pb-28">
+<!-- Top App Bar -->
+<header class="sticky top-0 z-20 flex items-center justify-between px-4 py-3 backdrop-blur-md bg-background-light/80 dark:bg-background-dark/80 border-b border-slate-200/50 dark:border-slate-800/50">
+<div class="flex size-10 shrink-0 items-center justify-center rounded-full active:bg-slate-200 dark:active:bg-slate-800 transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-slate-900 dark:text-white" style="font-size: 20px;">arrow_back_ios_new</span>
+</div>
+<h2 class="text-lg font-bold leading-tight tracking-tight flex-1 text-center pr-10">Payment Summary</h2>
+</header>
+<!-- Main Content -->
+<main class="flex flex-col gap-5 p-4">
+<!-- Package Card -->
+<section>
+<div class="flex flex-col gap-4 rounded-xl bg-surface-light dark:bg-surface-dark p-4 shadow-sm border border-slate-200 dark:border-slate-800/50">
+<div class="flex items-stretch justify-between gap-4">
+<div class="flex flex-col justify-center gap-1 flex-[2_2_0px]">
+<p class="text-sm font-semibold text-primary uppercase tracking-wide">Selected Package</p>
+<h3 class="text-xl font-bold leading-tight">The Classic (M)</h3>
+<p class="text-slate-500 dark:text-[#9cabba] text-sm font-medium leading-normal mt-1">Berlin • 2 Nights • 10 Guests</p>
+</div>
+<div class="w-24 bg-center bg-no-repeat bg-cover rounded-lg aspect-square shadow-inner" data-alt="Abstract vibrant geometric pattern representing a party atmosphere" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuASpHYDMdOuZmLPLS0zHZuVccPPrTrIsCNibch8xhx8d2CsjlTAiW9t21l_Q4bVXK_23u5YhXvgymiQwAIij49xsAZpfC_ipWf1H7ol21xUDyiV6pHdou9I4fc-ggp-7nSXwfrQ0pQB0-s4Qr0ECwnFPi7dChJNhS0h2yhFGrpZRR68PKgBZHSOFnkaIsZD8eD0TIxpLO0n9RXCzKJV5Wlce8dpGjOCu5s9DyZte61sDQ0xs38QPDzFQ5crX92hcVifBaGlFukT2Lw");'>
+</div>
+</div>
+</div>
+</section>
+<!-- Cost Breakdown -->
+<section class="flex flex-col gap-3">
+<h3 class="px-1 text-sm font-semibold text-slate-500 dark:text-[#9cabba] uppercase tracking-wider">Cost Breakdown</h3>
+<div class="rounded-xl bg-surface-light dark:bg-surface-dark p-5 shadow-sm border border-slate-200 dark:border-slate-800/50 flex flex-col gap-4">
+<div class="flex justify-between items-center">
+<p class="text-slate-500 dark:text-[#9cabba] text-sm font-medium">Package Base</p>
+<p class="text-slate-900 dark:text-white text-base font-semibold">€1,200.00</p>
+</div>
+<div class="flex justify-between items-center group cursor-pointer">
+<div class="flex items-center gap-1.5">
+<p class="text-slate-500 dark:text-[#9cabba] text-sm font-medium">Service Fee (10%)</p>
+<span class="material-symbols-outlined text-slate-400 text-[16px]">info</span>
+</div>
+<p class="text-slate-900 dark:text-white text-base font-semibold">€120.00</p>
+</div>
+<div class="h-px bg-slate-200 dark:bg-slate-700/50 my-1"></div>
+<div class="flex justify-between items-center">
+<p class="text-slate-500 dark:text-[#9cabba] text-sm font-medium">Total Group Cost</p>
+<p class="text-slate-900 dark:text-white text-lg font-bold">€1,320.00</p>
+</div>
+</div>
+</section>
+<!-- Honoree Toggle -->
+<section>
+<div class="flex items-center gap-4 rounded-xl bg-surface-light dark:bg-surface-dark px-4 py-3 shadow-sm border border-slate-200 dark:border-slate-800/50 justify-between">
+<div class="flex flex-col gap-0.5">
+<p class="text-slate-900 dark:text-white text-base font-medium leading-normal">Exclude Honoree</p>
+<p class="text-xs text-slate-500 dark:text-[#9cabba]">Honoree pays €0.00</p>
+</div>
+<div class="shrink-0">
+<label class="relative flex h-[31px] w-[51px] cursor-pointer items-center rounded-full border-none bg-slate-200 dark:bg-[#283039] p-0.5 has-[:checked]:justify-end has-[:checked]:bg-primary transition-all duration-200">
+<div class="h-full w-[27px] rounded-full bg-white shadow-sm transform transition-all duration-200 ease-in-out"></div>
+<input checked="" class="invisible absolute" type="checkbox"/>
+</label>
+</div>
+</div>
+</section>
+<!-- Cost Per Person Stats -->
+<section>
+<div class="flex flex-col gap-2 rounded-xl p-6 bg-gradient-to-br from-surface-light to-slate-50 dark:from-surface-dark dark:to-[#222a33] shadow-lg border border-primary/20 relative overflow-hidden">
+<div class="absolute top-0 right-0 p-4 opacity-10">
+<span class="material-symbols-outlined text-6xl">payments</span>
+</div>
+<div class="relative z-10">
+<p class="text-slate-500 dark:text-[#9cabba] text-sm font-medium leading-normal uppercase tracking-wide mb-2">Cost Per Person (9 Paying)</p>
+<div class="flex items-baseline gap-2">
+<p class="text-primary tracking-tight text-4xl font-bold leading-tight">€146.66</p>
+<p class="text-slate-400 text-sm">/ person</p>
+</div>
+<p class="text-xs text-green-600 dark:text-green-400 mt-2 font-medium flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">check_circle</span>
+                            Includes all taxes &amp; fees
+                        </p>
+</div>
+</div>
+</section>
+<!-- Trust & Policy -->
+<section class="mt-2 flex flex-col gap-6 items-center">
+<!-- Trust Badge -->
+<div class="flex items-center justify-center gap-2 px-4 py-2 bg-slate-200/50 dark:bg-slate-800/50 rounded-full">
+<span class="material-symbols-outlined text-slate-500 dark:text-slate-400 text-lg">lock</span>
+<span class="text-xs font-medium text-slate-600 dark:text-slate-300">Secure payment processing via Stripe</span>
+</div>
+<!-- Terms Text -->
+<div class="px-4 text-center">
+<p class="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
+                        Free cancellation up to 14 days before the event. A non-refundable deposit is required to secure this booking. By proceeding, you agree to our 
+                        <a class="underline decoration-slate-400 hover:text-slate-300" href="#">Terms of Service</a>.
+                    </p>
+</div>
+</section>
+</main>
+<!-- Sticky Bottom Action -->
+<div class="fixed bottom-0 left-0 right-0 z-50 p-4 pb-8 backdrop-blur-xl bg-surface-light/80 dark:bg-surface-dark/90 border-t border-slate-200 dark:border-slate-800 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+<button class="flex w-full items-center justify-center gap-3 rounded-xl bg-primary px-6 py-4 text-white shadow-lg shadow-primary/30 transition-transform active:scale-[0.98] hover:bg-blue-600">
+<span class="text-base font-bold tracking-wide">Proceed to Payment</span>
+<span class="material-symbols-outlined text-xl">arrow_forward</span>
+</button>
+</div>
+</div>
+</body></html>

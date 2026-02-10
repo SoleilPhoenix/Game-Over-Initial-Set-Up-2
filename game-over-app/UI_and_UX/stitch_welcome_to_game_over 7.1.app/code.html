@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Create New Event</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Poppins:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#258cf4",
+                        "background-light": "#f5f7f8",
+                        "background-dark": "#101922",
+                        "surface": "#2D3748", 
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"],
+                        "heading": ["Poppins", "sans-serif"],
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem", 
+                        "lg": "1rem", 
+                        "xl": "1.5rem", 
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .glass-panel {
+            background: rgba(45, 55, 72, 0.4);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+        .glass-input {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            transition: all 0.2s ease;
+        }
+        .glass-input:focus {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: #258cf4;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(37, 140, 244, 0.2);
+        }input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            opacity: 0.6;
+            cursor: pointer;
+        }
+        .chip-base {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .chip-selected {
+            background-color: #258cf4;
+            color: white;
+            border: 1px solid #258cf4;
+            box-shadow: 0 4px 12px rgba(37, 140, 244, 0.3);
+        }
+        .chip-default {
+            background-color: rgba(255, 255, 255, 0.03);
+            color: #94a3b8;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .chip-default:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.15);
+            color: white;
+        }
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }input[type=range] {
+            -webkit-appearance: none; 
+            background: transparent; 
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            height: 24px;
+            width: 24px;
+            border-radius: 50%;
+            background: #258cf4;
+            cursor: pointer;
+            margin-top: -10px; 
+            box-shadow: 0 0 10px rgba(37, 140, 244, 0.5);
+            border: 2px solid #fff;
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            width: 100%;
+            height: 4px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.1);
+            border-radius: 2px;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-white antialiased h-screen w-full flex justify-center">
+<div class="relative w-full max-w-md h-full flex flex-col bg-background-dark overflow-hidden shadow-2xl">
+<div class="absolute top-[-10%] right-[-10%] w-[300px] h-[300px] bg-primary/20 rounded-full blur-[80px] pointer-events-none" data-alt="Soft blue gradient glow top right"></div>
+<div class="absolute bottom-[10%] left-[-10%] w-[250px] h-[250px] bg-blue-900/20 rounded-full blur-[60px] pointer-events-none" data-alt="Deep blue gradient glow bottom left"></div>
+<header class="flex items-center justify-between p-5 z-20">
+<button class="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 active:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-white">arrow_back</span>
+</button>
+<h1 class="text-lg font-heading font-semibold tracking-wide text-white/90">Create New Event</h1>
+<button class="flex items-center justify-center w-10 h-10 rounded-full hover:bg-white/5 active:bg-white/10 transition-colors">
+<span class="material-symbols-outlined text-white/70">more_horiz</span>
+</button>
+</header>
+<div class="px-6 pb-2 z-20">
+<div class="flex justify-between items-end mb-3">
+<span class="text-2xl font-heading font-bold text-white">Key Details</span>
+<span class="text-xs font-medium text-primary tracking-wider uppercase mb-1">Step 1 of 4</span>
+</div>
+<div class="flex gap-2 w-full h-1.5">
+<div class="flex-1 rounded-full bg-primary shadow-[0_0_8px_rgba(37,140,244,0.6)]"></div>
+<div class="flex-1 rounded-full bg-surface border border-white/5"></div>
+<div class="flex-1 rounded-full bg-surface border border-white/5"></div>
+<div class="flex-1 rounded-full bg-surface border border-white/5"></div>
+</div>
+</div>
+<main class="flex-1 overflow-y-auto px-5 pt-4 pb-32 no-scrollbar z-10 relative">
+<p class="text-white/70 text-sm leading-relaxed mb-6 font-display">
+            Start by defining the basics. We'll use this to tailor the entire party experience.
+        </p>
+<section class="glass-panel rounded-lg p-5 mb-5 group">
+<div class="flex items-center gap-3 mb-5">
+<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-lg">celebration</span>
+</div>
+<h3 class="text-white font-heading font-semibold text-lg">Party For</h3>
+</div>
+<div class="flex flex-col sm:flex-row gap-3">
+<button class="flex-1 chip-selected py-3 px-4 rounded-lg flex items-center justify-center gap-2 group transition-all">
+<span class="material-symbols-outlined">male</span>
+                Bachelor Party
+                <span class="material-symbols-outlined text-sm ml-1">check_circle</span>
+</button>
+<button class="flex-1 chip-default py-3 px-4 rounded-lg flex items-center justify-center gap-2 transition-all">
+<span class="material-symbols-outlined">female</span>
+                Bachelorette Party
+            </button>
+</div>
+</section>
+<section class="glass-panel rounded-lg p-5 mb-5">
+<div class="flex items-center gap-3 mb-5">
+<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-lg">person</span>
+</div>
+<h3 class="text-white font-heading font-semibold text-lg">Honoree's Name</h3>
+</div>
+<div>
+<label class="sr-only" for="honoree_name">Name</label>
+<div class="relative">
+<input class="glass-input w-full rounded-lg px-4 py-3.5 pl-11 text-sm font-medium placeholder-white/40" id="honoree_name" placeholder="e.g. Michael Scott" type="text"/>
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-white/40">
+<span class="material-symbols-outlined text-[20px]">badge</span>
+</span>
+</div>
+</div>
+</section>
+<section class="glass-panel rounded-lg p-5 mb-5">
+<div class="flex items-center gap-3 mb-5">
+<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-lg">location_on</span>
+</div>
+<h3 class="text-white font-heading font-semibold text-lg">Select City</h3>
+</div>
+<div class="flex flex-wrap gap-2">
+<button class="chip-base chip-selected px-4 py-2.5 rounded-full text-sm font-medium flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">check</span>
+                Berlin
+            </button>
+<button class="chip-base chip-default px-4 py-2.5 rounded-full text-sm font-medium">Hamburg</button>
+<button class="chip-base chip-default px-4 py-2.5 rounded-full text-sm font-medium">Hannover</button>
+</div>
+</section>
+<section class="glass-panel rounded-lg p-5 mb-5">
+<div class="flex items-center justify-between mb-5">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-lg">groups</span>
+</div>
+<h3 class="text-white font-heading font-semibold text-lg">Participants</h3>
+</div>
+<div class="bg-primary/20 text-primary border border-primary/30 px-3 py-1 rounded-md font-mono text-sm font-bold">
+                    12
+                </div>
+</div>
+<div class="px-1">
+<input class="w-full" max="30" min="1" step="1" type="range" value="12"/>
+<div class="flex justify-between mt-2 text-xs text-white/40 font-medium font-display">
+<span>1 Person</span>
+<span>30 People</span>
+</div>
+</div>
+</section>
+<section class="glass-panel rounded-lg p-5 mb-5">
+<div class="flex items-center gap-3 mb-5">
+<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-lg">calendar_month</span>
+</div>
+<h3 class="text-white font-heading font-semibold text-lg">Select Date</h3>
+</div>
+<div>
+<label class="sr-only" for="event_date">Date</label>
+<div class="relative">
+<input class="glass-input w-full rounded-lg px-4 py-3.5 pl-11 text-sm font-medium text-white/90 placeholder-white/40" id="event_date" type="date"/>
+<span class="absolute left-4 top-1/2 -translate-y-1/2 text-white/40 pointer-events-none">
+<span class="material-symbols-outlined text-[20px]">event</span>
+</span>
+</div>
+</div>
+</section>
+</main>
+<div class="absolute bottom-0 left-0 w-full z-30">
+<div class="h-12 w-full bg-gradient-to-t from-background-dark to-transparent pointer-events-none"></div>
+<div class="bg-background-dark/80 backdrop-blur-xl border-t border-white/5 p-5 pb-8 flex items-center gap-4">
+<button class="h-14 w-14 rounded-lg flex items-center justify-center border border-white/10 text-white/80 hover:bg-white/5 active:scale-95 transition-all">
+<span class="material-symbols-outlined">chevron_left</span>
+</button>
+<button class="flex-1 h-14 bg-primary hover:bg-blue-500 active:bg-blue-600 rounded-lg flex items-center justify-center gap-2 text-white font-heading font-semibold shadow-[0_4px_20px_rgba(37,140,244,0.4)] hover:shadow-[0_6px_25px_rgba(37,140,244,0.5)] active:scale-[0.98] transition-all">
+                Next Step
+                <span class="material-symbols-outlined text-sm">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</body></html>
