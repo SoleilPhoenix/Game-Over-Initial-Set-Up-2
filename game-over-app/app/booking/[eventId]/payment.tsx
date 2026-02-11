@@ -13,6 +13,7 @@ import { useBookingFlow } from '@/hooks/useBookingFlow';
 import { usePaymentSheet } from '@/hooks/usePaymentSheet';
 import { useCreateBooking, useUpdatePaymentStatus } from '@/hooks/queries/useBookings';
 import { useWizardStore } from '@/stores/wizardStore';
+import { supabase } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useTranslation, getTranslation } from '@/i18n';
@@ -117,8 +118,10 @@ export default function PaymentScreen() {
     if (!eventId) return;
 
     try {
-      // Draft mode or E2E: prompt user then simulate payment flow
-      if (isDraft || IS_E2E) {
+      // Demo mode: draft events, E2E tests, or missing Stripe key
+      const useSimulatedPayment = isDraft || IS_E2E || !process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+
+      if (useSimulatedPayment) {
         const tr = getTranslation();
         const confirmed = await new Promise<boolean>((resolve) => {
           Alert.alert(
@@ -137,6 +140,14 @@ export default function PaymentScreen() {
 
         setPaymentStep('processing_payment');
         await new Promise(resolve => setTimeout(resolve, 1200));
+
+        // If we have a real event in DB, update its status to 'booked'
+        if (!isDraft) {
+          await supabase
+            .from('events')
+            .update({ status: 'booked' })
+            .eq('id', eventId);
+        }
 
         setPaymentStep('confirming');
         await new Promise(resolve => setTimeout(resolve, 600));

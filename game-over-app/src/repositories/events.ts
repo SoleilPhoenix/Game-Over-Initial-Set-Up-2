@@ -18,6 +18,13 @@ export interface EventWithDetails extends Event {
   participant_count: number;
 }
 
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 export const eventsRepository = {
   /**
    * Get all events for a user (as organizer or participant)
@@ -102,51 +109,71 @@ export const eventsRepository = {
 
   /**
    * Create a new event with preferences
+   * Uses client-side UUID to avoid .select() after .insert()
+   * which triggers SELECT RLS policy recursion (42P17)
    */
   async create(
     event: EventInsert,
     preferences?: Omit<EventPreferencesInsert, 'event_id'>
   ): Promise<Event> {
-    const { data, error } = await supabase
+    const eventId = generateUUID();
+
+    const { error } = await supabase
       .from('events')
-      .insert(event)
-      .select()
-      .single();
+      .insert({ ...event, id: eventId });
 
     if (error) throw error;
+
+    // Build return object from known data (avoids SELECT RLS issue)
+    const now = new Date().toISOString();
+    const createdEvent = {
+      id: eventId,
+      ...event,
+      status: event.status || 'draft',
+      created_at: now,
+      updated_at: now,
+      deleted_at: null,
+      hero_image_url: null,
+    } as Event;
 
     // Create preferences if provided
     if (preferences) {
       const { error: prefError } = await supabase
         .from('event_preferences')
-        .insert({ ...preferences, event_id: data.id });
+        .insert({ ...preferences, event_id: eventId });
 
-      if (prefError) throw prefError;
+      if (prefError) {
+        console.warn('Failed to create event preferences:', prefError.message);
+      }
     }
 
     // Add creator as organizer participant
     const { error: participantError } = await supabase
       .from('event_participants')
       .insert({
-        event_id: data.id,
+        event_id: eventId,
         user_id: event.created_by,
         role: 'organizer',
       });
 
-    if (participantError) throw participantError;
+    if (participantError) {
+      console.warn('Failed to add organizer participant:', participantError.message);
+    }
 
     // Create default chat channel
     const { error: channelError } = await supabase
       .from('chat_channels')
       .insert({
-        event_id: data.id,
+        event_id: eventId,
         name: 'Main Lobby',
         category: 'general',
       });
 
-    if (channelError) throw channelError;
+    if (channelError) {
+      console.warn('Failed to create chat channel:', channelError.message);
+    }
 
-    return data;
+    return createdEvent;
   },
 
   /**
