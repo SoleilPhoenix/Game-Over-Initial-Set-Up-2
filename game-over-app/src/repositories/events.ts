@@ -25,6 +25,25 @@ function generateUUID(): string {
   });
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function resolveCityId(cityId: string): Promise<string> {
+  if (UUID_REGEX.test(cityId)) return cityId;
+
+  // cityId is a slug (e.g. "hannover") — look up the real UUID by name
+  const { data } = await supabase
+    .from('cities')
+    .select('id')
+    .ilike('name', cityId)
+    .limit(1)
+    .maybeSingle();
+
+  if (!data?.id) {
+    throw new Error(`City not found: "${cityId}". Ensure city exists in the database.`);
+  }
+  return data.id;
+}
+
 export const eventsRepository = {
   /**
    * Get all events for a user (as organizer or participant)
@@ -118,9 +137,14 @@ export const eventsRepository = {
   ): Promise<Event> {
     const eventId = generateUUID();
 
+    // Resolve city slug (e.g. "hannover") to real UUID if needed
+    const resolvedCityId = await resolveCityId(event.city_id);
+    const insertData = { ...event, city_id: resolvedCityId } as EventInsert & { id: string };
+    insertData.id = eventId;
+
     const { error } = await supabase
       .from('events')
-      .insert({ ...event, id: eventId });
+      .insert(insertData as any);
 
     if (error) throw error;
 
