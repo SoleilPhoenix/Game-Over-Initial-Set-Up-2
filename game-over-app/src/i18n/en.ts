@@ -212,6 +212,13 @@ const en = {
     selectPackage: 'Select Package',
     selectRecommended: 'Select Recommended Package',
     disputeFreePayment: 'Dispute-free payment splitting available',
+    // Draft dialog
+    existingDraftTitle: 'Existing Draft',
+    existingDraftMessage: 'You have saved drafts. Continue an existing one or start a new plan?',
+    continueDraft: 'Continue Draft',
+    startFresh: 'Start Fresh',
+    // Multi-select hint
+    selectMultiple: 'Select multiple',
   },
 
   // ─── Package Detail ────────────────────────────

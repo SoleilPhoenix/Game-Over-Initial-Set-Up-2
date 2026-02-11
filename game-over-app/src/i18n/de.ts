@@ -207,6 +207,13 @@ const de: TranslationKeys = {
     selectPackage: 'Paket wählen',
     selectRecommended: 'Empfohlenes Paket wählen',
     disputeFreePayment: 'Streitfreie Kostenteilung verfügbar',
+    // Draft dialog
+    existingDraftTitle: 'Vorhandener Entwurf',
+    existingDraftMessage: 'Du hast gespeicherte Entwürfe. Einen bestehenden fortsetzen oder neu planen?',
+    continueDraft: 'Entwurf fortsetzen',
+    startFresh: 'Neu starten',
+    // Multi-select hint
+    selectMultiple: 'Mehrere auswählbar',
   },
 
   // ─── Package Detail ────────────────────────────

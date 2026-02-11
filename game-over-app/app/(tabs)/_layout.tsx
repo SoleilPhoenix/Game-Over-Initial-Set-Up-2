@@ -5,14 +5,14 @@
  */
 
 import { Tabs, useRouter } from 'expo-router';
-import { View, StyleSheet, Pressable, Platform, Text } from 'react-native';
+import { Alert, View, StyleSheet, Pressable, Platform, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DARK_THEME } from '@/constants/theme';
 import { useWizardStore } from '@/stores/wizardStore';
-import { useTranslation } from '@/i18n';
+import { useTranslation, getTranslation } from '@/i18n';
 
 type IconName = 'calendar' | 'calendar-outline' | 'chatbubbles' | 'chatbubbles-outline' |
   'card' | 'card-outline' | 'person-circle' | 'person-circle-outline' | 'add';
@@ -60,8 +60,39 @@ function FABButton() {
   const router = useRouter();
 
   const handlePress = () => {
-    // Clear any existing draft so FAB always starts a fresh wizard
-    useWizardStore.getState().clearDraft();
+    const store = useWizardStore.getState();
+    if (store.hasDraft()) {
+      const tr = getTranslation();
+      Alert.alert(
+        tr.wizard.existingDraftTitle,
+        tr.wizard.existingDraftMessage,
+        [
+          { text: tr.wizard.cancel, style: 'cancel' },
+          {
+            text: tr.wizard.continueDraft,
+            onPress: () => {
+              const drafts = store.getAllDrafts();
+              if (drafts.length > 0) {
+                store.loadDraft(drafts[0].id);
+                const stepPaths = ['/create-event', '/create-event/preferences', '/create-event/participants', '/create-event/packages'];
+                const targetPath = stepPaths[Math.min(drafts[0].currentStep - 1, 3)];
+                router.push(targetPath as any);
+              }
+            },
+          },
+          {
+            text: tr.wizard.startFresh,
+            style: 'destructive',
+            onPress: () => {
+              store.startNewDraft();
+              router.push('/create-event');
+            },
+          },
+        ]
+      );
+      return;
+    }
+    store.startNewDraft();
     router.push('/create-event');
   };
 

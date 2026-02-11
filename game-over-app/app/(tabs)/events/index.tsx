@@ -6,6 +6,7 @@
 
 import React, { useCallback, useState, useMemo } from 'react';
 import {
+  Alert,
   FlatList,
   RefreshControl,
   Pressable,
@@ -14,15 +15,16 @@ import {
   View,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useUser } from '@/stores/authStore';
-import { useWizardStore } from '@/stores/wizardStore';
+import { useWizardStore, type DraftSnapshot } from '@/stores/wizardStore';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
-import { useTranslation } from '@/i18n';
+import { useTranslation, getTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
 import type { EventWithDetails } from '@/repositories';
 
@@ -81,6 +83,13 @@ export default function EventsScreen() {
 
   const { data: events, isLoading, refetch } = useEvents();
 
+  // Refetch events when screen gains focus (e.g., returning from booking)
+  useFocusEffect(
+    useCallback(() => {
+      refetch();
+    }, [refetch])
+  );
+
   // Filter events based on active tab
   const filteredEvents = useMemo(() => {
     if (!events) return [];
@@ -100,22 +109,50 @@ export default function EventsScreen() {
     setIsRefreshing(false);
   }, [refetch]);
 
-  // Draft state
-  const wizardHasDraft = useWizardStore((s) => s.hasDraft());
-  const draftHonoreeName = useWizardStore((s) => s.honoreeName);
-  const draftPartyType = useWizardStore((s) => s.partyType);
-  const draftCityId = useWizardStore((s) => s.cityId);
-  const draftCurrentStep = useWizardStore((s) => s.currentStep);
+  // Draft state (multi-draft)
+  const allDrafts = useWizardStore((s) => s.getAllDrafts());
+  const hasDrafts = allDrafts.length > 0;
 
   const handleCreateEvent = () => {
-    // Clear any existing draft so we start fresh
-    useWizardStore.getState().clearDraft();
+    const store = useWizardStore.getState();
+    if (store.hasDraft()) {
+      const tr = getTranslation();
+      Alert.alert(
+        tr.wizard.existingDraftTitle,
+        tr.wizard.existingDraftMessage,
+        [
+          { text: tr.wizard.cancel, style: 'cancel' },
+          {
+            text: tr.wizard.continueDraft,
+            onPress: () => {
+              const drafts = store.getAllDrafts();
+              if (drafts.length > 0) handleResumeDraft(drafts[0].id);
+            },
+          },
+          {
+            text: tr.wizard.startFresh,
+            style: 'destructive',
+            onPress: () => {
+              useWizardStore.getState().startNewDraft();
+              router.push('/create-event');
+            },
+          },
+        ]
+      );
+      return;
+    }
+    useWizardStore.getState().startNewDraft();
     router.push('/create-event');
   };
 
-  const handleResumeDraft = () => {
-    // Navigate to create-event — the persisted draft will load automatically
-    router.push('/create-event');
+  const handleResumeDraft = (draftId: string) => {
+    const store = useWizardStore.getState();
+    store.loadDraft(draftId);
+    const draft = store.savedDrafts[draftId];
+    const step = draft?.currentStep ?? 1;
+    const stepPaths = ['/create-event', '/create-event/preferences', '/create-event/participants', '/create-event/packages'];
+    const targetPath = stepPaths[Math.min(step - 1, stepPaths.length - 1)] || '/create-event';
+    router.push(targetPath as any);
   };
 
   const handleEventPress = (eventId: string) => {
@@ -355,24 +392,24 @@ export default function EventsScreen() {
     </YStack>
   );
 
-  const renderDraftCard = () => {
-    if (!wizardHasDraft) return null;
+  const renderSingleDraftCard = (draft: DraftSnapshot) => {
     const stepLabels = [t.wizard.keyDetails, t.wizard.preferences, t.wizard.participants, t.wizard.packageSelection];
-    const draftTitle = draftHonoreeName
-      ? `${draftHonoreeName}'s ${draftPartyType === 'bachelor' ? t.events.bachelorParty : t.events.bacheloretteParty}`
+    const draftTitle = draft.honoreeName
+      ? `${draft.honoreeName}'s ${draft.partyType === 'bachelor' ? t.events.bachelorParty : t.events.bacheloretteParty}`
       : t.events.newEvent;
-    const stepLabel = stepLabels[draftCurrentStep - 1] || t.wizard.keyDetails;
-    const progressPct = Math.round((draftCurrentStep / 4) * 100);
+    const stepLabel = stepLabels[draft.currentStep - 1] || t.wizard.keyDetails;
+    const progressPct = Math.round((draft.currentStep / 4) * 100);
 
     return (
       <Pressable
-        onPress={handleResumeDraft}
+        key={draft.id}
+        onPress={() => handleResumeDraft(draft.id)}
         style={({ pressed }) => [
           styles.eventCard,
           styles.draftCard,
           pressed && styles.eventCardPressed,
         ]}
-        testID="draft-event-card"
+        testID={`draft-event-card-${draft.id}`}
       >
         <XStack alignItems="center" gap={12}>
           <View style={styles.draftIcon}>
@@ -386,7 +423,7 @@ export default function EventsScreen() {
               </View>
             </XStack>
             <Text style={styles.dateText}>
-              {draftCityId ? `${draftCityId.charAt(0).toUpperCase()}${draftCityId.slice(1)}` : t.events.noCityLabel} — {t.events.step} {draftCurrentStep}: {stepLabel}
+              {draft.cityId ? `${draft.cityId.charAt(0).toUpperCase()}${draft.cityId.slice(1)}` : t.events.noCityLabel} — {t.events.step} {draft.currentStep}: {stepLabel}
             </Text>
           </YStack>
           <Ionicons name="chevron-forward" size={20} color={DARK_THEME.textTertiary} />
@@ -396,7 +433,7 @@ export default function EventsScreen() {
           <XStack justifyContent="space-between" alignItems="center" marginBottom={6}>
             <XStack alignItems="center" gap={6}>
               <Ionicons name="ellipse" size={10} color="#F59E0B" />
-              <Text style={[styles.progressLabel, { color: '#F59E0B' }]}>{t.events.draft} — {t.events.step} {draftCurrentStep}/4</Text>
+              <Text style={[styles.progressLabel, { color: '#F59E0B' }]}>{t.events.draft} — {t.events.step} {draft.currentStep}/4</Text>
             </XStack>
             <Text style={[styles.progressPercentage, { color: '#F59E0B' }]}>{progressPct}%</Text>
           </XStack>
@@ -406,6 +443,11 @@ export default function EventsScreen() {
         </View>
       </Pressable>
     );
+  };
+
+  const renderDraftCards = () => {
+    if (!hasDrafts) return null;
+    return <>{allDrafts.map(renderSingleDraftCard)}</>;
   };
 
   const renderListFooter = () => {
@@ -488,11 +530,11 @@ export default function EventsScreen() {
             />
           }
           showsVerticalScrollIndicator={false}
-          ListHeaderComponent={renderDraftCard}
+          ListHeaderComponent={renderDraftCards}
           ListFooterComponent={renderListFooter}
           testID="events-list"
         />
-      ) : wizardHasDraft ? (
+      ) : hasDrafts ? (
         <FlatList
           data={[]}
           renderItem={null}
@@ -511,7 +553,7 @@ export default function EventsScreen() {
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <>
-              {renderDraftCard()}
+              {renderDraftCards()}
               <View style={{ marginTop: 12 }}>
                 {renderStartNewPlanButton()}
               </View>

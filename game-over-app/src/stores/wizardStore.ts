@@ -32,6 +32,32 @@ type ActivityLevel = 'relaxed' | 'moderate' | 'high_paced';
 type TravelDistance = 'local' | 'domestic' | 'international';
 type EventDuration = '1_day' | '2_days' | '3_plus_days' | '1_night' | 'weekend' | 'long_weekend';
 
+export interface DraftSnapshot {
+  id: string;
+  createdAt: string;
+  updatedAt: string;
+  partyType: PartyType | null;
+  honoreeName: string;
+  cityId: string | null;
+  participantCount: number;
+  startDate: string | null;
+  endDate: string | null;
+  gatheringSize: GatheringSize | null;
+  socialApproach: SocialApproach | null;
+  energyLevel: EnergyLevel | null;
+  participationStyle: ParticipationStyle | null;
+  venuePreference: VenuePreference | null;
+  publicAttention: PublicAttention | null;
+  averageAge: AgeRange | null;
+  groupCohesion: GroupCohesion | null;
+  vibePreferences: string[];
+  activityLevel: ActivityLevel | null;
+  travelDistance: TravelDistance | null;
+  eventDuration: EventDuration | null;
+  selectedPackageId: string | null;
+  currentStep: number;
+}
+
 interface WizardState {
   // Step 1: Key Details
   partyType: PartyType | null;
@@ -64,6 +90,10 @@ interface WizardState {
   currentStep: number;
   lastSavedAt: string | null;
   isDirty: boolean;
+
+  // Multi-draft
+  activeDraftId: string | null;
+  savedDrafts: Record<string, DraftSnapshot>;
 }
 
 interface WizardActions {
@@ -112,6 +142,12 @@ interface WizardActions {
   hasDraft: () => boolean;
   getTimeSinceLastSave: () => number | null;
 
+  // Multi-draft actions
+  startNewDraft: () => void;
+  loadDraft: (id: string) => void;
+  deleteDraft: (id: string) => void;
+  getAllDrafts: () => DraftSnapshot[];
+
   // Get data for API
   getEventData: () => {
     event: {
@@ -139,30 +175,78 @@ interface WizardActions {
   } | null;
 }
 
-const initialState: WizardState = {
-  partyType: null,
+const initialWizardFields = {
+  partyType: null as PartyType | null,
   honoreeName: '',
-  cityId: null,
+  cityId: null as string | null,
   participantCount: 10,
-  startDate: null,
-  endDate: null,
-  gatheringSize: null,
-  socialApproach: null,
-  energyLevel: null,
-  participationStyle: null,
-  venuePreference: null,
-  publicAttention: null,
-  averageAge: null,
-  groupCohesion: null,
-  vibePreferences: [],
-  activityLevel: null,
-  travelDistance: null,
-  eventDuration: null,
-  selectedPackageId: null,
+  startDate: null as string | null,
+  endDate: null as string | null,
+  gatheringSize: null as GatheringSize | null,
+  socialApproach: null as SocialApproach | null,
+  energyLevel: null as EnergyLevel | null,
+  participationStyle: null as ParticipationStyle | null,
+  venuePreference: null as VenuePreference | null,
+  publicAttention: null as PublicAttention | null,
+  averageAge: null as AgeRange | null,
+  groupCohesion: null as GroupCohesion | null,
+  vibePreferences: [] as string[],
+  activityLevel: null as ActivityLevel | null,
+  travelDistance: null as TravelDistance | null,
+  eventDuration: null as EventDuration | null,
+  selectedPackageId: null as string | null,
   currentStep: 1,
+};
+
+const initialState: WizardState = {
+  ...initialWizardFields,
   lastSavedAt: null,
   isDirty: false,
+  activeDraftId: null,
+  savedDrafts: {},
 };
+
+function generateDraftId(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+function snapshotFromState(state: WizardState, id: string, now: string): DraftSnapshot {
+  return {
+    id,
+    createdAt: now,
+    updatedAt: now,
+    partyType: state.partyType,
+    honoreeName: state.honoreeName,
+    cityId: state.cityId,
+    participantCount: state.participantCount,
+    startDate: state.startDate,
+    endDate: state.endDate,
+    gatheringSize: state.gatheringSize,
+    socialApproach: state.socialApproach,
+    energyLevel: state.energyLevel,
+    participationStyle: state.participationStyle,
+    venuePreference: state.venuePreference,
+    publicAttention: state.publicAttention,
+    averageAge: state.averageAge,
+    groupCohesion: state.groupCohesion,
+    vibePreferences: state.vibePreferences,
+    activityLevel: state.activityLevel,
+    travelDistance: state.travelDistance,
+    eventDuration: state.eventDuration,
+    selectedPackageId: state.selectedPackageId,
+    currentStep: state.currentStep,
+  };
+}
+
+function hasActiveData(state: WizardState): boolean {
+  return !!(
+    state.partyType ||
+    state.honoreeName.trim() ||
+    state.cityId ||
+    state.startDate ||
+    state.endDate
+  );
+}
 
 export const useWizardStore = create<WizardState & WizardActions>()(
   persist(
@@ -234,12 +318,27 @@ export const useWizardStore = create<WizardState & WizardActions>()(
             return !!(
               state.partyType &&
               state.honoreeName.trim() &&
-              state.cityId
+              state.cityId &&
+              state.startDate
             );
           case 2:
-            return !!(state.gatheringSize && state.energyLevel);
+            return !!(
+              state.gatheringSize &&
+              state.socialApproach &&
+              state.energyLevel &&
+              state.participationStyle &&
+              state.venuePreference &&
+              state.publicAttention
+            );
           case 3:
-            return true; // Step 3 is optional
+            return !!(
+              state.averageAge &&
+              state.groupCohesion &&
+              state.vibePreferences.length > 0 &&
+              state.activityLevel &&
+              state.travelDistance &&
+              state.eventDuration
+            );
           case 4:
             return !!state.selectedPackageId;
           default:
@@ -253,16 +352,33 @@ export const useWizardStore = create<WizardState & WizardActions>()(
 
       // Persistence & Auto-save
       saveDraft: () => {
-        set({ lastSavedAt: new Date().toISOString(), isDirty: false });
+        const state = get();
+        const now = new Date().toISOString();
+        if (state.activeDraftId && hasActiveData(state)) {
+          const existing = state.savedDrafts[state.activeDraftId];
+          const snapshot = snapshotFromState(state, state.activeDraftId, existing?.createdAt || now);
+          snapshot.updatedAt = now;
+          set({
+            lastSavedAt: now,
+            isDirty: false,
+            savedDrafts: { ...state.savedDrafts, [state.activeDraftId]: snapshot },
+          });
+        } else {
+          set({ lastSavedAt: now, isDirty: false });
+        }
       },
       clearDraft: () => {
-        // Stop auto-save when clearing draft
-        if (autoSaveTimer) {
-          clearInterval(autoSaveTimer);
-          autoSaveTimer = null;
+        // Backward compat — deletes active draft
+        const state = get();
+        if (state.activeDraftId) {
+          get().deleteDraft(state.activeDraftId);
+        } else {
+          if (autoSaveTimer) {
+            clearInterval(autoSaveTimer);
+            autoSaveTimer = null;
+          }
+          set({ ...initialWizardFields, lastSavedAt: null, isDirty: false, activeDraftId: null });
         }
-        deleteFromStorage('wizard-storage', 'wizard-state');
-        set(initialState);
       },
       reset: () => {
         set(initialState);
@@ -276,8 +392,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
         autoSaveTimer = setInterval(() => {
           const state = get();
           if (state.isDirty) {
-            set({ lastSavedAt: new Date().toISOString(), isDirty: false });
-            // MMKV persist middleware handles actual save automatically
+            state.saveDraft();
           }
         }, AUTO_SAVE_INTERVAL);
       },
@@ -288,20 +403,89 @@ export const useWizardStore = create<WizardState & WizardActions>()(
         }
       },
       hasDraft: () => {
-        const state = get();
-        // Check if there's any meaningful data in the wizard
-        return !!(
-          state.partyType ||
-          state.honoreeName.trim() ||
-          state.cityId ||
-          state.startDate ||
-          state.endDate
-        );
+        return Object.keys(get().savedDrafts).length > 0 || hasActiveData(get());
       },
       getTimeSinceLastSave: () => {
         const { lastSavedAt } = get();
         if (!lastSavedAt) return null;
         return Math.floor((Date.now() - new Date(lastSavedAt).getTime()) / 1000);
+      },
+
+      // Multi-draft actions
+      startNewDraft: () => {
+        const state = get();
+        const now = new Date().toISOString();
+        let drafts = { ...state.savedDrafts };
+
+        // Save current active draft if it has data
+        if (state.activeDraftId && hasActiveData(state)) {
+          const existing = drafts[state.activeDraftId];
+          const snapshot = snapshotFromState(state, state.activeDraftId, existing?.createdAt || now);
+          snapshot.updatedAt = now;
+          drafts[state.activeDraftId] = snapshot;
+        }
+
+        const newId = generateDraftId();
+        set({
+          ...initialWizardFields,
+          lastSavedAt: null,
+          isDirty: false,
+          activeDraftId: newId,
+          savedDrafts: drafts,
+        });
+      },
+      loadDraft: (id) => {
+        const draft = get().savedDrafts[id];
+        if (!draft) return;
+        set({
+          partyType: draft.partyType,
+          honoreeName: draft.honoreeName,
+          cityId: draft.cityId,
+          participantCount: draft.participantCount,
+          startDate: draft.startDate,
+          endDate: draft.endDate,
+          gatheringSize: draft.gatheringSize,
+          socialApproach: draft.socialApproach,
+          energyLevel: draft.energyLevel,
+          participationStyle: draft.participationStyle,
+          venuePreference: draft.venuePreference,
+          publicAttention: draft.publicAttention,
+          averageAge: draft.averageAge,
+          groupCohesion: draft.groupCohesion,
+          vibePreferences: draft.vibePreferences,
+          activityLevel: draft.activityLevel,
+          travelDistance: draft.travelDistance,
+          eventDuration: draft.eventDuration,
+          selectedPackageId: draft.selectedPackageId,
+          currentStep: draft.currentStep,
+          activeDraftId: id,
+          isDirty: false,
+          lastSavedAt: draft.updatedAt,
+        });
+      },
+      deleteDraft: (id) => {
+        const state = get();
+        const { [id]: _removed, ...remaining } = state.savedDrafts;
+        if (autoSaveTimer) {
+          clearInterval(autoSaveTimer);
+          autoSaveTimer = null;
+        }
+        if (id === state.activeDraftId) {
+          set({
+            ...initialWizardFields,
+            lastSavedAt: null,
+            isDirty: false,
+            activeDraftId: null,
+            savedDrafts: remaining,
+          });
+        } else {
+          set({ savedDrafts: remaining });
+        }
+      },
+      getAllDrafts: () => {
+        return Object.values(get().savedDrafts).sort(
+          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        );
       },
 
       // Get data for API
@@ -371,6 +555,8 @@ export const useWizardStore = create<WizardState & WizardActions>()(
         selectedPackageId: state.selectedPackageId,
         currentStep: state.currentStep,
         lastSavedAt: state.lastSavedAt,
+        activeDraftId: state.activeDraftId,
+        savedDrafts: state.savedDrafts,
       }),
     }
   )

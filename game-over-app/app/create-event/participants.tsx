@@ -51,6 +51,7 @@ export default function WizardStep3() {
     setActivityLevel,
     setTravelDistance,
     setEventDuration,
+    isStepValid,
   } = useWizardStore();
 
   const GROUP_COHESIONS = [
@@ -135,6 +136,9 @@ export default function WizardStep3() {
           {/* Vibe Preference */}
           <YStack marginBottom="$5">
             <SectionLabel>{t.wizard.vibePreference}</SectionLabel>
+            <Text fontSize="$1" color="$textTertiary" marginBottom="$2">
+              {t.wizard.selectMultiple}
+            </Text>
             <ChipGroup testID="vibe-preferences-chips">
               {VIBE_OPTIONS.map(vibe => (
                 <Chip
@@ -208,6 +212,7 @@ export default function WizardStep3() {
         onBack={handleBack}
         onNext={handleNext}
         nextLabel={`${t.wizard.nextStep} →`}
+        nextDisabled={!isStepValid(3)}
       />
     </YStack>
   );

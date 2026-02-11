@@ -7,6 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { Stack, useRouter, usePathname } from 'expo-router';
+
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -113,8 +114,17 @@ export default function CreateEventLayout() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { clearDraft, saveDraft, startAutoSave, stopAutoSave, hasDraft, partyType, goToStep } = useWizardStore();
+  const { deleteDraft, activeDraftId, saveDraft, startAutoSave, stopAutoSave, hasDraft, partyType, goToStep } = useWizardStore();
   const { t } = useTranslation();
+
+  // Navigate to the Events tab — dismiss modal stack back to tabs
+  const goToEventsTab = () => {
+    if (router.canDismiss()) {
+      router.dismissTo('/(tabs)/events');
+    } else {
+      router.replace('/(tabs)/events');
+    }
+  };
 
   // Start auto-save when wizard mounts, stop when unmounts
   useEffect(() => {
@@ -156,15 +166,15 @@ export default function CreateEventLayout() {
               text: tr.wizard.discard,
               style: 'destructive',
               onPress: () => {
-                clearDraft();
-                router.navigate('/(tabs)/events');
+                if (activeDraftId) deleteDraft(activeDraftId);
+                goToEventsTab();
               },
             },
             {
               text: tr.wizard.saveExit,
               onPress: () => {
                 saveDraft();
-                router.navigate('/(tabs)/events');
+                goToEventsTab();
               },
             },
           ]
@@ -189,15 +199,15 @@ export default function CreateEventLayout() {
           text: tr.wizard.saveDraftExit,
           onPress: () => {
             saveDraft();
-            router.navigate('/(tabs)/events');
+            goToEventsTab();
           },
         },
         {
           text: tr.wizard.discardDraft,
           style: 'destructive',
           onPress: () => {
-            clearDraft();
-            router.navigate('/(tabs)/events');
+            if (activeDraftId) deleteDraft(activeDraftId);
+            goToEventsTab();
           },
         },
       ]

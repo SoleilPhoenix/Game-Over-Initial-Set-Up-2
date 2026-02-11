@@ -6,11 +6,13 @@
 import React, { useState } from 'react';
 import { Alert, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
-import { useEvent } from '@/hooks/queries/useEvents';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEvent, eventKeys } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { useWizardStore } from '@/stores/wizardStore';
 import { addEventToCalendarWithFeedback } from '@/utils/calendar';
@@ -31,9 +33,19 @@ export default function BookingConfirmationScreen() {
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
   const isDraft = eventId === 'draft';
   const { t } = useTranslation();
+
+  // Navigate to the Events tab — dismiss all modal/booking screens back to tabs
+  const goToEventsTab = () => {
+    if (router.canDismiss()) {
+      router.dismissTo('/(tabs)/events');
+    } else {
+      router.replace('/(tabs)/events');
+    }
+  };
 
   const { data: event, isLoading: eventLoading } = useEvent(isDraft ? undefined : eventId);
   const { data: booking, isLoading: bookingLoading } = useBooking(isDraft ? undefined : eventId);
@@ -87,17 +99,22 @@ export default function BookingConfirmationScreen() {
   };
 
   const handleViewEvent = () => {
-    useWizardStore.getState().clearDraft();
+    const { activeDraftId, deleteDraft } = useWizardStore.getState();
+    if (activeDraftId) deleteDraft(activeDraftId);
+    queryClient.invalidateQueries({ queryKey: eventKeys.all });
     if (isDraft) {
-      router.replace('/(tabs)/events');
+      goToEventsTab();
       return;
     }
-    router.replace(`/event/${eventId}`);
+    goToEventsTab();
+    setTimeout(() => router.push(`/event/${eventId}`), 200);
   };
 
   const handleGoHome = () => {
-    useWizardStore.getState().clearDraft();
-    router.replace('/(tabs)/events');
+    const { activeDraftId, deleteDraft } = useWizardStore.getState();
+    if (activeDraftId) deleteDraft(activeDraftId);
+    queryClient.invalidateQueries({ queryKey: eventKeys.all });
+    goToEventsTab();
   };
 
   return (
