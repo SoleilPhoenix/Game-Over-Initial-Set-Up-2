@@ -464,7 +464,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           fitnessLevel: draft.fitnessLevel,
           drinkingCulture: draft.drinkingCulture,
           groupDynamic: draft.groupDynamic,
-          groupVibe: draft.groupVibe,
+          groupVibe: Array.isArray(draft.groupVibe) ? draft.groupVibe : (Array.isArray((draft as any).vibePreferences) ? (draft as any).vibePreferences : []),
           selectedPackageId: draft.selectedPackageId,
           currentStep: draft.currentStep,
           activeDraftId: id,
@@ -567,6 +567,32 @@ export const useWizardStore = create<WizardState & WizardActions>()(
         activeDraftId: state.activeDraftId,
         savedDrafts: state.savedDrafts,
       }),
+      // Merge persisted state with defaults so new fields always exist
+      merge: (persisted: any, current: any) => {
+        const merged = { ...current, ...persisted };
+        // Ensure new array/object fields have defaults when loading old data
+        if (!Array.isArray(merged.groupVibe)) merged.groupVibe = [];
+        if (!merged.savedDrafts) merged.savedDrafts = {};
+        // Clean up old-schema drafts (from pre-questionnaire-redesign)
+        const cleanDrafts: Record<string, any> = {};
+        for (const [id, draft] of Object.entries(merged.savedDrafts as Record<string, any>)) {
+          // Drop drafts that have old-only fields (gatheringSize, socialApproach, etc.)
+          if (draft.gatheringSize || draft.socialApproach || draft.activityLevel || draft.travelDistance) {
+            continue; // skip old-schema draft
+          }
+          // Migrate vibePreferences → groupVibe
+          if (!Array.isArray(draft.groupVibe)) {
+            draft.groupVibe = Array.isArray(draft.vibePreferences) ? draft.vibePreferences : [];
+          }
+          cleanDrafts[id] = draft;
+        }
+        merged.savedDrafts = cleanDrafts;
+        // If active draft was removed, reset to null
+        if (merged.activeDraftId && !cleanDrafts[merged.activeDraftId]) {
+          merged.activeDraftId = null;
+        }
+        return merged;
+      },
     }
   )
 );

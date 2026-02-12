@@ -237,13 +237,11 @@ export default function PaymentScreen() {
     <YStack flex={1} backgroundColor="$background">
       {/* Header */}
       <XStack
-        paddingTop={insets.top + 8}
+        paddingTop={insets.top}
         paddingHorizontal="$4"
-        paddingBottom="$3"
+        paddingBottom="$2"
         alignItems="center"
-        backgroundColor="$surface"
-        borderBottomWidth={1}
-        borderBottomColor="$borderColor"
+        backgroundColor="$background"
       >
         <XStack
           width={40}

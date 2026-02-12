@@ -141,13 +141,11 @@ export default function BookingSummaryScreen() {
     <YStack flex={1} backgroundColor={DARK_THEME.background}>
       {/* Header */}
       <XStack
-        paddingTop={insets.top + 4}
+        paddingTop={insets.top}
         paddingHorizontal="$4"
         paddingBottom="$2"
         alignItems="center"
-        backgroundColor={DARK_THEME.surface}
-        borderBottomWidth={1}
-        borderBottomColor={DARK_THEME.glassBorder}
+        backgroundColor={DARK_THEME.background}
       >
         <XStack
           width={40}

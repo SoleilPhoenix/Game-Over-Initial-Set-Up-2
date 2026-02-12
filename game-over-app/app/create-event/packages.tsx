@@ -223,31 +223,8 @@ function PackageSelectionCard({
             padding: 20,
           }}
         >
-          {/* Badge: Recommendation or Selected */}
-          {isBestMatch && (
-            <XStack
-              position="absolute"
-              top={16}
-              left={16}
-              backgroundColor={DARK_THEME.primary}
-              paddingHorizontal={12}
-              paddingVertical={6}
-              borderRadius={20}
-              gap="$1.5"
-              alignItems="center"
-            >
-              {isSelected ? (
-                <Ionicons name="checkmark-circle" size={12} color="white" />
-              ) : (
-                <Ionicons name="sparkles" size={12} color="white" />
-              )}
-              <Text color="white" fontSize={11} fontWeight="600">
-                Recommendation based on preferences
-              </Text>
-            </XStack>
-          )}
-
-          {isSelected && !isBestMatch && (
+          {/* Badges: Selected (green) takes priority, then Recommendation (blue) */}
+          {isSelected ? (
             <XStack
               position="absolute"
               top={16}
@@ -264,7 +241,24 @@ function PackageSelectionCard({
                 Selected
               </Text>
             </XStack>
-          )}
+          ) : isBestMatch ? (
+            <XStack
+              position="absolute"
+              top={16}
+              left={16}
+              backgroundColor={DARK_THEME.primary}
+              paddingHorizontal={12}
+              paddingVertical={6}
+              borderRadius={20}
+              gap="$1.5"
+              alignItems="center"
+            >
+              <Ionicons name="sparkles" size={12} color="white" />
+              <Text color="white" fontSize={11} fontWeight="600">
+                Recommendation based on preferences
+              </Text>
+            </XStack>
+          ) : null}
 
           {/* Card Content */}
           <YStack gap="$3">
