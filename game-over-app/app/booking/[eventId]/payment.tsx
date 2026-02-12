@@ -30,9 +30,15 @@ const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; pri
   'hannover-essential': { id: 'hannover-essential', name: 'Hannover Essential', tier: 'essential', price_per_person_cents: 99_00 },
   'hannover-grand': { id: 'hannover-grand', name: 'Hannover Grand', tier: 'grand', price_per_person_cents: 199_00 },
 };
-const CITY_NAMES: Record<string, string> = { berlin: 'Berlin', hamburg: 'Hamburg', hannover: 'Hannover' };
+const CITY_NAMES: Record<string, string> = {
+  berlin: 'Berlin', hamburg: 'Hamburg', hannover: 'Hannover',
+  '550e8400-e29b-41d4-a716-446655440101': 'Berlin',
+  '550e8400-e29b-41d4-a716-446655440102': 'Hamburg',
+  '550e8400-e29b-41d4-a716-446655440103': 'Hannover',
+};
 const SERVICE_FEE_RATE = 0.10;
 const MIN_SERVICE_FEE_CENTS = 5000;
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // In E2E mode, we mock the payment
 const IS_E2E = process.env.EXPO_PUBLIC_E2E_MODE === 'true';
@@ -47,20 +53,20 @@ export default function PaymentScreen() {
   const isDraft = eventId === 'draft';
   const { t } = useTranslation();
 
-  // For real events, use the booking flow hook
-  const bookingFlow = useBookingFlow(isDraft ? undefined : eventId, packageId);
-
   // Wizard store data for draft mode
   const wizardCityId = useWizardStore((s) => s.cityId);
   const wizardParticipantCount = useWizardStore((s) => s.participantCount);
   const wizardHonoreeName = useWizardStore((s) => s.honoreeName);
+
+  // For real events, use the booking flow hook (pass URL participant count as override)
+  const urlParticipantCount = paramParticipants ? parseInt(paramParticipants, 10) : undefined;
+  const bookingFlow = useBookingFlow(isDraft ? undefined : eventId, packageId, urlParticipantCount);
 
   // Resolve package
   const draftPkg = packageId ? FALLBACK_PKG[packageId] : null;
   const pkg = isDraft ? draftPkg : (bookingFlow.package || draftPkg);
 
   // Draft pricing
-  const urlParticipantCount = paramParticipants ? parseInt(paramParticipants, 10) : null;
   const draftPricing = useMemo(() => {
     if (!draftPkg) return null;
     const totalParticipants = urlParticipantCount || wizardParticipantCount || 10;
@@ -76,7 +82,12 @@ export default function PaymentScreen() {
   }, [draftPkg, urlParticipantCount, wizardParticipantCount]);
 
   const effectiveCityId = paramCityId || wizardCityId;
-  const event = isDraft ? { city: { name: effectiveCityId ? CITY_NAMES[effectiveCityId] || effectiveCityId : 'Unknown' }, honoree_name: wizardHonoreeName || 'Guest' } : bookingFlow.event;
+  const cityFallback = effectiveCityId ? CITY_NAMES[effectiveCityId] || effectiveCityId : 'Unknown';
+  const honoreeNameFallback = wizardHonoreeName || 'Guest';
+  // For non-draft events, use DB event data with wizard fallbacks
+  const event = isDraft
+    ? { city: { name: cityFallback }, honoree_name: honoreeNameFallback }
+    : (bookingFlow.event || { city: { name: cityFallback }, honoree_name: honoreeNameFallback });
   const pricing = isDraft ? draftPricing : bookingFlow.pricing;
   const excludeHonoree = isDraft ? true : bookingFlow.excludeHonoree;
   const isLoading = isDraft ? false : bookingFlow.isLoading;
@@ -118,8 +129,9 @@ export default function PaymentScreen() {
     if (!eventId) return;
 
     try {
-      // Demo mode: draft events, E2E tests, or missing Stripe key
-      const useSimulatedPayment = isDraft || IS_E2E || !process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+      // Demo mode: draft events, E2E tests, missing Stripe key, or fallback package (non-UUID ID)
+      const isFallbackPackage = !!(pkg?.id && !UUID_REGEX.test(pkg.id));
+      const useSimulatedPayment = isDraft || IS_E2E || !process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || isFallbackPackage;
 
       if (useSimulatedPayment) {
         const tr = getTranslation();
@@ -143,10 +155,13 @@ export default function PaymentScreen() {
 
         // If we have a real event in DB, update its status to 'booked'
         if (!isDraft) {
-          await supabase
+          const { error: updateError } = await supabase
             .from('events')
             .update({ status: 'booked' })
             .eq('id', eventId);
+          if (updateError) {
+            console.warn('Event status update failed (non-blocking):', updateError.message);
+          }
         }
 
         setPaymentStep('confirming');

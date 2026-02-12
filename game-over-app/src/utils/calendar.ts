@@ -1,6 +1,7 @@
 /**
  * Calendar Utility
  * Add events to device calendar using expo-calendar
+ * Uses write-only permission — does NOT read existing calendars.
  */
 
 import { Alert, Platform } from 'react-native';
@@ -16,68 +17,65 @@ export interface CalendarEventData {
 }
 
 /**
- * Request calendar permissions
- * Returns true if granted, false otherwise
+ * Request calendar write permission.
+ * On iOS 17+ this requests write-only access (not full calendar read).
  */
-export async function requestCalendarPermissions(): Promise<boolean> {
-  const { status: existingStatus } = await Calendar.getCalendarPermissionsAsync();
-
-  if (existingStatus === 'granted') {
-    return true;
-  }
+async function requestWritePermission(): Promise<boolean> {
+  const { status: existing } = await Calendar.getCalendarPermissionsAsync();
+  if (existing === 'granted') return true;
 
   const { status } = await Calendar.requestCalendarPermissionsAsync();
   return status === 'granted';
 }
 
 /**
- * Get or create a calendar for the app
- * Returns the calendar ID
+ * Get the default calendar for new events.
+ * Avoids getCalendarsAsync() which requires full calendar read access.
  */
-async function getOrCreateCalendar(): Promise<string | null> {
-  const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-
-  // Try to find a writable calendar
-  const writableCalendar = calendars.find(
-    (cal) =>
-      cal.allowsModifications &&
-      (cal.source?.type === Calendar.SourceType.LOCAL ||
-        cal.source?.type === Calendar.SourceType.CALDAV ||
-        cal.isPrimary)
-  );
-
-  if (writableCalendar) {
-    return writableCalendar.id;
+async function getDefaultCalendarId(): Promise<string | null> {
+  try {
+    const defaultCal = await Calendar.getDefaultCalendarAsync();
+    if (defaultCal?.id) return defaultCal.id;
+  } catch {
+    // getDefaultCalendarAsync may not be available or may need full access
   }
 
-  // On iOS, try to create a new calendar
-  if (Platform.OS === 'ios') {
-    const defaultCalendarSource =
-      calendars.find((cal) => cal.source?.type === Calendar.SourceType.LOCAL)?.source ||
-      calendars.find((cal) => cal.source?.type === Calendar.SourceType.CALDAV)?.source;
+  // Fallback: try to list calendars (works when full access is granted)
+  try {
+    const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+    const writable = calendars.find(
+      (cal) =>
+        cal.allowsModifications &&
+        (cal.isPrimary ||
+          cal.source?.type === Calendar.SourceType.LOCAL ||
+          cal.source?.type === Calendar.SourceType.CALDAV)
+    );
+    if (writable) return writable.id;
 
-    if (defaultCalendarSource) {
-      try {
-        const newCalendarId = await Calendar.createCalendarAsync({
-          title: 'Game Over Events',
-          color: '#258CF4',
-          entityType: Calendar.EntityTypes.EVENT,
-          sourceId: defaultCalendarSource.id,
-          source: defaultCalendarSource,
-          name: 'Game Over',
-          ownerAccount: 'personal',
-          accessLevel: Calendar.CalendarAccessLevel.OWNER,
-        });
-        return newCalendarId;
-      } catch {
-        // Fall back to any writable calendar
-        return calendars.find((cal) => cal.allowsModifications)?.id || null;
-      }
+    // Last resort: any writable calendar
+    return calendars.find((cal) => cal.allowsModifications)?.id || null;
+  } catch {
+    // Cannot list calendars (write-only mode on iOS 17+)
+  }
+
+  // Create a dedicated app calendar as last resort
+  if (Platform.OS === 'ios') {
+    try {
+      return await Calendar.createCalendarAsync({
+        title: 'Game Over Events',
+        color: '#5A7EB0',
+        entityType: Calendar.EntityTypes.EVENT,
+        source: { isLocalAccount: true, name: 'Game Over', type: Calendar.SourceType.LOCAL },
+        name: 'Game Over',
+        ownerAccount: 'personal',
+        accessLevel: Calendar.CalendarAccessLevel.OWNER,
+      });
+    } catch {
+      // Cannot create calendar
     }
   }
 
-  // On Android, just use the first writable calendar
-  return calendars.find((cal) => cal.allowsModifications)?.id || null;
+  return null;
 }
 
 /**
@@ -89,9 +87,7 @@ export async function addEventToCalendar(eventData: CalendarEventData): Promise<
   error?: string;
 }> {
   try {
-    // Check/request permissions
-    const hasPermission = await requestCalendarPermissions();
-
+    const hasPermission = await requestWritePermission();
     if (!hasPermission) {
       return {
         success: false,
@@ -99,9 +95,7 @@ export async function addEventToCalendar(eventData: CalendarEventData): Promise<
       };
     }
 
-    // Get calendar to add event to
-    const calendarId = await getOrCreateCalendar();
-
+    const calendarId = await getDefaultCalendarId();
     if (!calendarId) {
       return {
         success: false,
@@ -109,20 +103,17 @@ export async function addEventToCalendar(eventData: CalendarEventData): Promise<
       };
     }
 
-    // Parse dates
     const startDate = new Date(eventData.startDate);
     const endDate = eventData.endDate
       ? new Date(eventData.endDate)
-      : new Date(startDate.getTime() + 24 * 60 * 60 * 1000); // Default to 1 day
+      : new Date(startDate.getTime() + 24 * 60 * 60 * 1000);
 
-    // Build notes with booking reference
     let notes = eventData.notes || '';
     if (eventData.bookingReference) {
       notes = `Booking Reference: ${eventData.bookingReference}\n\n${notes}`;
     }
     notes += '\n\nCreated by Game Over App';
 
-    // Create the calendar event
     const eventId = await Calendar.createEventAsync(calendarId, {
       title: eventData.title,
       startDate,

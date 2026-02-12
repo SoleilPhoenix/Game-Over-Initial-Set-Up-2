@@ -19,10 +19,11 @@ import { useTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
 
 // PRD-defined cities: Berlin, Hamburg, Hannover
+// UUIDs must match supabase/migrations/20260211000000_add_german_cities.sql
 const AVAILABLE_CITIES = [
-  { id: 'berlin', name: 'Berlin' },
-  { id: 'hamburg', name: 'Hamburg' },
-  { id: 'hannover', name: 'Hannover' },
+  { id: '550e8400-e29b-41d4-a716-446655440101', name: 'Berlin', slug: 'berlin' },
+  { id: '550e8400-e29b-41d4-a716-446655440102', name: 'Hamburg', slug: 'hamburg' },
+  { id: '550e8400-e29b-41d4-a716-446655440103', name: 'Hannover', slug: 'hannover' },
 ];
 
 function formatDate(date: Date): string {

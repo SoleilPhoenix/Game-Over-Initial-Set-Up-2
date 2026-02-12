@@ -20,17 +20,21 @@ const AUTO_SAVE_INTERVAL = 30000; // 30 seconds
 
 // Types
 type PartyType = 'bachelor' | 'bachelorette';
-type GatheringSize = 'intimate' | 'small_group' | 'party';
-type SocialApproach = 'wallflower' | 'butterfly' | 'observer' | 'mingler';
-type EnergyLevel = 'low_key' | 'moderate' | 'high_energy' | 'extreme';
-type ParticipationStyle = 'active' | 'passive' | 'competitive' | 'cooperative';
-type VenuePreference = 'indoors' | 'outdoors' | 'rooftop' | 'dive_bar' | 'club';
-type PublicAttention = 'low_key' | 'moderate' | 'center_stage';
-type AgeRange = '21-25' | '26-30' | '31-35' | '35+';
-type GroupCohesion = 'close_friends' | 'mixed_group' | 'strangers';
-type ActivityLevel = 'relaxed' | 'moderate' | 'high_paced';
-type TravelDistance = 'local' | 'domestic' | 'international';
-type EventDuration = '1_day' | '2_days' | '3_plus_days' | '1_night' | 'weekend' | 'long_weekend';
+
+// Step 2: Honoree Preferences
+export type HonoreeEnergyLevel = 'relaxed' | 'active' | 'action' | 'party';
+export type SpotlightComfort = 'background' | 'group' | 'center_stage';
+export type CompetitionStyle = 'cooperative' | 'competitive' | 'spectator';
+export type EnjoymentType = 'food' | 'drinks' | 'experience';
+export type IndoorOutdoor = 'indoor' | 'outdoor' | 'mix';
+export type EveningStyle = 'dinner_only' | 'dinner_bar' | 'full_night';
+
+// Step 3: Group Preferences
+export type AgeRange = '21-25' | '26-30' | '31-35' | '35+';
+export type GroupCohesion = 'close_friends' | 'mixed' | 'strangers';
+export type FitnessLevel = 'low' | 'medium' | 'high';
+export type DrinkingCulture = 'low' | 'social' | 'central';
+export type GroupDynamic = 'team_players' | 'competitive' | 'relaxed';
 
 export interface DraftSnapshot {
   id: string;
@@ -42,18 +46,21 @@ export interface DraftSnapshot {
   participantCount: number;
   startDate: string | null;
   endDate: string | null;
-  gatheringSize: GatheringSize | null;
-  socialApproach: SocialApproach | null;
-  energyLevel: EnergyLevel | null;
-  participationStyle: ParticipationStyle | null;
-  venuePreference: VenuePreference | null;
-  publicAttention: PublicAttention | null;
+  // Step 2: Honoree
+  energyLevel: HonoreeEnergyLevel | null;
+  spotlightComfort: SpotlightComfort | null;
+  competitionStyle: CompetitionStyle | null;
+  enjoymentType: EnjoymentType | null;
+  indoorOutdoor: IndoorOutdoor | null;
+  eveningStyle: EveningStyle | null;
+  // Step 3: Group
   averageAge: AgeRange | null;
   groupCohesion: GroupCohesion | null;
-  vibePreferences: string[];
-  activityLevel: ActivityLevel | null;
-  travelDistance: TravelDistance | null;
-  eventDuration: EventDuration | null;
+  fitnessLevel: FitnessLevel | null;
+  drinkingCulture: DrinkingCulture | null;
+  groupDynamic: GroupDynamic | null;
+  groupVibe: string[];
+  // Step 4
   selectedPackageId: string | null;
   currentStep: number;
 }
@@ -68,20 +75,20 @@ interface WizardState {
   endDate: string | null;
 
   // Step 2: Honoree Preferences
-  gatheringSize: GatheringSize | null;
-  socialApproach: SocialApproach | null;
-  energyLevel: EnergyLevel | null;
-  participationStyle: ParticipationStyle | null;
-  venuePreference: VenuePreference | null;
-  publicAttention: PublicAttention | null;
+  energyLevel: HonoreeEnergyLevel | null;
+  spotlightComfort: SpotlightComfort | null;
+  competitionStyle: CompetitionStyle | null;
+  enjoymentType: EnjoymentType | null;
+  indoorOutdoor: IndoorOutdoor | null;
+  eveningStyle: EveningStyle | null;
 
-  // Step 3: Participant Preferences
+  // Step 3: Group Preferences
   averageAge: AgeRange | null;
   groupCohesion: GroupCohesion | null;
-  vibePreferences: string[];
-  activityLevel: ActivityLevel | null;
-  travelDistance: TravelDistance | null;
-  eventDuration: EventDuration | null;
+  fitnessLevel: FitnessLevel | null;
+  drinkingCulture: DrinkingCulture | null;
+  groupDynamic: GroupDynamic | null;
+  groupVibe: string[];
 
   // Step 4: Package Selection
   selectedPackageId: string | null;
@@ -105,21 +112,21 @@ interface WizardActions {
   setDates: (startDate: string, endDate: string) => void;
 
   // Step 2 actions
-  setGatheringSize: (size: GatheringSize) => void;
-  setSocialApproach: (approach: SocialApproach) => void;
-  setEnergyLevel: (level: EnergyLevel) => void;
-  setParticipationStyle: (style: ParticipationStyle) => void;
-  setVenuePreference: (venue: VenuePreference) => void;
-  setPublicAttention: (attention: PublicAttention) => void;
+  setEnergyLevel: (level: HonoreeEnergyLevel) => void;
+  setSpotlightComfort: (comfort: SpotlightComfort) => void;
+  setCompetitionStyle: (style: CompetitionStyle) => void;
+  setEnjoymentType: (type: EnjoymentType) => void;
+  setIndoorOutdoor: (pref: IndoorOutdoor) => void;
+  setEveningStyle: (style: EveningStyle) => void;
 
   // Step 3 actions
   setAverageAge: (age: AgeRange) => void;
   setGroupCohesion: (cohesion: GroupCohesion) => void;
-  setVibePreferences: (vibes: string[]) => void;
-  toggleVibePreference: (vibe: string) => void;
-  setActivityLevel: (level: ActivityLevel) => void;
-  setTravelDistance: (distance: TravelDistance) => void;
-  setEventDuration: (duration: EventDuration) => void;
+  setFitnessLevel: (level: FitnessLevel) => void;
+  setDrinkingCulture: (culture: DrinkingCulture) => void;
+  setGroupDynamic: (dynamic: GroupDynamic) => void;
+  setGroupVibe: (vibes: string[]) => void;
+  toggleGroupVibe: (vibe: string) => void;
 
   // Step 4 actions
   setSelectedPackageId: (packageId: string) => void;
@@ -159,18 +166,18 @@ interface WizardActions {
       end_date: string | null;
     };
     preferences: {
-      gathering_size: GatheringSize | null;
-      social_approach: SocialApproach | null;
-      energy_level: EnergyLevel | null;
-      participation_style: ParticipationStyle | null;
-      venue_preference: VenuePreference | null;
-      public_attention: PublicAttention | null;
+      honoree_energy: HonoreeEnergyLevel | null;
+      spotlight_comfort: SpotlightComfort | null;
+      competition_style: CompetitionStyle | null;
+      enjoyment_type: EnjoymentType | null;
+      indoor_outdoor: IndoorOutdoor | null;
+      evening_style: EveningStyle | null;
       average_age: AgeRange | null;
       group_cohesion: GroupCohesion | null;
+      fitness_level: FitnessLevel | null;
+      drinking_culture: DrinkingCulture | null;
+      group_dynamic: GroupDynamic | null;
       vibe_preferences: string[];
-      activity_level: ActivityLevel | null;
-      travel_distance: TravelDistance | null;
-      event_duration: EventDuration | null;
     };
   } | null;
 }
@@ -182,18 +189,18 @@ const initialWizardFields = {
   participantCount: 10,
   startDate: null as string | null,
   endDate: null as string | null,
-  gatheringSize: null as GatheringSize | null,
-  socialApproach: null as SocialApproach | null,
-  energyLevel: null as EnergyLevel | null,
-  participationStyle: null as ParticipationStyle | null,
-  venuePreference: null as VenuePreference | null,
-  publicAttention: null as PublicAttention | null,
+  energyLevel: null as HonoreeEnergyLevel | null,
+  spotlightComfort: null as SpotlightComfort | null,
+  competitionStyle: null as CompetitionStyle | null,
+  enjoymentType: null as EnjoymentType | null,
+  indoorOutdoor: null as IndoorOutdoor | null,
+  eveningStyle: null as EveningStyle | null,
   averageAge: null as AgeRange | null,
   groupCohesion: null as GroupCohesion | null,
-  vibePreferences: [] as string[],
-  activityLevel: null as ActivityLevel | null,
-  travelDistance: null as TravelDistance | null,
-  eventDuration: null as EventDuration | null,
+  fitnessLevel: null as FitnessLevel | null,
+  drinkingCulture: null as DrinkingCulture | null,
+  groupDynamic: null as GroupDynamic | null,
+  groupVibe: [] as string[],
   selectedPackageId: null as string | null,
   currentStep: 1,
 };
@@ -221,18 +228,18 @@ function snapshotFromState(state: WizardState, id: string, now: string): DraftSn
     participantCount: state.participantCount,
     startDate: state.startDate,
     endDate: state.endDate,
-    gatheringSize: state.gatheringSize,
-    socialApproach: state.socialApproach,
     energyLevel: state.energyLevel,
-    participationStyle: state.participationStyle,
-    venuePreference: state.venuePreference,
-    publicAttention: state.publicAttention,
+    spotlightComfort: state.spotlightComfort,
+    competitionStyle: state.competitionStyle,
+    enjoymentType: state.enjoymentType,
+    indoorOutdoor: state.indoorOutdoor,
+    eveningStyle: state.eveningStyle,
     averageAge: state.averageAge,
     groupCohesion: state.groupCohesion,
-    vibePreferences: state.vibePreferences,
-    activityLevel: state.activityLevel,
-    travelDistance: state.travelDistance,
-    eventDuration: state.eventDuration,
+    fitnessLevel: state.fitnessLevel,
+    drinkingCulture: state.drinkingCulture,
+    groupDynamic: state.groupDynamic,
+    groupVibe: state.groupVibe,
     selectedPackageId: state.selectedPackageId,
     currentStep: state.currentStep,
   };
@@ -262,30 +269,31 @@ export const useWizardStore = create<WizardState & WizardActions>()(
         set({ startDate, endDate, isDirty: true }),
 
       // Step 2 actions
-      setGatheringSize: (size) => set({ gatheringSize: size, isDirty: true }),
-      setSocialApproach: (approach) =>
-        set({ socialApproach: approach, isDirty: true }),
       setEnergyLevel: (level) => set({ energyLevel: level, isDirty: true }),
-      setParticipationStyle: (style) => set({ participationStyle: style, isDirty: true }),
-      setVenuePreference: (venue) => set({ venuePreference: venue, isDirty: true }),
-      setPublicAttention: (attention) => set({ publicAttention: attention, isDirty: true }),
+      setSpotlightComfort: (comfort) => set({ spotlightComfort: comfort, isDirty: true }),
+      setCompetitionStyle: (style) => set({ competitionStyle: style, isDirty: true }),
+      setEnjoymentType: (type) => set({ enjoymentType: type, isDirty: true }),
+      setIndoorOutdoor: (pref) => set({ indoorOutdoor: pref, isDirty: true }),
+      setEveningStyle: (style) => set({ eveningStyle: style, isDirty: true }),
 
       // Step 3 actions
       setAverageAge: (age) => set({ averageAge: age, isDirty: true }),
       setGroupCohesion: (cohesion) =>
         set({ groupCohesion: cohesion, isDirty: true }),
-      setVibePreferences: (vibes) =>
-        set({ vibePreferences: vibes, isDirty: true }),
-      toggleVibePreference: (vibe) => {
-        const current = get().vibePreferences;
-        const newVibes = current.includes(vibe)
-          ? current.filter((v) => v !== vibe)
-          : [...current, vibe];
-        set({ vibePreferences: newVibes, isDirty: true });
+      setFitnessLevel: (level) => set({ fitnessLevel: level, isDirty: true }),
+      setDrinkingCulture: (culture) => set({ drinkingCulture: culture, isDirty: true }),
+      setGroupDynamic: (dynamic) => set({ groupDynamic: dynamic, isDirty: true }),
+      setGroupVibe: (vibes) =>
+        set({ groupVibe: vibes.slice(0, 2), isDirty: true }),
+      toggleGroupVibe: (vibe) => {
+        const current = get().groupVibe;
+        if (current.includes(vibe)) {
+          set({ groupVibe: current.filter((v) => v !== vibe), isDirty: true });
+        } else if (current.length < 2) {
+          set({ groupVibe: [...current, vibe], isDirty: true });
+        }
+        // If already at max 2 and trying to add, do nothing
       },
-      setActivityLevel: (level) => set({ activityLevel: level, isDirty: true }),
-      setTravelDistance: (distance) => set({ travelDistance: distance, isDirty: true }),
-      setEventDuration: (duration) => set({ eventDuration: duration, isDirty: true }),
 
       // Step 4 actions
       setSelectedPackageId: (packageId) =>
@@ -323,21 +331,22 @@ export const useWizardStore = create<WizardState & WizardActions>()(
             );
           case 2:
             return !!(
-              state.gatheringSize &&
-              state.socialApproach &&
               state.energyLevel &&
-              state.participationStyle &&
-              state.venuePreference &&
-              state.publicAttention
+              state.spotlightComfort &&
+              state.competitionStyle &&
+              state.enjoymentType &&
+              state.indoorOutdoor &&
+              state.eveningStyle
             );
           case 3:
             return !!(
               state.averageAge &&
               state.groupCohesion &&
-              state.vibePreferences.length > 0 &&
-              state.activityLevel &&
-              state.travelDistance &&
-              state.eventDuration
+              state.fitnessLevel &&
+              state.drinkingCulture &&
+              state.groupDynamic &&
+              state.groupVibe.length >= 1 &&
+              state.groupVibe.length <= 2
             );
           case 4:
             return !!state.selectedPackageId;
@@ -444,18 +453,18 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           participantCount: draft.participantCount,
           startDate: draft.startDate,
           endDate: draft.endDate,
-          gatheringSize: draft.gatheringSize,
-          socialApproach: draft.socialApproach,
           energyLevel: draft.energyLevel,
-          participationStyle: draft.participationStyle,
-          venuePreference: draft.venuePreference,
-          publicAttention: draft.publicAttention,
+          spotlightComfort: draft.spotlightComfort,
+          competitionStyle: draft.competitionStyle,
+          enjoymentType: draft.enjoymentType,
+          indoorOutdoor: draft.indoorOutdoor,
+          eveningStyle: draft.eveningStyle,
           averageAge: draft.averageAge,
           groupCohesion: draft.groupCohesion,
-          vibePreferences: draft.vibePreferences,
-          activityLevel: draft.activityLevel,
-          travelDistance: draft.travelDistance,
-          eventDuration: draft.eventDuration,
+          fitnessLevel: draft.fitnessLevel,
+          drinkingCulture: draft.drinkingCulture,
+          groupDynamic: draft.groupDynamic,
+          groupVibe: draft.groupVibe,
           selectedPackageId: draft.selectedPackageId,
           currentStep: draft.currentStep,
           activeDraftId: id,
@@ -514,18 +523,18 @@ export const useWizardStore = create<WizardState & WizardActions>()(
             end_date: state.endDate,
           },
           preferences: {
-            gathering_size: state.gatheringSize,
-            social_approach: state.socialApproach,
-            energy_level: state.energyLevel,
-            participation_style: state.participationStyle,
-            venue_preference: state.venuePreference,
-            public_attention: state.publicAttention,
+            honoree_energy: state.energyLevel,
+            spotlight_comfort: state.spotlightComfort,
+            competition_style: state.competitionStyle,
+            enjoyment_type: state.enjoymentType,
+            indoor_outdoor: state.indoorOutdoor,
+            evening_style: state.eveningStyle,
             average_age: state.averageAge,
             group_cohesion: state.groupCohesion,
-            vibe_preferences: state.vibePreferences,
-            activity_level: state.activityLevel,
-            travel_distance: state.travelDistance,
-            event_duration: state.eventDuration,
+            fitness_level: state.fitnessLevel,
+            drinking_culture: state.drinkingCulture,
+            group_dynamic: state.groupDynamic,
+            vibe_preferences: state.groupVibe,
           },
         };
       },
@@ -540,18 +549,18 @@ export const useWizardStore = create<WizardState & WizardActions>()(
         participantCount: state.participantCount,
         startDate: state.startDate,
         endDate: state.endDate,
-        gatheringSize: state.gatheringSize,
-        socialApproach: state.socialApproach,
         energyLevel: state.energyLevel,
-        participationStyle: state.participationStyle,
-        venuePreference: state.venuePreference,
-        publicAttention: state.publicAttention,
+        spotlightComfort: state.spotlightComfort,
+        competitionStyle: state.competitionStyle,
+        enjoymentType: state.enjoymentType,
+        indoorOutdoor: state.indoorOutdoor,
+        eveningStyle: state.eveningStyle,
         averageAge: state.averageAge,
         groupCohesion: state.groupCohesion,
-        vibePreferences: state.vibePreferences,
-        activityLevel: state.activityLevel,
-        travelDistance: state.travelDistance,
-        eventDuration: state.eventDuration,
+        fitnessLevel: state.fitnessLevel,
+        drinkingCulture: state.drinkingCulture,
+        groupDynamic: state.groupDynamic,
+        groupVibe: state.groupVibe,
         selectedPackageId: state.selectedPackageId,
         currentStep: state.currentStep,
         lastSavedAt: state.lastSavedAt,

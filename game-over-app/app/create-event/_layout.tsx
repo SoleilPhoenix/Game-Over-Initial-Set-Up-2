@@ -183,8 +183,15 @@ export default function CreateEventLayout() {
         router.back();
       }
     } else {
-      // Go to previous step
-      router.back();
+      // Navigate to the previous wizard step explicitly.
+      // router.back() only pops the nav stack, which fails when resuming
+      // a draft (e.g. jumping directly to step 3 — there's no step 2 in history).
+      const prevPath = STEPS[currentStepIndex - 1]?.path;
+      if (prevPath) {
+        router.replace(prevPath as any);
+      } else {
+        router.back();
+      }
     }
   };
 

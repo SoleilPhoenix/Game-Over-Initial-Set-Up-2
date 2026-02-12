@@ -81,7 +81,7 @@ export default function EventsScreen() {
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const { t } = useTranslation();
 
-  const { data: events, isLoading, refetch } = useEvents();
+  const { data: events, isLoading, error: eventsError, refetch } = useEvents();
 
   // Refetch events when screen gains focus (e.g., returning from booking)
   useFocusEffect(
@@ -393,12 +393,31 @@ export default function EventsScreen() {
   );
 
   const renderSingleDraftCard = (draft: DraftSnapshot) => {
-    const stepLabels = [t.wizard.keyDetails, t.wizard.preferences, t.wizard.participants, t.wizard.packageSelection];
     const draftTitle = draft.honoreeName
       ? `${draft.honoreeName}'s ${draft.partyType === 'bachelor' ? t.events.bachelorParty : t.events.bacheloretteParty}`
       : t.events.newEvent;
-    const stepLabel = stepLabels[draft.currentStep - 1] || t.wizard.keyDetails;
     const progressPct = Math.round((draft.currentStep / 4) * 100);
+
+    // Resolve cityId to display name (may be UUID or slug)
+    const CITY_NAMES: Record<string, string> = {
+      berlin: 'Berlin', hamburg: 'Hamburg', hannover: 'Hannover',
+      '550e8400-e29b-41d4-a716-446655440101': 'Berlin',
+      '550e8400-e29b-41d4-a716-446655440102': 'Hamburg',
+      '550e8400-e29b-41d4-a716-446655440103': 'Hannover',
+    };
+    const cityName = draft.cityId ? (CITY_NAMES[draft.cityId] || draft.cityId) : null;
+
+    // Format date for display
+    const dateStr = draft.startDate
+      ? new Date(draft.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+      : null;
+
+    // Build subtitle: City · Date · X participants
+    const subtitleParts: string[] = [];
+    if (cityName) subtitleParts.push(cityName);
+    if (dateStr) subtitleParts.push(dateStr);
+    if (draft.participantCount > 0) subtitleParts.push(`${draft.participantCount} ${t.events.participantsLabel || 'participants'}`);
+    const subtitle = subtitleParts.length > 0 ? subtitleParts.join(' · ') : t.events.noCityLabel;
 
     return (
       <Pressable
@@ -422,8 +441,8 @@ export default function EventsScreen() {
                 <Text style={styles.draftBadgeText}>{t.events.draft}</Text>
               </View>
             </XStack>
-            <Text style={styles.dateText}>
-              {draft.cityId ? `${draft.cityId.charAt(0).toUpperCase()}${draft.cityId.slice(1)}` : t.events.noCityLabel} — {t.events.step} {draft.currentStep}: {stepLabel}
+            <Text style={styles.dateText} numberOfLines={1}>
+              {subtitle}
             </Text>
           </YStack>
           <Ionicons name="chevron-forward" size={20} color={DARK_THEME.textTertiary} />
@@ -511,7 +530,20 @@ export default function EventsScreen() {
         {renderFilterTabs()}
       </View>
 
-      {/* Content - No loading skeleton, show empty state immediately */}
+      {/* Error banner */}
+      {eventsError && (
+        <Pressable
+          onPress={handleRefresh}
+          style={styles.errorBanner}
+        >
+          <Ionicons name="alert-circle-outline" size={18} color="#F87171" />
+          <Text style={styles.errorText}>
+            {t.events.loadError || 'Failed to load events. Tap to retry.'}
+          </Text>
+        </Pressable>
+      )}
+
+      {/* Content */}
       {filteredEvents && filteredEvents.length > 0 ? (
         <FlatList
           data={filteredEvents}
@@ -808,5 +840,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#F59E0B',
     letterSpacing: 0.5,
+  },
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: 'rgba(248, 113, 113, 0.12)',
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#F87171',
+    flex: 1,
   },
 });

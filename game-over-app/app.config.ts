@@ -32,6 +32,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     },
     infoPlist: {
       UILaunchStoryboardName: 'SplashScreen',
+      NSCalendarsWriteOnlyAccessUsageDescription:
+        'Game Over needs to add your event to the calendar.',
       CFBundleURLTypes: [
         {
           CFBundleURLSchemes: ['gameover'],
@@ -74,7 +76,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-router',
     'expo-secure-store',
     'expo-apple-authentication',
-    'expo-calendar',
+    ['expo-calendar', {
+      calendarPermission: 'Game Over needs access to add events to your calendar.',
+    }],
     [
       '@stripe/stripe-react-native',
       {

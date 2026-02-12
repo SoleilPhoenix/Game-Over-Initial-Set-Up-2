@@ -117,11 +117,6 @@ export default function WizardStep5() {
       value: city?.name || 'Not selected',
     },
     {
-      icon: 'people-circle',
-      label: 'Gathering Size',
-      value: wizardState.gatheringSize?.replace('_', ' ') || 'Not specified',
-    },
-    {
       icon: 'flash',
       label: 'Energy Level',
       value: wizardState.energyLevel?.replace('_', ' ') || 'Not specified',
@@ -171,14 +166,14 @@ export default function WizardStep5() {
         </Card>
 
         {/* Vibes Card */}
-        {wizardState.vibePreferences.length > 0 && (
+        {wizardState.groupVibe.length > 0 && (
           <Card marginBottom="$4" testID="review-vibes-card">
             <YStack gap="$3">
               <Text fontSize="$4" fontWeight="700" color="$textPrimary">
                 Selected Vibes
               </Text>
               <XStack flexWrap="wrap" gap="$2">
-                {wizardState.vibePreferences.map(vibe => (
+                {wizardState.groupVibe.map(vibe => (
                   <Badge key={vibe} label={vibe} variant="primary" />
                 ))}
               </XStack>

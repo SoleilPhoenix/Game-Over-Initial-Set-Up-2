@@ -1,222 +1,127 @@
 /**
- * Package Matching Utility Tests
- * Unit tests for the package scoring algorithm
+ * Activity Matching Algorithm Tests
+ * Unit tests for the 12-question scoring algorithm
  */
 
 import { describe, it, expect } from 'vitest';
 import {
-  calculatePackageScore,
-  calculatePackageScoreBreakdown,
-  isBestMatchScore,
-  formatMatchPercentage,
-  BEST_MATCH_THRESHOLD,
-  PackageMatchingFields,
-  EventPreferences,
+  scoreActivities,
+  SCORE_THRESHOLDS,
+  type QuestionnaireAnswers,
 } from '@/utils/packageMatching';
 
-describe('packageMatching', () => {
-  describe('calculatePackageScore', () => {
-    it('should return 0 when no preferences match', () => {
-      const pkg: PackageMatchingFields = {
-        ideal_gathering_size: ['large'],
-        ideal_energy_level: ['high_energy'],
-        ideal_vibe: ['party'],
-      };
+// Helper: full answer set for "relaxed foodie, mixed group 30+"
+const RELAXED_FOODIE: QuestionnaireAnswers = {
+  h1: 'relaxed', h2: 'background', h3: 'spectator', h4: 'food', h5: 'indoor', h6: 'dinner_bar',
+  g1: '31-35', g2: 'mixed', g3: 'low', g4: 'social', g5: 'relaxed',
+  g6: ['food', 'culture'],
+};
 
-      const preferences: EventPreferences = {
-        gathering_size: 'intimate',
-        energy_level: 'low_key',
-        vibe_preferences: ['relaxing'],
-      };
+// Helper: full answer set for "action groom, young close friends"
+const ACTION_GROOM: QuestionnaireAnswers = {
+  h1: 'action', h2: 'center_stage', h3: 'competitive', h4: 'experience', h5: 'mix', h6: 'full_night',
+  g1: '21-25', g2: 'close_friends', g3: 'high', g4: 'central', g5: 'competitive',
+  g6: ['action', 'nightlife'],
+};
 
-      const score = calculatePackageScore(pkg, preferences);
+describe('scoreActivities', () => {
+  it('should return sorted activities descending by score', () => {
+    const results = scoreActivities(RELAXED_FOODIE);
 
-      // Score should be relatively low for non-matching preferences
-      expect(score).toBeLessThan(50);
-    });
-
-    it('should return high score for perfect match', () => {
-      const pkg: PackageMatchingFields = {
-        ideal_gathering_size: ['small_group'],
-        ideal_energy_level: ['moderate'],
-        ideal_vibe: ['adventurous', 'cultural'],
-      };
-
-      const preferences: EventPreferences = {
-        gathering_size: 'small_group',
-        energy_level: 'moderate',
-        vibe_preferences: ['adventurous', 'cultural'],
-      };
-
-      const score = calculatePackageScore(pkg, preferences);
-
-      expect(score).toBe(100);
-    });
-
-    it('should handle null/undefined values gracefully', () => {
-      const pkg: PackageMatchingFields = {
-        ideal_gathering_size: null,
-        ideal_energy_level: undefined,
-        ideal_vibe: [],
-      };
-
-      const preferences: EventPreferences = {
-        gathering_size: 'small_group',
-        energy_level: null,
-        vibe_preferences: undefined,
-      };
-
-      const score = calculatePackageScore(pkg, preferences);
-
-      expect(score).toBe(0);
-    });
-
-    it('should give partial score for adjacent gathering sizes', () => {
-      const pkg: PackageMatchingFields = {
-        ideal_gathering_size: ['small_group'],
-        ideal_energy_level: ['moderate'],
-        ideal_vibe: ['relaxing'],
-      };
-
-      const preferences: EventPreferences = {
-        gathering_size: 'intimate', // Adjacent to small_group
-        energy_level: 'moderate',
-        vibe_preferences: ['relaxing'],
-      };
-
-      const score = calculatePackageScore(pkg, preferences);
-
-      // Should be less than perfect but still good
-      expect(score).toBeGreaterThan(60);
-      expect(score).toBeLessThan(100);
-    });
-
-    it('should give partial score for adjacent energy levels', () => {
-      const pkg: PackageMatchingFields = {
-        ideal_gathering_size: ['small_group'],
-        ideal_energy_level: ['moderate'],
-        ideal_vibe: ['relaxing'],
-      };
-
-      const preferences: EventPreferences = {
-        gathering_size: 'small_group',
-        energy_level: 'high_energy', // Adjacent to moderate
-        vibe_preferences: ['relaxing'],
-      };
-
-      const score = calculatePackageScore(pkg, preferences);
-
-      expect(score).toBeGreaterThan(60);
-      expect(score).toBeLessThan(100);
-    });
+    expect(results.length).toBeGreaterThan(0);
+    for (let i = 1; i < results.length; i++) {
+      expect(results[i - 1].totalScore).toBeGreaterThanOrEqual(results[i].totalScore);
+    }
   });
 
-  describe('calculatePackageScoreBreakdown', () => {
-    it('should return detailed score breakdown', () => {
-      const pkg: PackageMatchingFields = {
-        ideal_gathering_size: ['small_group'],
-        ideal_energy_level: ['moderate'],
-        ideal_vibe: ['adventurous'],
-      };
+  it('should rank cooking class high for relaxed foodie scenario', () => {
+    const results = scoreActivities(RELAXED_FOODIE);
+    const cookingClass = results.find(a => a.name === 'Cooking Class');
 
-      const preferences: EventPreferences = {
-        gathering_size: 'small_group',
-        energy_level: 'moderate',
-        vibe_preferences: ['adventurous'],
-      };
-
-      const breakdown = calculatePackageScoreBreakdown(pkg, preferences);
-
-      expect(breakdown.gatheringScore).toBe(40); // WEIGHTS.GATHERING_SIZE
-      expect(breakdown.energyScore).toBe(30); // WEIGHTS.ENERGY_LEVEL
-      expect(breakdown.vibeScore).toBeGreaterThan(0);
-      expect(breakdown.totalScore).toBe(100);
-    });
-
-    it('should have individual scores sum to total', () => {
-      const pkg: PackageMatchingFields = {
-        ideal_gathering_size: ['party'],
-        ideal_energy_level: ['high_energy'],
-        ideal_vibe: ['party', 'clubbing'],
-      };
-
-      const preferences: EventPreferences = {
-        gathering_size: 'party',
-        energy_level: 'moderate',
-        vibe_preferences: ['nightlife'],
-      };
-
-      const breakdown = calculatePackageScoreBreakdown(pkg, preferences);
-
-      // Total should be sum of components (capped at 100)
-      const sum = breakdown.gatheringScore + breakdown.energyScore + breakdown.vibeScore;
-      expect(breakdown.totalScore).toBe(Math.min(100, sum));
-    });
+    expect(cookingClass).toBeDefined();
+    expect(cookingClass!.totalScore).toBeGreaterThanOrEqual(SCORE_THRESHOLDS.STRONG);
   });
 
-  describe('isBestMatchScore', () => {
-    it('should return true for scores >= threshold', () => {
-      expect(isBestMatchScore(BEST_MATCH_THRESHOLD)).toBe(true);
-      expect(isBestMatchScore(BEST_MATCH_THRESHOLD + 1)).toBe(true);
-      expect(isBestMatchScore(100)).toBe(true);
-    });
+  it('should rank go-karting high for action groom scenario', () => {
+    const results = scoreActivities(ACTION_GROOM);
+    const goKarting = results.find(a => a.name === 'Go-Karting');
 
-    it('should return false for scores < threshold', () => {
-      expect(isBestMatchScore(BEST_MATCH_THRESHOLD - 1)).toBe(false);
-      expect(isBestMatchScore(0)).toBe(false);
-      expect(isBestMatchScore(50)).toBe(false);
-    });
+    expect(goKarting).toBeDefined();
+    expect(goKarting!.totalScore).toBeGreaterThanOrEqual(SCORE_THRESHOLDS.GOOD);
   });
 
-  describe('formatMatchPercentage', () => {
-    it('should format score as percentage string', () => {
-      expect(formatMatchPercentage(100)).toBe('100% match');
-      expect(formatMatchPercentage(75)).toBe('75% match');
-      expect(formatMatchPercentage(0)).toBe('0% match');
-    });
+  it('should apply hard filter: exclude activities with -1 for strangers when g2=strangers', () => {
+    const strangerAnswers: QuestionnaireAnswers = {
+      ...RELAXED_FOODIE,
+      g2: 'strangers',
+    };
+    const results = scoreActivities(strangerAnswers);
 
-    it('should round decimal scores', () => {
-      expect(formatMatchPercentage(75.5)).toBe('76% match');
-      expect(formatMatchPercentage(75.4)).toBe('75% match');
-    });
+    // Paintball has g2[strangers] = -1, should be excluded
+    const paintball = results.find(a => a.name === 'Paintball / Airsoft');
+    expect(paintball).toBeUndefined();
   });
 
-  describe('fuzzy matching', () => {
-    it('should match case-insensitively', () => {
-      const pkg: PackageMatchingFields = {
-        ideal_gathering_size: ['Small_Group'],
-        ideal_energy_level: ['MODERATE'],
-        ideal_vibe: ['Adventurous'],
-      };
+  it('should apply hard filter: exclude activities with -1 for low fitness when g3=low', () => {
+    const results = scoreActivities(RELAXED_FOODIE); // g3=low
 
-      const preferences: EventPreferences = {
-        gathering_size: 'small_group',
-        energy_level: 'moderate',
-        vibe_preferences: ['adventurous'],
-      };
+    // Laser Tag has g3[low] = -1, should be excluded
+    const laserTag = results.find(a => a.name === 'Laser Tag Session');
+    expect(laserTag).toBeUndefined();
+  });
 
-      const score = calculatePackageScore(pkg, preferences);
+  it('should apply ice-breaker bonus for mixed/stranger groups', () => {
+    const mixedAnswers: QuestionnaireAnswers = {
+      ...RELAXED_FOODIE,
+      g2: 'mixed',
+    };
+    const closeFriendsAnswers: QuestionnaireAnswers = {
+      ...RELAXED_FOODIE,
+      g2: 'close_friends',
+    };
 
-      expect(score).toBe(100);
-    });
+    const mixedResults = scoreActivities(mixedAnswers);
+    const closeFriendsResults = scoreActivities(closeFriendsAnswers);
 
-    it('should match with different separators', () => {
-      const pkg: PackageMatchingFields = {
-        ideal_gathering_size: ['small-group'],
-        ideal_energy_level: ['high energy'],
-        ideal_vibe: null,
-      };
+    // Escape Room is an ice-breaker
+    const escapeRoomMixed = mixedResults.find(a => a.name === 'Escape Room');
+    const escapeRoomClose = closeFriendsResults.find(a => a.name === 'Escape Room');
 
-      const preferences: EventPreferences = {
-        gathering_size: 'small_group',
-        energy_level: 'high_energy',
-        vibe_preferences: null,
-      };
+    expect(escapeRoomMixed).toBeDefined();
+    expect(escapeRoomClose).toBeDefined();
+    // Mixed group should get +3 ice-breaker bonus
+    expect(escapeRoomMixed!.totalScore).toBeGreaterThan(escapeRoomClose!.totalScore);
+  });
 
-      const score = calculatePackageScore(pkg, preferences);
+  it('should include category information for each activity', () => {
+    const results = scoreActivities(RELAXED_FOODIE);
 
-      // Should match despite different separators
-      expect(score).toBe(70); // 40 + 30 for gathering and energy
-    });
+    for (const activity of results) {
+      expect(activity.category).toBeTruthy();
+      expect(['team', 'nightlife', 'tasting', 'outdoor', 'entertainment', 'wellness', 'dining'])
+        .toContain(activity.category);
+    }
+  });
+
+  it('should use MAX of selected vibes for G6 scoring', () => {
+    // With food+culture vibes, activities with high food OR culture should score well
+    const results = scoreActivities(RELAXED_FOODIE);
+    const wineTasting = results.find(a => a.name === 'Wine Tasting');
+
+    expect(wineTasting).toBeDefined();
+    // Wine Tasting has g6: [0, 2, 0, 2, 1] — MAX(culture:2, food:2) = 2
+    expect(wineTasting!.totalScore).toBeGreaterThanOrEqual(SCORE_THRESHOLDS.GOOD);
+  });
+
+  it('should not include filtered activities for low-drinking group', () => {
+    const lowDrinkingAnswers: QuestionnaireAnswers = {
+      ...RELAXED_FOODIE,
+      g4: 'low',
+    };
+    const results = scoreActivities(lowDrinkingAnswers);
+
+    // Beer Tasting has g4[low] = -1, should be excluded
+    const beerTasting = results.find(a => a.name === 'Beer Tasting Flight');
+    expect(beerTasting).toBeUndefined();
   });
 });

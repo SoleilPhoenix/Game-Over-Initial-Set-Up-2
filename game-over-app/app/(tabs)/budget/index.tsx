@@ -653,7 +653,7 @@ const styles = StyleSheet.create({
     paddingBottom: 180,
   },
   glassCard: {
-    backgroundColor: DARK_THEME.glassCard,
+    backgroundColor: DARK_THEME.glassLight,
     borderRadius: 12,
     padding: 24,
     marginBottom: 16,
@@ -724,7 +724,7 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: DARK_THEME.backgroundDark,
+    borderColor: DARK_THEME.background,
   },
   participantAvatarInitials: {
     width: 40,
@@ -796,7 +796,7 @@ const styles = StyleSheet.create({
     borderColor: DARK_THEME.borderLight,
   },
   processingBadge: {
-    backgroundColor: `${DARK_THEME.orange}1A`,
+    backgroundColor: `${'#F97316'}1A`,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -839,7 +839,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   budgetCategoryBar: {
-    backgroundColor: DARK_THEME.glassCard,
+    backgroundColor: DARK_THEME.glassLight,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,

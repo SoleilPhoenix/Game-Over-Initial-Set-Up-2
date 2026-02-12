@@ -87,27 +87,45 @@ describe('wizardStore', () => {
     });
   });
 
-  describe('step 2 actions', () => {
-    it('should set gathering size', () => {
-      useWizardStore.getState().setGatheringSize('small_group');
-
-      expect(useWizardStore.getState().gatheringSize).toBe('small_group');
-    });
-
-    it('should set social approach', () => {
-      useWizardStore.getState().setSocialApproach('butterfly');
-
-      expect(useWizardStore.getState().socialApproach).toBe('butterfly');
-    });
-
+  describe('step 2 actions (honoree preferences)', () => {
     it('should set energy level', () => {
-      useWizardStore.getState().setEnergyLevel('high_energy');
+      useWizardStore.getState().setEnergyLevel('active');
 
-      expect(useWizardStore.getState().energyLevel).toBe('high_energy');
+      expect(useWizardStore.getState().energyLevel).toBe('active');
+    });
+
+    it('should set spotlight comfort', () => {
+      useWizardStore.getState().setSpotlightComfort('group');
+
+      expect(useWizardStore.getState().spotlightComfort).toBe('group');
+    });
+
+    it('should set competition style', () => {
+      useWizardStore.getState().setCompetitionStyle('cooperative');
+
+      expect(useWizardStore.getState().competitionStyle).toBe('cooperative');
+    });
+
+    it('should set enjoyment type', () => {
+      useWizardStore.getState().setEnjoymentType('food');
+
+      expect(useWizardStore.getState().enjoymentType).toBe('food');
+    });
+
+    it('should set indoor/outdoor preference', () => {
+      useWizardStore.getState().setIndoorOutdoor('mix');
+
+      expect(useWizardStore.getState().indoorOutdoor).toBe('mix');
+    });
+
+    it('should set evening style', () => {
+      useWizardStore.getState().setEveningStyle('dinner_bar');
+
+      expect(useWizardStore.getState().eveningStyle).toBe('dinner_bar');
     });
   });
 
-  describe('step 3 actions', () => {
+  describe('step 3 actions (group preferences)', () => {
     it('should set average age', () => {
       useWizardStore.getState().setAverageAge('26-30');
 
@@ -120,20 +138,38 @@ describe('wizardStore', () => {
       expect(useWizardStore.getState().groupCohesion).toBe('close_friends');
     });
 
-    it('should toggle vibe preferences', () => {
-      useWizardStore.getState().toggleVibePreference('adventurous');
+    it('should set fitness level', () => {
+      useWizardStore.getState().setFitnessLevel('medium');
 
-      expect(useWizardStore.getState().vibePreferences).toContain('adventurous');
-
-      useWizardStore.getState().toggleVibePreference('adventurous');
-
-      expect(useWizardStore.getState().vibePreferences).not.toContain('adventurous');
+      expect(useWizardStore.getState().fitnessLevel).toBe('medium');
     });
 
-    it('should set vibe preferences array', () => {
-      useWizardStore.getState().setVibePreferences(['relaxing', 'cultural']);
+    it('should set drinking culture', () => {
+      useWizardStore.getState().setDrinkingCulture('social');
 
-      expect(useWizardStore.getState().vibePreferences).toEqual(['relaxing', 'cultural']);
+      expect(useWizardStore.getState().drinkingCulture).toBe('social');
+    });
+
+    it('should set group dynamic', () => {
+      useWizardStore.getState().setGroupDynamic('team_players');
+
+      expect(useWizardStore.getState().groupDynamic).toBe('team_players');
+    });
+
+    it('should toggle group vibe with max 2 enforcement', () => {
+      useWizardStore.getState().toggleGroupVibe('action');
+      expect(useWizardStore.getState().groupVibe).toEqual(['action']);
+
+      useWizardStore.getState().toggleGroupVibe('culture');
+      expect(useWizardStore.getState().groupVibe).toEqual(['action', 'culture']);
+
+      // Third toggle should be ignored (max 2)
+      useWizardStore.getState().toggleGroupVibe('nightlife');
+      expect(useWizardStore.getState().groupVibe).toEqual(['action', 'culture']);
+
+      // Toggle off should work
+      useWizardStore.getState().toggleGroupVibe('action');
+      expect(useWizardStore.getState().groupVibe).toEqual(['culture']);
     });
   });
 
@@ -143,6 +179,7 @@ describe('wizardStore', () => {
       useWizardStore.getState().setPartyType('bachelor');
       useWizardStore.getState().setHonoreeName('John');
       useWizardStore.getState().setCityId('city-123');
+      useWizardStore.getState().setDates('2024-06-15', '2024-06-17');
 
       useWizardStore.getState().nextStep();
 
@@ -171,7 +208,7 @@ describe('wizardStore', () => {
   });
 
   describe('validation', () => {
-    it('should validate step 1 requires party type, name, and city', () => {
+    it('should validate step 1 requires party type, name, city, and date', () => {
       expect(useWizardStore.getState().isStepValid(1)).toBe(false);
 
       useWizardStore.getState().setPartyType('bachelor');
@@ -181,7 +218,38 @@ describe('wizardStore', () => {
       expect(useWizardStore.getState().isStepValid(1)).toBe(false);
 
       useWizardStore.getState().setCityId('city-123');
+      expect(useWizardStore.getState().isStepValid(1)).toBe(false);
+
+      useWizardStore.getState().setDates('2024-06-15', '2024-06-17');
       expect(useWizardStore.getState().isStepValid(1)).toBe(true);
+    });
+
+    it('should validate step 2 requires all 6 honoree fields', () => {
+      expect(useWizardStore.getState().isStepValid(2)).toBe(false);
+
+      useWizardStore.getState().setEnergyLevel('active');
+      useWizardStore.getState().setSpotlightComfort('group');
+      useWizardStore.getState().setCompetitionStyle('cooperative');
+      useWizardStore.getState().setEnjoymentType('food');
+      useWizardStore.getState().setIndoorOutdoor('indoor');
+      expect(useWizardStore.getState().isStepValid(2)).toBe(false);
+
+      useWizardStore.getState().setEveningStyle('dinner_bar');
+      expect(useWizardStore.getState().isStepValid(2)).toBe(true);
+    });
+
+    it('should validate step 3 requires all fields + groupVibe 1-2', () => {
+      expect(useWizardStore.getState().isStepValid(3)).toBe(false);
+
+      useWizardStore.getState().setAverageAge('26-30');
+      useWizardStore.getState().setGroupCohesion('mixed');
+      useWizardStore.getState().setFitnessLevel('medium');
+      useWizardStore.getState().setDrinkingCulture('social');
+      useWizardStore.getState().setGroupDynamic('team_players');
+      expect(useWizardStore.getState().isStepValid(3)).toBe(false);
+
+      useWizardStore.getState().toggleGroupVibe('action');
+      expect(useWizardStore.getState().isStepValid(3)).toBe(true);
     });
   });
 

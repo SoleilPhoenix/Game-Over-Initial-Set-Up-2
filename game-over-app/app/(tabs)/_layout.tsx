@@ -201,7 +201,7 @@ export default function TabsLayout() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        contentStyle: {
+        sceneStyle: {
           backgroundColor: DARK_THEME.background,
         },
       }}

@@ -39,6 +39,10 @@ const CITY_NAMES: Record<string, string> = {
   berlin: 'Berlin',
   hamburg: 'Hamburg',
   hannover: 'Hannover',
+  // UUID keys for wizard-generated city IDs
+  '550e8400-e29b-41d4-a716-446655440101': 'Berlin',
+  '550e8400-e29b-41d4-a716-446655440102': 'Hamburg',
+  '550e8400-e29b-41d4-a716-446655440103': 'Hannover',
 };
 
 const SERVICE_FEE_RATE = 0.10;
@@ -51,8 +55,9 @@ export default function BookingSummaryScreen() {
   const isDraft = eventId === 'draft';
   const { t } = useTranslation();
 
-  // For real events, use the booking flow hook
-  const bookingFlow = useBookingFlow(isDraft ? undefined : eventId, packageId);
+  // For real events, use the booking flow hook (pass URL participant count as override)
+  const urlParticipantCount = paramParticipants ? parseInt(paramParticipants, 10) : undefined;
+  const bookingFlow = useBookingFlow(isDraft ? undefined : eventId, packageId, urlParticipantCount);
 
   // For draft mode, get data from wizard store
   const wizardCityId = useWizardStore((s) => s.cityId);
@@ -68,7 +73,6 @@ export default function BookingSummaryScreen() {
   const setExcludeHonoree = isDraft ? setDraftExcludeHonoree : bookingFlow.setExcludeHonoree;
 
   // Calculate pricing for draft mode
-  const urlParticipantCount = paramParticipants ? parseInt(paramParticipants, 10) : null;
   const draftPricing = useMemo(() => {
     if (!draftPkg) return null;
     const totalParticipants = urlParticipantCount || wizardParticipantCount || 10;
@@ -121,19 +125,15 @@ export default function BookingSummaryScreen() {
   const tierLabel = TIER_LABELS[pkg.tier] || pkg.name;
   const heroImage = pkg.hero_image_url || null;
 
-  // City name: from URL params > wizard store > event data
+  // City name: event data > URL params > wizard store
   const effectiveCityId = paramCityId || wizardCityId;
+  const cityFallback = effectiveCityId ? CITY_NAMES[effectiveCityId] || effectiveCityId : 'Unknown';
   const cityName = isDraft
-    ? (effectiveCityId ? CITY_NAMES[effectiveCityId] || effectiveCityId : 'Unknown')
-    : (bookingFlow.event?.city?.name || bookingFlow.event?.city_id || 'Unknown');
+    ? cityFallback
+    : (bookingFlow.event?.city?.name || cityFallback);
 
-  // Guest count: from URL params > wizard store > participants > event
-  const paramParticipantCount = paramParticipants ? parseInt(paramParticipants, 10) : null;
-  const guestCount = isDraft
-    ? (paramParticipantCount || wizardParticipantCount || 10)
-    : ((bookingFlow.participants && bookingFlow.participants.length > 0)
-      ? bookingFlow.participants.length
-      : (bookingFlow.event?.participant_count || pricing.payingParticipantCount));
+  // Guest count: URL params always take precedence (wizard passes intended group size)
+  const guestCount = urlParticipantCount || wizardParticipantCount || pricing.payingParticipantCount;
 
   const honoreePaysCents = excludeHonoree ? 0 : pricing.perPersonCents;
 

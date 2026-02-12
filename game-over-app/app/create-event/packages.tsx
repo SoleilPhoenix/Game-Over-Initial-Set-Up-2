@@ -25,6 +25,12 @@ const TIER_PRICE_PER_PERSON: Record<string, number> = {
 
 // Feature counts by tier: S=3, M=4, L=5
 // Fallback packages when DB returns empty (for Berlin, Hamburg, Hannover)
+// UUIDs must match supabase/migrations/20260211000000_add_german_cities.sql
+const CITY_UUID_TO_SLUG: Record<string, string> = {
+  '550e8400-e29b-41d4-a716-446655440101': 'berlin',
+  '550e8400-e29b-41d4-a716-446655440102': 'hamburg',
+  '550e8400-e29b-41d4-a716-446655440103': 'hannover',
+};
 const FALLBACK_PACKAGES: Record<string, any[]> = {
   berlin: [
     {
@@ -343,9 +349,8 @@ export default function WizardStep4() {
   const wizardState = useWizardStore();
   const {
     cityId,
-    gatheringSize,
     energyLevel,
-    vibePreferences,
+    groupVibe,
     participantCount,
     selectedPackageId,
     setSelectedPackageId,
@@ -354,22 +359,22 @@ export default function WizardStep4() {
 
   const { mutateAsync: createEvent } = useCreateEvent();
 
-  // Map 'extreme' to 'high_energy' for DB compatibility
-  const dbEnergyLevel = energyLevel === 'extreme' ? 'high_energy' : energyLevel;
+  // Pass new questionnaire fields for package matching
   const preferences = {
-    gathering_size: gatheringSize,
-    energy_level: dbEnergyLevel as 'low_key' | 'moderate' | 'high_energy' | null,
-    vibe_preferences: vibePreferences,
+    honoree_energy: energyLevel,
+    vibe_preferences: groupVibe,
   };
 
   const { data: dbPackages, isLoading } = useMatchedPackages(cityId || '', preferences);
 
-  // Use fallback packages when DB returns empty (for local city IDs like berlin/hamburg/hannover)
+  // Use fallback packages when DB returns empty (for German cities)
+  // Resolve UUID to slug for fallback lookup
   // Sort order: S (essential) → M (classic/recommended) → L (grand)
   const TIER_ORDER: Record<string, number> = { essential: 0, classic: 1, grand: 2 };
+  const citySlug = cityId ? (CITY_UUID_TO_SLUG[cityId] || cityId) : null;
   const rawPackages = (dbPackages && dbPackages.length > 0)
     ? dbPackages
-    : (cityId ? FALLBACK_PACKAGES[cityId] || [] : []);
+    : (citySlug ? FALLBACK_PACKAGES[citySlug] || [] : []);
   const packages = [...rawPackages].sort(
     (a: any, b: any) => (TIER_ORDER[a.tier] ?? 1) - (TIER_ORDER[b.tier] ?? 1)
   );
@@ -445,7 +450,7 @@ export default function WizardStep4() {
   }, [router]);
 
   // Skip loading spinner for fallback cities — we have local data immediately
-  const hasFallbackData = !!(cityId && FALLBACK_PACKAGES[cityId]);
+  const hasFallbackData = !!(citySlug && FALLBACK_PACKAGES[citySlug]);
   if (isLoading && !hasFallbackData) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">

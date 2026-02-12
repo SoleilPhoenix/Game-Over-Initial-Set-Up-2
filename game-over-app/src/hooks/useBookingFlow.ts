@@ -45,7 +45,7 @@ const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; pri
   'hannover-grand': { id: 'hannover-grand', name: 'Hannover Grand', tier: 'grand', price_per_person_cents: 199_00 },
 };
 
-export function useBookingFlow(eventId: string | undefined, packageIdOverride?: string): UseBookingFlowResult {
+export function useBookingFlow(eventId: string | undefined, packageIdOverride?: string, participantCountOverride?: number): UseBookingFlowResult {
   const { data: event, isLoading: eventLoading, error: eventError } = useEvent(eventId);
   const { data: participants, isLoading: participantsLoading } = useParticipants(eventId);
   const { data: booking, isLoading: bookingLoading } = useBooking(eventId);
@@ -65,8 +65,9 @@ export function useBookingFlow(eventId: string | undefined, packageIdOverride?: 
   const pricing = useMemo((): BookingPricing | null => {
     if (!pkg) return null;
 
-    // Use participant list if available, otherwise default to event's participant_count or 1
-    const totalParticipants = (participants && participants.length > 0) ? participants.length : (event?.participant_count || 1);
+    // Use override (from URL params) > participant list > event count > fallback to 1
+    const totalParticipants = participantCountOverride ||
+      ((participants && participants.length > 0) ? participants.length : (event?.participant_count || 1));
     const honoreeCount = excludeHonoree ? 1 : 0;
     const payingCount = Math.max(1, totalParticipants - honoreeCount);
 
@@ -88,7 +89,7 @@ export function useBookingFlow(eventId: string | undefined, packageIdOverride?: 
       perPersonCents: perPerson,
       payingParticipantCount: payingCount,
     };
-  }, [pkg, participants, excludeHonoree, event]);
+  }, [pkg, participants, excludeHonoree, event, participantCountOverride]);
 
   const isLoading = eventLoading || participantsLoading || bookingLoading || (packageLoading && !pkg);
 

@@ -49,51 +49,83 @@ export const eventsRepository = {
    * Get all events for a user (as organizer or participant)
    */
   async getByUser(userId: string): Promise<EventWithDetails[]> {
-    // Get events where user is creator
+    // Query 1: Events where user is creator
+    // Only join cities (safe RLS: public read for authenticated).
+    // Avoid joining event_preferences / event_participants here because
+    // their RLS policies reference the events table, causing 42P17
+    // infinite recursion on some Supabase configurations.
     const { data: createdEvents, error: createdError } = await supabase
       .from('events')
       .select(`
         *,
-        city:cities(id, name, country),
-        preferences:event_preferences(*),
-        participants:event_participants(count)
+        city:cities(id, name, country)
       `)
       .eq('created_by', userId)
       .is('deleted_at', null)
       .order('created_at', { ascending: false });
 
-    if (createdError) throw createdError;
+    if (createdError) {
+      console.error('[events.getByUser] created query failed:', createdError.code, createdError.message);
+      throw createdError;
+    }
 
-    // Get events where user is participant
-    const { data: participatingEvents, error: participatingError } = await supabase
-      .from('events')
-      .select(`
-        *,
-        city:cities(id, name, country),
-        preferences:event_preferences(*),
-        participants:event_participants(count)
-      `)
-      .in('id',
-        supabase
-          .from('event_participants')
-          .select('event_id')
-          .eq('user_id', userId)
-          .neq('role', 'organizer') as unknown as string[]
-      )
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
+    // Query 2: Events where user is a non-organizer participant
+    let participatingEvents: typeof createdEvents = [];
+    try {
+      const { data: participantRows } = await supabase
+        .from('event_participants')
+        .select('event_id')
+        .eq('user_id', userId)
+        .neq('role', 'organizer');
 
-    if (participatingError) throw participatingError;
+      const participantEventIds = (participantRows || []).map(r => r.event_id);
+      if (participantEventIds.length > 0) {
+        const { data, error } = await supabase
+          .from('events')
+          .select(`*, city:cities(id, name, country)`)
+          .in('id', participantEventIds)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false });
+
+        if (error) {
+          console.error('[events.getByUser] participating query failed:', error.code, error.message);
+        } else {
+          participatingEvents = data;
+        }
+      }
+    } catch (err) {
+      console.warn('[events.getByUser] participating lookup failed, skipping:', err);
+    }
 
     // Combine and deduplicate
     const allEvents = [...(createdEvents || []), ...(participatingEvents || [])];
     const uniqueEvents = Array.from(new Map(allEvents.map(e => [e.id, e])).values());
 
+    // Fetch participant counts separately (non-blocking)
+    let countMap = new Map<string, number>();
+    try {
+      const eventIds = uniqueEvents.map(e => e.id);
+      if (eventIds.length > 0) {
+        const { data: counts } = await supabase
+          .from('event_participants')
+          .select('event_id')
+          .in('event_id', eventIds);
+
+        if (counts) {
+          for (const row of counts) {
+            countMap.set(row.event_id, (countMap.get(row.event_id) || 0) + 1);
+          }
+        }
+      }
+    } catch {
+      // Non-critical — default to 0
+    }
+
     return uniqueEvents.map(event => ({
       ...event,
       city: event.city as EventWithDetails['city'],
-      preferences: Array.isArray(event.preferences) ? event.preferences[0] || null : event.preferences || null,
-      participant_count: Array.isArray(event.participants) ? event.participants[0]?.count || 0 : 0,
+      preferences: null,
+      participant_count: countMap.get(event.id) || 0,
     }));
   },
 
@@ -105,9 +137,7 @@ export const eventsRepository = {
       .from('events')
       .select(`
         *,
-        city:cities(id, name, country),
-        preferences:event_preferences(*),
-        participants:event_participants(count)
+        city:cities(id, name, country)
       `)
       .eq('id', eventId)
       .is('deleted_at', null)
@@ -115,14 +145,40 @@ export const eventsRepository = {
 
     if (error) {
       if (error.code === 'PGRST116') return null;
+      console.error('[events.getById] failed:', error.code, error.message);
       throw error;
+    }
+
+    // Fetch preferences separately (avoids RLS recursion)
+    let preferences: EventPreferences | null = null;
+    try {
+      const { data: prefs } = await supabase
+        .from('event_preferences')
+        .select('*')
+        .eq('event_id', eventId)
+        .maybeSingle();
+      preferences = prefs;
+    } catch {
+      // Non-critical
+    }
+
+    // Fetch participant count separately
+    let participantCount = 0;
+    try {
+      const { count } = await supabase
+        .from('event_participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('event_id', eventId);
+      participantCount = count || 0;
+    } catch {
+      // Non-critical
     }
 
     return {
       ...data,
       city: data.city as EventWithDetails['city'],
-      preferences: Array.isArray(data.preferences) ? data.preferences[0] || null : data.preferences || null,
-      participant_count: Array.isArray(data.participants) ? data.participants[0]?.count || 0 : 0,
+      preferences,
+      participant_count: participantCount,
     };
   },
 

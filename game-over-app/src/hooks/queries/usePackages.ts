@@ -7,7 +7,8 @@ import { useQuery } from '@tanstack/react-query';
 import { packagesRepository, PackageWithMatch } from '@/repositories';
 import type { Database } from '@/lib/supabase/types';
 
-type EventPreferences = Database['public']['Tables']['event_preferences']['Row'];
+// Local preferences type — Supabase generated types lag behind migrations
+type EventPreferences = Record<string, unknown>;
 
 // Query keys
 export const packageKeys = {
@@ -54,8 +55,17 @@ export function useMatchedPackages(
   // Create a hash of preferences for cache key
   const prefsHash = preferences
     ? JSON.stringify({
-        gathering_size: preferences.gathering_size,
-        energy_level: preferences.energy_level,
+        honoree_energy: preferences.honoree_energy,
+        spotlight_comfort: preferences.spotlight_comfort,
+        competition_style: preferences.competition_style,
+        enjoyment_type: preferences.enjoyment_type,
+        indoor_outdoor: preferences.indoor_outdoor,
+        evening_style: preferences.evening_style,
+        average_age: preferences.average_age,
+        group_cohesion: preferences.group_cohesion,
+        fitness_level: preferences.fitness_level,
+        drinking_culture: preferences.drinking_culture,
+        group_dynamic: preferences.group_dynamic,
         vibe_preferences: preferences.vibe_preferences,
       })
     : '';

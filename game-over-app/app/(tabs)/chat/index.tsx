@@ -221,7 +221,7 @@ export default function CommunicationScreen() {
         },
         {
           text: tr.chat.create,
-          onPress: async (channelName) => {
+          onPress: async (channelName?: string) => {
             if (channelName && channelName.trim()) {
               if (selectedEventId) {
                 // Save to database if event exists
@@ -274,7 +274,7 @@ export default function CommunicationScreen() {
         },
         {
           text: tr.chat.create,
-          onPress: async (topicName) => {
+          onPress: async (topicName?: string) => {
             if (topicName && topicName.trim()) {
               if (selectedEventId) {
                 // Save to database if event exists
