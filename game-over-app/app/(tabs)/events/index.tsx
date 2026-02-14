@@ -4,9 +4,10 @@
  * Matches UI mockup: Avatar header, filter tabs, card layout with thumbnails
  */
 
-import React, { useCallback, useState, useMemo } from 'react';
+import React, { useCallback, useRef, useState, useMemo } from 'react';
 import {
   Alert,
+  Animated,
   FlatList,
   RefreshControl,
   Pressable,
@@ -14,39 +15,103 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useEvents } from '@/hooks/queries/useEvents';
+import { useEvents, eventKeys } from '@/hooks/queries/useEvents';
+import { participantKeys } from '@/hooks/queries/useParticipants';
+import { bookingKeys } from '@/hooks/queries/useBookings';
+import { useQueryClient } from '@tanstack/react-query';
+import { eventsRepository } from '@/repositories';
+import { participantsRepository } from '@/repositories';
+import { bookingsRepository } from '@/repositories';
 import { useUser } from '@/stores/authStore';
 import { useWizardStore, type DraftSnapshot } from '@/stores/wizardStore';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
 import { useTranslation, getTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
+import { getCurrentPhaseLabel } from '@/utils/planningProgress';
 import type { EventWithDetails } from '@/repositories';
 
 type FilterTab = 'all' | 'organizing' | 'attending';
 
-const getProgressConfig = (status: string | null): {
+/** Approximate step completion from card data (full detail only on detail page) */
+const getBookedStepCount = (event: EventWithDetails): number => {
+  const checklist = event.planning_checklist || {};
+  // Steps 1-3 are auto — approximate from participant_count on card
+  // (We don't have full participant details here, so approximate generously)
+  const hasParticipants = event.participant_count > 1; // organizer + at least 1 invite
+  const autoSteps = hasParticipants ? 1 : 0; // invitations_sent approximation
+  // Steps 4-8 from checklist
+  const manualSteps = ['quiz_prepared', 'accommodations', 'travel', 'surprise_plan', 'final_briefing']
+    .filter(k => checklist[k]).length;
+  return autoSteps + manualSteps;
+};
+
+// Step label key → step number mapping for "Step X:" prefix
+const STEP_NUMBER: Record<string, number> = {
+  inviteParticipants: 1,
+  groupConfirmed: 2,
+  collectBudget: 3,
+  prepareQuiz: 4,
+  planAccommodation: 5,
+  organizeTravel: 6,
+  planSurprise: 7,
+  finalBriefing: 8,
+};
+
+const getProgressConfig = (event: EventWithDetails, t: any): {
   phase: string;
   percentage: number;
   color: string;
   icon: 'ellipse' | 'checkmark-circle';
+  isBooked: boolean;
+  completedSteps: number;
 } => {
+  const status = event.status;
   switch (status) {
-    case 'draft':
-      return { phase: 'Planning Phase', percentage: 15, color: '#F59E0B', icon: 'ellipse' };
-    case 'planning':
-      return { phase: 'Planning Phase', percentage: 45, color: '#3B82F6', icon: 'ellipse' };
-    case 'booked':
-      return { phase: 'Budgeting', percentage: 75, color: '#F59E0B', icon: 'ellipse' };
+    case 'booked': {
+      const completed = getBookedStepCount(event);
+      const percentage = Math.round((completed / 8) * 100);
+      if (completed === 8) {
+        return { phase: t.events.allSetReady, percentage: 100, color: '#10B981', icon: 'checkmark-circle', isBooked: true, completedSteps: 8 };
+      }
+      // Show next step name: "Step X: Label"
+      const nextLabelKey = getCurrentPhaseLabel(
+        // Build minimal steps from card data for next step detection
+        ['invitations_sent', 'group_confirmed', 'budget_collected', 'quiz_prepared', 'accommodations', 'travel', 'surprise_plan', 'final_briefing']
+          .map((key, i) => ({
+            key,
+            labelKey: ['inviteParticipants', 'groupConfirmed', 'collectBudget', 'prepareQuiz', 'planAccommodation', 'organizeTravel', 'planSurprise', 'finalBriefing'][i],
+            descriptionKey: '',
+            completed: i < completed,
+            auto: i < 3,
+            icon: '',
+          }))
+      );
+      const stepLabel = nextLabelKey ? (t.eventDetail as any)[nextLabelKey] || nextLabelKey : '';
+      const stepNum = nextLabelKey ? STEP_NUMBER[nextLabelKey] || (completed + 1) : (completed + 1);
+      const phase = `Step ${stepNum}/8: ${stepLabel}`;
+      return {
+        phase,
+        percentage,
+        color: DARK_THEME.primary,
+        icon: 'ellipse',
+        isBooked: true,
+        completedSteps: completed,
+      };
+    }
     case 'completed':
-      return { phase: 'All Set & Ready', percentage: 100, color: '#10B981', icon: 'checkmark-circle' };
+      return { phase: t.events.allSetReady, percentage: 100, color: '#10B981', icon: 'checkmark-circle', isBooked: true, completedSteps: 8 };
+    case 'planning':
+      return { phase: t.events.planningPhase, percentage: 45, color: '#3B82F6', icon: 'ellipse', isBooked: false, completedSteps: 0 };
+    case 'draft':
     default:
-      return { phase: 'Planning Phase', percentage: 25, color: '#3B82F6', icon: 'ellipse' };
+      return { phase: t.events.planningPhase, percentage: 15, color: '#F59E0B', icon: 'ellipse', isBooked: false, completedSteps: 0 };
   }
 };
 
@@ -67,7 +132,7 @@ const formatDateRange = (startDate?: string, endDate?: string): string => {
   const start = new Date(startDate);
   const startStr = start.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
 
-  if (!endDate) return startStr;
+  if (!endDate || endDate === startDate) return startStr;
   const end = new Date(endDate);
   const endStr = end.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
   return `${startStr} - ${endStr}`;
@@ -81,6 +146,7 @@ export default function EventsScreen() {
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const { t } = useTranslation();
 
+  const queryClient = useQueryClient();
   const { data: events, isLoading, error: eventsError, refetch } = useEvents();
 
   // Refetch events when screen gains focus (e.g., returning from booking)
@@ -109,8 +175,19 @@ export default function EventsScreen() {
     setIsRefreshing(false);
   }, [refetch]);
 
-  // Draft state (multi-draft)
-  const allDrafts = useWizardStore((s) => s.getAllDrafts());
+  // Draft state (multi-draft) — filter out drafts that match an already-booked event
+  const rawDrafts = useWizardStore((s) => s.getAllDrafts());
+  const allDrafts = useMemo(() => {
+    if (!events || events.length === 0) return rawDrafts;
+    // If a booked/completed event exists with the same honoree name, hide the draft
+    const bookedNames = new Set(
+      events
+        .filter(e => e.status === 'booked' || e.status === 'completed')
+        .map(e => e.honoree_name?.toLowerCase())
+        .filter(Boolean)
+    );
+    return rawDrafts.filter(d => !bookedNames.has(d.honoreeName?.toLowerCase()));
+  }, [rawDrafts, events]);
   const hasDrafts = allDrafts.length > 0;
 
   const handleCreateEvent = () => {
@@ -156,6 +233,22 @@ export default function EventsScreen() {
   };
 
   const handleEventPress = (eventId: string) => {
+    // Prefetch detail, participants, and booking in parallel for faster load
+    queryClient.prefetchQuery({
+      queryKey: eventKeys.detail(eventId),
+      queryFn: () => eventsRepository.getById(eventId),
+      staleTime: 60 * 1000,
+    });
+    queryClient.prefetchQuery({
+      queryKey: participantKeys.byEvent(eventId),
+      queryFn: () => participantsRepository.getByEventId(eventId),
+      staleTime: 60 * 1000,
+    });
+    queryClient.prefetchQuery({
+      queryKey: bookingKeys.byEvent(eventId),
+      queryFn: () => bookingsRepository.getByEventId(eventId),
+      staleTime: 60 * 1000,
+    });
     router.push(`/event/${eventId}`);
   };
 
@@ -202,9 +295,25 @@ export default function EventsScreen() {
     </View>
   );
 
+  const renderSegmentedProgress = (completedSteps: number, color: string) => (
+    <View style={styles.segmentedBar}>
+      {Array.from({ length: 8 }, (_, i) => (
+        <View
+          key={i}
+          style={[
+            styles.segment,
+            { backgroundColor: i < completedSteps ? color : DARK_THEME.deepNavy },
+            i === 0 && styles.segmentFirst,
+            i === 7 && styles.segmentLast,
+          ]}
+        />
+      ))}
+    </View>
+  );
+
   const renderEventCard = ({ item }: { item: EventWithDetails }) => {
     const role = getUserRole(item);
-    const progress = getProgressConfig(item.status);
+    const progress = getProgressConfig(item, t);
     const daysLeft = getDaysLeft(item.start_date);
     const paymentStatus = getPaymentStatus(item);
     const dateRange = formatDateRange(item.start_date, item.end_date);
@@ -301,17 +410,21 @@ export default function EventsScreen() {
               {progress.percentage}%
             </Text>
           </XStack>
-          <View style={styles.progressBarBackground}>
-            <View
-              style={[
-                styles.progressBarFill,
-                {
-                  width: `${progress.percentage}%`,
-                  backgroundColor: progress.color,
-                }
-              ]}
-            />
-          </View>
+          {progress.isBooked ? (
+            renderSegmentedProgress(progress.completedSteps, progress.color)
+          ) : (
+            <View style={styles.progressBarBackground}>
+              <View
+                style={[
+                  styles.progressBarFill,
+                  {
+                    width: `${progress.percentage}%`,
+                    backgroundColor: progress.color,
+                  }
+                ]}
+              />
+            </View>
+          )}
         </View>
       </Pressable>
     );
@@ -407,60 +520,98 @@ export default function EventsScreen() {
     };
     const cityName = draft.cityId ? (CITY_NAMES[draft.cityId] || draft.cityId) : null;
 
-    // Format date for display
-    const dateStr = draft.startDate
-      ? new Date(draft.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-      : null;
+    // Format date for display — guard against empty/invalid strings
+    let dateStr: string | null = null;
+    if (draft.startDate) {
+      const parsed = new Date(draft.startDate);
+      if (!isNaN(parsed.getTime())) {
+        dateStr = parsed.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      }
+    }
 
     // Build subtitle: City · Date · X participants
     const subtitleParts: string[] = [];
     if (cityName) subtitleParts.push(cityName);
-    if (dateStr) subtitleParts.push(dateStr);
+    subtitleParts.push(dateStr || t.events.noDateLabel);
     if (draft.participantCount > 0) subtitleParts.push(`${draft.participantCount} ${t.events.participantsLabel || 'participants'}`);
     const subtitle = subtitleParts.length > 0 ? subtitleParts.join(' · ') : t.events.noCityLabel;
 
-    return (
-      <Pressable
-        key={draft.id}
-        onPress={() => handleResumeDraft(draft.id)}
-        style={({ pressed }) => [
-          styles.eventCard,
-          styles.draftCard,
-          pressed && styles.eventCardPressed,
-        ]}
-        testID={`draft-event-card-${draft.id}`}
-      >
-        <XStack alignItems="center" gap={12}>
-          <View style={styles.draftIcon}>
-            <Ionicons name="document-text-outline" size={24} color="#F59E0B" />
-          </View>
-          <YStack flex={1}>
-            <XStack alignItems="center" gap={8}>
-              <Text style={styles.eventTitle} numberOfLines={1}>{draftTitle}</Text>
-              <View style={styles.draftBadge}>
-                <Text style={styles.draftBadgeText}>{t.events.draft}</Text>
-              </View>
-            </XStack>
-            <Text style={styles.dateText} numberOfLines={1}>
-              {subtitle}
-            </Text>
-          </YStack>
-          <Ionicons name="chevron-forward" size={20} color={DARK_THEME.textTertiary} />
-        </XStack>
+    const handleDeleteDraft = (draftId: string, title: string) => {
+      const tr = getTranslation();
+      Alert.alert(
+        tr.wizard.deleteDraftTitle || 'Delete Draft',
+        tr.wizard.deleteDraftMessage?.replace('{{name}}', title) || `Delete "${title}"?`,
+        [
+          { text: tr.wizard.cancel, style: 'cancel' },
+          {
+            text: tr.common?.delete || 'Delete',
+            style: 'destructive',
+            onPress: () => useWizardStore.getState().deleteDraft(draftId),
+          },
+        ]
+      );
+    };
 
-        <View style={styles.progressSection}>
-          <XStack justifyContent="space-between" alignItems="center" marginBottom={6}>
-            <XStack alignItems="center" gap={6}>
-              <Ionicons name="ellipse" size={10} color="#F59E0B" />
-              <Text style={[styles.progressLabel, { color: '#F59E0B' }]}>{t.events.draft} — {t.events.step} {draft.currentStep}/4</Text>
-            </XStack>
-            <Text style={[styles.progressPercentage, { color: '#F59E0B' }]}>{progressPct}%</Text>
-          </XStack>
-          <View style={styles.progressBarBackground}>
-            <View style={[styles.progressBarFill, { width: `${progressPct}%`, backgroundColor: '#F59E0B' }]} />
-          </View>
-        </View>
+    const renderRightActions = (draftId: string, title: string) => (
+      _progress: Animated.AnimatedInterpolation<number>,
+      _dragX: Animated.AnimatedInterpolation<number>,
+    ) => (
+      <Pressable
+        onPress={() => handleDeleteDraft(draftId, title)}
+        style={styles.swipeDeleteAction}
+      >
+        <Ionicons name="trash-outline" size={22} color="#FFFFFF" />
+        <Text style={styles.swipeDeleteText}>{t.common?.delete || 'Delete'}</Text>
       </Pressable>
+    );
+
+    return (
+      <Swipeable
+        key={draft.id}
+        renderRightActions={renderRightActions(draft.id, draftTitle)}
+        overshootRight={false}
+      >
+        <Pressable
+          onPress={() => handleResumeDraft(draft.id)}
+          style={({ pressed }) => [
+            styles.eventCard,
+            styles.draftCard,
+            pressed && styles.eventCardPressed,
+          ]}
+          testID={`draft-event-card-${draft.id}`}
+        >
+          <XStack alignItems="center" gap={12}>
+            <View style={styles.draftIcon}>
+              <Ionicons name="document-text-outline" size={24} color="#F59E0B" />
+            </View>
+            <YStack flex={1}>
+              <XStack alignItems="center" gap={8}>
+                <Text style={styles.eventTitle} numberOfLines={1}>{draftTitle}</Text>
+                <View style={styles.draftBadge}>
+                  <Text style={styles.draftBadgeText}>{t.events.draft}</Text>
+                </View>
+              </XStack>
+              <Text style={styles.dateText} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            </YStack>
+            <Ionicons name="chevron-forward" size={20} color={DARK_THEME.textTertiary} />
+          </XStack>
+
+          <View style={styles.progressSection}>
+            <XStack justifyContent="space-between" alignItems="center" marginBottom={6}>
+              <XStack alignItems="center" gap={6}>
+                <Ionicons name="ellipse" size={10} color="#F59E0B" />
+                <Text style={[styles.progressLabel, { color: '#F59E0B' }]}>{t.events.draft} — {t.events.step} {draft.currentStep}/4</Text>
+              </XStack>
+              <Text style={[styles.progressPercentage, { color: '#F59E0B' }]}>{progressPct}%</Text>
+            </XStack>
+            <View style={styles.progressBarBackground}>
+              <View style={[styles.progressBarFill, { width: `${progressPct}%`, backgroundColor: '#F59E0B' }]} />
+            </View>
+          </View>
+        </Pressable>
+      </Swipeable>
     );
   };
 
@@ -494,7 +645,7 @@ export default function EventsScreen() {
       />
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
         <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
           {/* Avatar and Title */}
           <XStack alignItems="center" gap={12}>
@@ -605,7 +756,7 @@ const styles = StyleSheet.create({
     backgroundColor: DARK_THEME.background,
   },
   header: {
-    paddingBottom: 16,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: DARK_THEME.glassBorder,
   },
@@ -662,7 +813,7 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     paddingHorizontal: 20,
-    marginTop: 16,
+    marginTop: 10,
   },
   filterPill: {
     flexDirection: 'row',
@@ -841,6 +992,21 @@ const styles = StyleSheet.create({
     color: '#F59E0B',
     letterSpacing: 0.5,
   },
+  swipeDeleteAction: {
+    backgroundColor: '#EF4444',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    borderRadius: 16,
+    marginBottom: 12,
+    marginLeft: 8,
+    gap: 4,
+  },
+  swipeDeleteText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFFFFF',
+  },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -856,5 +1022,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#F87171',
     flex: 1,
+  },
+  segmentedBar: {
+    flexDirection: 'row',
+    gap: 3,
+    height: 6,
+  },
+  segment: {
+    flex: 1,
+    height: '100%',
+    borderRadius: 1,
+  },
+  segmentFirst: {
+    borderTopLeftRadius: 3,
+    borderBottomLeftRadius: 3,
+  },
+  segmentLast: {
+    borderTopRightRadius: 3,
+    borderBottomRightRadius: 3,
   },
 });

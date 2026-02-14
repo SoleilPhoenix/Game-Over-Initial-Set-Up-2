@@ -261,34 +261,34 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       ...initialState,
 
       // Step 1 actions
-      setPartyType: (type) => set({ partyType: type, isDirty: true }),
-      setHonoreeName: (name) => set({ honoreeName: name, isDirty: true }),
-      setCityId: (cityId) => set({ cityId, isDirty: true }),
-      setParticipantCount: (count) => set({ participantCount: Math.max(1, Math.min(30, count)), isDirty: true }),
-      setDates: (startDate, endDate) =>
+      setPartyType: (type: PartyType) => set({ partyType: type, isDirty: true }),
+      setHonoreeName: (name: string) => set({ honoreeName: name, isDirty: true }),
+      setCityId: (cityId: string) => set({ cityId, isDirty: true }),
+      setParticipantCount: (count: number) => set({ participantCount: Math.max(1, Math.min(30, count)), isDirty: true }),
+      setDates: (startDate: string, endDate: string) =>
         set({ startDate, endDate, isDirty: true }),
 
       // Step 2 actions
-      setEnergyLevel: (level) => set({ energyLevel: level, isDirty: true }),
-      setSpotlightComfort: (comfort) => set({ spotlightComfort: comfort, isDirty: true }),
-      setCompetitionStyle: (style) => set({ competitionStyle: style, isDirty: true }),
-      setEnjoymentType: (type) => set({ enjoymentType: type, isDirty: true }),
-      setIndoorOutdoor: (pref) => set({ indoorOutdoor: pref, isDirty: true }),
-      setEveningStyle: (style) => set({ eveningStyle: style, isDirty: true }),
+      setEnergyLevel: (level: HonoreeEnergyLevel) => set({ energyLevel: level, isDirty: true }),
+      setSpotlightComfort: (comfort: SpotlightComfort) => set({ spotlightComfort: comfort, isDirty: true }),
+      setCompetitionStyle: (style: CompetitionStyle) => set({ competitionStyle: style, isDirty: true }),
+      setEnjoymentType: (type: EnjoymentType) => set({ enjoymentType: type, isDirty: true }),
+      setIndoorOutdoor: (pref: IndoorOutdoor) => set({ indoorOutdoor: pref, isDirty: true }),
+      setEveningStyle: (style: EveningStyle) => set({ eveningStyle: style, isDirty: true }),
 
       // Step 3 actions
-      setAverageAge: (age) => set({ averageAge: age, isDirty: true }),
-      setGroupCohesion: (cohesion) =>
+      setAverageAge: (age: AgeRange) => set({ averageAge: age, isDirty: true }),
+      setGroupCohesion: (cohesion: GroupCohesion) =>
         set({ groupCohesion: cohesion, isDirty: true }),
-      setFitnessLevel: (level) => set({ fitnessLevel: level, isDirty: true }),
-      setDrinkingCulture: (culture) => set({ drinkingCulture: culture, isDirty: true }),
-      setGroupDynamic: (dynamic) => set({ groupDynamic: dynamic, isDirty: true }),
-      setGroupVibe: (vibes) =>
+      setFitnessLevel: (level: FitnessLevel) => set({ fitnessLevel: level, isDirty: true }),
+      setDrinkingCulture: (culture: DrinkingCulture) => set({ drinkingCulture: culture, isDirty: true }),
+      setGroupDynamic: (dynamic: GroupDynamic) => set({ groupDynamic: dynamic, isDirty: true }),
+      setGroupVibe: (vibes: string[]) =>
         set({ groupVibe: vibes.slice(0, 2), isDirty: true }),
-      toggleGroupVibe: (vibe) => {
+      toggleGroupVibe: (vibe: string) => {
         const current = get().groupVibe;
         if (current.includes(vibe)) {
-          set({ groupVibe: current.filter((v) => v !== vibe), isDirty: true });
+          set({ groupVibe: current.filter((v: string) => v !== vibe), isDirty: true });
         } else if (current.length < 2) {
           set({ groupVibe: [...current, vibe], isDirty: true });
         }
@@ -296,7 +296,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       },
 
       // Step 4 actions
-      setSelectedPackageId: (packageId) =>
+      setSelectedPackageId: (packageId: string) =>
         set({ selectedPackageId: packageId, isDirty: true }),
 
       // Navigation
@@ -312,14 +312,14 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           set({ currentStep: currentStep - 1 });
         }
       },
-      goToStep: (step) => {
+      goToStep: (step: number) => {
         if (step >= 1 && step <= 4) {
           set({ currentStep: step });
         }
       },
 
       // Validation
-      isStepValid: (step) => {
+      isStepValid: (step: number) => {
         const state = get();
         switch (step) {
           case 1:
@@ -443,7 +443,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           savedDrafts: drafts,
         });
       },
-      loadDraft: (id) => {
+      loadDraft: (id: string) => {
         const draft = get().savedDrafts[id];
         if (!draft) return;
         set({
@@ -472,7 +472,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           lastSavedAt: draft.updatedAt,
         });
       },
-      deleteDraft: (id) => {
+      deleteDraft: (id: string) => {
         const state = get();
         const { [id]: _removed, ...remaining } = state.savedDrafts;
         if (autoSaveTimer) {
@@ -492,7 +492,8 @@ export const useWizardStore = create<WizardState & WizardActions>()(
         }
       },
       getAllDrafts: () => {
-        return Object.values(get().savedDrafts).sort(
+        const drafts = Object.values(get().savedDrafts) as DraftSnapshot[];
+        return drafts.sort(
           (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         );
       },

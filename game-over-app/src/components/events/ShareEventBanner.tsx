@@ -8,7 +8,7 @@ import { Share, Pressable, StyleSheet, Alert } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
-import { colors } from '@/constants/colors';
+import { DARK_THEME } from '@/constants/theme';
 
 interface ShareEventBannerProps {
   eventId: string;
@@ -80,10 +80,10 @@ export function ShareEventBanner({
 
   return (
     <YStack
-      backgroundColor={`${colors.light.primary}08`}
+      backgroundColor={`${DARK_THEME.primary}15`}
       borderRadius="$lg"
       borderWidth={1}
-      borderColor={`${colors.light.primary}20`}
+      borderColor={`${DARK_THEME.primary}30`}
       padding="$4"
       gap="$3"
       testID="share-event-banner"
@@ -94,11 +94,11 @@ export function ShareEventBanner({
           width={48}
           height={48}
           borderRadius="$full"
-          backgroundColor={`${colors.light.primary}15`}
+          backgroundColor={`${DARK_THEME.primary}20`}
           alignItems="center"
           justifyContent="center"
         >
-          <Ionicons name="people" size={24} color={colors.light.primary} />
+          <Ionicons name="people" size={24} color={DARK_THEME.primary} />
         </YStack>
         <YStack flex={1}>
           <Text fontSize="$4" fontWeight="700" color="$textPrimary">
@@ -130,7 +130,7 @@ export function ShareEventBanner({
           onPress={handleCopyLink}
           disabled={isLoading}
         >
-          <Ionicons name="copy-outline" size={18} color={colors.light.primary} />
+          <Ionicons name="copy-outline" size={18} color={DARK_THEME.primary} />
           <Text color="$primary" fontWeight="600">
             Copy Link
           </Text>
@@ -151,11 +151,11 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   primaryButton: {
-    backgroundColor: colors.light.primary,
+    backgroundColor: DARK_THEME.primary,
   },
   secondaryButton: {
-    backgroundColor: 'white',
+    backgroundColor: DARK_THEME.surfaceCard,
     borderWidth: 1,
-    borderColor: colors.light.primary,
+    borderColor: DARK_THEME.primary,
   },
 });

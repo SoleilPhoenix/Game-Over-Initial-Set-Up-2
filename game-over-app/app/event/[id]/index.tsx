@@ -1,234 +1,642 @@
 /**
- * Event Summary Screen (Phase 5)
- * Event details with planning tools grid
+ * Event Summary Screen — Redesigned
+ * Clean header, info card, 8-step progress, 2×2 planning tools grid, planning checklist
  */
 
-import React from 'react';
-import { ScrollView } from 'react-native';
+import React, { useMemo } from 'react';
+import { ScrollView, Pressable, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { YStack, XStack, Text, Spinner, Image } from 'tamagui';
+import { YStack, XStack, Text, Image } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useEvent } from '@/hooks/queries/useEvents';
+import { useEvent, useUpdateEvent } from '@/hooks/queries/useEvents';
 import { useParticipants } from '@/hooks/queries/useParticipants';
-import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
+import { useBooking } from '@/hooks/queries/useBookings';
 import { ShareEventBanner } from '@/components/events';
+import { useTranslation } from '@/i18n';
+import { DARK_THEME } from '@/constants/theme';
+import { getCityImage } from '@/constants/packageImages';
+import {
+  calculatePlanningSteps,
+  getProgressPercentage,
+  getCompletedCount,
+  type PlanningStep,
+  type PlanningChecklist,
+} from '@/utils/planningProgress';
+import { SkeletonEventCard } from '@/components/ui/Skeleton';
 
-const PLANNING_TOOLS = [
-  { key: 'invitations', icon: 'people', label: 'Invitations', route: 'participants' },
-  { key: 'communication', icon: 'chatbubbles', label: 'Communication', route: 'communication' },
-  { key: 'budget', icon: 'wallet', label: 'Budget', route: 'budget' },
-  { key: 'packages', icon: 'gift', label: 'Packages', route: 'packages' },
-];
+// ─── Planning Tools ────────────────────────────
+const TOOL_CONFIGS = [
+  { key: 'invitations', icon: 'people', iconBg: 'rgba(236, 72, 153, 0.15)', iconColor: '#EC4899', route: 'participants' },
+  { key: 'communication', icon: 'chatbubbles', iconBg: 'rgba(59, 130, 246, 0.15)', iconColor: '#3B82F6', route: 'communication' },
+  { key: 'budget', icon: 'wallet', iconBg: 'rgba(16, 185, 129, 0.15)', iconColor: '#10B981', route: 'budget' },
+  { key: 'packages', icon: 'gift', iconBg: 'rgba(139, 92, 246, 0.15)', iconColor: '#8B5CF6', route: 'packages' },
+] as const;
 
 export default function EventSummaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
 
   const { data: event, isLoading: eventLoading } = useEvent(id);
   const { data: participants } = useParticipants(id);
+  const { data: booking } = useBooking(id);
+  const updateEvent = useUpdateEvent();
 
+  // Planning steps (only for booked events)
+  const planningSteps = useMemo(() => {
+    if (!event) return [];
+    return calculatePlanningSteps(
+      event,
+      participants ?? undefined,
+      event.planning_checklist as PlanningChecklist | undefined,
+    );
+  }, [event, participants]);
+
+  const completedCount = getCompletedCount(planningSteps);
+  const progressPct = getProgressPercentage(planningSteps);
+  const isBooked = event?.status === 'booked' || event?.status === 'completed';
+
+  // Derive vibe from preferences — must be before early return (hooks rule)
+  const vibeText = useMemo(() => {
+    if (!event) return '';
+    if (event.vibe) return event.vibe;
+    const parts: string[] = [];
+    const energyMap: Record<string, string> = {
+      low_key: 'Low Key',
+      moderate: 'Moderate',
+      high_energy: 'High Energy',
+    };
+    if (event.preferences?.energy_level) {
+      parts.push(energyMap[event.preferences.energy_level] || event.preferences.energy_level);
+    }
+    if (event.preferences?.vibe_preferences?.length) {
+      const vibes = event.preferences.vibe_preferences
+        .slice(0, 2)
+        .map((v: string) => v.charAt(0).toUpperCase() + v.slice(1));
+      parts.push(...vibes);
+    }
+    return parts.length > 0 ? parts.join(' \u2022 ') : '';
+  }, [event]);
+
+  // Toggle a manual checklist item
+  const handleToggleChecklist = (key: string, currentValue: boolean) => {
+    if (!event) return;
+    const current = (event.planning_checklist ?? {}) as PlanningChecklist;
+    updateEvent.mutate({
+      eventId: event.id,
+      updates: {
+        planning_checklist: { ...current, [key]: !currentValue },
+      } as any,
+    });
+  };
+
+  // ─── Loading skeleton ──────────────────────────
   if (eventLoading || !event) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
-        <Spinner size="large" color="$primary" />
-      </YStack>
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <YStack padding={16} gap={16}>
+          <View style={{ height: 40 }} />
+          <SkeletonEventCard />
+          <SkeletonEventCard />
+        </YStack>
+      </View>
     );
   }
 
-  const statusConfig = {
-    draft: { label: 'Draft', variant: 'neutral' as const },
-    planning: { label: 'Planning', variant: 'info' as const },
-    booked: { label: 'Booked', variant: 'success' as const },
-    completed: { label: 'Completed', variant: 'success' as const },
-    cancelled: { label: 'Cancelled', variant: 'error' as const },
+  const eventTitle = event.title || `${event.honoree_name}'s Party`;
+  const cityName = event.city?.name || 'Unknown';
+  const dateStr = event.start_date
+    ? new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : 'TBD';
+
+  // Confirmed participant count for tool subtext
+  const confirmedCount = participants?.filter(p => p.confirmed_at != null).length ?? 0;
+  const totalParticipants = event.participant_count || participants?.length || 0;
+
+  // Per-person cost from booking
+  const perPersonCents = booking?.per_person_cents || booking?.total_amount_cents
+    ? Math.round((booking?.total_amount_cents || 0) / Math.max(totalParticipants, 1))
+    : 0;
+  const perPersonDisplay = perPersonCents > 0 ? Math.round(perPersonCents / 100) : null;
+
+  // City image for destination guide
+  const citySlug = event.city?.name?.toLowerCase() || 'berlin';
+  const cityImage = getCityImage(citySlug);
+
+  // Tool subtext
+  const getToolSubtext = (key: string): { text: string; color: string } => {
+    switch (key) {
+      case 'invitations':
+        return {
+          text: t.eventDetail.confirmed.replace('{{count}}', String(confirmedCount)).replace('{{total}}', String(totalParticipants)),
+          color: '#10B981',
+        };
+      case 'communication':
+        return { text: t.eventDetail.openChat, color: DARK_THEME.textTertiary };
+      case 'budget':
+        return {
+          text: perPersonDisplay
+            ? t.eventDetail.personEst.replace('{{amount}}', String(perPersonDisplay))
+            : t.eventDetail.budgetTool,
+          color: DARK_THEME.textTertiary,
+        };
+      case 'packages':
+        return { text: t.eventDetail.selectedPackage, color: DARK_THEME.textTertiary };
+      default:
+        return { text: '', color: DARK_THEME.textTertiary };
+    }
   };
 
-  const status = statusConfig[event.status as keyof typeof statusConfig] || statusConfig.draft;
-
   return (
-    <YStack flex={1} backgroundColor="$background" testID="event-summary-screen">
-      {/* Header */}
-      <YStack position="relative">
-        <Image
-          source={{ uri: event.hero_image_url || 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=800' }}
-          width="100%"
-          height={200}
-        />
-        <YStack
-          position="absolute"
-          top={0}
-          left={0}
-          right={0}
-          bottom={0}
-          backgroundColor="rgba(0,0,0,0.3)"
-        />
-        <XStack
-          position="absolute"
-          top={insets.top + 8}
-          left={16}
-          right={16}
-          justifyContent="space-between"
-        >
-          <XStack
-            width={40}
-            height={40}
-            borderRadius="$full"
-            backgroundColor="rgba(255,255,255,0.9)"
-            alignItems="center"
-            justifyContent="center"
-            pressStyle={{ opacity: 0.8 }}
-            onPress={() => router.back()}
-            testID="back-button"
-          >
-            <Ionicons name="arrow-back" size={24} color="#1A202C" />
-          </XStack>
-          <XStack
-            width={40}
-            height={40}
-            borderRadius="$full"
-            backgroundColor="rgba(255,255,255,0.9)"
-            alignItems="center"
-            justifyContent="center"
-            pressStyle={{ opacity: 0.8 }}
+    <View style={styles.container}>
+      {/* ─── Header bar ─────────────────────────── */}
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={16}>
+          <Pressable onPress={() => router.back()} hitSlop={8} testID="back-button">
+            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+          </Pressable>
+          <Text style={styles.headerTitle}>{t.eventDetail.title}</Text>
+          <Pressable
             onPress={() => router.push(`/event/${id}/edit`)}
+            hitSlop={8}
             testID="edit-button"
           >
-            <Ionicons name="create-outline" size={22} color="#1A202C" />
-          </XStack>
+            <Ionicons name="create-outline" size={22} color="#FFFFFF" />
+          </Pressable>
         </XStack>
-      </YStack>
+      </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
-        {/* Event Title & Info */}
-        <YStack gap="$2" marginBottom="$4">
-          <XStack alignItems="center" justifyContent="space-between">
-            <Text fontSize="$7" fontWeight="800" color="$textPrimary" flex={1}>
-              {event.title || `${event.honoree_name}'s Party`}
-            </Text>
-            <Badge label={status.label} variant={status.variant} />
-          </XStack>
-
-          <XStack gap="$4" alignItems="center">
-            <XStack gap="$1" alignItems="center">
-              <Ionicons name="location" size={16} color="#64748B" />
-              <Text color="$textSecondary">{event.city?.name || 'Unknown'}</Text>
-            </XStack>
-            <XStack gap="$1" alignItems="center">
-              <Ionicons name="calendar" size={16} color="#64748B" />
-              <Text color="$textSecondary">
-                {new Date(event.start_date).toLocaleDateString('en-US', {
-                  month: 'short',
-                  day: 'numeric',
-                  year: 'numeric',
-                })}
-              </Text>
-            </XStack>
-          </XStack>
-
-          {event.vibe && (
-            <Text color="$textSecondary" fontStyle="italic">
-              "{event.vibe}"
-            </Text>
-          )}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 100 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ─── Title + Motto ──────────────────────── */}
+        <YStack marginBottom={20}>
+          <Text style={styles.eventTitle}>{eventTitle}</Text>
+          <Text style={styles.motto}>{t.eventDetail.motto}</Text>
         </YStack>
 
-        {/* Share Event Banner */}
-        <YStack marginBottom="$4">
+        {/* ─── Info Card ──────────────────────────── */}
+        <View style={styles.infoCard}>
+          {/* Location */}
+          <View style={styles.infoRow}>
+            <View style={[styles.infoIconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}>
+              <Ionicons name="location" size={18} color="#3B82F6" />
+            </View>
+            <YStack flex={1}>
+              <Text style={styles.infoLabel}>{t.eventDetail.location}</Text>
+              <Text style={styles.infoValue}>{cityName}</Text>
+            </YStack>
+          </View>
+
+          <View style={styles.infoDivider} />
+
+          {/* Dates */}
+          <View style={styles.infoRow}>
+            <View style={[styles.infoIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+              <Ionicons name="calendar" size={18} color="#10B981" />
+            </View>
+            <YStack flex={1}>
+              <Text style={styles.infoLabel}>{t.eventDetail.dates}</Text>
+              <Text style={styles.infoValue}>{dateStr}</Text>
+            </YStack>
+          </View>
+
+          <View style={styles.infoDivider} />
+
+          {/* Vibe */}
+          <View style={styles.infoRow}>
+            <View style={[styles.infoIconCircle, { backgroundColor: 'rgba(249, 115, 22, 0.15)' }]}>
+              <Ionicons name="wine" size={18} color="#F97316" />
+            </View>
+            <YStack flex={1}>
+              <Text style={styles.infoLabel}>{t.eventDetail.vibe}</Text>
+              <Text style={styles.infoValue}>{vibeText || '—'}</Text>
+            </YStack>
+          </View>
+        </View>
+
+        {/* ─── 8-Step Progress (booked only) ─────── */}
+        {isBooked && planningSteps.length > 0 && (
+          <View style={styles.progressCard}>
+            <XStack justifyContent="space-between" alignItems="center" marginBottom={10}>
+              <Text style={styles.sectionLabel}>{t.eventDetail.planningProgress}</Text>
+              <Text style={styles.progressCount}>
+                {t.eventDetail.stepsComplete.replace('{{completed}}', String(completedCount))}
+              </Text>
+            </XStack>
+            <View style={styles.segmentedBar}>
+              {Array.from({ length: 8 }, (_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    styles.segment,
+                    { backgroundColor: i < completedCount ? DARK_THEME.primary : DARK_THEME.deepNavy },
+                    i === 0 && styles.segmentFirst,
+                    i === 7 && styles.segmentLast,
+                  ]}
+                />
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* ─── Share / Invite Banner ─────────────── */}
+        <View style={{ marginBottom: 20 }}>
           <ShareEventBanner
             eventId={id!}
-            eventTitle={event.title || `${event.honoree_name}'s Party`}
+            eventTitle={eventTitle}
             participantCount={participants?.length || 0}
           />
-        </YStack>
+        </View>
 
-        {/* Planning Tools Grid */}
-        <Text fontSize="$4" fontWeight="700" color="$textPrimary" marginBottom="$3">
-          Planning Tools
-        </Text>
-        <XStack flexWrap="wrap" gap="$3" marginBottom="$6">
-          {PLANNING_TOOLS.map(tool => (
-            <Card
-              key={tool.key}
-              width="47%"
-              padding="$4"
-              onPress={() => router.push(`/event/${id}/${tool.route}`)}
-              testID={`planning-tool-${tool.key}`}
-            >
-              <YStack alignItems="center" gap="$2">
-                <YStack
-                  width={48}
-                  height={48}
-                  borderRadius="$full"
-                  backgroundColor="$backgroundHover"
-                  alignItems="center"
-                  justifyContent="center"
-                >
-                  <Ionicons name={tool.icon as any} size={24} color="#258CF4" />
-                </YStack>
-                <Text fontWeight="600" color="$textPrimary">
-                  {tool.label}
+        {/* ─── Planning Tools 2×2 Grid ───────────── */}
+        <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>{t.eventDetail.planningTools}</Text>
+        <View style={styles.toolsGrid}>
+          {TOOL_CONFIGS.map((tool) => {
+            const sub = getToolSubtext(tool.key);
+            const toolLabel = t.eventDetail[
+              tool.key === 'invitations' ? 'manageInvitations'
+                : tool.key === 'communication' ? 'communication'
+                  : tool.key === 'budget' ? 'budgetTool'
+                    : 'packagesTool'
+            ];
+            return (
+              <Pressable
+                key={tool.key}
+                style={({ pressed }) => [styles.toolCard, pressed && styles.toolCardPressed]}
+                onPress={() => router.push(`/event/${id}/${tool.route}`)}
+                testID={`planning-tool-${tool.key}`}
+              >
+                <View style={[styles.toolIconCircle, { backgroundColor: tool.iconBg }]}>
+                  <Ionicons name={tool.icon as any} size={22} color={tool.iconColor} />
+                </View>
+                <Text style={styles.toolLabel}>{toolLabel}</Text>
+                <Text style={[styles.toolSubtext, { color: sub.color }]} numberOfLines={1}>
+                  {sub.text}
                 </Text>
-                {tool.key === 'invitations' && participants && (
-                  <Badge label={`${participants.length} guests`} variant="neutral" size="sm" />
-                )}
-              </YStack>
-            </Card>
-          ))}
-        </XStack>
+              </Pressable>
+            );
+          })}
+        </View>
 
-        {/* Destination Guide */}
-        <Card
-          onPress={() => router.push(`/event/${id}/destination`)}
-          testID="destination-guide-card"
-        >
-          <XStack gap="$3" alignItems="center">
+        {/* ─── Planning Checklist (booked, all 8 steps) ── */}
+        {isBooked && planningSteps.length > 0 && (
+          <View style={{ marginTop: 8 }}>
+            <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>{t.eventDetail.planningChecklist}</Text>
+            <View style={styles.checklistCard}>
+              {planningSteps.map((step, idx) => (
+                <React.Fragment key={step.key}>
+                  {idx > 0 && <View style={styles.infoDivider} />}
+                  <ChecklistRow
+                    step={step}
+                    t={t}
+                    onToggle={handleToggleChecklist}
+                  />
+                </React.Fragment>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {/* ─── Destination Guide ─────────────────── */}
+        <View style={{ marginTop: 20 }}>
+          <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>{t.eventDetail.destinationGuide}</Text>
+          <Pressable
+            style={({ pressed }) => [styles.destinationCard, pressed && { opacity: 0.9 }]}
+            onPress={() => router.push(`/event/${id}/destination`)}
+            testID="destination-guide-card"
+          >
             <Image
-              source={{ uri: 'https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9?w=200' }}
-              width={80}
-              height={80}
-              borderRadius="$md"
+              source={{ uri: event.hero_image_url || cityImage.hero }}
+              style={styles.destinationImage}
+              resizeMode="cover"
             />
-            <YStack flex={1} gap="$1">
-              <Text fontSize="$2" color="$textSecondary" textTransform="uppercase">
-                Destination Guide
+            <View style={styles.destinationOverlay} />
+            <YStack style={styles.destinationContent}>
+              <Text style={styles.destinationLabel}>
+                {t.eventDetail.topRatedSpots.replace('{{city}}', cityName)}
               </Text>
-              <Text fontSize="$4" fontWeight="700" color="$textPrimary">
-                {event.city?.name || 'Unknown'}
-              </Text>
-              <Text fontSize="$2" color="$primary">
-                View local tips & recommendations →
-              </Text>
+              <Text style={styles.destinationLink}>{t.eventDetail.viewTips} →</Text>
             </YStack>
-          </XStack>
-        </Card>
+          </Pressable>
+        </View>
       </ScrollView>
 
-      {/* Book Package CTA */}
+      {/* ─── Book Package CTA (planning only) ──── */}
       {event.status === 'planning' && (
-        <XStack
-          position="absolute"
-          bottom={0}
-          left={0}
-          right={0}
-          padding="$4"
-          paddingBottom={insets.bottom + 16}
-          backgroundColor="$surface"
-          borderTopWidth={1}
-          borderTopColor="$borderColor"
-        >
-          <Button
-            flex={1}
+        <View style={[styles.ctaBar, { paddingBottom: insets.bottom + 16 }]}>
+          <Pressable
+            style={styles.ctaButton}
             onPress={() => router.push(`/booking/${id}/summary`)}
             testID="book-package-button"
           >
-            Book Package
-          </Button>
-        </XStack>
+            <Text style={styles.ctaButtonText}>Book Package</Text>
+          </Pressable>
+        </View>
       )}
-    </YStack>
+    </View>
   );
 }
+
+// ─── Checklist Row Component ───────────────────
+function ChecklistRow({
+  step,
+  t,
+  onToggle,
+}: {
+  step: PlanningStep;
+  t: any;
+  onToggle: (key: string, current: boolean) => void;
+}) {
+  const label = (t.eventDetail as any)[step.labelKey] || step.labelKey;
+  const description = (t.eventDetail as any)[step.descriptionKey] || '';
+
+  return (
+    <Pressable
+      style={styles.checklistRow}
+      onPress={step.auto ? undefined : () => onToggle(step.key, step.completed)}
+      disabled={step.auto}
+    >
+      <View style={[
+        styles.checkbox,
+        step.completed && styles.checkboxChecked,
+        step.auto && styles.checkboxAuto,
+      ]}>
+        {step.completed && (
+          <Ionicons name="checkmark" size={14} color={step.auto ? '#10B981' : '#FFFFFF'} />
+        )}
+      </View>
+      <YStack flex={1}>
+        <Text style={[styles.checklistLabel, step.completed && styles.checklistLabelDone]}>
+          {label}
+        </Text>
+        <Text style={styles.checklistDesc} numberOfLines={2}>{description}</Text>
+      </YStack>
+      {step.auto && (
+        <Text style={styles.autoTag}>AUTO</Text>
+      )}
+    </Pressable>
+  );
+}
+
+// ─── Styles ────────────────────────────────────
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: DARK_THEME.background,
+  },
+  header: {
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: DARK_THEME.glassBorder,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: DARK_THEME.textPrimary,
+  },
+  eventTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: DARK_THEME.textPrimary,
+    marginBottom: 4,
+  },
+  motto: {
+    fontSize: 14,
+    color: DARK_THEME.textTertiary,
+    fontStyle: 'italic',
+  },
+
+  // Info Card
+  infoCard: {
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: DARK_THEME.glassBorder,
+    padding: 4,
+    marginBottom: 20,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+  },
+  infoIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: DARK_THEME.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  infoValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: DARK_THEME.textPrimary,
+    marginTop: 1,
+  },
+  infoDivider: {
+    height: 1,
+    backgroundColor: DARK_THEME.glassBorder,
+    marginHorizontal: 14,
+  },
+
+  // Progress
+  progressCard: {
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: DARK_THEME.glassBorder,
+    padding: 16,
+    marginBottom: 20,
+  },
+  sectionLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: DARK_THEME.textPrimary,
+  },
+  progressCount: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: DARK_THEME.textSecondary,
+  },
+  segmentedBar: {
+    flexDirection: 'row',
+    gap: 3,
+    height: 8,
+  },
+  segment: {
+    flex: 1,
+    height: '100%',
+    borderRadius: 1,
+  },
+  segmentFirst: {
+    borderTopLeftRadius: 4,
+    borderBottomLeftRadius: 4,
+  },
+  segmentLast: {
+    borderTopRightRadius: 4,
+    borderBottomRightRadius: 4,
+  },
+
+  // Planning Tools Grid
+  toolsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginBottom: 20,
+  },
+  toolCard: {
+    width: '47%',
+    flexGrow: 1,
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: DARK_THEME.glassBorder,
+    padding: 16,
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  toolCardPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+  toolIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toolLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: DARK_THEME.textPrimary,
+  },
+  toolSubtext: {
+    fontSize: 12,
+    fontWeight: '500',
+  },
+
+  // Planning Checklist
+  checklistCard: {
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: DARK_THEME.glassBorder,
+    overflow: 'hidden',
+  },
+  checklistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: DARK_THEME.textTertiary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: DARK_THEME.primary,
+    borderColor: DARK_THEME.primary,
+  },
+  checkboxAuto: {
+    backgroundColor: 'transparent',
+    borderColor: '#10B981',
+  },
+  checklistLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: DARK_THEME.textPrimary,
+  },
+  checklistLabelDone: {
+    color: DARK_THEME.textSecondary,
+  },
+  checklistDesc: {
+    fontSize: 12,
+    color: DARK_THEME.textTertiary,
+    marginTop: 2,
+  },
+  autoTag: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#10B981',
+    letterSpacing: 0.5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    overflow: 'hidden',
+  },
+
+  // Destination Guide
+  destinationCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    height: 160,
+    position: 'relative',
+  },
+  destinationImage: {
+    width: '100%',
+    height: '100%',
+  },
+  destinationOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  destinationContent: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    right: 16,
+  },
+  destinationLabel: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  destinationLink: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
+  },
+
+  // CTA Bar
+  ctaBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 16,
+    backgroundColor: DARK_THEME.surface,
+    borderTopWidth: 1,
+    borderTopColor: DARK_THEME.glassBorder,
+  },
+  ctaButton: {
+    backgroundColor: DARK_THEME.primary,
+    borderRadius: 14,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  ctaButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+});

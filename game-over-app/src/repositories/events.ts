@@ -16,6 +16,7 @@ export interface EventWithDetails extends Event {
   city: { id: string; name: string; country: string } | null;
   preferences: EventPreferences | null;
   participant_count: number;
+  planning_checklist?: Record<string, boolean>;
 }
 
 function generateUUID(): string {
@@ -126,6 +127,7 @@ export const eventsRepository = {
       city: event.city as EventWithDetails['city'],
       preferences: null,
       participant_count: countMap.get(event.id) || 0,
+      planning_checklist: (event as any).planning_checklist as Record<string, boolean> | undefined,
     }));
   },
 
@@ -179,6 +181,7 @@ export const eventsRepository = {
       city: data.city as EventWithDetails['city'],
       preferences,
       participant_count: participantCount,
+      planning_checklist: (data as any).planning_checklist as Record<string, boolean> | undefined,
     };
   },
 

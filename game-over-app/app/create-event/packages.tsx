@@ -14,6 +14,7 @@ import { useCreateEvent } from '@/hooks/queries/useEvents';
 import { Button } from '@/components/ui/Button';
 import { WizardFooter } from '@/components/ui/WizardFooter';
 import { DARK_THEME } from '@/constants/theme';
+import { getPackageImage } from '@/constants/packageImages';
 import { LinearGradient } from 'expo-linear-gradient';
 
 // Standard per-person pricing: S=€99, M=€149, L=€199
@@ -38,7 +39,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Berlin Classic',
       tier: 'classic',
       price_per_person_cents: TIER_PRICE_PER_PERSON.classic,
-      hero_image_url: 'https://images.unsplash.com/photo-1560969184-10fe8719e047?w=800',
+      hero_image_url: getPackageImage('berlin', 'classic').hero,
       rating: 4.8,
       review_count: 127,
       features: ['VIP nightlife access', 'Private party bus', 'Professional photographer', 'Welcome drinks package'],
@@ -50,7 +51,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Berlin Essential',
       tier: 'essential',
       price_per_person_cents: TIER_PRICE_PER_PERSON.essential,
-      hero_image_url: 'https://images.unsplash.com/photo-1587330979470-3595ac045ab0?w=800',
+      hero_image_url: getPackageImage('berlin', 'essential').hero,
       rating: 4.5,
       review_count: 89,
       features: ['Bar hopping tour', 'Welcome drinks', 'Group coordination'],
@@ -61,7 +62,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Berlin Grand',
       tier: 'grand',
       price_per_person_cents: TIER_PRICE_PER_PERSON.grand,
-      hero_image_url: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800',
+      hero_image_url: getPackageImage('berlin', 'grand').hero,
       rating: 4.9,
       review_count: 42,
       features: ['Luxury suite', 'Private chef dinner', 'Spa & wellness package', 'VIP club access', 'Private chauffeur'],
@@ -74,7 +75,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Hamburg Classic',
       tier: 'classic',
       price_per_person_cents: TIER_PRICE_PER_PERSON.classic,
-      hero_image_url: 'https://images.unsplash.com/photo-1567359781514-3b964e2b04d6?w=800',
+      hero_image_url: getPackageImage('hamburg', 'classic').hero,
       rating: 4.7,
       review_count: 98,
       features: ['Reeperbahn nightlife tour', 'Harbor cruise', 'Professional photographer', 'Reserved bar area'],
@@ -86,7 +87,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Hamburg Essential',
       tier: 'essential',
       price_per_person_cents: TIER_PRICE_PER_PERSON.essential,
-      hero_image_url: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=800',
+      hero_image_url: getPackageImage('hamburg', 'essential').hero,
       rating: 4.4,
       review_count: 64,
       features: ['Guided bar tour', 'Welcome cocktails', 'Group planning'],
@@ -97,7 +98,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Hamburg Grand',
       tier: 'grand',
       price_per_person_cents: TIER_PRICE_PER_PERSON.grand,
-      hero_image_url: 'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800',
+      hero_image_url: getPackageImage('hamburg', 'grand').hero,
       rating: 4.9,
       review_count: 31,
       features: ['Elbphilharmonie VIP event', 'Private yacht dinner', 'Luxury hotel suite', 'Spa & wellness day', 'Premium bottle service'],
@@ -110,7 +111,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Hannover Classic',
       tier: 'classic',
       price_per_person_cents: TIER_PRICE_PER_PERSON.classic,
-      hero_image_url: 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=800',
+      hero_image_url: getPackageImage('hannover', 'classic').hero,
       rating: 4.6,
       review_count: 73,
       features: ['Craft beer experience', 'Go-kart racing', 'Professional photographer', 'Welcome dinner'],
@@ -122,7 +123,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Hannover Essential',
       tier: 'essential',
       price_per_person_cents: TIER_PRICE_PER_PERSON.essential,
-      hero_image_url: 'https://images.unsplash.com/photo-1528605248644-14dd04022da1?w=800',
+      hero_image_url: getPackageImage('hannover', 'essential').hero,
       rating: 4.3,
       review_count: 51,
       features: ['City adventure tour', 'Welcome drinks', 'Group coordination'],
@@ -133,7 +134,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Hannover Grand',
       tier: 'grand',
       price_per_person_cents: TIER_PRICE_PER_PERSON.grand,
-      hero_image_url: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=800',
+      hero_image_url: getPackageImage('hannover', 'grand').hero,
       rating: 4.8,
       review_count: 28,
       features: ['Herrenhausen Gardens gala', 'Private chef dinner', 'Spa & wellness day', 'VIP nightlife access', 'Luxury hotel suite'],
@@ -223,42 +224,43 @@ function PackageSelectionCard({
             padding: 20,
           }}
         >
-          {/* Badges: Selected (green) takes priority, then Recommendation (blue) */}
-          {isSelected ? (
-            <XStack
-              position="absolute"
-              top={16}
-              left={16}
-              backgroundColor="rgba(71, 184, 129, 0.9)"
-              paddingHorizontal={12}
-              paddingVertical={6}
-              borderRadius={20}
-              gap="$1.5"
-              alignItems="center"
-            >
-              <Ionicons name="checkmark-circle" size={12} color="white" />
-              <Text color="white" fontSize={11} fontWeight="600">
-                Selected
-              </Text>
-            </XStack>
-          ) : isBestMatch ? (
-            <XStack
-              position="absolute"
-              top={16}
-              left={16}
-              backgroundColor={DARK_THEME.primary}
-              paddingHorizontal={12}
-              paddingVertical={6}
-              borderRadius={20}
-              gap="$1.5"
-              alignItems="center"
-            >
-              <Ionicons name="sparkles" size={12} color="white" />
-              <Text color="white" fontSize={11} fontWeight="600">
-                Recommendation based on preferences
-              </Text>
-            </XStack>
-          ) : null}
+          {/* Badges: show both Recommendation + Selected when applicable */}
+          {(isBestMatch || isSelected) && (
+            <YStack position="absolute" top={16} left={16} gap="$1.5">
+              {isBestMatch && (
+                <XStack
+                  backgroundColor={DARK_THEME.primary}
+                  paddingHorizontal={12}
+                  paddingVertical={6}
+                  borderRadius={20}
+                  gap="$1.5"
+                  alignItems="center"
+                  alignSelf="flex-start"
+                >
+                  <Ionicons name="sparkles" size={12} color="white" />
+                  <Text color="white" fontSize={11} fontWeight="600">
+                    Recommendation based on preferences
+                  </Text>
+                </XStack>
+              )}
+              {isSelected && (
+                <XStack
+                  backgroundColor="rgba(71, 184, 129, 0.9)"
+                  paddingHorizontal={12}
+                  paddingVertical={6}
+                  borderRadius={20}
+                  gap="$1.5"
+                  alignItems="center"
+                  alignSelf="flex-start"
+                >
+                  <Ionicons name="checkmark-circle" size={12} color="white" />
+                  <Text color="white" fontSize={11} fontWeight="600">
+                    Selected
+                  </Text>
+                </XStack>
+              )}
+            </YStack>
+          )}
 
           {/* Card Content */}
           <YStack gap="$3">
@@ -396,12 +398,17 @@ export default function WizardStep4() {
         Alert.alert('Error', 'Please complete all required fields.');
         return;
       }
+      // Look up the selected package's hero image for the event
+      const selectedPkg = packages.find((p: any) => p.id === wizardState.selectedPackageId);
+      const heroUrl = selectedPkg?.hero_image_url || (citySlug ? getPackageImage(citySlug, selectedPkg?.tier || 'classic').hero : null);
+
       const apiData = {
         ...eventData,
         event: {
           ...eventData.event,
           start_date: eventData.event.start_date || new Date().toISOString(),
           end_date: eventData.event.end_date || new Date().toISOString(),
+          ...(heroUrl ? { hero_image_url: heroUrl } : {}),
         },
       };
 
@@ -410,10 +417,11 @@ export default function WizardStep4() {
         const newEvent = await createEvent(apiData as any);
         eventId = newEvent.id;
       } catch (createError: any) {
-        // RLS recursion error — skip event creation, proceed with draft data
+        // RLS recursion or network error — skip event creation, proceed with draft booking
         const isRlsRecursion = createError?.code === '42P17' || createError?.message?.includes('infinite recursion');
-        if (!isRlsRecursion) throw createError;
-        console.warn('RLS recursion on event creation — proceeding with draft booking flow');
+        const isNetwork = createError?.message?.includes('Network request failed') || createError?.message?.includes('fetch');
+        if (!isRlsRecursion && !isNetwork) throw createError;
+        console.warn('Event creation failed (network/RLS) — proceeding with draft booking flow');
       }
 
       const packageId = wizardState.selectedPackageId;
@@ -432,7 +440,7 @@ export default function WizardStep4() {
   };
 
   const handleBack = () => {
-    router.back();
+    router.replace('/create-event/participants' as any);
   };
 
   const handleSelectPackage = useCallback((packageId: string) => {

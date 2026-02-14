@@ -47,7 +47,7 @@ export default function WizardStep3() {
   };
 
   const handleBack = () => {
-    router.back();
+    router.replace('/create-event/preferences' as any);
   };
 
   return (

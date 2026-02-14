@@ -266,7 +266,7 @@ export default function PaymentScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{
           padding: 16,
-          paddingBottom: isProcessing ? 16 : 120,
+          paddingBottom: isProcessing ? 16 : 100,
           ...(isProcessing ? { flex: 1, justifyContent: 'center', alignItems: 'center' } : {}),
         }}
         showsVerticalScrollIndicator={false}
@@ -441,7 +441,7 @@ export default function PaymentScreen() {
           left={0}
           right={0}
           padding="$4"
-          paddingBottom={insets.bottom + 16}
+          paddingBottom={insets.bottom + 8}
           backgroundColor="$surface"
           borderTopWidth={1}
           borderTopColor="$borderColor"

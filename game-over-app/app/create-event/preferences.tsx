@@ -44,7 +44,7 @@ export default function WizardStep2() {
   };
 
   const handleBack = () => {
-    router.back();
+    router.replace('/create-event' as any);
   };
 
   return (

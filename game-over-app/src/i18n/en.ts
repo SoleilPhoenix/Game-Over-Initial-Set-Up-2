@@ -24,6 +24,7 @@ const en = {
     draft: 'DRAFT',
     newEvent: 'New Event',
     noCityLabel: 'No city',
+    noDateLabel: 'No date set',
     participantsLabel: 'participants',
     step: 'Step',
     of: 'of',
@@ -220,6 +221,8 @@ const en = {
     existingDraftMessage: 'You have saved drafts. Continue an existing one or start a new plan?',
     continueDraft: 'Continue Draft',
     startFresh: 'Start Fresh',
+    deleteDraftTitle: 'Delete Draft',
+    deleteDraftMessage: 'Delete "{{name}}"? This cannot be undone.',
     // Multi-select hint
     selectMultiple: 'Select multiple',
   },
@@ -456,6 +459,59 @@ const en = {
     earlier: 'Earlier',
     allCaughtUp: 'All Caught Up!',
     noNewNotifications: 'You have no new notifications',
+  },
+
+  // ─── Event Detail ─────────────────────────────
+  eventDetail: {
+    title: 'Event Summary',
+    motto: "Let's make memories, not mistakes.",
+    // Info card
+    location: 'Location',
+    dates: 'Dates',
+    vibe: 'Vibe',
+    // Progress
+    stepsComplete: '{{completed}}/8 Steps Complete',
+    planningProgress: 'Planning Progress',
+    bookingPending: 'Booking Pending',
+    draftStatus: 'Draft',
+    // Planning steps
+    inviteParticipants: 'Invite Participants',
+    inviteParticipantsDesc: 'Send invitations to at least half your group',
+    groupConfirmed: 'Group Confirmed',
+    groupConfirmedDesc: 'Wait for participants to confirm attendance',
+    collectBudget: 'Collect Budget',
+    collectBudgetDesc: 'Collect payments from at least half the group',
+    prepareQuiz: 'Prepare Quiz',
+    prepareQuizDesc: 'Prepare fun questions about the honoree for a party game',
+    planAccommodation: 'Plan Accommodation',
+    planAccommodationDesc: 'Book hotels or apartments for the group',
+    organizeTravel: 'Organize Travel',
+    organizeTravelDesc: 'Coordinate carpools, trains, or flights',
+    planSurprise: 'Plan the Surprise',
+    planSurpriseDesc: 'How will the honoree be surprised?',
+    finalBriefing: 'Final Briefing',
+    finalBriefingDesc: 'Share schedule, meeting point, and final details with everyone',
+    // Quiz categories
+    quizCategories: 'Suggested question types: How did you meet? Favorite memory together, Who said it first?, Embarrassing stories, Fun facts',
+    // Planning tools
+    planningTools: 'Planning Tools',
+    manageInvitations: 'Manage Invitations',
+    communication: 'Communication',
+    budgetTool: 'Budget',
+    packagesTool: 'Packages',
+    // Tool subtexts
+    confirmed: '{{count}}/{{total}} Confirmed',
+    openChat: 'Open Chat',
+    personEst: '\u20AC{{amount}}/person est.',
+    selectedPackage: 'View Package',
+    // Planning checklist
+    planningChecklist: 'Planning Checklist',
+    // Destination guide
+    destinationGuide: 'Destination Guide',
+    topRatedSpots: 'Top Rated Spots in {{city}}',
+    viewTips: 'View local tips & recommendations',
+    // Invite group
+    inviteYourGroup: 'Invite Your Group',
   },
 
   // ─── Common ────────────────────────────────────

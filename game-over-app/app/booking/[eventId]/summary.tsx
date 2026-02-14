@@ -165,7 +165,7 @@ export default function BookingSummaryScreen() {
         <YStack width={40} />
       </XStack>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 140 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
         {/* Selected Package Card */}
         <YStack
           backgroundColor={DARK_THEME.surfaceCard}
@@ -331,7 +331,7 @@ export default function BookingSummaryScreen() {
         left={0}
         right={0}
         padding="$4"
-        paddingBottom={insets.bottom + 16}
+        paddingBottom={insets.bottom + 8}
         backgroundColor={DARK_THEME.surface}
         borderTopWidth={1}
         borderTopColor={DARK_THEME.glassBorder}

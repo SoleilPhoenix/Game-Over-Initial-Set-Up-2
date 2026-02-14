@@ -82,8 +82,8 @@ function RootLayoutNav() {
         <Stack.Screen
           name="create-event"
           options={{
-            presentation: 'fullScreenModal',
             animation: 'slide_from_bottom',
+            gestureEnabled: false,
           }}
         />
         <Stack.Screen name="event" />

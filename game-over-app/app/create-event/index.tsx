@@ -4,15 +4,14 @@
  */
 
 import React, { useState } from 'react';
-import { ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import { ScrollView, KeyboardAvoidingView, Platform, Pressable, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useWizardStore } from '@/stores/wizardStore';
-import { Input } from '@/components/ui/Input';
-import { Chip, ChipGroup } from '@/components/ui/Chip';
+import { OptionBlock, OptionBlockGroup } from '@/components/ui/OptionBlock';
 import { GlassPanel } from '@/components/ui/GlassPanel';
 import { WizardFooter } from '@/components/ui/WizardFooter';
 import { useTranslation } from '@/i18n';
@@ -38,6 +37,7 @@ export default function WizardStep1() {
   const router = useRouter();
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isFocused, setIsFocused] = useState(false);
   const { t } = useTranslation();
   const {
     partyType,
@@ -87,73 +87,59 @@ export default function WizardStep1() {
           contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Step Description */}
           {/* Party Type Selection */}
           <GlassPanel icon="sparkles" title={t.wizard.partyType} testID="panel-party-type">
-            <YStack gap="$3">
-              {/* Bachelor */}
-              <XStack
-                height={48}
-                borderRadius="$full"
-                backgroundColor={partyType === 'bachelor' ? DARK_THEME.primary : 'rgba(45, 55, 72, 0.6)'}
-                borderWidth={1}
-                borderColor={partyType === 'bachelor' ? DARK_THEME.primary : 'rgba(255, 255, 255, 0.08)'}
-                alignItems="center"
-                justifyContent="center"
-                gap="$2"
-                pressStyle={{ opacity: 0.8, scale: 0.98 }}
+            <OptionBlockGroup>
+              <OptionBlock
+                label={t.wizard.bachelor}
+                selected={partyType === 'bachelor'}
                 onPress={() => setPartyType('bachelor')}
                 testID="party-type-bachelor"
-              >
-                <Ionicons name="male" size={18} color={partyType === 'bachelor' ? '#FFFFFF' : '#9CA3AF'} />
-                <Text fontWeight="600" color={partyType === 'bachelor' ? '#FFFFFF' : '$textPrimary'}>
-                  {t.wizard.bachelor}
-                </Text>
-                {partyType === 'bachelor' && (
-                  <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
-                )}
-              </XStack>
-
-              {/* Bachelorette */}
-              <XStack
-                height={48}
-                borderRadius="$full"
-                backgroundColor={partyType === 'bachelorette' ? DARK_THEME.primary : 'rgba(45, 55, 72, 0.6)'}
-                borderWidth={1}
-                borderColor={partyType === 'bachelorette' ? DARK_THEME.primary : 'rgba(255, 255, 255, 0.08)'}
-                alignItems="center"
-                justifyContent="center"
-                gap="$2"
-                pressStyle={{ opacity: 0.8, scale: 0.98 }}
+              />
+              <OptionBlock
+                label={t.wizard.bachelorette}
+                selected={partyType === 'bachelorette'}
                 onPress={() => setPartyType('bachelorette')}
                 testID="party-type-bachelorette"
-              >
-                <Ionicons name="female" size={18} color={partyType === 'bachelorette' ? '#FFFFFF' : '#9CA3AF'} />
-                <Text fontWeight="600" color={partyType === 'bachelorette' ? '#FFFFFF' : '$textPrimary'}>
-                  {t.wizard.bachelorette}
-                </Text>
-                {partyType === 'bachelorette' && (
-                  <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
-                )}
-              </XStack>
-            </YStack>
+              />
+            </OptionBlockGroup>
           </GlassPanel>
 
           {/* Honoree's Name */}
           <GlassPanel icon="person" title={t.wizard.honoreeName} testID="panel-honoree">
-            <Input
-              placeholder={t.wizard.honoreeNamePlaceholder}
-              value={honoreeName}
-              onChangeText={setHonoreeName}
-              testID="honoree-name-input"
-            />
+            <XStack
+              height={48}
+              borderRadius="$full"
+              backgroundColor="rgba(45, 55, 72, 0.6)"
+              borderWidth={isFocused ? 2 : 1}
+              borderColor={isFocused ? DARK_THEME.primary : 'rgba(255, 255, 255, 0.08)'}
+              alignItems="center"
+              paddingHorizontal="$4"
+            >
+              <TextInput
+                placeholder={t.wizard.honoreeNamePlaceholder}
+                placeholderTextColor="#9CA3AF"
+                value={honoreeName}
+                onChangeText={setHonoreeName}
+                onFocus={() => setIsFocused(true)}
+                onBlur={() => setIsFocused(false)}
+                style={{
+                  flex: 1,
+                  color: '#FFFFFF',
+                  fontSize: 15,
+                  fontWeight: '600',
+                  height: '100%',
+                }}
+                testID="honoree-name-input"
+              />
+            </XStack>
           </GlassPanel>
 
           {/* City Selection */}
           <GlassPanel icon="location" title={t.wizard.city} testID="panel-city">
-            <ChipGroup testID="city-chips">
+            <OptionBlockGroup testID="city-options">
               {AVAILABLE_CITIES.map(city => (
-                <Chip
+                <OptionBlock
                   key={city.id}
                   label={city.name}
                   selected={cityId === city.id}
@@ -161,7 +147,7 @@ export default function WizardStep1() {
                   testID={`city-chip-${city.name.toLowerCase()}`}
                 />
               ))}
-            </ChipGroup>
+            </OptionBlockGroup>
           </GlassPanel>
 
           {/* Participants */}
@@ -202,19 +188,26 @@ export default function WizardStep1() {
 
           {/* Date */}
           <GlassPanel icon="calendar" title={t.wizard.dateLabel} testID="panel-date">
-            {/* Date input - tapping anywhere opens calendar */}
             <Pressable onPress={() => setShowDatePicker(true)}>
-              <Input
-                placeholder={t.wizard.datePlaceholder}
-                value={startDate || ''}
-                editable={false}
-                pointerEvents="none"
-                testID="date-input"
-                rightIcon={
-                  <Ionicons name="calendar-outline" size={22} color={DARK_THEME.primary} />
-                }
-                onRightIconPress={() => setShowDatePicker(true)}
-              />
+              <XStack
+                height={48}
+                borderRadius="$full"
+                backgroundColor="rgba(45, 55, 72, 0.6)"
+                borderWidth={1}
+                borderColor="rgba(255, 255, 255, 0.08)"
+                alignItems="center"
+                paddingHorizontal="$4"
+              >
+                <Text
+                  flex={1}
+                  fontSize={15}
+                  fontWeight="600"
+                  color={startDate ? '#FFFFFF' : '#9CA3AF'}
+                >
+                  {startDate || t.wizard.datePlaceholder}
+                </Text>
+                <Ionicons name="calendar-outline" size={22} color={DARK_THEME.primary} />
+              </XStack>
             </Pressable>
 
             {/* Calendar Picker */}
@@ -254,7 +247,7 @@ export default function WizardStep1() {
       <WizardFooter
         showBack={false}
         onNext={handleNext}
-        nextLabel={`${t.wizard.nextStep} →`}
+        nextLabel={`${t.wizard.nextStep} \u2192`}
         nextDisabled={!canProceed}
       />
     </YStack>
