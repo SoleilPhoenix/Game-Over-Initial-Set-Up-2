@@ -94,6 +94,8 @@ const en = {
     title: 'Support & FAQ',
     contactUs: 'Contact Us',
     emailSupport: 'Email Support',
+    liveChat: 'Live Chat',
+    liveChatSubtitle: 'Chat with us in real time',
     responseTime: 'We typically respond within 24 hours on business days.',
     faqTitle: 'Frequently Asked Questions',
     legal: 'Legal',
@@ -310,7 +312,10 @@ const en = {
     slashPerson: '/ person',
     includesTaxes: 'Includes all taxes & fees',
     securePaymentStripe: 'Secure payment processing via Stripe',
-    cancellationSummary: 'Free cancellation up to 14 days before the event. A non-refundable deposit is required to secure this booking. By proceeding, you agree to our',
+    cancellationSummary: 'A 25% deposit ({{deposit}}) is charged now to secure your booking. The remaining 75% is due 14 days before the event. Full refund if cancelled 14+ days before the event. By proceeding, you agree to our Terms & Conditions.',
+    depositLabel: 'Deposit (25%)',
+    remainingBalanceLabel: 'Remaining (due 14 days before)',
+    proceedToPaymentDeposit: 'Pay {{deposit}} Deposit',
     // Payment screen
     totalAmount: 'Total Amount',
     perPersonGuests: '{{price}} per person \u00D7 {{count}} guests',
@@ -318,7 +323,8 @@ const en = {
     visaMastercard: 'Visa, Mastercard, Amex',
     appleGoogleAvailable: 'Apple Pay and Google Pay also available',
     secureEncryption: 'Your payment is secured with 256-bit SSL encryption via Stripe',
-    cancellationPayment: 'Free cancellation up to 48 hours before the event. After that, a 50% cancellation fee applies.',
+    cancellationPayment: 'Full refund if cancelled 14+ days before the event. Deposit (25%) is forfeited for cancellations within 14 days.',
+    payDepositButtonLabel: 'Pay {{amount}} Deposit',
     payButtonLabel: 'Pay {{amount}}',
     preparing: 'Preparing...',
     pleaseWait: 'Please wait while we process your payment.',
@@ -414,8 +420,8 @@ const en = {
 
   // ─── Chat Screen ─────────────────────────────
   chat: {
-    headerTitle: 'Connect',
-    tabChat: 'Chat',
+    headerTitle: 'Chat',
+    tabChat: 'Topics',
     tabVoting: 'Voting',
     tabDecisions: 'Decisions',
     shareEvent: 'Share Event',
@@ -468,7 +474,7 @@ const en = {
     // Info card
     location: 'Location',
     dates: 'Dates',
-    vibe: 'Vibe',
+    vibe: 'Package Highlight',
     // Progress
     stepsComplete: '{{completed}}/8 Steps Complete',
     planningProgress: 'Planning Progress',
@@ -481,8 +487,8 @@ const en = {
     groupConfirmedDesc: 'Wait for participants to confirm attendance',
     collectBudget: 'Collect Budget',
     collectBudgetDesc: 'Collect payments from at least half the group',
-    prepareQuiz: 'Prepare Quiz',
-    prepareQuizDesc: 'Prepare fun questions about the honoree for a party game',
+    completePayment: 'Complete Outstanding Payment',
+    completePaymentDesc: 'Pay the remaining balance at least 14 days before the event. A reminder will be provided via email and app.',
     planAccommodation: 'Plan Accommodation',
     planAccommodationDesc: 'Book hotels or apartments for the group',
     organizeTravel: 'Organize Travel',
@@ -490,7 +496,7 @@ const en = {
     planSurprise: 'Plan the Surprise',
     planSurpriseDesc: 'How will the honoree be surprised?',
     finalBriefing: 'Final Briefing',
-    finalBriefingDesc: 'Share schedule, meeting point, and final details with everyone',
+    finalBriefingDesc: 'Automatically sent 3 days before the event via email and push notification.',
     // Quiz categories
     quizCategories: 'Suggested question types: How did you meet? Favorite memory together, Who said it first?, Embarrassing stories, Fun facts',
     // Planning tools
@@ -532,6 +538,20 @@ const en = {
     comingSoon: 'Coming Soon',
     selected: 'Selected',
     euro: '\u20AC',
+  },
+
+  // ─── Payment Reminders ───────────────────────────
+  paymentReminders: {
+    normalTitle: 'Payment Due Soon',
+    normalBody: 'Your final payment of {{amount}} is due within 7 days.',
+    moderateTitle: 'Payment Reminder',
+    moderateBody: 'Reminder: Your final payment of {{amount}} is due in 4 days.',
+    urgentTitle: 'Urgent: Payment Due',
+    urgentBody: 'Urgent: Your final payment of {{amount}} is due in 2 days.',
+    finalTitle: 'Final Notice: Payment Due Today',
+    finalBody: 'Final notice: Pay {{amount}} today or event is cancelled. Only 25% deposit retained.',
+    cancelledTitle: 'Event Cancelled',
+    cancelledBody: "{{honoreeName}}'s {{eventTitle}} has been cancelled due to non-payment. Your 25% deposit has been retained.",
   },
 } as const;
 

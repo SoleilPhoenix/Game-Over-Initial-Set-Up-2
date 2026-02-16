@@ -86,6 +86,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         enableGooglePay: true,
       },
     ],
+    [
+      'react-native-crisp-chat-sdk',
+      {
+        websiteId: '403b436b-3ea7-4b76-8d8d-3f860ed63468',
+      },
+    ],
   ],
   experiments: {
     typedRoutes: false,

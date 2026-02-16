@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, View } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { show as showCrispChat } from 'react-native-crisp-chat-sdk';
 import { useTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
 
@@ -169,6 +170,35 @@ export default function SupportScreen() {
                   </Text>
                 </YStack>
                 <Ionicons name="open-outline" size={18} color={DARK_THEME.textSecondary} />
+              </XStack>
+            </Pressable>
+
+            {/* Live Chat */}
+            <Pressable
+              style={styles.contactCard}
+              onPress={() => showCrispChat()}
+              testID="live-chat-button"
+            >
+              <XStack alignItems="center" gap="$3">
+                <View
+                  width={44}
+                  height={44}
+                  borderRadius={22}
+                  backgroundColor="rgba(52, 211, 153, 0.2)"
+                  alignItems="center"
+                  justifyContent="center"
+                >
+                  <Ionicons name="chatbubbles" size={22} color="#34D399" />
+                </View>
+                <YStack flex={1}>
+                  <Text fontSize={15} fontWeight="600" color={DARK_THEME.textPrimary}>
+                    {t.support.liveChat}
+                  </Text>
+                  <Text fontSize={12} color={DARK_THEME.textSecondary}>
+                    {t.support.liveChatSubtitle}
+                  </Text>
+                </YStack>
+                <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textSecondary} />
               </XStack>
             </Pressable>
 
