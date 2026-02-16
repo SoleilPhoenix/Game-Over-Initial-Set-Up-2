@@ -89,6 +89,7 @@ android {
 
     namespace 'app.gameover.android'
     defaultConfig {
+        multiDexEnabled true
         applicationId 'app.gameover.android'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
@@ -153,6 +154,8 @@ android {
 }
 
 dependencies {
+    implementation 'androidx.multidex:multidex:2.0.1'
+    implementation 'im.crisp:crisp-sdk:2.0.15'
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 

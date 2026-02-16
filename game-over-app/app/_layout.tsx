@@ -13,14 +13,29 @@ import { ToastProvider, ToastViewport } from '@tamagui/toast';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StripeProvider } from '@stripe/stripe-react-native';
-import { configure as configureCrisp, setUserEmail, setUserNickname } from 'react-native-crisp-chat-sdk';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { DARK_THEME } from '@/constants/theme';
 import config from '../tamagui.config';
 
-// Initialize Crisp Chat
-configureCrisp('403b436b-3ea7-4b76-8d8d-3f860ed63468');
+// Crisp Chat — native module, not available in Expo Go
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+let configureCrisp: ((id: string) => void) | undefined;
+let setUserEmail: ((email: string, signature: string | null) => void) | undefined;
+let setUserNickname: ((name: string) => void) | undefined;
+
+if (!isExpoGo) {
+  try {
+    const crisp = require('react-native-crisp-chat-sdk');
+    configureCrisp = crisp.configure;
+    setUserEmail = crisp.setUserEmail;
+    setUserNickname = crisp.setUserNickname;
+    configureCrisp?.('403b436b-3ea7-4b76-8d8d-3f860ed63468');
+  } catch {
+    // Crisp SDK not available
+  }
+}
 
 // Stripe publishable key from environment
 const STRIPE_PUBLISHABLE_KEY = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || '';
@@ -47,20 +62,20 @@ function RootLayoutNav() {
 
   // Sync user info with Crisp when session changes (with identity verification)
   useEffect(() => {
-    if (!session?.user) return;
+    if (!session?.user || isExpoGo) return;
 
     const { email, user_metadata } = session.user;
     const name = user_metadata?.full_name || user_metadata?.name;
-    if (name) setUserNickname(name);
+    if (name) setUserNickname?.(name);
 
     if (!email) return;
 
     // Fetch HMAC signature for identity verification, fallback to null if unavailable
     supabase.functions.invoke('crisp-identity').then(({ data }) => {
       const signature = data?.signature ?? null;
-      setUserEmail(email, signature);
+      setUserEmail?.(email, signature);
     }).catch(() => {
-      setUserEmail(email, null);
+      setUserEmail?.(email, null);
     });
   }, [session]);
 

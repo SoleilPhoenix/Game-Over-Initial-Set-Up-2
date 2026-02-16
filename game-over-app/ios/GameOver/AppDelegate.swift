@@ -1,4 +1,7 @@
 import Expo
+// @generated begin react-native-crisp-chat-sdk-swift - expo prebuild (DO NOT MODIFY) sync-cf002978639482214f88d4756d2925f629b1443b
+import Crisp
+// @generated end react-native-crisp-chat-sdk-swift
 import React
 import ReactAppDependencyProvider
 
@@ -15,6 +18,10 @@ public class AppDelegate: ExpoAppDelegate {
   ) -> Bool {
     let delegate = ReactNativeDelegate()
     let factory = ExpoReactNativeFactory(delegate: delegate)
+// @generated begin react-native-crisp-chat-sdk-swift-call - expo prebuild (DO NOT MODIFY) sync-86425d25fd71a15faa80c0e438c8702d483d8e5a
+// Crisp SDK Configuration
+    CrispSDK.configure(websiteID: "403b436b-3ea7-4b76-8d8d-3f860ed63468")
+// @generated end react-native-crisp-chat-sdk-swift-call
     delegate.dependencyProvider = RCTAppDependencyProvider()
 
     reactNativeDelegate = delegate

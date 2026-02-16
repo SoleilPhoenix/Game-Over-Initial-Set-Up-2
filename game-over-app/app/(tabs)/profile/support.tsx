@@ -9,9 +9,20 @@ import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, View } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { show as showCrispChat } from 'react-native-crisp-chat-sdk';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
+
+// Crisp Chat — native module, not available in Expo Go
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+let showCrispChat: (() => void) | undefined;
+if (!isExpoGo) {
+  try {
+    showCrispChat = require('react-native-crisp-chat-sdk').show;
+  } catch {
+    // Crisp SDK not available
+  }
+}
 
 interface FAQItem {
   question: string;
@@ -173,10 +184,10 @@ export default function SupportScreen() {
               </XStack>
             </Pressable>
 
-            {/* Live Chat */}
-            <Pressable
+            {/* Live Chat — hidden in Expo Go (native module) */}
+            {showCrispChat && <Pressable
               style={styles.contactCard}
-              onPress={() => showCrispChat()}
+              onPress={() => showCrispChat?.()}
               testID="live-chat-button"
             >
               <XStack alignItems="center" gap="$3">
@@ -200,7 +211,7 @@ export default function SupportScreen() {
                 </YStack>
                 <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textSecondary} />
               </XStack>
-            </Pressable>
+            </Pressable>}
 
             {/* Response time info */}
             <XStack
