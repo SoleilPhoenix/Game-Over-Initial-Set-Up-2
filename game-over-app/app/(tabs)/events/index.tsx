@@ -35,7 +35,16 @@ import { SkeletonEventCard } from '@/components/ui/Skeleton';
 import { useTranslation, getTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
 import { getCurrentPhaseLabel } from '@/utils/planningProgress';
+import { getCityImage, resolveImageSource } from '@/constants/packageImages';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import type { EventWithDetails } from '@/repositories';
+
+// Map city UUIDs to slugs for image lookup
+const CITY_UUID_TO_SLUG: Record<string, string> = {
+  '550e8400-e29b-41d4-a716-446655440101': 'berlin',
+  '550e8400-e29b-41d4-a716-446655440102': 'hamburg',
+  '550e8400-e29b-41d4-a716-446655440103': 'hannover',
+};
 
 type FilterTab = 'all' | 'organizing' | 'attending';
 
@@ -47,7 +56,7 @@ const getBookedStepCount = (event: EventWithDetails): number => {
   const hasParticipants = event.participant_count > 1; // organizer + at least 1 invite
   const autoSteps = hasParticipants ? 1 : 0; // invitations_sent approximation
   // Steps 4-8 from checklist
-  const manualSteps = ['quiz_prepared', 'accommodations', 'travel', 'surprise_plan', 'final_briefing']
+  const manualSteps = ['outstanding_payment', 'accommodations', 'travel', 'surprise_plan', 'final_briefing']
     .filter(k => checklist[k]).length;
   return autoSteps + manualSteps;
 };
@@ -57,7 +66,7 @@ const STEP_NUMBER: Record<string, number> = {
   inviteParticipants: 1,
   groupConfirmed: 2,
   collectBudget: 3,
-  prepareQuiz: 4,
+  completePayment: 4,
   planAccommodation: 5,
   organizeTravel: 6,
   planSurprise: 7,
@@ -83,10 +92,10 @@ const getProgressConfig = (event: EventWithDetails, t: any): {
       // Show next step name: "Step X: Label"
       const nextLabelKey = getCurrentPhaseLabel(
         // Build minimal steps from card data for next step detection
-        ['invitations_sent', 'group_confirmed', 'budget_collected', 'quiz_prepared', 'accommodations', 'travel', 'surprise_plan', 'final_briefing']
+        ['invitations_sent', 'group_confirmed', 'budget_collected', 'outstanding_payment', 'accommodations', 'travel', 'surprise_plan', 'final_briefing']
           .map((key, i) => ({
             key,
-            labelKey: ['inviteParticipants', 'groupConfirmed', 'collectBudget', 'prepareQuiz', 'planAccommodation', 'organizeTravel', 'planSurprise', 'finalBriefing'][i],
+            labelKey: ['inviteParticipants', 'groupConfirmed', 'collectBudget', 'completePayment', 'planAccommodation', 'organizeTravel', 'planSurprise', 'finalBriefing'][i],
             descriptionKey: '',
             completed: i < completed,
             auto: i < 3,
@@ -145,6 +154,8 @@ export default function EventsScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
   const { t } = useTranslation();
+  const FILTER_TABS = ['all', 'organizing', 'attending'] as const;
+  const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchFilterAnimated } = useSwipeTabs(FILTER_TABS, activeFilter, setActiveFilter);
 
   const queryClient = useQueryClient();
   const { data: events, isLoading, error: eventsError, refetch } = useEvents();
@@ -156,18 +167,41 @@ export default function EventsScreen() {
     }, [refetch])
   );
 
+  // Hide events still in wizard booking flow (created at Step 4 but not yet paid)
+  const wizardCreatedEventId = useWizardStore((s) => s.createdEventId);
+
+  // Deduplicate events with same honoree+city+date (keeps highest-priority status)
+  const deduplicatedEvents = useMemo(() => {
+    if (!events || events.length === 0) return events;
+    const STATUS_PRIORITY: Record<string, number> = { completed: 4, booked: 3, planning: 2, draft: 1 };
+    const seen = new Map<string, EventWithDetails>();
+    for (const e of events) {
+      const key = `${e.honoree_name?.toLowerCase()}_${e.city_id}_${e.start_date}`;
+      const existing = seen.get(key);
+      if (!existing || (STATUS_PRIORITY[e.status || ''] || 0) > (STATUS_PRIORITY[existing.status || ''] || 0)) {
+        seen.set(key, e);
+      }
+    }
+    return Array.from(seen.values());
+  }, [events]);
+
   // Filter events based on active tab
+  // Also hide events still in the wizard booking flow (created but not yet paid)
   const filteredEvents = useMemo(() => {
-    if (!events) return [];
+    if (!deduplicatedEvents) return [];
+    // Hide events still going through wizard → booking flow
+    const visible = wizardCreatedEventId
+      ? deduplicatedEvents.filter((e) => e.id !== wizardCreatedEventId)
+      : deduplicatedEvents;
     switch (activeFilter) {
       case 'organizing':
-        return events.filter((e) => e.created_by === user?.id);
+        return visible.filter((e) => e.created_by === user?.id);
       case 'attending':
-        return events.filter((e) => e.created_by !== user?.id);
+        return visible.filter((e) => e.created_by !== user?.id);
       default:
-        return events;
+        return visible;
     }
-  }, [events, activeFilter, user?.id]);
+  }, [deduplicatedEvents, activeFilter, user?.id, wizardCreatedEventId]);
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -261,9 +295,11 @@ export default function EventsScreen() {
   };
 
   const getPaymentStatus = (event: EventWithDetails): string | null => {
-    // Check if user has paid (simplified - would need actual booking data)
-    if (event.status === 'booked' || event.status === 'completed') {
-      return 'Paid';
+    if (event.status === 'completed') {
+      return '100% Paid';
+    }
+    if (event.status === 'booked') {
+      return '25% Paid';
     }
     return null;
   };
@@ -274,7 +310,7 @@ export default function EventsScreen() {
         {(['all', 'organizing', 'attending'] as FilterTab[]).map((tab) => (
           <Pressable
             key={tab}
-            onPress={() => setActiveFilter(tab)}
+            onPress={() => switchFilterAnimated(tab)}
             style={[
               styles.filterTab,
               activeFilter === tab && styles.filterTabActive,
@@ -317,7 +353,7 @@ export default function EventsScreen() {
     const daysLeft = getDaysLeft(item.start_date);
     const paymentStatus = getPaymentStatus(item);
     const dateRange = formatDateRange(item.start_date, item.end_date);
-    const eventTitle = item.title || `${item.honoree_name}'s Bach...`;
+    const eventTitle = item.title || `${item.honoree_name}'s Event`;
 
     return (
       <Pressable
@@ -338,9 +374,15 @@ export default function EventsScreen() {
                 resizeMode="cover"
               />
             ) : (
-              <View style={[styles.thumbnail, styles.thumbnailPlaceholder]}>
-                <Ionicons name="image-outline" size={32} color={DARK_THEME.textTertiary} />
-              </View>
+              <Image
+                source={resolveImageSource(getCityImage(
+                  (item.city?.name?.toLowerCase()) ||
+                  CITY_UUID_TO_SLUG[item.city_id || ''] ||
+                  'berlin'
+                ))}
+                style={styles.thumbnail}
+                resizeMode="cover"
+              />
             )}
           </View>
 
@@ -373,7 +415,7 @@ export default function EventsScreen() {
               <Text style={styles.dateText}>{dateRange}</Text>
             </XStack>
 
-            {/* Role badge and status */}
+            {/* Role badge */}
             <XStack alignItems="center" gap={8} marginTop={8}>
               <View style={[
                 styles.roleBadge,
@@ -383,13 +425,21 @@ export default function EventsScreen() {
                   {role === 'organizer' ? t.events.organizer : t.events.guest}
                 </Text>
               </View>
-              {daysLeft && (
-                <Text style={styles.statusText}>• {daysLeft}</Text>
-              )}
-              {paymentStatus && (
-                <Text style={styles.statusText}>• {paymentStatus}</Text>
-              )}
             </XStack>
+
+            {/* Days left + payment status row */}
+            {(daysLeft || paymentStatus) && (
+              <XStack alignItems="center" gap={8} marginTop={6}>
+                {daysLeft && (
+                  <Text style={styles.statusText}>{daysLeft}</Text>
+                )}
+                {paymentStatus && (
+                  <View style={styles.paymentBadge}>
+                    <Text style={styles.paymentBadgeText}>{paymentStatus}</Text>
+                  </View>
+                )}
+              </XStack>
+            )}
           </YStack>
         </XStack>
 
@@ -446,56 +496,65 @@ export default function EventsScreen() {
     </Pressable>
   );
 
-  const renderEmptyState = () => (
-    <FlatList
-      data={[]}
-      renderItem={null}
-      contentContainerStyle={{
-        flexGrow: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 24,
-        paddingBottom: insets.bottom + 180,
-      }}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefreshing}
-          onRefresh={handleRefresh}
-          tintColor={DARK_THEME.primary}
-          colors={[DARK_THEME.primary]}
-        />
-      }
-      showsVerticalScrollIndicator={false}
-      ListEmptyComponent={
-        <YStack justifyContent="center" alignItems="center" width="100%" paddingHorizontal={0}>
-          <View style={styles.emptyIconContainer}>
-            <LinearGradient
-              colors={[`${DARK_THEME.primary}30`, `${DARK_THEME.primary}10`]}
-              style={styles.emptyIconGradient}
+  const renderEmptyState = () => {
+    const isAttending = activeFilter === 'attending';
+    const emptyTitle = isAttending ? (t.events as any).noAttendingTitle || 'No Invitations Yet' : t.events.noEventsTitle;
+    const emptySubtitle = isAttending ? (t.events as any).noAttendingSubtitle || 'When someone invites you to an event, it will appear here.' : t.events.noEventsSubtitle;
+    const emptyEmoji = isAttending ? '📬' : '🎊';
+
+    return (
+      <FlatList
+        data={[]}
+        renderItem={null}
+        contentContainerStyle={{
+          flexGrow: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          padding: 24,
+          paddingBottom: insets.bottom + 180,
+        }}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            tintColor={DARK_THEME.primary}
+            colors={[DARK_THEME.primary]}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <YStack justifyContent="center" alignItems="center" width="100%" paddingHorizontal={0}>
+            <View style={styles.emptyIconContainer}>
+              <LinearGradient
+                colors={[`${DARK_THEME.primary}30`, `${DARK_THEME.primary}10`]}
+                style={styles.emptyIconGradient}
+              >
+                <Text fontSize={56}>{emptyEmoji}</Text>
+              </LinearGradient>
+            </View>
+            <Text fontSize={24} fontWeight="800" color={DARK_THEME.textPrimary} marginBottom={8}>
+              {emptyTitle}
+            </Text>
+            <Text
+              fontSize={16}
+              color={DARK_THEME.textSecondary}
+              textAlign="center"
+              marginBottom={24}
+              maxWidth={280}
+              lineHeight={24}
             >
-              <Text fontSize={56}>🎊</Text>
-            </LinearGradient>
-          </View>
-          <Text fontSize={24} fontWeight="800" color={DARK_THEME.textPrimary} marginBottom={8}>
-            {t.events.noEventsTitle}
-          </Text>
-          <Text
-            fontSize={16}
-            color={DARK_THEME.textSecondary}
-            textAlign="center"
-            marginBottom={24}
-            maxWidth={280}
-            lineHeight={24}
-          >
-            {t.events.noEventsSubtitle}
-          </Text>
-          <View style={{ width: '100%', paddingHorizontal: 0 }}>
-            {renderStartNewPlanButton()}
-          </View>
-        </YStack>
-      }
-    />
-  );
+              {emptySubtitle}
+            </Text>
+            {!isAttending && (
+              <View style={{ width: '100%', paddingHorizontal: 0 }}>
+                {renderStartNewPlanButton()}
+              </View>
+            )}
+          </YStack>
+        }
+      />
+    );
+  };
 
   const renderLoadingState = () => (
     <YStack padding={16} gap={12}>
@@ -616,7 +675,8 @@ export default function EventsScreen() {
   };
 
   const renderDraftCards = () => {
-    if (!hasDrafts) return null;
+    // Only show drafts on All and Organizing tabs — they don't belong in Attending
+    if (!hasDrafts || activeFilter === 'attending') return null;
     return <>{allDrafts.map(renderSingleDraftCard)}</>;
   };
 
@@ -672,8 +732,6 @@ export default function EventsScreen() {
             testID="notifications-button"
           >
             <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
-            {/* Notification dot */}
-            <View style={styles.notificationDot} />
           </Pressable>
         </XStack>
 
@@ -694,58 +752,62 @@ export default function EventsScreen() {
         </Pressable>
       )}
 
-      {/* Content */}
-      {filteredEvents && filteredEvents.length > 0 ? (
-        <FlatList
-          data={filteredEvents}
-          renderItem={renderEventCard}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{
-            padding: 16,
-            paddingBottom: insets.bottom + 180
-          }}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              tintColor={DARK_THEME.primary}
-              colors={[DARK_THEME.primary]}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-          ListHeaderComponent={renderDraftCards}
-          ListFooterComponent={renderListFooter}
-          testID="events-list"
-        />
-      ) : hasDrafts ? (
-        <FlatList
-          data={[]}
-          renderItem={null}
-          contentContainerStyle={{
-            padding: 16,
-            paddingBottom: insets.bottom + 180,
-          }}
-          refreshControl={
-            <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={handleRefresh}
-              tintColor={DARK_THEME.primary}
-              colors={[DARK_THEME.primary]}
-            />
-          }
-          showsVerticalScrollIndicator={false}
-          ListHeaderComponent={
-            <>
-              {renderDraftCards()}
-              <View style={{ marginTop: 12 }}>
-                {renderStartNewPlanButton()}
-              </View>
-            </>
-          }
-        />
-      ) : (
-        renderEmptyState()
-      )}
+      {/* Content — swipe left/right to switch filter tabs */}
+      <Animated.View style={[{ flex: 1 }, swipeAnimStyle]} {...swipeHandlers}>
+        {isLoading && !events ? (
+          renderLoadingState()
+        ) : filteredEvents && filteredEvents.length > 0 ? (
+          <FlatList
+            data={filteredEvents}
+            renderItem={renderEventCard}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={{
+              padding: 16,
+              paddingBottom: insets.bottom + 180
+            }}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                tintColor={DARK_THEME.primary}
+                colors={[DARK_THEME.primary]}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={renderDraftCards}
+            ListFooterComponent={renderListFooter}
+            testID="events-list"
+          />
+        ) : hasDrafts && activeFilter !== 'attending' ? (
+          <FlatList
+            data={[]}
+            renderItem={null}
+            contentContainerStyle={{
+              padding: 16,
+              paddingBottom: insets.bottom + 180,
+            }}
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                tintColor={DARK_THEME.primary}
+                colors={[DARK_THEME.primary]}
+              />
+            }
+            showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              <>
+                {renderDraftCards()}
+                <View style={{ marginTop: 12 }}>
+                  {renderStartNewPlanButton()}
+                </View>
+              </>
+            }
+          />
+        ) : (
+          renderEmptyState()
+        )}
+      </Animated.View>
     </View>
   );
 }
@@ -901,6 +963,17 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 13,
     color: DARK_THEME.textSecondary,
+  },
+  paymentBadge: {
+    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  paymentBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#5A7EB0',
   },
   progressSection: {
     marginTop: 14,

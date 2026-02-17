@@ -31,7 +31,7 @@ export function useEvents() {
     queryKey: eventKeys.list(user?.id || ''),
     queryFn: () => eventsRepository.getByUser(user!.id),
     enabled: !!user?.id,
-    staleTime: 60 * 1000, // 60 seconds
+    staleTime: 30 * 1000, // 30 seconds — show cached data fast, refetch in background
   });
 }
 
@@ -43,7 +43,7 @@ export function useEvent(eventId: string | undefined) {
     queryKey: eventKeys.detail(eventId || ''),
     queryFn: () => eventsRepository.getById(eventId!),
     enabled: !!eventId,
-    staleTime: 2 * 60 * 1000, // 2 minutes
+    staleTime: 60 * 1000, // 1 minute — prefetched from events list
   });
 }
 

@@ -12,10 +12,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvent, useUpdateEvent } from '@/hooks/queries/useEvents';
 import { useParticipants } from '@/hooks/queries/useParticipants';
 import { useBooking } from '@/hooks/queries/useBookings';
+import { useCreateInvite } from '@/hooks/queries/useInvites';
 import { ShareEventBanner } from '@/components/events';
 import { useTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
-import { getCityImage } from '@/constants/packageImages';
+import { getCityImage, resolveImageSource } from '@/constants/packageImages';
 import {
   calculatePlanningSteps,
   getProgressPercentage,
@@ -27,10 +28,10 @@ import { SkeletonEventCard } from '@/components/ui/Skeleton';
 
 // ─── Planning Tools ────────────────────────────
 const TOOL_CONFIGS = [
-  { key: 'invitations', icon: 'people', iconBg: 'rgba(236, 72, 153, 0.15)', iconColor: '#EC4899', route: 'participants' },
-  { key: 'communication', icon: 'chatbubbles', iconBg: 'rgba(59, 130, 246, 0.15)', iconColor: '#3B82F6', route: 'communication' },
-  { key: 'budget', icon: 'wallet', iconBg: 'rgba(16, 185, 129, 0.15)', iconColor: '#10B981', route: 'budget' },
-  { key: 'packages', icon: 'gift', iconBg: 'rgba(139, 92, 246, 0.15)', iconColor: '#8B5CF6', route: 'packages' },
+  { key: 'invitations', icon: 'people', iconBg: 'rgba(236, 72, 153, 0.15)', iconColor: '#EC4899', route: 'participants', isTab: false },
+  { key: 'communication', icon: 'chatbubbles', iconBg: 'rgba(59, 130, 246, 0.15)', iconColor: '#3B82F6', route: '/(tabs)/chat', isTab: true },
+  { key: 'budget', icon: 'wallet', iconBg: 'rgba(16, 185, 129, 0.15)', iconColor: '#10B981', route: '/(tabs)/budget', isTab: true },
+  { key: 'packages', icon: 'gift', iconBg: 'rgba(139, 92, 246, 0.15)', iconColor: '#8B5CF6', route: 'packages', isTab: false },
 ] as const;
 
 export default function EventSummaryScreen() {
@@ -43,6 +44,7 @@ export default function EventSummaryScreen() {
   const { data: participants } = useParticipants(id);
   const { data: booking } = useBooking(id);
   const updateEvent = useUpdateEvent();
+  const createInvite = useCreateInvite();
 
   // Planning steps (only for booked events)
   const planningSteps = useMemo(() => {
@@ -58,27 +60,56 @@ export default function EventSummaryScreen() {
   const progressPct = getProgressPercentage(planningSteps);
   const isBooked = event?.status === 'booked' || event?.status === 'completed';
 
-  // Derive vibe from preferences — must be before early return (hooks rule)
+  // Derive package highlight from booking tier — the premium feature of the selected package
+  const TIER_HIGHLIGHTS: Record<string, string> = {
+    essential: 'Reserved Bar Area',
+    classic: 'Private Wine Tasting',
+    grand: 'Private Yacht Charter',
+  };
   const vibeText = useMemo(() => {
     if (!event) return '';
+
+    // Try to get highlight from booking package tier
+    const bookingPkg = booking as Record<string, any> | undefined;
+    const pkgTier = bookingPkg?.package?.tier || bookingPkg?.tier;
+    if (pkgTier && TIER_HIGHLIGHTS[pkgTier]) {
+      return TIER_HIGHLIGHTS[pkgTier];
+    }
+
+    // Try to extract tier from selected_package_id slug (e.g., "hamburg-classic" → "classic")
+    const selectedPkgId = bookingPkg?.selected_package_id;
+    if (selectedPkgId && typeof selectedPkgId === 'string') {
+      const slugParts = selectedPkgId.split('-');
+      const possibleTier = slugParts[slugParts.length - 1];
+      if (possibleTier && TIER_HIGHLIGHTS[possibleTier]) {
+        return TIER_HIGHLIGHTS[possibleTier];
+      }
+    }
+
+    // Fallback: first feature from the package if available
+    const features = bookingPkg?.package?.features || bookingPkg?.features;
+    if (Array.isArray(features) && features.length > 0) {
+      return features[0];
+    }
+
+    // Final fallback: from event vibe or preferences
     if (event.vibe) return event.vibe;
-    const parts: string[] = [];
-    const energyMap: Record<string, string> = {
-      low_key: 'Low Key',
-      moderate: 'Moderate',
-      high_energy: 'High Energy',
-    };
-    if (event.preferences?.energy_level) {
-      parts.push(energyMap[event.preferences.energy_level] || event.preferences.energy_level);
+
+    // For booked events, always show something meaningful
+    if (event.status === 'booked' || event.status === 'completed') {
+      return 'Classic Package';
     }
-    if (event.preferences?.vibe_preferences?.length) {
-      const vibes = event.preferences.vibe_preferences
-        .slice(0, 2)
-        .map((v: string) => v.charAt(0).toUpperCase() + v.slice(1));
-      parts.push(...vibes);
-    }
-    return parts.length > 0 ? parts.join(' \u2022 ') : '';
-  }, [event]);
+
+    // Show a meaningful fallback for events still in planning
+    if (event.status === 'planning') return t.events.planningPhase || 'Planning in progress';
+    return '';
+  }, [event, booking]);
+
+  // Generate invite code for sharing
+  const handleGenerateInvite = async (): Promise<string> => {
+    const invite = await createInvite.mutateAsync({ eventId: id! });
+    return invite.code;
+  };
 
   // Toggle a manual checklist item
   const handleToggleChecklist = (key: string, currentValue: boolean) => {
@@ -105,15 +136,15 @@ export default function EventSummaryScreen() {
     );
   }
 
-  const eventTitle = event.title || `${event.honoree_name}'s Party`;
+  const eventTitle = event.title || `${event.honoree_name}'s Event`;
   const cityName = event.city?.name || 'Unknown';
   const dateStr = event.start_date
     ? new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : 'TBD';
 
-  // Confirmed participant count for tool subtext
+  // Confirmed participant count for tool subtext (exclude honoree from total)
   const confirmedCount = participants?.filter(p => p.confirmed_at != null).length ?? 0;
-  const totalParticipants = event.participant_count || participants?.length || 0;
+  const totalParticipants = Math.max((participants?.length || 10) - 1, 1);
 
   // Per-person cost from booking
   const perPersonCents = booking?.per_person_cents || booking?.total_amount_cents
@@ -134,12 +165,12 @@ export default function EventSummaryScreen() {
           color: '#10B981',
         };
       case 'communication':
-        return { text: t.eventDetail.openChat, color: DARK_THEME.textTertiary };
+        return { text: (t.eventDetail as any).chatSubtext || 'Align with your group', color: DARK_THEME.textTertiary };
       case 'budget':
         return {
           text: perPersonDisplay
             ? t.eventDetail.personEst.replace('{{amount}}', String(perPersonDisplay))
-            : t.eventDetail.budgetTool,
+            : (t.eventDetail as any).budgetSubtext || 'Track expenses',
           color: DARK_THEME.textTertiary,
         };
       case 'packages':
@@ -207,10 +238,10 @@ export default function EventSummaryScreen() {
 
           <View style={styles.infoDivider} />
 
-          {/* Vibe */}
+          {/* Package Highlight */}
           <View style={styles.infoRow}>
             <View style={[styles.infoIconCircle, { backgroundColor: 'rgba(249, 115, 22, 0.15)' }]}>
-              <Ionicons name="wine" size={18} color="#F97316" />
+              <Ionicons name="trophy" size={18} color="#F97316" />
             </View>
             <YStack flex={1}>
               <Text style={styles.infoLabel}>{t.eventDetail.vibe}</Text>
@@ -219,9 +250,49 @@ export default function EventSummaryScreen() {
           </View>
         </View>
 
+        {/* ─── Share / Invite Banner ─────────────── */}
+        <View style={{ marginBottom: 20 }}>
+          <ShareEventBanner
+            eventId={id!}
+            eventTitle={eventTitle}
+            participantCount={participants?.length || 0}
+            onGenerateInvite={handleGenerateInvite}
+          />
+        </View>
+
+        {/* ─── Planning Tools 2×2 Grid ───────────── */}
+        <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>{t.eventDetail.planningTools}</Text>
+        <View style={styles.toolsGrid}>
+          {TOOL_CONFIGS.map((tool) => {
+            const sub = getToolSubtext(tool.key);
+            const toolLabel = t.eventDetail[
+              tool.key === 'invitations' ? 'manageInvitations'
+                : tool.key === 'communication' ? 'communication'
+                  : tool.key === 'budget' ? 'budgetTool'
+                    : 'packagesTool'
+            ];
+            return (
+              <Pressable
+                key={tool.key}
+                style={({ pressed }) => [styles.toolCard, pressed && styles.toolCardPressed]}
+                onPress={() => router.push(tool.isTab ? tool.route as any : `/event/${id}/${tool.route}`)}
+                testID={`planning-tool-${tool.key}`}
+              >
+                <View style={[styles.toolIconCircle, { backgroundColor: tool.iconBg }]}>
+                  <Ionicons name={tool.icon as any} size={22} color={tool.iconColor} />
+                </View>
+                <Text style={styles.toolLabel}>{toolLabel}</Text>
+                <Text style={[styles.toolSubtext, { color: sub.color }]} numberOfLines={1}>
+                  {sub.text}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
         {/* ─── 8-Step Progress (booked only) ─────── */}
         {isBooked && planningSteps.length > 0 && (
-          <View style={styles.progressCard}>
+          <View style={[styles.progressCard, { marginTop: 8 }]}>
             <XStack justifyContent="space-between" alignItems="center" marginBottom={10}>
               <Text style={styles.sectionLabel}>{t.eventDetail.planningProgress}</Text>
               <Text style={styles.progressCount}>
@@ -243,45 +314,6 @@ export default function EventSummaryScreen() {
             </View>
           </View>
         )}
-
-        {/* ─── Share / Invite Banner ─────────────── */}
-        <View style={{ marginBottom: 20 }}>
-          <ShareEventBanner
-            eventId={id!}
-            eventTitle={eventTitle}
-            participantCount={participants?.length || 0}
-          />
-        </View>
-
-        {/* ─── Planning Tools 2×2 Grid ───────────── */}
-        <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>{t.eventDetail.planningTools}</Text>
-        <View style={styles.toolsGrid}>
-          {TOOL_CONFIGS.map((tool) => {
-            const sub = getToolSubtext(tool.key);
-            const toolLabel = t.eventDetail[
-              tool.key === 'invitations' ? 'manageInvitations'
-                : tool.key === 'communication' ? 'communication'
-                  : tool.key === 'budget' ? 'budgetTool'
-                    : 'packagesTool'
-            ];
-            return (
-              <Pressable
-                key={tool.key}
-                style={({ pressed }) => [styles.toolCard, pressed && styles.toolCardPressed]}
-                onPress={() => router.push(`/event/${id}/${tool.route}`)}
-                testID={`planning-tool-${tool.key}`}
-              >
-                <View style={[styles.toolIconCircle, { backgroundColor: tool.iconBg }]}>
-                  <Ionicons name={tool.icon as any} size={22} color={tool.iconColor} />
-                </View>
-                <Text style={styles.toolLabel}>{toolLabel}</Text>
-                <Text style={[styles.toolSubtext, { color: sub.color }]} numberOfLines={1}>
-                  {sub.text}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
 
         {/* ─── Planning Checklist (booked, all 8 steps) ── */}
         {isBooked && planningSteps.length > 0 && (
@@ -311,7 +343,7 @@ export default function EventSummaryScreen() {
             testID="destination-guide-card"
           >
             <Image
-              source={{ uri: event.hero_image_url || cityImage.hero }}
+              source={resolveImageSource(event.hero_image_url || cityImage)}
               style={styles.destinationImage}
               resizeMode="cover"
             />

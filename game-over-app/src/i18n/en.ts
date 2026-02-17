@@ -41,9 +41,11 @@ const en = {
     guest: 'GUEST',
     paid: 'Paid',
     // Draft card
-    bachelorParty: "Bachelor Party",
-    bacheloretteParty: "Bachelorette Party",
+    bachelorParty: "Bachelor",
+    bacheloretteParty: "Bachelorette",
     draftStep: "Draft — Step {{current}}/{{total}}",
+    noAttendingTitle: "No Invitations Yet",
+    noAttendingSubtitle: "When someone invites you to an event, it will appear here.",
   },
 
   // ─── Profile Screen ────────────────────────────
@@ -502,12 +504,14 @@ const en = {
     // Planning tools
     planningTools: 'Planning Tools',
     manageInvitations: 'Manage Invitations',
-    communication: 'Communication',
+    communication: 'Chat',
     budgetTool: 'Budget',
     packagesTool: 'Packages',
     // Tool subtexts
     confirmed: '{{count}}/{{total}} Confirmed',
     openChat: 'Open Chat',
+    chatSubtext: 'Align with your group',
+    budgetSubtext: 'Track expenses',
     personEst: '\u20AC{{amount}}/person est.',
     selectedPackage: 'View Package',
     // Planning checklist

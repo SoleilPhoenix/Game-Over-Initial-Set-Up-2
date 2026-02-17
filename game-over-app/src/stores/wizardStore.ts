@@ -63,6 +63,8 @@ export interface DraftSnapshot {
   // Step 4
   selectedPackageId: string | null;
   currentStep: number;
+  // Created event ID (prevents duplicate creation on back-navigation)
+  createdEventId: string | null;
 }
 
 interface WizardState {
@@ -92,6 +94,9 @@ interface WizardState {
 
   // Step 4: Package Selection
   selectedPackageId: string | null;
+
+  // Created event (prevents duplicate creation on back-navigation)
+  createdEventId: string | null;
 
   // Meta
   currentStep: number;
@@ -130,6 +135,7 @@ interface WizardActions {
 
   // Step 4 actions
   setSelectedPackageId: (packageId: string) => void;
+  setCreatedEventId: (eventId: string) => void;
 
   // Navigation
   nextStep: () => void;
@@ -203,6 +209,7 @@ const initialWizardFields = {
   groupVibe: [] as string[],
   selectedPackageId: null as string | null,
   currentStep: 1,
+  createdEventId: null as string | null,
 };
 
 const initialState: WizardState = {
@@ -242,6 +249,7 @@ function snapshotFromState(state: WizardState, id: string, now: string): DraftSn
     groupVibe: state.groupVibe,
     selectedPackageId: state.selectedPackageId,
     currentStep: state.currentStep,
+    createdEventId: state.createdEventId,
   };
 }
 
@@ -298,6 +306,8 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       // Step 4 actions
       setSelectedPackageId: (packageId: string) =>
         set({ selectedPackageId: packageId, isDirty: true }),
+      setCreatedEventId: (eventId: string) =>
+        set({ createdEventId: eventId }),
 
       // Navigation
       nextStep: () => {
@@ -512,7 +522,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
 
         const title = `${state.honoreeName}'s ${
           state.partyType === 'bachelor' ? 'Bachelor' : 'Bachelorette'
-        } Party`;
+        }`;
 
         return {
           event: {
@@ -564,6 +574,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
         groupVibe: state.groupVibe,
         selectedPackageId: state.selectedPackageId,
         currentStep: state.currentStep,
+        createdEventId: state.createdEventId,
         lastSavedAt: state.lastSavedAt,
         activeDraftId: state.activeDraftId,
         savedDrafts: state.savedDrafts,

@@ -42,6 +42,8 @@ const de: TranslationKeys = {
     bachelorParty: 'Junggesellenabschied',
     bacheloretteParty: 'Junggesellinnenabschied',
     draftStep: 'Entwurf — Schritt {{current}}/{{total}}',
+    noAttendingTitle: 'Noch keine Einladungen',
+    noAttendingSubtitle: 'Wenn dich jemand zu einem Event einlädt, erscheint es hier.',
   },
 
   // ─── Profile Screen ────────────────────────────
@@ -489,11 +491,13 @@ const de: TranslationKeys = {
     quizCategories: 'Vorgeschlagene Fragetypen: Wie habt ihr euch kennengelernt? Lieblingserinnerung, Wer hat es zuerst gesagt?, Peinliche Geschichten, Fun Facts',
     planningTools: 'Planungs-Tools',
     manageInvitations: 'Einladungen verwalten',
-    communication: 'Kommunikation',
+    communication: 'Chat',
     budgetTool: 'Budget',
     packagesTool: 'Pakete',
     confirmed: '{{count}}/{{total}} Bestätigt',
     openChat: 'Chat öffnen',
+    chatSubtext: 'Austausch mit deiner Gruppe',
+    budgetSubtext: 'Ausgaben verfolgen',
     personEst: '\u20AC{{amount}}/Person gesch.',
     selectedPackage: 'Paket ansehen',
     planningChecklist: 'Planungs-Checkliste',
