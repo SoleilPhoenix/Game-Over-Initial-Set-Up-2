@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar, Alert, Share, Linking } from 'react-native';
+import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar, Alert, Share, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import { useEvents } from '@/hooks/queries/useEvents';
 import { useChannels, useCreateChannel } from '@/hooks/queries/useChat';
 import { DARK_THEME } from '@/constants/theme';
 import { useTranslation, getTranslation } from '@/i18n';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { useUser } from '@/stores/authStore';
 import type { Database } from '@/lib/supabase/types';
 
@@ -41,6 +42,8 @@ export default function CommunicationScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const { t } = useTranslation();
+  const COMM_TABS = ['chat', 'voting', 'decisions'] as const;
+  const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchTabAnimated } = useSwipeTabs(COMM_TABS, selectedTab, setSelectedTab);
 
   // Local channel storage for when no event is selected
   const [localSections, setLocalSections] = useState<LocalChannelSection[]>([
@@ -321,7 +324,7 @@ export default function CommunicationScreen() {
         {(['chat', 'voting', 'decisions'] as CommunicationTab[]).map((tab) => (
           <Pressable
             key={tab}
-            onPress={() => setSelectedTab(tab)}
+            onPress={() => switchTabAnimated(tab)}
             style={[
               styles.filterTab,
               selectedTab === tab && styles.filterTabActive,
@@ -410,7 +413,7 @@ export default function CommunicationScreen() {
       />
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
         <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
           {/* Avatar and Title */}
           <XStack alignItems="center" gap={12}>
@@ -427,7 +430,7 @@ export default function CommunicationScreen() {
               )}
               <View style={styles.onlineIndicator} />
             </View>
-            <Text style={styles.headerTitle}>Connect</Text>
+            <Text style={styles.headerTitle}>{t.chat.headerTitle}</Text>
           </XStack>
 
           {/* Notification Bell */}
@@ -437,7 +440,6 @@ export default function CommunicationScreen() {
             testID="notifications-button"
           >
             <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
-            <View style={styles.notificationDot} />
           </Pressable>
         </XStack>
 
@@ -445,7 +447,8 @@ export default function CommunicationScreen() {
         {renderTabs()}
       </View>
 
-      {/* Content */}
+      {/* Content — swipe left/right to switch tabs */}
+      <Animated.View style={[{ flex: 1 }, swipeAnimStyle]} {...swipeHandlers}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 180 }]}
@@ -504,6 +507,7 @@ export default function CommunicationScreen() {
           </>
         )}
       </ScrollView>
+      </Animated.View>
     </View>
   );
 }
@@ -514,7 +518,7 @@ const styles = StyleSheet.create({
     backgroundColor: DARK_THEME.background,
   },
   header: {
-    paddingBottom: 16,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: DARK_THEME.glassBorder,
   },
@@ -571,7 +575,7 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     paddingHorizontal: 20,
-    marginTop: 16,
+    marginTop: 10,
   },
   filterPill: {
     flexDirection: 'row',

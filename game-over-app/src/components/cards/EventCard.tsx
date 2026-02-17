@@ -5,11 +5,13 @@
  */
 
 import React, { memo } from 'react';
+import { ImageSourcePropType } from 'react-native';
 import { styled, YStack, XStack, Text } from 'tamagui';
 import { Badge } from '../ui/Badge';
 import { ProgressBar } from '../ui/ProgressBar';
 import { Card } from '../ui/Card';
 import { OptimizedImage } from '../ui/OptimizedImage';
+import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 
 const RoleBadge = styled(XStack, {
   position: 'absolute',
@@ -28,7 +30,7 @@ export interface EventCardProps {
   cityName: string;
   startDate: string;
   endDate?: string;
-  heroImageUrl?: string;
+  heroImageUrl?: string | number | ImageSourcePropType;
   status: 'draft' | 'planning' | 'booked' | 'completed' | 'cancelled';
   role: 'organizer' | 'guest' | 'honoree';
   progress: number;
@@ -75,7 +77,7 @@ export const EventCard = memo(function EventCard({
     <Card onPress={onPress} testID={testID} padding="$3" gap="$3">
       <YStack position="relative">
         <OptimizedImage
-          source={{ uri: heroImageUrl || 'https://images.unsplash.com/photo-1530103862676-de8c9debad1d?w=400' }}
+          source={resolveImageSource(heroImageUrl || getPackageImage('berlin', 'essential'))}
           height={140}
           borderRadius={8}
         />

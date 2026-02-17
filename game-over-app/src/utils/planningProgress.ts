@@ -27,11 +27,11 @@ const STEP_DEFINITIONS: Array<{
   { key: 'invitations_sent', labelKey: 'inviteParticipants', descriptionKey: 'inviteParticipantsDesc', icon: 'mail-outline', auto: true },
   { key: 'group_confirmed', labelKey: 'groupConfirmed', descriptionKey: 'groupConfirmedDesc', icon: 'people-outline', auto: true },
   { key: 'budget_collected', labelKey: 'collectBudget', descriptionKey: 'collectBudgetDesc', icon: 'wallet-outline', auto: true },
-  { key: 'quiz_prepared', labelKey: 'prepareQuiz', descriptionKey: 'prepareQuizDesc', icon: 'help-circle-outline', auto: false },
+  { key: 'outstanding_payment', labelKey: 'completePayment', descriptionKey: 'completePaymentDesc', icon: 'card-outline', auto: false },
   { key: 'accommodations', labelKey: 'planAccommodation', descriptionKey: 'planAccommodationDesc', icon: 'bed-outline', auto: false },
   { key: 'travel', labelKey: 'organizeTravel', descriptionKey: 'organizeTravelDesc', icon: 'car-outline', auto: false },
   { key: 'surprise_plan', labelKey: 'planSurprise', descriptionKey: 'planSurpriseDesc', icon: 'gift-outline', auto: false },
-  { key: 'final_briefing', labelKey: 'finalBriefing', descriptionKey: 'finalBriefingDesc', icon: 'megaphone-outline', auto: false },
+  { key: 'final_briefing', labelKey: 'finalBriefing', descriptionKey: 'finalBriefingDesc', icon: 'megaphone-outline', auto: true },
 ];
 
 /**

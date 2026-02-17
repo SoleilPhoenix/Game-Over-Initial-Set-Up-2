@@ -145,12 +145,13 @@ async function handlePaymentSuccess(
     return;
   }
 
-  console.log(`Payment succeeded for booking: ${bookingId}`);
+  const paymentType = paymentIntent.metadata?.payment_type; // 'deposit' or 'full'
+  console.log(`Payment succeeded for booking: ${bookingId}, type: ${paymentType ?? 'unknown'}`);
 
   // Update booking status
   const { data: booking, error: fetchError } = await supabase
     .from('bookings')
-    .select('audit_log')
+    .select('audit_log, total_amount_cents')
     .eq('id', bookingId)
     .single();
 
@@ -165,14 +166,31 @@ async function handlePaymentSuccess(
     payment_intent_id: paymentIntent.id,
     amount: paymentIntent.amount,
     currency: paymentIntent.currency,
+    payment_type: paymentType ?? 'unknown',
     timestamp: new Date().toISOString(),
   });
+
+  // Determine deposit vs full payment fields
+  const isDeposit = paymentType === 'deposit' ||
+    (!paymentType && booking.total_amount_cents && paymentIntent.amount < booking.total_amount_cents * 0.5);
+
+  const depositFields = isDeposit
+    ? {
+        deposit_paid_at: new Date().toISOString(),
+        deposit_amount_cents: paymentIntent.amount,
+        remaining_amount_cents: (booking.total_amount_cents ?? 0) - paymentIntent.amount,
+      }
+    : {
+        fully_paid_at: new Date().toISOString(),
+        remaining_amount_cents: 0,
+      };
 
   const { error: updateError } = await supabase
     .from('bookings')
     .update({
-      payment_status: 'completed',
+      payment_status: isDeposit ? 'processing' : 'completed',
       audit_log: auditLog,
+      ...depositFields,
     })
     .eq('id', bookingId);
 

@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { ScrollView, RefreshControl, Pressable, StyleSheet, Alert, View, Image, FlatList, StatusBar } from 'react-native';
+import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, View, Image, FlatList, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,7 @@ import { useParticipants } from '@/hooks/queries/useParticipants';
 import { useUser } from '@/stores/authStore';
 import { DARK_THEME } from '@/constants/theme';
 import { useTranslation, getTranslation } from '@/i18n';
+import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import type { Database } from '@/lib/supabase/types';
 
 type Event = Database['public']['Tables']['events']['Row'] & {
@@ -41,6 +42,8 @@ export default function BudgetDashboardScreen() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<BudgetCategory>('total');
   const { t } = useTranslation();
+  const BUDGET_TABS = ['total', 'collected', 'pending'] as const;
+  const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchCategoryAnimated } = useSwipeTabs(BUDGET_TABS, selectedCategory, setSelectedCategory);
 
   // Fetch user's events
   const {
@@ -164,7 +167,7 @@ export default function BudgetDashboardScreen() {
         {(['total', 'collected', 'pending'] as BudgetCategory[]).map((category) => (
           <Pressable
             key={category}
-            onPress={() => setSelectedCategory(category)}
+            onPress={() => switchCategoryAnimated(category)}
             style={[
               styles.filterTab,
               selectedCategory === category && styles.filterTabActive,
@@ -194,7 +197,7 @@ export default function BudgetDashboardScreen() {
           colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
           style={StyleSheet.absoluteFill}
         />
-        <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+        <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
           <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
             <XStack alignItems="center" gap={12}>
               <View style={styles.avatarContainer}>
@@ -215,7 +218,6 @@ export default function BudgetDashboardScreen() {
               testID="notifications-button"
             >
               <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
-              <View style={styles.notificationDot} />
             </Pressable>
           </XStack>
           {renderCategoryTabs()}
@@ -279,7 +281,7 @@ export default function BudgetDashboardScreen() {
       />
 
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
+      <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
         <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
           {/* Avatar and Title */}
           <XStack alignItems="center" gap={12}>
@@ -306,7 +308,6 @@ export default function BudgetDashboardScreen() {
             testID="notifications-button"
           >
             <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
-            <View style={styles.notificationDot} />
           </Pressable>
         </XStack>
 
@@ -314,6 +315,7 @@ export default function BudgetDashboardScreen() {
         {renderCategoryTabs()}
       </View>
 
+      <Animated.View style={[{ flex: 1 }, swipeAnimStyle]} {...swipeHandlers}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={styles.scrollContent}
@@ -573,6 +575,7 @@ export default function BudgetDashboardScreen() {
           </>
         )}
       </ScrollView>
+      </Animated.View>
     </View>
   );
 }
@@ -583,7 +586,7 @@ const styles = StyleSheet.create({
     backgroundColor: DARK_THEME.background,
   },
   header: {
-    paddingBottom: 16,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: DARK_THEME.glassBorder,
   },
@@ -640,7 +643,7 @@ const styles = StyleSheet.create({
   },
   filterContainer: {
     paddingHorizontal: 20,
-    marginTop: 16,
+    marginTop: 10,
   },
   headerButton: {
     width: 48,

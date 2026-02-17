@@ -271,15 +271,15 @@ const styles = StyleSheet.create({
   tabBarInner: {
     flexDirection: 'row',
     backgroundColor: 'transparent',
-    paddingTop: 12,
-    paddingBottom: 8,
+    paddingTop: 8,
+    paddingBottom: 4,
     paddingHorizontal: 8,
   },
   tabItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
+    paddingVertical: 4,
   },
   tabItemLeft: {
     marginRight: 32, // Space for FAB
@@ -290,9 +290,9 @@ const styles = StyleSheet.create({
   iconContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 68,
-    height: 48,
-    gap: 4,
+    width: 72,
+    height: 42,
+    gap: 2,
   },
   tabLabel: {
     fontSize: 11,

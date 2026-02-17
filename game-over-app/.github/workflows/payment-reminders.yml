@@ -1,0 +1,36 @@
+name: Payment Reminders (Fallback)
+
+# Fallback cron for payment reminders in case pg_cron is not available.
+# Primary scheduling is via pg_cron in the database.
+# This workflow calls the same edge function.
+
+on:
+  schedule:
+    - cron: '0 9 * * *' # 9:00 AM UTC daily
+  workflow_dispatch: # Allow manual trigger for testing
+
+jobs:
+  process-reminders:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Trigger payment reminder processing
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "${SUPABASE_URL}/functions/v1/process-payment-reminders" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{}')
+
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | head -n -1)
+
+          echo "Response: $body"
+          echo "HTTP Status: $http_code"
+
+          if [ "$http_code" -ne 200 ]; then
+            echo "::error::Payment reminder processing failed with HTTP $http_code"
+            exit 1
+          fi

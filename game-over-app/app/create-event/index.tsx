@@ -25,7 +25,13 @@ const AVAILABLE_CITIES = [
   { id: '550e8400-e29b-41d4-a716-446655440103', name: 'Hannover', slug: 'hannover' },
 ];
 
-function formatDate(date: Date): string {
+/** Returns ISO date string for storage (universally parseable across JS engines) */
+function formatDateISO(date: Date): string {
+  return date.toISOString().split('T')[0]; // "2026-02-28"
+}
+
+/** Returns human-readable date string for display */
+function formatDateDisplay(date: Date): string {
   return date.toLocaleDateString('en-US', {
     month: 'long',
     day: 'numeric',
@@ -67,8 +73,8 @@ export default function WizardStep1() {
     }
     if (date) {
       setSelectedDate(date);
-      const formatted = formatDate(date);
-      setDates(formatted, formatted);
+      const iso = formatDateISO(date);
+      setDates(iso, iso);
     }
   };
 
@@ -204,7 +210,7 @@ export default function WizardStep1() {
                   fontWeight="600"
                   color={startDate ? '#FFFFFF' : '#9CA3AF'}
                 >
-                  {startDate || t.wizard.datePlaceholder}
+                  {startDate ? formatDateDisplay(new Date(startDate)) : t.wizard.datePlaceholder}
                 </Text>
                 <Ionicons name="calendar-outline" size={22} color={DARK_THEME.primary} />
               </XStack>

@@ -14,7 +14,7 @@ import { useCreateEvent } from '@/hooks/queries/useEvents';
 import { Button } from '@/components/ui/Button';
 import { WizardFooter } from '@/components/ui/WizardFooter';
 import { DARK_THEME } from '@/constants/theme';
-import { getPackageImage } from '@/constants/packageImages';
+import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { LinearGradient } from 'expo-linear-gradient';
 
 // Standard per-person pricing: S=€99, M=€149, L=€199
@@ -39,7 +39,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Berlin Classic',
       tier: 'classic',
       price_per_person_cents: TIER_PRICE_PER_PERSON.classic,
-      hero_image_url: getPackageImage('berlin', 'classic').hero,
+      hero_image_url: getPackageImage('berlin', 'classic'),
       rating: 4.8,
       review_count: 127,
       features: ['VIP nightlife access', 'Private party bus', 'Professional photographer', 'Welcome drinks package'],
@@ -51,7 +51,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Berlin Essential',
       tier: 'essential',
       price_per_person_cents: TIER_PRICE_PER_PERSON.essential,
-      hero_image_url: getPackageImage('berlin', 'essential').hero,
+      hero_image_url: getPackageImage('berlin', 'essential'),
       rating: 4.5,
       review_count: 89,
       features: ['Bar hopping tour', 'Welcome drinks', 'Group coordination'],
@@ -62,7 +62,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Berlin Grand',
       tier: 'grand',
       price_per_person_cents: TIER_PRICE_PER_PERSON.grand,
-      hero_image_url: getPackageImage('berlin', 'grand').hero,
+      hero_image_url: getPackageImage('berlin', 'grand'),
       rating: 4.9,
       review_count: 42,
       features: ['Luxury suite', 'Private chef dinner', 'Spa & wellness package', 'VIP club access', 'Private chauffeur'],
@@ -75,7 +75,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Hamburg Classic',
       tier: 'classic',
       price_per_person_cents: TIER_PRICE_PER_PERSON.classic,
-      hero_image_url: getPackageImage('hamburg', 'classic').hero,
+      hero_image_url: getPackageImage('hamburg', 'classic'),
       rating: 4.7,
       review_count: 98,
       features: ['Reeperbahn nightlife tour', 'Harbor cruise', 'Professional photographer', 'Reserved bar area'],
@@ -87,7 +87,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Hamburg Essential',
       tier: 'essential',
       price_per_person_cents: TIER_PRICE_PER_PERSON.essential,
-      hero_image_url: getPackageImage('hamburg', 'essential').hero,
+      hero_image_url: getPackageImage('hamburg', 'essential'),
       rating: 4.4,
       review_count: 64,
       features: ['Guided bar tour', 'Welcome cocktails', 'Group planning'],
@@ -98,7 +98,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Hamburg Grand',
       tier: 'grand',
       price_per_person_cents: TIER_PRICE_PER_PERSON.grand,
-      hero_image_url: getPackageImage('hamburg', 'grand').hero,
+      hero_image_url: getPackageImage('hamburg', 'grand'),
       rating: 4.9,
       review_count: 31,
       features: ['Elbphilharmonie VIP event', 'Private yacht dinner', 'Luxury hotel suite', 'Spa & wellness day', 'Premium bottle service'],
@@ -111,7 +111,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Hannover Classic',
       tier: 'classic',
       price_per_person_cents: TIER_PRICE_PER_PERSON.classic,
-      hero_image_url: getPackageImage('hannover', 'classic').hero,
+      hero_image_url: getPackageImage('hannover', 'classic'),
       rating: 4.6,
       review_count: 73,
       features: ['Craft beer experience', 'Go-kart racing', 'Professional photographer', 'Welcome dinner'],
@@ -123,7 +123,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Hannover Essential',
       tier: 'essential',
       price_per_person_cents: TIER_PRICE_PER_PERSON.essential,
-      hero_image_url: getPackageImage('hannover', 'essential').hero,
+      hero_image_url: getPackageImage('hannover', 'essential'),
       rating: 4.3,
       review_count: 51,
       features: ['City adventure tour', 'Welcome drinks', 'Group coordination'],
@@ -134,7 +134,7 @@ const FALLBACK_PACKAGES: Record<string, any[]> = {
       name: 'Hannover Grand',
       tier: 'grand',
       price_per_person_cents: TIER_PRICE_PER_PERSON.grand,
-      hero_image_url: getPackageImage('hannover', 'grand').hero,
+      hero_image_url: getPackageImage('hannover', 'grand'),
       rating: 4.8,
       review_count: 28,
       features: ['Herrenhausen Gardens gala', 'Private chef dinner', 'Spa & wellness day', 'VIP nightlife access', 'Luxury hotel suite'],
@@ -195,7 +195,7 @@ function PackageSelectionCard({
     ? pkg.features.filter((f: any): f is string => typeof f === 'string').slice(0, featureLimit)
     : [];
 
-  const imageUrl = pkg.hero_image_url || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800';
+  const imageSource = resolveImageSource(pkg.hero_image_url || getPackageImage('berlin', 'essential'));
   const cardHeight = isBestMatch ? 480 : 420;
 
   return (
@@ -210,7 +210,7 @@ function PackageSelectionCard({
       testID={`package-card-${index}`}
     >
       <ImageBackground
-        source={{ uri: imageUrl }}
+        source={imageSource}
         style={{ height: cardHeight }}
         imageStyle={{ borderRadius: 16 }}
       >
@@ -393,14 +393,25 @@ export default function WizardStep4() {
     if (!canProceed || isCreating) return;
     setIsCreating(true);
     try {
+      const packageId = wizardState.selectedPackageId;
+      const wizCityId = wizardState.cityId;
+      const wizParticipants = wizardState.participantCount;
+
+      // Reuse previously created event to prevent duplicates on back-navigation
+      const existingEventId = wizardState.createdEventId;
+      if (existingEventId) {
+        router.push(`/booking/${existingEventId}/summary?packageId=${packageId}&cityId=${wizCityId}&participants=${wizParticipants}`);
+        return;
+      }
+
       const eventData = wizardState.getEventData();
       if (!eventData) {
         Alert.alert('Error', 'Please complete all required fields.');
         return;
       }
-      // Look up the selected package's hero image for the event
+      // Look up the selected package's hero image for the event (only persist string URLs to DB)
       const selectedPkg = packages.find((p: any) => p.id === wizardState.selectedPackageId);
-      const heroUrl = selectedPkg?.hero_image_url || (citySlug ? getPackageImage(citySlug, selectedPkg?.tier || 'classic').hero : null);
+      const heroUrl = typeof selectedPkg?.hero_image_url === 'string' ? selectedPkg.hero_image_url : null;
 
       const apiData = {
         ...eventData,
@@ -416,6 +427,8 @@ export default function WizardStep4() {
       try {
         const newEvent = await createEvent(apiData as any);
         eventId = newEvent.id;
+        // Store created event ID to prevent duplicates on back-navigation
+        useWizardStore.getState().setCreatedEventId(eventId);
       } catch (createError: any) {
         // RLS recursion or network error — skip event creation, proceed with draft booking
         const isRlsRecursion = createError?.code === '42P17' || createError?.message?.includes('infinite recursion');
@@ -424,9 +437,6 @@ export default function WizardStep4() {
         console.warn('Event creation failed (network/RLS) — proceeding with draft booking flow');
       }
 
-      const packageId = wizardState.selectedPackageId;
-      const wizCityId = wizardState.cityId;
-      const wizParticipants = wizardState.participantCount;
       // Don't clearDraft() here — it will be cleared on booking confirmation
       // Navigate to summary: use real event ID or 'draft' as fallback
       // Pass cityId and participants via URL params so summary doesn't depend on wizard store

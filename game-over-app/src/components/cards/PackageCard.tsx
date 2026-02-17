@@ -5,11 +5,13 @@
  */
 
 import React, { memo } from 'react';
+import { ImageSourcePropType } from 'react-native';
 import { styled, YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
 import { OptimizedImage } from '../ui/OptimizedImage';
+import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 
 const BestMatchBadge = styled(XStack, {
   position: 'absolute',
@@ -32,7 +34,7 @@ export interface PackageCardProps {
   rating: number;
   reviewCount: number;
   features: string[];
-  heroImageUrl?: string;
+  heroImageUrl?: string | number | ImageSourcePropType;
   isBestMatch?: boolean;
   matchScore?: number;
   onPress?: () => void;
@@ -74,7 +76,7 @@ export const PackageCard = memo(function PackageCard({
     <Card onPress={onPress} testID={testID} padding="$3" gap="$3">
       <YStack position="relative">
         <OptimizedImage
-          source={{ uri: heroImageUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=400' }}
+          source={resolveImageSource(heroImageUrl || getPackageImage('berlin', 'essential'))}
           height={160}
           borderRadius={8}
         />

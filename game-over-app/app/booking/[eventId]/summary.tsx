@@ -14,6 +14,7 @@ import { useBookingFlow } from '@/hooks/useBookingFlow';
 import { useWizardStore } from '@/stores/wizardStore';
 import { Button } from '@/components/ui/Button';
 import { DARK_THEME } from '@/constants/theme';
+import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { useTranslation } from '@/i18n';
 
 const TIER_LABELS: Record<string, string> = {
@@ -23,16 +24,16 @@ const TIER_LABELS: Record<string, string> = {
 };
 
 // Fallback package data for draft mode
-const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; price_per_person_cents: number; hero_image_url: string }> = {
-  'berlin-classic': { id: 'berlin-classic', name: 'Berlin Classic', tier: 'classic', price_per_person_cents: 149_00, hero_image_url: 'https://images.unsplash.com/photo-1560969184-10fe8719e047?w=400' },
-  'berlin-essential': { id: 'berlin-essential', name: 'Berlin Essential', tier: 'essential', price_per_person_cents: 99_00, hero_image_url: 'https://images.unsplash.com/photo-1587330979470-3595ac045ab0?w=400' },
-  'berlin-grand': { id: 'berlin-grand', name: 'Berlin Grand', tier: 'grand', price_per_person_cents: 199_00, hero_image_url: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=400' },
-  'hamburg-classic': { id: 'hamburg-classic', name: 'Hamburg Classic', tier: 'classic', price_per_person_cents: 149_00, hero_image_url: 'https://images.unsplash.com/photo-1567359781514-3b964e2b04d6?w=400' },
-  'hamburg-essential': { id: 'hamburg-essential', name: 'Hamburg Essential', tier: 'essential', price_per_person_cents: 99_00, hero_image_url: 'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=400' },
-  'hamburg-grand': { id: 'hamburg-grand', name: 'Hamburg Grand', tier: 'grand', price_per_person_cents: 199_00, hero_image_url: 'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=400' },
-  'hannover-classic': { id: 'hannover-classic', name: 'Hannover Classic', tier: 'classic', price_per_person_cents: 149_00, hero_image_url: 'https://images.unsplash.com/photo-1517457373958-b7bdd4587205?w=400' },
-  'hannover-essential': { id: 'hannover-essential', name: 'Hannover Essential', tier: 'essential', price_per_person_cents: 99_00, hero_image_url: 'https://images.unsplash.com/photo-1528605248644-14dd04022da1?w=400' },
-  'hannover-grand': { id: 'hannover-grand', name: 'Hannover Grand', tier: 'grand', price_per_person_cents: 199_00, hero_image_url: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400' },
+const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; price_per_person_cents: number; hero_image_url: any }> = {
+  'berlin-classic': { id: 'berlin-classic', name: 'Berlin Classic', tier: 'classic', price_per_person_cents: 149_00, hero_image_url: getPackageImage('berlin', 'classic') },
+  'berlin-essential': { id: 'berlin-essential', name: 'Berlin Essential', tier: 'essential', price_per_person_cents: 99_00, hero_image_url: getPackageImage('berlin', 'essential') },
+  'berlin-grand': { id: 'berlin-grand', name: 'Berlin Grand', tier: 'grand', price_per_person_cents: 199_00, hero_image_url: getPackageImage('berlin', 'grand') },
+  'hamburg-classic': { id: 'hamburg-classic', name: 'Hamburg Classic', tier: 'classic', price_per_person_cents: 149_00, hero_image_url: getPackageImage('hamburg', 'classic') },
+  'hamburg-essential': { id: 'hamburg-essential', name: 'Hamburg Essential', tier: 'essential', price_per_person_cents: 99_00, hero_image_url: getPackageImage('hamburg', 'essential') },
+  'hamburg-grand': { id: 'hamburg-grand', name: 'Hamburg Grand', tier: 'grand', price_per_person_cents: 199_00, hero_image_url: getPackageImage('hamburg', 'grand') },
+  'hannover-classic': { id: 'hannover-classic', name: 'Hannover Classic', tier: 'classic', price_per_person_cents: 149_00, hero_image_url: getPackageImage('hannover', 'classic') },
+  'hannover-essential': { id: 'hannover-essential', name: 'Hannover Essential', tier: 'essential', price_per_person_cents: 99_00, hero_image_url: getPackageImage('hannover', 'essential') },
+  'hannover-grand': { id: 'hannover-grand', name: 'Hannover Grand', tier: 'grand', price_per_person_cents: 199_00, hero_image_url: getPackageImage('hannover', 'grand') },
 };
 
 const CITY_NAMES: Record<string, string> = {
@@ -62,6 +63,7 @@ export default function BookingSummaryScreen() {
   // For draft mode, get data from wizard store
   const wizardCityId = useWizardStore((s) => s.cityId);
   const wizardParticipantCount = useWizardStore((s) => s.participantCount);
+  const wizardStartDate = useWizardStore((s) => s.startDate);
 
   // Resolve package data
   const draftPkg = packageId ? FALLBACK_PKG[packageId] : null;
@@ -94,8 +96,10 @@ export default function BookingSummaryScreen() {
     };
   }, [draftPkg, urlParticipantCount, wizardParticipantCount, draftExcludeHonoree]);
 
-  const pricing = isDraft ? draftPricing : bookingFlow.pricing;
-  const isLoading = isDraft ? false : bookingFlow.isLoading;
+  // Use bookingFlow pricing when available, fallback to local pricing for instant render
+  const pricing = isDraft ? draftPricing : (bookingFlow.pricing || draftPricing);
+  // Don't show loading if we already have fallback data to render
+  const isLoading = isDraft ? false : (bookingFlow.isLoading && !draftPricing);
 
   // For draft mode, we don't need event data — just package + pricing
   if (isLoading || !pkg || !pricing) {
@@ -118,6 +122,7 @@ export default function BookingSummaryScreen() {
     if (packageId) params.set('packageId', packageId);
     if (paramCityId) params.set('cityId', paramCityId);
     if (paramParticipants) params.set('participants', paramParticipants);
+    params.set('excludeHonoree', excludeHonoree ? '1' : '0');
     const qs = params.toString() ? `?${params.toString()}` : '';
     router.push(`/booking/${eventId}/payment${qs}`);
   };
@@ -132,10 +137,22 @@ export default function BookingSummaryScreen() {
     ? cityFallback
     : (bookingFlow.event?.city?.name || cityFallback);
 
+  // Event date: event data > wizard store
+  const eventDateStr = (() => {
+    const raw = isDraft ? wizardStartDate : ((bookingFlow.event as any)?.start_date || wizardStartDate);
+    if (!raw) return null;
+    const d = new Date(raw);
+    return isNaN(d.getTime()) ? null : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  })();
+
   // Guest count: URL params always take precedence (wizard passes intended group size)
   const guestCount = urlParticipantCount || wizardParticipantCount || pricing.payingParticipantCount;
 
   const honoreePaysCents = excludeHonoree ? 0 : pricing.perPersonCents;
+
+  // Deposit calculation (25% of total)
+  const depositCents = Math.ceil(pricing.totalCents * 0.25);
+  const remainingCents = pricing.totalCents - depositCents;
 
   return (
     <YStack flex={1} backgroundColor={DARK_THEME.background}>
@@ -182,15 +199,15 @@ export default function BookingSummaryScreen() {
                 {t.booking.selectedPackageLabel}
               </Text>
               <Text fontSize={20} fontWeight="800" color="white">
-                The {tierLabel}
+                {tierLabel}
               </Text>
               <Text fontSize={13} color={DARK_THEME.textSecondary} marginTop={4}>
-                {cityName} {'\u2022'} {t.booking.nights.replace('{{count}}', '2')} {'\u2022'} {t.booking.guests.replace('{{count}}', String(guestCount))}
+                {[cityName, eventDateStr, t.booking.guests.replace('{{count}}', String(guestCount))].filter(Boolean).join(' \u2022 ')}
               </Text>
             </YStack>
             {heroImage && (
               <Image
-                source={{ uri: heroImage }}
+                source={resolveImageSource(heroImage)}
                 style={{ width: 80, height: 80, borderRadius: 12 }}
                 resizeMode="cover"
               />
@@ -236,6 +253,22 @@ export default function BookingSummaryScreen() {
               {formatPrice(pricing.totalCents)}
             </Text>
           </XStack>
+
+          <YStack height={1} backgroundColor={DARK_THEME.glassBorder} marginVertical="$2" />
+
+          {/* Deposit Breakdown */}
+          <XStack justifyContent="space-between" marginBottom="$2">
+            <Text fontSize={14} fontWeight="600" color="#47B881">{t.booking.depositLabel}</Text>
+            <Text fontSize={14} fontWeight="700" color="#47B881">
+              {formatPrice(depositCents)}
+            </Text>
+          </XStack>
+          <XStack justifyContent="space-between">
+            <Text fontSize={13} color={DARK_THEME.textTertiary}>{t.booking.remainingBalanceLabel}</Text>
+            <Text fontSize={13} color={DARK_THEME.textTertiary}>
+              {formatPrice(remainingCents)}
+            </Text>
+          </XStack>
         </YStack>
 
         {/* Exclude Honoree */}
@@ -278,26 +311,23 @@ export default function BookingSummaryScreen() {
           borderColor={DARK_THEME.glassBorder}
           testID="per-person-card"
         >
-          <XStack justifyContent="space-between" alignItems="flex-start">
-            <YStack>
-              <Text fontSize={11} fontWeight="700" color={DARK_THEME.textSecondary} textTransform="uppercase" letterSpacing={1}>
-                {t.booking.costPerPersonLabel.replace('{{count}}', String(pricing.payingParticipantCount))}
+          <YStack>
+            <Text fontSize={11} fontWeight="700" color={DARK_THEME.textSecondary} textTransform="uppercase" letterSpacing={1}>
+              {t.booking.costPerPersonLabel.replace('{{count}}', String(pricing.payingParticipantCount))}
+            </Text>
+            <XStack alignItems="baseline" gap="$2" marginTop="$2">
+              <Text fontSize={36} fontWeight="800" color={DARK_THEME.primary}>
+                {formatPrice(pricing.perPersonCents)}
               </Text>
-              <XStack alignItems="baseline" gap="$2" marginTop="$2">
-                <Text fontSize={36} fontWeight="800" color={DARK_THEME.primary}>
-                  {formatPrice(pricing.perPersonCents)}
-                </Text>
-                <Text fontSize={14} color={DARK_THEME.textSecondary}>{t.booking.slashPerson}</Text>
-              </XStack>
-              <XStack alignItems="center" gap="$1" marginTop="$1">
-                <Ionicons name="checkmark-circle" size={14} color="#47B881" />
-                <Text fontSize={12} fontWeight="600" color="#47B881">
-                  {t.booking.includesTaxes}
-                </Text>
-              </XStack>
-            </YStack>
-            <Ionicons name="camera-outline" size={28} color={DARK_THEME.textTertiary} />
-          </XStack>
+              <Text fontSize={14} color={DARK_THEME.textSecondary}>{t.booking.slashPerson}</Text>
+            </XStack>
+            <XStack alignItems="center" gap="$1" marginTop="$1">
+              <Ionicons name="checkmark-circle" size={14} color="#47B881" />
+              <Text fontSize={12} fontWeight="600" color="#47B881">
+                {t.booking.includesTaxes}
+              </Text>
+            </XStack>
+          </YStack>
         </YStack>
 
         {/* Stripe Security */}
@@ -320,7 +350,7 @@ export default function BookingSummaryScreen() {
 
         {/* Cancellation Policy */}
         <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" lineHeight={18} paddingHorizontal="$2">
-          {t.booking.cancellationSummary}
+          {t.booking.cancellationSummary.replace('{{deposit}}', formatPrice(depositCents))}
         </Text>
       </ScrollView>
 
@@ -342,7 +372,7 @@ export default function BookingSummaryScreen() {
           testID="proceed-to-payment-button"
         >
           <XStack alignItems="center" gap="$2">
-            <Text fontSize={16} fontWeight="700" color="white">{t.booking.proceedToPayment}</Text>
+            <Text fontSize={16} fontWeight="700" color="white">{t.booking.proceedToPaymentDeposit.replace('{{deposit}}', formatPrice(depositCents))}</Text>
             <Ionicons name="arrow-forward" size={18} color="white" />
           </XStack>
         </Button>

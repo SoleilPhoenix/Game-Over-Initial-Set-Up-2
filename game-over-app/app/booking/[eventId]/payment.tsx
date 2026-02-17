@@ -3,7 +3,7 @@
  * Stripe Payment Sheet integration for package bookings
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Alert, ScrollView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
@@ -46,7 +46,7 @@ const IS_E2E = process.env.EXPO_PUBLIC_E2E_MODE === 'true';
 type PaymentStep = 'ready' | 'creating_booking' | 'processing_payment' | 'confirming';
 
 export default function PaymentScreen() {
-  const { eventId, packageId, cityId: paramCityId, participants: paramParticipants } = useLocalSearchParams<{ eventId: string; packageId?: string; cityId?: string; participants?: string }>();
+  const { eventId, packageId, cityId: paramCityId, participants: paramParticipants, excludeHonoree: paramExcludeHonoree } = useLocalSearchParams<{ eventId: string; packageId?: string; cityId?: string; participants?: string; excludeHonoree?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('ready');
@@ -57,6 +57,7 @@ export default function PaymentScreen() {
   const wizardCityId = useWizardStore((s) => s.cityId);
   const wizardParticipantCount = useWizardStore((s) => s.participantCount);
   const wizardHonoreeName = useWizardStore((s) => s.honoreeName);
+  const wizardStartDate = useWizardStore((s) => s.startDate);
 
   // For real events, use the booking flow hook (pass URL participant count as override)
   const urlParticipantCount = paramParticipants ? parseInt(paramParticipants, 10) : undefined;
@@ -66,11 +67,22 @@ export default function PaymentScreen() {
   const draftPkg = packageId ? FALLBACK_PKG[packageId] : null;
   const pkg = isDraft ? draftPkg : (bookingFlow.package || draftPkg);
 
+  // Exclude honoree from URL param (passed from summary screen)
+  const honoreeExcluded = paramExcludeHonoree === '0' ? false : true; // default true
+
+  // Sync URL param into bookingFlow so pricing recalculates with the correct value from summary
+  useEffect(() => {
+    if (!isDraft && paramExcludeHonoree !== undefined) {
+      bookingFlow.setExcludeHonoree(honoreeExcluded);
+    }
+  }, [isDraft, honoreeExcluded]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Draft pricing
   const draftPricing = useMemo(() => {
     if (!draftPkg) return null;
     const totalParticipants = urlParticipantCount || wizardParticipantCount || 10;
-    const payingCount = Math.max(1, totalParticipants - 1);
+    const honoreeCount = honoreeExcluded ? 1 : 0;
+    const payingCount = Math.max(1, totalParticipants - honoreeCount);
     const perPersonPrice = draftPkg.price_per_person_cents;
     // Package Base is ALWAYS price × total participants (fixed amount)
     const packagePrice = perPersonPrice * totalParticipants;
@@ -79,7 +91,7 @@ export default function PaymentScreen() {
     // Only per-person cost changes based on exclude honoree toggle
     const perPerson = Math.ceil(total / payingCount);
     return { packagePriceCents: packagePrice, serviceFeeCents: serviceFee, totalCents: total, perPersonCents: perPerson, payingParticipantCount: payingCount };
-  }, [draftPkg, urlParticipantCount, wizardParticipantCount]);
+  }, [draftPkg, urlParticipantCount, wizardParticipantCount, honoreeExcluded]);
 
   const effectiveCityId = paramCityId || wizardCityId;
   const cityFallback = effectiveCityId ? CITY_NAMES[effectiveCityId] || effectiveCityId : 'Unknown';
@@ -88,9 +100,11 @@ export default function PaymentScreen() {
   const event = isDraft
     ? { city: { name: cityFallback }, honoree_name: honoreeNameFallback }
     : (bookingFlow.event || { city: { name: cityFallback }, honoree_name: honoreeNameFallback });
-  const pricing = isDraft ? draftPricing : bookingFlow.pricing;
-  const excludeHonoree = isDraft ? true : bookingFlow.excludeHonoree;
-  const isLoading = isDraft ? false : bookingFlow.isLoading;
+  // Use bookingFlow pricing when available, fallback to local pricing for instant render
+  const pricing = isDraft ? draftPricing : (bookingFlow.pricing || draftPricing);
+  const excludeHonoree = isDraft ? honoreeExcluded : bookingFlow.excludeHonoree;
+  // Don't show loading if we already have fallback data to render
+  const isLoading = isDraft ? false : (bookingFlow.isLoading && !draftPricing);
 
   const createBookingMutation = useCreateBooking();
   const updatePaymentMutation = useUpdatePaymentStatus();
@@ -172,7 +186,8 @@ export default function PaymentScreen() {
         if (packageId) confirmParams.set('packageId', packageId);
         if (paramCityId) confirmParams.set('cityId', paramCityId);
         if (paramParticipants) confirmParams.set('participants', paramParticipants);
-        confirmParams.set('total', String(pricing.totalCents));
+        confirmParams.set('total', String(Math.ceil(pricing.totalCents * 0.25)));
+        confirmParams.set('fullTotal', String(pricing.totalCents));
         const qs = confirmParams.toString() ? `?${confirmParams.toString()}` : '';
         router.replace(`/booking/${eventId}/confirmation${qs}`);
         return;
@@ -230,6 +245,9 @@ export default function PaymentScreen() {
       );
     }
   };
+
+  // Deposit calculation (25% of total)
+  const depositCents = Math.ceil(pricing.totalCents * 0.25);
 
   const isProcessing = paymentStep !== 'ready' || isPaymentLoading;
 
@@ -313,13 +331,13 @@ export default function PaymentScreen() {
             <Card testID="payment-amount-card">
               <YStack alignItems="center" gap="$2">
                 <Text fontSize="$2" color="$textSecondary">
-                  {t.booking.totalAmount}
+                  {t.booking.depositLabel}
                 </Text>
                 <Text fontSize="$9" fontWeight="800" color="$primary">
-                  {formatPrice(pricing.totalCents)}
+                  {formatPrice(depositCents)}
                 </Text>
                 <Text fontSize="$2" color="$textSecondary">
-                  {t.booking.perPersonGuests.replace('{{price}}', formatPrice(pricing.perPersonCents)).replace('{{count}}', String(pricing.payingParticipantCount))}
+                  {t.booking.totalAmount}: {formatPrice(pricing.totalCents)} {'\u2022'} {t.booking.perPersonGuests.replace('{{price}}', formatPrice(pricing.perPersonCents)).replace('{{count}}', String(pricing.payingParticipantCount))}
                 </Text>
               </YStack>
             </Card>
@@ -393,10 +411,23 @@ export default function PaymentScreen() {
                 </YStack>
                 <YStack flex={1}>
                   <Text fontWeight="600" color="$textPrimary">
-                    {pkg.name}
+                    {(() => {
+                      const tierLabels: Record<string, string> = { essential: 'S', classic: 'M', grand: 'L' };
+                      const tierNames: Record<string, string> = { essential: 'Essential', classic: 'Classic', grand: 'Grand' };
+                      return pkg.tier ? `${tierNames[pkg.tier] || pkg.tier} (${tierLabels[pkg.tier] || ''})` : pkg.name;
+                    })()}
                   </Text>
                   <Text fontSize="$2" color="$textSecondary">
-                    {event.city?.name} • {event.honoree_name}'s Party
+                    {[
+                      event.city?.name,
+                      (() => {
+                        const dateStr = (event as any).start_date || wizardStartDate;
+                        if (!dateStr) return null;
+                        const d = new Date(dateStr);
+                        return isNaN(d.getTime()) ? null : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                      })(),
+                      `${urlParticipantCount || wizardParticipantCount || pricing?.payingParticipantCount || ''} Guests`,
+                    ].filter(Boolean).join(' \u2022 ')}
                   </Text>
                 </YStack>
               </XStack>
@@ -451,7 +482,7 @@ export default function PaymentScreen() {
             onPress={handlePayment}
             testID="pay-now-button"
           >
-            {t.booking.payButtonLabel.replace('{{amount}}', formatPrice(pricing.totalCents))}
+            {t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(depositCents))}
           </Button>
         </XStack>
       )}
