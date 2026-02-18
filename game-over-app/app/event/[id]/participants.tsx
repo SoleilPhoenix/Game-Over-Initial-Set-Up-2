@@ -557,8 +557,35 @@ export default function ManageInvitationsScreen() {
           </Text>
         </XStack>
 
-        {/* Slot Cards */}
-        {slots.map(renderSlotCard)}
+        {/* Slot Cards — inject honoree info banner before the honoree slot */}
+        {slots.map((slot) => (
+          <View key={`slot-wrapper-${slot.role}-${slot.index}`}>
+            {slot.role === 'honoree' && (
+              <View style={styles.honoreeInfoBanner}>
+                <XStack gap={10} alignItems="flex-start">
+                  <View style={styles.honoreeInfoIcon}>
+                    <Ionicons name="notifications" size={16} color="#F59E0B" />
+                  </View>
+                  <YStack flex={1} gap={6}>
+                    <Text style={styles.honoreeInfoTitle}>Honoree wird automatisch benachrichtigt</Text>
+                    <Text style={styles.honoreeInfoBody}>
+                      Der Ehrengast erhält{' '}
+                      <Text style={styles.honoreeInfoHighlight}>15 Minuten vor der ersten Aktivität</Text>
+                      {' '}eine Einladung zur App und wird zur Teilnahme aufgefordert.
+                    </Text>
+                    <View style={styles.honoreePrivacyRow}>
+                      <Ionicons name="eye-off-outline" size={13} color="#10B981" />
+                      <Text style={styles.honoreePrivacyText}>
+                        Budget & Kosten werden dem Ehrengast nicht angezeigt
+                      </Text>
+                    </View>
+                  </YStack>
+                </XStack>
+              </View>
+            )}
+            {renderSlotCard(slot)}
+          </View>
+        ))}
       </ScrollView>
 
       {/* Invite All Footer */}
@@ -710,6 +737,48 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  honoreeInfoBanner: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.25)',
+    padding: 14,
+    marginBottom: 8,
+  },
+  honoreeInfoIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  honoreeInfoTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#F59E0B',
+  },
+  honoreeInfoBody: {
+    fontSize: 12,
+    color: DARK_THEME.textSecondary,
+    lineHeight: 17,
+  },
+  honoreeInfoHighlight: {
+    fontWeight: '700',
+    color: DARK_THEME.textPrimary,
+  },
+  honoreePrivacyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 2,
+  },
+  honoreePrivacyText: {
+    fontSize: 11,
+    color: '#10B981',
+    fontWeight: '500',
   },
   suggestionBox: {
     backgroundColor: DARK_THEME.surface,
