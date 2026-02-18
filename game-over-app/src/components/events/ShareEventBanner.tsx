@@ -80,10 +80,10 @@ export function ShareEventBanner({
     >
       <XStack alignItems="center" gap={10}>
         <View style={styles.iconCircle}>
-          <Ionicons name="people-outline" size={18} color="#5A7EB0" />
+          <Ionicons name="share-social-outline" size={18} color="#5A7EB0" />
         </View>
         <Text style={styles.title} numberOfLines={1} flex={1}>
-          {(t.eventDetail as any).inviteYourGroup || 'Invite Your Group'} — {subtext}
+          {(t.chat as any).shareInvite || 'Share Invite'} — {(t.chat as any).inviteFriendsToJoin || 'Invite Friends to Join'}
         </Text>
         <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
       </XStack>

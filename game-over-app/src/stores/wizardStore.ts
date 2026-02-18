@@ -528,7 +528,8 @@ export const useWizardStore = create<WizardState & WizardActions>()(
         }
 
         const fullName = [state.honoreeName, state.honoreeLastName].filter(Boolean).join(' ');
-        const title = `${fullName}'s ${
+        // Title uses first name only for brevity: "Sven's Bachelor"
+        const title = `${state.honoreeName}'s ${
           state.partyType === 'bachelor' ? 'Bachelor' : 'Bachelorette'
         }`;
 
@@ -536,7 +537,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           event: {
             title,
             party_type: state.partyType,
-            honoree_name: fullName,
+            honoree_name: fullName, // full name stored in DB
             city_id: state.cityId,
             start_date: state.startDate,
             end_date: state.endDate,
