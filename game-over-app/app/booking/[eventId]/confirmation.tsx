@@ -136,8 +136,8 @@ export default function BookingConfirmationScreen() {
               // Derive city + tier from packageId slug (e.g., "berlin-classic")
               if (packageId) {
                 const parts = packageId.split('-');
-                const city = parts[0] || 'berlin';
-                const tier = parts[1] || 'essential';
+                const city = parts.slice(0, -1).join('-') || 'berlin';
+                const tier = parts[parts.length - 1] || 'essential';
                 return getPackageImage(city, tier);
               }
               // Fallback from cityId
@@ -145,6 +145,7 @@ export default function BookingConfirmationScreen() {
               return getPackageImage(slug, 'essential');
             })())}
             style={confirmStyles.heroImage}
+            fadeDuration={0}
             resizeMode="cover"
           >
             <View style={confirmStyles.heroOverlay}>

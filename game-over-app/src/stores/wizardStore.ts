@@ -42,6 +42,7 @@ export interface DraftSnapshot {
   updatedAt: string;
   partyType: PartyType | null;
   honoreeName: string;
+  honoreeLastName: string;
   cityId: string | null;
   participantCount: number;
   startDate: string | null;
@@ -71,6 +72,7 @@ interface WizardState {
   // Step 1: Key Details
   partyType: PartyType | null;
   honoreeName: string;
+  honoreeLastName: string;
   cityId: string | null;
   participantCount: number;
   startDate: string | null;
@@ -112,6 +114,7 @@ interface WizardActions {
   // Step 1 actions
   setPartyType: (type: PartyType) => void;
   setHonoreeName: (name: string) => void;
+  setHonoreeLastName: (name: string) => void;
   setCityId: (cityId: string) => void;
   setParticipantCount: (count: number) => void;
   setDates: (startDate: string, endDate: string) => void;
@@ -191,6 +194,7 @@ interface WizardActions {
 const initialWizardFields = {
   partyType: null as PartyType | null,
   honoreeName: '',
+  honoreeLastName: '',
   cityId: null as string | null,
   participantCount: 10,
   startDate: null as string | null,
@@ -231,6 +235,7 @@ function snapshotFromState(state: WizardState, id: string, now: string): DraftSn
     updatedAt: now,
     partyType: state.partyType,
     honoreeName: state.honoreeName,
+    honoreeLastName: state.honoreeLastName,
     cityId: state.cityId,
     participantCount: state.participantCount,
     startDate: state.startDate,
@@ -271,6 +276,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       // Step 1 actions
       setPartyType: (type: PartyType) => set({ partyType: type, isDirty: true }),
       setHonoreeName: (name: string) => set({ honoreeName: name, isDirty: true }),
+      setHonoreeLastName: (name: string) => set({ honoreeLastName: name, isDirty: true }),
       setCityId: (cityId: string) => set({ cityId, isDirty: true }),
       setParticipantCount: (count: number) => set({ participantCount: Math.max(1, Math.min(30, count)), isDirty: true }),
       setDates: (startDate: string, endDate: string) =>
@@ -459,6 +465,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
         set({
           partyType: draft.partyType,
           honoreeName: draft.honoreeName,
+          honoreeLastName: draft.honoreeLastName ?? '',
           cityId: draft.cityId,
           participantCount: draft.participantCount,
           startDate: draft.startDate,
@@ -520,7 +527,8 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           return null;
         }
 
-        const title = `${state.honoreeName}'s ${
+        const fullName = [state.honoreeName, state.honoreeLastName].filter(Boolean).join(' ');
+        const title = `${fullName}'s ${
           state.partyType === 'bachelor' ? 'Bachelor' : 'Bachelorette'
         }`;
 
@@ -528,7 +536,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           event: {
             title,
             party_type: state.partyType,
-            honoree_name: state.honoreeName,
+            honoree_name: fullName,
             city_id: state.cityId,
             start_date: state.startDate,
             end_date: state.endDate,
@@ -556,6 +564,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       partialize: (state) => ({
         partyType: state.partyType,
         honoreeName: state.honoreeName,
+        honoreeLastName: state.honoreeLastName,
         cityId: state.cityId,
         participantCount: state.participantCount,
         startDate: state.startDate,

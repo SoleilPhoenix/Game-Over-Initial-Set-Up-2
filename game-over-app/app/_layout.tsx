@@ -17,6 +17,7 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { DARK_THEME } from '@/constants/theme';
+import { preloadPackageImages } from '@/constants/packageImages';
 import config from '../tamagui.config';
 
 // Crisp Chat — native module, not available in Expo Go
@@ -58,6 +59,8 @@ function RootLayoutNav() {
 
   useEffect(() => {
     initialize();
+    // Preload package images during splash screen to eliminate loading delays
+    preloadPackageImages().catch(() => {});
   }, [initialize]);
 
   // Sync user info with Crisp when session changes (with identity verification)
@@ -116,8 +119,8 @@ function RootLayoutNav() {
     <>
       <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="(auth)" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="(tabs)" options={{ gestureEnabled: false }} />
         <Stack.Screen
           name="create-event"
           options={{

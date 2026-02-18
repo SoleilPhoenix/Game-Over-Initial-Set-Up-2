@@ -151,30 +151,25 @@ export const eventsRepository = {
       throw error;
     }
 
-    // Fetch preferences separately (avoids RLS recursion)
-    let preferences: EventPreferences | null = null;
-    try {
-      const { data: prefs } = await supabase
+    // Fetch preferences and participant count in parallel (avoids RLS recursion)
+    const [prefsResult, countResult] = await Promise.allSettled([
+      supabase
         .from('event_preferences')
         .select('*')
         .eq('event_id', eventId)
-        .maybeSingle();
-      preferences = prefs;
-    } catch {
-      // Non-critical
-    }
-
-    // Fetch participant count separately
-    let participantCount = 0;
-    try {
-      const { count } = await supabase
+        .maybeSingle(),
+      supabase
         .from('event_participants')
         .select('*', { count: 'exact', head: true })
-        .eq('event_id', eventId);
-      participantCount = count || 0;
-    } catch {
-      // Non-critical
-    }
+        .eq('event_id', eventId),
+    ]);
+
+    const preferences = prefsResult.status === 'fulfilled'
+      ? (prefsResult.value.data as EventPreferences | null)
+      : null;
+    const participantCount = countResult.status === 'fulfilled'
+      ? (countResult.value.count || 0)
+      : 0;
 
     return {
       ...data,

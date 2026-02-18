@@ -1,14 +1,15 @@
 /**
  * ShareEventBanner Component
- * Displays a banner prompting users to share/invite others to an event
+ * Compact single-line invite banner matching the Chat share card style
  */
 
 import React, { useCallback, useState } from 'react';
-import { Share, Pressable, StyleSheet, Alert } from 'react-native';
-import { YStack, XStack, Text } from 'tamagui';
+import { Share, Pressable, StyleSheet, Alert, View } from 'react-native';
+import { XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { DARK_THEME } from '@/constants/theme';
+import { useTranslation } from '@/i18n';
 
 interface ShareEventBannerProps {
   eventId: string;
@@ -26,6 +27,7 @@ export function ShareEventBanner({
   participantCount = 0,
 }: ShareEventBannerProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const { t } = useTranslation();
 
   const getShareUrl = useCallback(async () => {
     let code = inviteCode;
@@ -65,97 +67,50 @@ export function ShareEventBanner({
     }
   }, [eventTitle, getShareUrl]);
 
-  const handleCopyLink = useCallback(async () => {
-    const shareUrl = await getShareUrl();
-    if (!shareUrl) return;
-
-    try {
-      await Clipboard.setStringAsync(shareUrl);
-      Alert.alert('Copied!', 'Invite link copied to clipboard');
-    } catch (error) {
-      console.error('Failed to copy:', error);
-      Alert.alert('Error', 'Failed to copy link');
-    }
-  }, [getShareUrl]);
+  const subtext = participantCount > 0
+    ? `${participantCount} member${participantCount !== 1 ? 's' : ''} joined`
+    : (t.eventDetail as any).shareSubtext || 'Share invite link to get started';
 
   return (
-    <YStack
-      backgroundColor={`${DARK_THEME.primary}15`}
-      borderRadius="$lg"
-      borderWidth={1}
-      borderColor={`${DARK_THEME.primary}30`}
-      padding="$4"
-      gap="$3"
+    <Pressable
+      style={styles.card}
+      onPress={handleShare}
+      disabled={isLoading}
       testID="share-event-banner"
     >
-      {/* Header */}
-      <XStack alignItems="center" gap="$3">
-        <YStack
-          width={48}
-          height={48}
-          borderRadius="$full"
-          backgroundColor={`${DARK_THEME.primary}20`}
-          alignItems="center"
-          justifyContent="center"
-        >
-          <Ionicons name="people" size={24} color={DARK_THEME.primary} />
-        </YStack>
-        <YStack flex={1}>
-          <Text fontSize="$4" fontWeight="700" color="$textPrimary">
-            Invite Your Group
-          </Text>
-          <Text fontSize="$2" color="$textSecondary">
-            {participantCount > 0
-              ? `${participantCount} member${participantCount !== 1 ? 's' : ''} joined`
-              : 'Share the invite link to get started'}
-          </Text>
-        </YStack>
+      <XStack alignItems="center" gap={10}>
+        <View style={styles.iconCircle}>
+          <Ionicons name="people-outline" size={18} color="#5A7EB0" />
+        </View>
+        <Text style={styles.title} numberOfLines={1} flex={1}>
+          {(t.eventDetail as any).inviteYourGroup || 'Invite Your Group'} — {subtext}
+        </Text>
+        <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
       </XStack>
-
-      {/* Action Buttons */}
-      <XStack gap="$2">
-        <Pressable
-          style={[styles.button, styles.primaryButton]}
-          onPress={handleShare}
-          disabled={isLoading}
-        >
-          <Ionicons name="share-social" size={18} color="white" />
-          <Text color="white" fontWeight="600">
-            Share Invite
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.button, styles.secondaryButton]}
-          onPress={handleCopyLink}
-          disabled={isLoading}
-        >
-          <Ionicons name="copy-outline" size={18} color={DARK_THEME.primary} />
-          <Text color="$primary" fontWeight="600">
-            Copy Link
-          </Text>
-        </Pressable>
-      </XStack>
-    </YStack>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  button: {
-    flex: 1,
-    flexDirection: 'row',
+  card: {
+    backgroundColor: 'rgba(45, 55, 72, 0.5)',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  iconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(90, 126, 176, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 10,
   },
-  primaryButton: {
-    backgroundColor: DARK_THEME.primary,
-  },
-  secondaryButton: {
-    backgroundColor: DARK_THEME.surfaceCard,
-    borderWidth: 1,
-    borderColor: DARK_THEME.primary,
+  title: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: DARK_THEME.textPrimary,
   },
 });

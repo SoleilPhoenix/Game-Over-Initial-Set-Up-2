@@ -112,10 +112,16 @@ export function usePushNotifications() {
 
       return token.data;
     } catch (error) {
-      console.error('Error registering for push notifications:', error);
+      const err = error as Error;
+      // Normalize the "TypeError: Network request failed" to a user-friendly message
+      const isNetworkError = err.message?.includes('Network request failed') || err.message?.includes('TypeError');
+      const normalizedError = isNetworkError
+        ? new Error('Network request failed — could not reach the push notification service.')
+        : err;
+      console.error('Error registering for push notifications:', err);
       setState(prev => ({
         ...prev,
-        error: error as Error,
+        error: normalizedError,
       }));
       return null;
     } finally {

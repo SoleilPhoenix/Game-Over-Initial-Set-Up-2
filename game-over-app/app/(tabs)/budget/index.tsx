@@ -4,7 +4,7 @@
  * Matches the dark theme glassmorphic design from UI specifications
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, View, Image, FlatList, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
@@ -18,6 +18,7 @@ import { useUser } from '@/stores/authStore';
 import { DARK_THEME } from '@/constants/theme';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
+import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import type { Database } from '@/lib/supabase/types';
 
 type Event = Database['public']['Tables']['events']['Row'] & {
@@ -40,6 +41,7 @@ export default function BudgetDashboardScreen() {
   const insets = useSafeAreaInsets();
   const user = useUser();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<BudgetCategory>('total');
   const { t } = useTranslation();
   const BUDGET_TABS = ['total', 'collected', 'pending'] as const;
@@ -75,12 +77,22 @@ export default function BudgetDashboardScreen() {
     router.push('/notifications');
   };
 
-  // Auto-select first booked event
-  React.useEffect(() => {
-    if (!selectedEventId && hasBookedEvents) {
-      setSelectedEventId(bookedEvents[0].id);
-    }
-  }, [bookedEvents, selectedEventId, hasBookedEvents]);
+  // Auto-select nearest booked event
+  const hasAutoSelected = React.useRef(false);
+  useEffect(() => {
+    if (hasAutoSelected.current || bookedEvents.length === 0) return;
+    hasAutoSelected.current = true;
+    const now = Date.now();
+    const sorted = [...bookedEvents].sort((a, b) => {
+      const aDate = a.start_date ? new Date(a.start_date).getTime() : Infinity;
+      const bDate = b.start_date ? new Date(b.start_date).getTime() : Infinity;
+      const aFuture = aDate >= now ? 0 : 1;
+      const bFuture = bDate >= now ? 0 : 1;
+      if (aFuture !== bFuture) return aFuture - bFuture;
+      return aDate - bDate;
+    });
+    setSelectedEventId(sorted[0].id);
+  }, [bookedEvents]);
 
   // ONLY fetch booking if we have booked events (prevent unnecessary queries)
   const { data: booking, isLoading: bookingLoading } = useBooking(
@@ -159,6 +171,108 @@ export default function BudgetDashboardScreen() {
 
   // Only show loading for booking/participants data when we have events
   const isLoading = hasBookedEvents && (bookingLoading || participantsLoading);
+
+  // Event selector
+  const selectedEventName = selectedEvent
+    ? (selectedEvent.title || (selectedEvent.honoree_name ? `${selectedEvent.honoree_name}'s Event` : 'Event'))
+    : 'Select Event';
+
+  const renderEventSelector = () => {
+    if (bookedEvents.length === 0) return null;
+
+    const selectedCitySlug = (selectedEvent?.city as any)?.name?.toLowerCase() || 'berlin';
+    const selectedCityImage = getEventImage(selectedCitySlug, selectedEvent?.hero_image_url);
+
+    return (
+      <View style={styles.eventSelectorWrapper}>
+        <Pressable
+          style={styles.eventSelectorCard}
+          onPress={() => bookedEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
+          testID="budget-event-selector"
+        >
+          <Image
+            source={resolveImageSource(selectedEvent?.hero_image_url || selectedCityImage)}
+            style={styles.eventSelectorImage}
+            resizeMode="cover"
+          />
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={styles.eventSelectorLabel}>
+              {t.budget.totalBudget ? 'CURRENT EVENT' : 'CURRENT EVENT'}
+            </Text>
+            <Text style={styles.eventSelectorName} numberOfLines={1}>
+              {selectedEventName}
+            </Text>
+            {selectedEvent?.start_date && (
+              <Text style={styles.eventSelectorDate}>
+                {new Date(selectedEvent.start_date).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {' \u2022 '}
+                {(selectedEvent.city as any)?.name || ''}
+              </Text>
+            )}
+          </View>
+          {bookedEvents.length > 1 && (
+            <View style={styles.eventSelectorChevron}>
+              <Ionicons
+                name={eventSelectorOpen ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color={DARK_THEME.textPrimary}
+              />
+            </View>
+          )}
+        </Pressable>
+
+        {eventSelectorOpen && (
+          <View style={styles.eventDropdown}>
+            {[...bookedEvents]
+              .sort((a, b) => {
+                if (a.id === selectedEventId) return -1;
+                if (b.id === selectedEventId) return 1;
+                const aDate = a.start_date ? new Date(a.start_date).getTime() : Infinity;
+                const bDate = b.start_date ? new Date(b.start_date).getTime() : Infinity;
+                return aDate - bDate;
+              })
+              .map(ev => {
+                const isSelected = ev.id === selectedEventId;
+                const evName = ev.title || (ev.honoree_name ? `${ev.honoree_name}'s Event` : 'Event');
+                const evCitySlug = (ev.city as any)?.name?.toLowerCase() || 'berlin';
+                const evCityImage = getEventImage(evCitySlug, ev.hero_image_url);
+                return (
+                  <Pressable
+                    key={ev.id}
+                    style={[styles.eventDropdownItem, isSelected && styles.eventDropdownItemActive]}
+                    onPress={() => {
+                      setSelectedEventId(ev.id);
+                      setEventSelectorOpen(false);
+                    }}
+                  >
+                    <Image
+                      source={resolveImageSource(ev.hero_image_url || evCityImage)}
+                      style={styles.eventDropdownImage}
+                      resizeMode="cover"
+                    />
+                    <View style={{ flex: 1, gap: 1 }}>
+                      <Text style={[
+                        styles.eventDropdownText,
+                        isSelected && styles.eventDropdownTextActive,
+                      ]} numberOfLines={1}>
+                        {evName}
+                      </Text>
+                      <Text style={styles.eventDropdownDate}>
+                        {(ev.city as any)?.name || ''}
+                        {ev.start_date ? ` \u2022 ${new Date(ev.start_date).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}` : ''}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={20} color="#5A7EB0" />
+                    )}
+                  </Pressable>
+                );
+              })}
+          </View>
+        )}
+      </View>
+    );
+  };
 
   // Render category tabs
   const renderCategoryTabs = () => (
@@ -314,6 +428,9 @@ export default function BudgetDashboardScreen() {
         {/* Category Tabs */}
         {renderCategoryTabs()}
       </View>
+
+      {/* Event Selector */}
+      {renderEventSelector()}
 
       <Animated.View style={[{ flex: 1 }, swipeAnimStyle]} {...swipeHandlers}>
       <ScrollView
@@ -853,6 +970,87 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(107, 114, 128, 0.3)',
     borderRadius: 3,
     overflow: 'hidden',
+  },
+  // Event Selector
+  eventSelectorWrapper: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    zIndex: 10,
+  },
+  eventSelectorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#5A7EB0',
+    borderRadius: 16,
+    padding: 14,
+  },
+  eventSelectorImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+  },
+  eventSelectorLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
+    letterSpacing: 0.5,
+  },
+  eventSelectorName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  eventSelectorDate: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  eventSelectorChevron: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eventDropdown: {
+    marginTop: 6,
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: DARK_THEME.glassBorder,
+    overflow: 'hidden',
+  },
+  eventDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: DARK_THEME.glassBorder,
+  },
+  eventDropdownItemActive: {
+    backgroundColor: 'rgba(90, 126, 176, 0.12)',
+  },
+  eventDropdownImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+  },
+  eventDropdownText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: DARK_THEME.textSecondary,
+  },
+  eventDropdownTextActive: {
+    color: '#5A7EB0',
+    fontWeight: '700',
+  },
+  eventDropdownDate: {
+    fontSize: 11,
+    color: DARK_THEME.textTertiary,
   },
   filterPill: {
     flexDirection: 'row',

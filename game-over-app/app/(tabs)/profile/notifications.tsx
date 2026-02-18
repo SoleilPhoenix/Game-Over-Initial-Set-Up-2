@@ -142,12 +142,20 @@ export default function NotificationsScreen() {
     if (token) {
       setPushEnabled(true);
     } else if (pushError) {
-      const isExpoGoLimit = pushError.message?.includes('EAS project ID') || pushError.message?.includes('Expo Go');
+      const msg = pushError.message || '';
+      const isExpoGoLimit = msg.includes('EAS project ID') || msg.includes('Expo Go');
+      const isNetworkError = msg.includes('Network request failed') || msg.includes('TypeError') || msg.includes('network');
       Alert.alert(
-        isExpoGoLimit ? 'Not Available in Expo Go' : 'Push Notifications',
+        isExpoGoLimit
+          ? 'Not Available in Expo Go'
+          : isNetworkError
+            ? 'No Connection'
+            : 'Push Notifications',
         isExpoGoLimit
           ? 'Push notifications require a development build (EAS Build). They are not supported in Expo Go. You can still toggle the preference for when you switch to a full build.'
-          : (pushError.message || 'Failed to enable push notifications. Please check your device settings.')
+          : isNetworkError
+            ? 'Could not connect to the push notification service. Please check your internet connection and try again.'
+            : (msg || 'Failed to enable push notifications. Please check your device settings.')
       );
     }
   };

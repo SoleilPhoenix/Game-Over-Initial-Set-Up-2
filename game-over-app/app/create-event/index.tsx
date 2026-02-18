@@ -43,16 +43,19 @@ export default function WizardStep1() {
   const router = useRouter();
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [isFocused, setIsFocused] = useState(false);
+  const [isFocusedFirst, setIsFocusedFirst] = useState(false);
+  const [isFocusedLast, setIsFocusedLast] = useState(false);
   const { t } = useTranslation();
   const {
     partyType,
     honoreeName,
+    honoreeLastName,
     cityId,
     participantCount,
     startDate,
     setPartyType,
     setHonoreeName,
+    setHonoreeLastName,
     setCityId,
     setParticipantCount,
     setDates,
@@ -113,31 +116,51 @@ export default function WizardStep1() {
 
           {/* Honoree's Name */}
           <GlassPanel icon="person" title={t.wizard.honoreeName} testID="panel-honoree">
-            <XStack
-              height={48}
-              borderRadius="$full"
-              backgroundColor="rgba(45, 55, 72, 0.6)"
-              borderWidth={isFocused ? 2 : 1}
-              borderColor={isFocused ? DARK_THEME.primary : 'rgba(255, 255, 255, 0.08)'}
-              alignItems="center"
-              paddingHorizontal="$4"
-            >
-              <TextInput
-                placeholder={t.wizard.honoreeNamePlaceholder}
-                placeholderTextColor="#9CA3AF"
-                value={honoreeName}
-                onChangeText={setHonoreeName}
-                onFocus={() => setIsFocused(true)}
-                onBlur={() => setIsFocused(false)}
-                style={{
-                  flex: 1,
-                  color: '#FFFFFF',
-                  fontSize: 15,
-                  fontWeight: '600',
-                  height: '100%',
-                }}
-                testID="honoree-name-input"
-              />
+            <XStack gap={10}>
+              {/* First Name */}
+              <XStack
+                flex={1}
+                height={48}
+                borderRadius="$full"
+                backgroundColor="rgba(45, 55, 72, 0.6)"
+                borderWidth={isFocusedFirst ? 2 : 1}
+                borderColor={isFocusedFirst ? DARK_THEME.primary : 'rgba(255, 255, 255, 0.08)'}
+                alignItems="center"
+                paddingHorizontal="$4"
+              >
+                <TextInput
+                  placeholder={t.wizard.honoreeNamePlaceholder}
+                  placeholderTextColor="#9CA3AF"
+                  value={honoreeName}
+                  onChangeText={setHonoreeName}
+                  onFocus={() => setIsFocusedFirst(true)}
+                  onBlur={() => setIsFocusedFirst(false)}
+                  style={{ flex: 1, color: '#FFFFFF', fontSize: 15, fontWeight: '600', height: '100%' }}
+                  testID="honoree-name-input"
+                />
+              </XStack>
+              {/* Last Name */}
+              <XStack
+                flex={1}
+                height={48}
+                borderRadius="$full"
+                backgroundColor="rgba(45, 55, 72, 0.6)"
+                borderWidth={isFocusedLast ? 2 : 1}
+                borderColor={isFocusedLast ? DARK_THEME.primary : 'rgba(255, 255, 255, 0.08)'}
+                alignItems="center"
+                paddingHorizontal="$4"
+              >
+                <TextInput
+                  placeholder={t.wizard.honoreeLastNamePlaceholder}
+                  placeholderTextColor="#9CA3AF"
+                  value={honoreeLastName}
+                  onChangeText={setHonoreeLastName}
+                  onFocus={() => setIsFocusedLast(true)}
+                  onBlur={() => setIsFocusedLast(false)}
+                  style={{ flex: 1, color: '#FFFFFF', fontSize: 15, fontWeight: '600', height: '100%' }}
+                  testID="honoree-last-name-input"
+                />
+              </XStack>
             </XStack>
           </GlassPanel>
 

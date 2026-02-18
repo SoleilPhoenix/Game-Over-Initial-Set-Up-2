@@ -17,6 +17,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useTranslation, getTranslation } from '@/i18n';
+import { setDesiredParticipants } from '@/lib/participantCountCache';
 
 // Fallback packages for draft mode
 const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; price_per_person_cents: number }> = {
@@ -176,6 +177,9 @@ export default function PaymentScreen() {
           if (updateError) {
             console.warn('Event status update failed (non-blocking):', updateError.message);
           }
+          // Cache desired participant count for event summary screens
+          const totalParticipants = pricing.payingParticipantCount + (excludeHonoree ? 1 : 0);
+          setDesiredParticipants(eventId, totalParticipants).catch(() => {});
         }
 
         setPaymentStep('confirming');
@@ -229,7 +233,13 @@ export default function PaymentScreen() {
         status: 'completed',
       });
 
-      router.replace(`/booking/${eventId}/confirmation`);
+      // Pass package info so confirmation shows the correct tier image
+      const realConfirmParams = new URLSearchParams();
+      if (packageId) realConfirmParams.set('packageId', packageId);
+      if (paramCityId) realConfirmParams.set('cityId', paramCityId);
+      if (paramParticipants) realConfirmParams.set('participants', paramParticipants);
+      const realQs = realConfirmParams.toString() ? `?${realConfirmParams.toString()}` : '';
+      router.replace(`/booking/${eventId}/confirmation${realQs}`);
     } catch (error) {
       console.error('Payment failed:', error);
       setPaymentStep('ready');

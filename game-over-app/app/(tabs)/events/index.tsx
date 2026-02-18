@@ -35,7 +35,7 @@ import { SkeletonEventCard } from '@/components/ui/Skeleton';
 import { useTranslation, getTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
 import { getCurrentPhaseLabel } from '@/utils/planningProgress';
-import { getCityImage, resolveImageSource } from '@/constants/packageImages';
+import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import type { EventWithDetails } from '@/repositories';
 
@@ -193,14 +193,23 @@ export default function EventsScreen() {
     const visible = wizardCreatedEventId
       ? deduplicatedEvents.filter((e) => e.id !== wizardCreatedEventId)
       : deduplicatedEvents;
+    let filtered: EventWithDetails[];
     switch (activeFilter) {
       case 'organizing':
-        return visible.filter((e) => e.created_by === user?.id);
+        filtered = visible.filter((e) => e.created_by === user?.id);
+        break;
       case 'attending':
-        return visible.filter((e) => e.created_by !== user?.id);
+        filtered = visible.filter((e) => e.created_by !== user?.id);
+        break;
       default:
-        return visible;
+        filtered = visible;
     }
+    // Sort by nearest start_date first (future events at top)
+    return [...filtered].sort((a, b) => {
+      const aDate = a.start_date ? new Date(a.start_date).getTime() : Infinity;
+      const bDate = b.start_date ? new Date(b.start_date).getTime() : Infinity;
+      return aDate - bDate;
+    });
   }, [deduplicatedEvents, activeFilter, user?.id, wizardCreatedEventId]);
 
   const handleRefresh = useCallback(async () => {
@@ -367,23 +376,18 @@ export default function EventsScreen() {
         <XStack flex={1}>
           {/* Thumbnail */}
           <View style={styles.thumbnailContainer}>
-            {item.hero_image_url ? (
-              <Image
-                source={{ uri: item.hero_image_url }}
-                style={styles.thumbnail}
-                resizeMode="cover"
-              />
-            ) : (
-              <Image
-                source={resolveImageSource(getCityImage(
+            <Image
+              source={resolveImageSource(
+                item.hero_image_url ||
+                getEventImage(
                   (item.city?.name?.toLowerCase()) ||
                   CITY_UUID_TO_SLUG[item.city_id || ''] ||
                   'berlin'
-                ))}
-                style={styles.thumbnail}
-                resizeMode="cover"
-              />
-            )}
+                )
+              )}
+              style={styles.thumbnail}
+              resizeMode="cover"
+            />
           </View>
 
           {/* Content */}

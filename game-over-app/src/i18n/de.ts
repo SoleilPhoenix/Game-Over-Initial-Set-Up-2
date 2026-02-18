@@ -149,7 +149,8 @@ const de: TranslationKeys = {
     bachelor: 'Junggesellenabschied',
     bachelorette: 'Junggesellinnenabschied',
     honoreeName: 'Name des Ehrengasts',
-    honoreeNamePlaceholder: 'Name des Ehrengasts eingeben',
+    honoreeNamePlaceholder: 'Vorname',
+    honoreeLastNamePlaceholder: 'Nachname',
     city: 'Stadt',
     selectCity: 'Stadt auswählen',
     participantCount: 'Teilnehmer',
@@ -415,6 +416,7 @@ const de: TranslationKeys = {
   // ─── Chat Screen ─────────────────────────────
   chat: {
     headerTitle: 'Chat',
+    currentEvent: 'Aktuelles Event',
     tabChat: 'Themen',
     tabVoting: 'Abstimmung',
     tabDecisions: 'Entscheidungen',
@@ -438,6 +440,8 @@ const de: TranslationKeys = {
     newTopicMessage: 'Gib einen Themennamen ein:',
     topicCreated: 'Thema erfolgreich erstellt!',
     topicCreateFailed: 'Thema konnte nicht erstellt werden. Bitte versuche es erneut.',
+    shareInvite: 'Einladung teilen',
+    inviteFriendsToJoin: 'Freunde einladen',
     shareInviteTitle: 'Event-Einladung teilen',
     shareInviteMessage: 'Wie möchtest du teilen:',
     moreOptions: 'Weitere Optionen',
@@ -500,11 +504,11 @@ const de: TranslationKeys = {
     budgetSubtext: 'Ausgaben verfolgen',
     personEst: '\u20AC{{amount}}/Person gesch.',
     selectedPackage: 'Paket ansehen',
-    planningChecklist: 'Planungs-Checkliste',
     destinationGuide: 'Reiseführer',
     topRatedSpots: 'Top Empfehlungen in {{city}}',
     viewTips: 'Lokale Tipps & Empfehlungen ansehen',
     inviteYourGroup: 'Gruppe einladen',
+    shareSubtext: 'Einladungslink teilen, um loszulegen',
   },
 
   // ─── Common ────────────────────────────────────
@@ -525,6 +529,32 @@ const de: TranslationKeys = {
     comingSoon: 'Demnächst verfügbar',
     selected: 'Ausgewählt',
     euro: '\u20AC',
+  },
+
+  // ─── Manage Invitations ─────────────────────────
+  manageInvitations: {
+    title: 'Einladungen verwalten',
+    guestSlot: 'Gast #{{number}}',
+    organizer: 'ORGANISATOR',
+    honoree: 'EHRENGAST',
+    guest: 'GAST',
+    confirmed: 'Bestätigt',
+    pending: 'Ausstehend',
+    notInvited: 'Nicht eingeladen',
+    fillDetails: 'Tippe, um Gastdaten hinzuzufügen',
+    firstName: 'Vorname',
+    lastName: 'Nachname',
+    email: 'E-Mail',
+    phone: 'Telefon / WhatsApp',
+    inviteAll: 'Alle Gäste einladen',
+    inviteMessage: 'Du bist zu {{name}}s Party eingeladen! Mach mit auf Game Over: {{link}}',
+    slots: '{{filled}}/{{total}} Plätze besetzt',
+    emptySlots: 'Gastdaten ausfüllen und Einladungen senden',
+  },
+
+  // ─── Chat ──────────────────────────────────────
+  chatSelector: {
+    selectEvent: 'Event auswählen',
   },
 
   // ─── Payment Reminders ───────────────────────────

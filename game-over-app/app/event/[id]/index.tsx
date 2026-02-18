@@ -1,9 +1,9 @@
 /**
  * Event Summary Screen — Redesigned
- * Clean header, info card, 8-step progress, 2×2 planning tools grid, planning checklist
+ * Clean header, info card, unified planning progress with checklist, 2×2 planning tools grid
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { ScrollView, Pressable, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Image } from 'tamagui';
@@ -16,7 +16,7 @@ import { useCreateInvite } from '@/hooks/queries/useInvites';
 import { ShareEventBanner } from '@/components/events';
 import { useTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
-import { getCityImage, resolveImageSource } from '@/constants/packageImages';
+import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import {
   calculatePlanningSteps,
   getProgressPercentage,
@@ -25,6 +25,7 @@ import {
   type PlanningChecklist,
 } from '@/utils/planningProgress';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
+import { loadDesiredParticipants, loadChecklist, setChecklistItem } from '@/lib/participantCountCache';
 
 // ─── Planning Tools ────────────────────────────
 const TOOL_CONFIGS = [
@@ -46,19 +47,39 @@ export default function EventSummaryScreen() {
   const updateEvent = useUpdateEvent();
   const createInvite = useCreateInvite();
 
+  // Load cached desired participant count (set during wizard/booking)
+  const [cachedParticipants, setCachedParticipants] = useState<number | undefined>(undefined);
+  // Load cached checklist state (fallback when DB column unavailable)
+  const [localChecklist, setLocalChecklist] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!id) return;
+    loadDesiredParticipants(id).then(setCachedParticipants);
+    loadChecklist(id).then(setLocalChecklist);
+  }, [id]);
+
   // Planning steps (only for booked events)
+  // Use DB planning_checklist if available, fallback to local cache
+  const effectiveChecklist = useMemo(() => {
+    const dbChecklist = (event?.planning_checklist ?? {}) as PlanningChecklist;
+    // Merge: local cache overrides DB values (DB might not have the column)
+    return { ...dbChecklist, ...localChecklist };
+  }, [event, localChecklist]);
+
   const planningSteps = useMemo(() => {
     if (!event) return [];
     return calculatePlanningSteps(
       event,
       participants ?? undefined,
-      event.planning_checklist as PlanningChecklist | undefined,
+      effectiveChecklist,
     );
-  }, [event, participants]);
+  }, [event, participants, effectiveChecklist]);
 
   const completedCount = getCompletedCount(planningSteps);
   const progressPct = getProgressPercentage(planningSteps);
   const isBooked = event?.status === 'booked' || event?.status === 'completed';
+
+  // Manual steps (4-7) are locked until all 3 auto steps (1-3) are completed
+  const autoStepsDone = planningSteps.slice(0, 3).every(s => s.completed);
 
   // Derive package highlight from booking tier — the premium feature of the selected package
   const TIER_HIGHLIGHTS: Record<string, string> = {
@@ -111,15 +132,25 @@ export default function EventSummaryScreen() {
     return invite.code;
   };
 
-  // Toggle a manual checklist item
+  // Toggle a manual checklist item — try DB update, always persist locally
   const handleToggleChecklist = (key: string, currentValue: boolean) => {
-    if (!event) return;
-    const current = (event.planning_checklist ?? {}) as PlanningChecklist;
+    if (!event || !id) return;
+    const newValue = !currentValue;
+
+    // Optimistic local update
+    setLocalChecklist(prev => ({ ...prev, [key]: newValue }));
+    setChecklistItem(id, key, newValue).catch(() => {});
+
+    // Also try DB update (non-blocking, may fail if column doesn't exist)
     updateEvent.mutate({
       eventId: event.id,
       updates: {
-        planning_checklist: { ...current, [key]: !currentValue },
+        planning_checklist: { ...effectiveChecklist, [key]: newValue },
       } as any,
+    }, {
+      onError: () => {
+        // DB update failed (PGRST204) — local cache already handles persistence
+      },
     });
   };
 
@@ -142,9 +173,15 @@ export default function EventSummaryScreen() {
     ? new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : 'TBD';
 
-  // Confirmed participant count for tool subtext (exclude honoree from total)
+  // Confirmed participant count for tool subtext (exclude honoree from display total)
   const confirmedCount = participants?.filter(p => p.confirmed_at != null).length ?? 0;
-  const totalParticipants = Math.max((participants?.length || 10) - 1, 1);
+  // Derive desired total: cache > booking > fallback
+  const bookingDesiredTotal = booking
+    ? (booking as any).paying_participants + ((booking as any).exclude_honoree ? 1 : 0)
+    : 0;
+  const rawDesiredTotal = cachedParticipants || bookingDesiredTotal || 10;
+  // Display total excludes the honoree (already counted separately)
+  const totalParticipants = Math.max(rawDesiredTotal - 1, 1);
 
   // Per-person cost from booking
   const perPersonCents = booking?.per_person_cents || booking?.total_amount_cents
@@ -152,9 +189,10 @@ export default function EventSummaryScreen() {
     : 0;
   const perPersonDisplay = perPersonCents > 0 ? Math.round(perPersonCents / 100) : null;
 
-  // City image for destination guide
+  // City image for destination guide — tier-aware from booking data
   const citySlug = event.city?.name?.toLowerCase() || 'berlin';
-  const cityImage = getCityImage(citySlug);
+  const bookingPkgId = (booking as any)?.selected_package_id;
+  const cityImage = getEventImage(citySlug, bookingPkgId || event.hero_image_url);
 
   // Tool subtext
   const getToolSubtext = (key: string): { text: string; color: string } => {
@@ -290,15 +328,18 @@ export default function EventSummaryScreen() {
           })}
         </View>
 
-        {/* ─── 8-Step Progress (booked only) ─────── */}
+        {/* ─── Unified Planning Progress (booked only) ── */}
         {isBooked && planningSteps.length > 0 && (
           <View style={[styles.progressCard, { marginTop: 8 }]}>
+            {/* Header + count */}
             <XStack justifyContent="space-between" alignItems="center" marginBottom={10}>
               <Text style={styles.sectionLabel}>{t.eventDetail.planningProgress}</Text>
               <Text style={styles.progressCount}>
                 {t.eventDetail.stepsComplete.replace('{{completed}}', String(completedCount))}
               </Text>
             </XStack>
+
+            {/* Segmented progress bar */}
             <View style={styles.segmentedBar}>
               {Array.from({ length: 8 }, (_, i) => (
                 <View
@@ -312,25 +353,23 @@ export default function EventSummaryScreen() {
                 />
               ))}
             </View>
-          </View>
-        )}
 
-        {/* ─── Planning Checklist (booked, all 8 steps) ── */}
-        {isBooked && planningSteps.length > 0 && (
-          <View style={{ marginTop: 8 }}>
-            <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>{t.eventDetail.planningChecklist}</Text>
-            <View style={styles.checklistCard}>
-              {planningSteps.map((step, idx) => (
-                <React.Fragment key={step.key}>
-                  {idx > 0 && <View style={styles.infoDivider} />}
-                  <ChecklistRow
-                    step={step}
-                    t={t}
-                    onToggle={handleToggleChecklist}
-                  />
-                </React.Fragment>
-              ))}
-            </View>
+            {/* Divider between bar and step list */}
+            <View style={[styles.infoDivider, { marginHorizontal: 0, marginTop: 14, marginBottom: 4 }]} />
+
+            {/* Inline step list */}
+            {planningSteps.map((step, idx) => (
+              <React.Fragment key={step.key}>
+                {idx > 0 && <View style={[styles.infoDivider, { marginHorizontal: 0 }]} />}
+                <ChecklistRow
+                  step={step}
+                  stepNumber={idx + 1}
+                  t={t}
+                  onToggle={handleToggleChecklist}
+                  locked={!step.auto && !autoStepsDone}
+                />
+              </React.Fragment>
+            ))}
           </View>
         )}
 
@@ -377,39 +416,74 @@ export default function EventSummaryScreen() {
 // ─── Checklist Row Component ───────────────────
 function ChecklistRow({
   step,
+  stepNumber,
   t,
   onToggle,
+  locked,
 }: {
   step: PlanningStep;
+  stepNumber: number;
   t: any;
   onToggle: (key: string, current: boolean) => void;
+  locked: boolean;
 }) {
   const label = (t.eventDetail as any)[step.labelKey] || step.labelKey;
-  const description = (t.eventDetail as any)[step.descriptionKey] || '';
+  const isDisabled = step.auto || locked;
+
+  // Icon color: green for completed auto, primary for completed manual, muted otherwise
+  const iconBgColor = step.completed
+    ? (step.auto ? 'rgba(16, 185, 129, 0.15)' : 'rgba(90, 126, 176, 0.15)')
+    : locked
+      ? 'rgba(156, 163, 175, 0.08)'
+      : 'rgba(156, 163, 175, 0.12)';
+  const iconColor = step.completed
+    ? (step.auto ? '#10B981' : DARK_THEME.primary)
+    : locked
+      ? 'rgba(156, 163, 175, 0.4)'
+      : DARK_THEME.textTertiary;
 
   return (
     <Pressable
-      style={styles.checklistRow}
-      onPress={step.auto ? undefined : () => onToggle(step.key, step.completed)}
-      disabled={step.auto}
+      style={[styles.checklistRow, locked && { opacity: 0.45 }]}
+      onPress={isDisabled ? undefined : () => onToggle(step.key, step.completed)}
+      disabled={isDisabled}
     >
-      <View style={[
-        styles.checkbox,
-        step.completed && styles.checkboxChecked,
-        step.auto && styles.checkboxAuto,
-      ]}>
-        {step.completed && (
-          <Ionicons name="checkmark" size={14} color={step.auto ? '#10B981' : '#FFFFFF'} />
-        )}
+      {/* Step icon circle */}
+      <View style={[styles.stepIconCircle, { backgroundColor: iconBgColor }]}>
+        <Ionicons name={step.icon as any} size={16} color={iconColor} />
       </View>
+
+      {/* Step number + label */}
       <YStack flex={1}>
         <Text style={[styles.checklistLabel, step.completed && styles.checklistLabelDone]}>
-          {label}
+          {stepNumber}. {label}
         </Text>
-        <Text style={styles.checklistDesc} numberOfLines={2}>{description}</Text>
       </YStack>
-      {step.auto && (
-        <Text style={styles.autoTag}>AUTO</Text>
+
+      {/* Right side: checkbox or lock or AUTO tag */}
+      {step.auto ? (
+        <XStack alignItems="center" gap={6}>
+          <View style={[
+            styles.checkbox,
+            step.completed && styles.checkboxAuto,
+          ]}>
+            {step.completed && (
+              <Ionicons name="checkmark" size={14} color="#10B981" />
+            )}
+          </View>
+          <Text style={styles.autoTag}>AUTO</Text>
+        </XStack>
+      ) : locked ? (
+        <Ionicons name="lock-closed" size={14} color={DARK_THEME.textTertiary} />
+      ) : (
+        <View style={[
+          styles.checkbox,
+          step.completed && styles.checkboxChecked,
+        ]}>
+          {step.completed && (
+            <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+          )}
+        </View>
       )}
     </Pressable>
   );
@@ -561,19 +635,20 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Planning Checklist
-  checklistCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
-    overflow: 'hidden',
-  },
+  // Planning Checklist (inside progress card)
   checklistRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 2,
+    gap: 10,
+  },
+  stepIconCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   checkbox: {
     width: 24,
@@ -599,11 +674,6 @@ const styles = StyleSheet.create({
   },
   checklistLabelDone: {
     color: DARK_THEME.textSecondary,
-  },
-  checklistDesc: {
-    fontSize: 12,
-    color: DARK_THEME.textTertiary,
-    marginTop: 2,
   },
   autoTag: {
     fontSize: 9,

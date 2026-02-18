@@ -5,6 +5,7 @@
  */
 
 import { ImageSourcePropType } from 'react-native';
+import { Asset } from 'expo-asset';
 
 const PACKAGE_IMAGES: Record<string, Record<string, ImageSourcePropType>> = {
   berlin: {
@@ -59,13 +60,66 @@ export function getCityImage(citySlug: string): ImageSourcePropType {
 }
 
 /**
- * Resolve an image source that may be a DB URL (string) or a local asset (number).
+ * Extract tier from a package slug like "hamburg-classic" → "classic"
+ */
+export function getTierFromSlug(slug: string | null | undefined): string {
+  if (!slug) return 'essential';
+  const parts = slug.split('-');
+  const lastPart = parts[parts.length - 1];
+  if (lastPart && TIER_MAP[lastPart.toLowerCase()]) {
+    return lastPart.toLowerCase();
+  }
+  return 'essential';
+}
+
+/**
+ * Get the correct tier-aware image for an event.
+ * Extracts city slug and tier from booking/event data.
+ */
+export function getEventImage(
+  citySlug: string,
+  packageSlug?: string | null,
+): ImageSourcePropType {
+  const tier = getTierFromSlug(packageSlug);
+  return getPackageImage(citySlug, tier);
+}
+
+/**
+ * Resolve an image source that may be a DB URL (string), a package slug, or a local asset (number).
+ * Package slugs (e.g. "hamburg-classic") are resolved to local assets via getEventImage().
  * Returns the correct source prop for <Image>, <ImageBackground>, or <OptimizedImage>.
  */
 export function resolveImageSource(source: string | number | ImageSourcePropType): { uri: string } | number {
   if (typeof source === 'string') {
-    return { uri: source };
+    // Remote URL — use as-is
+    if (source.startsWith('http')) {
+      return { uri: source };
+    }
+    // Package slug (e.g. "hamburg-classic") — resolve to local asset
+    const parts = source.split('-');
+    if (parts.length >= 2) {
+      const city = parts.slice(0, -1).join('-');
+      const tier = parts[parts.length - 1];
+      return getPackageImage(city, tier) as number;
+    }
+    // Single word — treat as city slug, essential tier
+    return getPackageImage(source, 'essential') as number;
   }
   // number (require result) or already an object — pass through
   return source as { uri: string } | number;
+}
+
+/**
+ * Preload all package images into memory.
+ * In Expo Go, require() images are fetched from Metro over HTTP —
+ * preloading during splash screen eliminates visible loading delays.
+ */
+export async function preloadPackageImages(): Promise<void> {
+  const allImages: number[] = [];
+  for (const city of Object.values(PACKAGE_IMAGES)) {
+    for (const img of Object.values(city)) {
+      if (typeof img === 'number') allImages.push(img);
+    }
+  }
+  await Asset.loadAsync(allImages);
 }

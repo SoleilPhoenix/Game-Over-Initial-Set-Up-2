@@ -154,7 +154,8 @@ const en = {
     bachelor: 'Bachelor',
     bachelorette: 'Bachelorette',
     honoreeName: "Honoree's Name",
-    honoreeNamePlaceholder: "Enter the honoree's name",
+    honoreeNamePlaceholder: "First name",
+    honoreeLastNamePlaceholder: "Last name",
     city: 'City',
     selectCity: 'Select a city',
     participantCount: 'Participants',
@@ -423,6 +424,7 @@ const en = {
   // ─── Chat Screen ─────────────────────────────
   chat: {
     headerTitle: 'Chat',
+    currentEvent: 'Current Event',
     tabChat: 'Topics',
     tabVoting: 'Voting',
     tabDecisions: 'Decisions',
@@ -446,6 +448,8 @@ const en = {
     newTopicMessage: 'Enter a topic name:',
     topicCreated: 'Topic created successfully!',
     topicCreateFailed: 'Failed to create topic. Please try again.',
+    shareInvite: 'Share Invite',
+    inviteFriendsToJoin: 'Invite Friends to Join',
     shareInviteTitle: 'Share Event Invite',
     shareInviteMessage: 'Choose how to share:',
     moreOptions: 'More Options',
@@ -514,14 +518,13 @@ const en = {
     budgetSubtext: 'Track expenses',
     personEst: '\u20AC{{amount}}/person est.',
     selectedPackage: 'View Package',
-    // Planning checklist
-    planningChecklist: 'Planning Checklist',
     // Destination guide
     destinationGuide: 'Destination Guide',
     topRatedSpots: 'Top Rated Spots in {{city}}',
     viewTips: 'View local tips & recommendations',
     // Invite group
     inviteYourGroup: 'Invite Your Group',
+    shareSubtext: 'Share invite link to get started',
   },
 
   // ─── Common ────────────────────────────────────
@@ -542,6 +545,32 @@ const en = {
     comingSoon: 'Coming Soon',
     selected: 'Selected',
     euro: '\u20AC',
+  },
+
+  // ─── Manage Invitations ─────────────────────────
+  manageInvitations: {
+    title: 'Manage Invitations',
+    guestSlot: 'Guest #{{number}}',
+    organizer: 'ORGANIZER',
+    honoree: 'HONOREE',
+    guest: 'GUEST',
+    confirmed: 'Confirmed',
+    pending: 'Pending',
+    notInvited: 'Not Invited',
+    fillDetails: 'Tap to add guest details',
+    firstName: 'First Name',
+    lastName: 'Last Name',
+    email: 'Email',
+    phone: 'Phone / WhatsApp',
+    inviteAll: 'Invite All Guests',
+    inviteMessage: "You're invited to {{name}}'s party! Join us on Game Over: {{link}}",
+    slots: '{{filled}}/{{total}} Slots Filled',
+    emptySlots: 'Fill in guest details and send invitations',
+  },
+
+  // ─── Chat ──────────────────────────────────────
+  chatSelector: {
+    selectEvent: 'Select Event',
   },
 
   // ─── Payment Reminders ───────────────────────────

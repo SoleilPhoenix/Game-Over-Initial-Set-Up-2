@@ -16,6 +16,8 @@ import { WizardFooter } from '@/components/ui/WizardFooter';
 import { DARK_THEME } from '@/constants/theme';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { LinearGradient } from 'expo-linear-gradient';
+import { supabase } from '@/lib/supabase/client';
+import { setDesiredParticipants } from '@/lib/participantCountCache';
 
 // Standard per-person pricing: S=€99, M=€149, L=€199
 const TIER_PRICE_PER_PERSON: Record<string, number> = {
@@ -213,6 +215,7 @@ function PackageSelectionCard({
         source={imageSource}
         style={{ height: cardHeight }}
         imageStyle={{ borderRadius: 16 }}
+        fadeDuration={0}
       >
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.85)']}
@@ -409,9 +412,11 @@ export default function WizardStep4() {
         Alert.alert('Error', 'Please complete all required fields.');
         return;
       }
-      // Look up the selected package's hero image for the event (only persist string URLs to DB)
+      // Store hero image reference: remote URL string or local package slug (e.g. "hamburg-classic")
       const selectedPkg = packages.find((p: any) => p.id === wizardState.selectedPackageId);
-      const heroUrl = typeof selectedPkg?.hero_image_url === 'string' ? selectedPkg.hero_image_url : null;
+      const heroUrl = typeof selectedPkg?.hero_image_url === 'string'
+        ? selectedPkg.hero_image_url
+        : (typeof selectedPkg?.id === 'string' ? selectedPkg.id : null);
 
       const apiData = {
         ...eventData,
@@ -429,6 +434,8 @@ export default function WizardStep4() {
         eventId = newEvent.id;
         // Store created event ID to prevent duplicates on back-navigation
         useWizardStore.getState().setCreatedEventId(eventId);
+        // Cache desired participant count for event summary / manage invitations screens
+        setDesiredParticipants(eventId, wizParticipants).catch(() => {});
       } catch (createError: any) {
         // RLS recursion or network error — skip event creation, proceed with draft booking
         const isRlsRecursion = createError?.code === '42P17' || createError?.message?.includes('infinite recursion');

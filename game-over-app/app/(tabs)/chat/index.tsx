@@ -16,6 +16,7 @@ import { DARK_THEME } from '@/constants/theme';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { useUser } from '@/stores/authStore';
+import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import type { Database } from '@/lib/supabase/types';
 
 type CommunicationTab = 'chat' | 'voting' | 'decisions';
@@ -41,6 +42,7 @@ export default function CommunicationScreen() {
   const [selectedTab, setSelectedTab] = useState<CommunicationTab>('chat');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
   const { t } = useTranslation();
   const COMM_TABS = ['chat', 'voting', 'decisions'] as const;
   const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchTabAnimated } = useSwipeTabs(COMM_TABS, selectedTab, setSelectedTab);
@@ -61,12 +63,24 @@ export default function CommunicationScreen() {
     return (events || []).filter(e => e.status === 'booked' || e.status === 'completed');
   }, [events]);
 
-  // Auto-select first booked event
+  // Auto-select nearest upcoming booked event on first load
+  const hasAutoSelected = React.useRef(false);
   useEffect(() => {
-    if (!selectedEventId && bookedEvents.length > 0) {
-      setSelectedEventId(bookedEvents[0].id);
-    }
-  }, [bookedEvents, selectedEventId]);
+    if (hasAutoSelected.current || bookedEvents.length === 0) return;
+    hasAutoSelected.current = true;
+
+    const now = Date.now();
+    const sorted = [...bookedEvents].sort((a, b) => {
+      const aDate = a.start_date ? new Date(a.start_date).getTime() : Infinity;
+      const bDate = b.start_date ? new Date(b.start_date).getTime() : Infinity;
+      // Prefer future events, then closest
+      const aFuture = aDate >= now ? 0 : 1;
+      const bFuture = bDate >= now ? 0 : 1;
+      if (aFuture !== bFuture) return aFuture - bFuture;
+      return aDate - bDate;
+    });
+    setSelectedEventId(sorted[0].id);
+  }, [bookedEvents]);
 
   // Fetch channels for selected event (only if event exists)
   const { data: dbChannels = [], refetch: refetchChannels } = useChannels(selectedEventId || undefined);
@@ -345,17 +359,126 @@ export default function CommunicationScreen() {
     </View>
   );
 
+  // Selected event display name
+  const selectedEvent = bookedEvents.find(e => e.id === selectedEventId);
+  const selectedEventName = selectedEvent
+    ? (selectedEvent.title || (selectedEvent.honoree_name ? `${selectedEvent.honoree_name}'s Event` : 'Event'))
+    : ((t as any).chatSelector?.selectEvent || 'Select Event');
+
+  const renderEventSelector = () => {
+    if (bookedEvents.length === 0) return null;
+
+    // Get city image for selected event
+    const selectedCitySlug = selectedEvent?.city?.name?.toLowerCase() || 'berlin';
+    const selectedCityImage = getEventImage(selectedCitySlug, selectedEvent?.hero_image_url);
+
+    return (
+      <View style={styles.eventSelectorWrapper}>
+        <Pressable
+          style={styles.eventSelectorCard}
+          onPress={() => bookedEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
+          testID="event-selector"
+        >
+          {/* City thumbnail */}
+          <Image
+            source={resolveImageSource(selectedEvent?.hero_image_url || selectedCityImage)}
+            style={styles.eventSelectorImage}
+            resizeMode="cover"
+          />
+          <YStack flex={1} gap={2}>
+            <Text style={styles.eventSelectorLabel}>
+              {t.chat.currentEvent}
+            </Text>
+            <Text style={styles.eventSelectorName} numberOfLines={1}>
+              {selectedEventName}
+            </Text>
+            {selectedEvent?.start_date && (
+              <Text style={styles.eventSelectorDate}>
+                {new Date(selectedEvent.start_date).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {' \u2022 '}
+                {selectedEvent.city?.name || ''}
+              </Text>
+            )}
+          </YStack>
+          {bookedEvents.length > 1 && (
+            <View style={styles.eventSelectorChevron}>
+              <Ionicons
+                name={eventSelectorOpen ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color={DARK_THEME.textPrimary}
+              />
+            </View>
+          )}
+        </Pressable>
+
+        {/* Dropdown */}
+        {eventSelectorOpen && (
+          <View style={styles.eventDropdown}>
+            {[...bookedEvents]
+              .sort((a, b) => {
+                // Selected event always first
+                if (a.id === selectedEventId) return -1;
+                if (b.id === selectedEventId) return 1;
+                // Then sort by date (nearest future first)
+                const aDate = a.start_date ? new Date(a.start_date).getTime() : Infinity;
+                const bDate = b.start_date ? new Date(b.start_date).getTime() : Infinity;
+                return aDate - bDate;
+              })
+              .map(ev => {
+              const isSelected = ev.id === selectedEventId;
+              const evName = ev.title || (ev.honoree_name ? `${ev.honoree_name}'s Event` : 'Event');
+              const evCitySlug = ev.city?.name?.toLowerCase() || 'berlin';
+              const evCityImage = getEventImage(evCitySlug, ev.hero_image_url);
+              return (
+                <Pressable
+                  key={ev.id}
+                  style={[styles.eventDropdownItem, isSelected && styles.eventDropdownItemActive]}
+                  onPress={() => {
+                    setSelectedEventId(ev.id);
+                    setEventSelectorOpen(false);
+                  }}
+                >
+                  <Image
+                    source={resolveImageSource(ev.hero_image_url || evCityImage)}
+                    style={styles.eventDropdownImage}
+                    resizeMode="cover"
+                  />
+                  <YStack flex={1} gap={1}>
+                    <Text style={[
+                      styles.eventDropdownText,
+                      isSelected && styles.eventDropdownTextActive,
+                    ]} numberOfLines={1}>
+                      {evName}
+                    </Text>
+                    <Text style={styles.eventDropdownDate}>
+                      {ev.city?.name || ''}
+                      {ev.start_date ? ` \u2022 ${new Date(ev.start_date).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}` : ''}
+                    </Text>
+                  </YStack>
+                  {isSelected && (
+                    <Ionicons name="checkmark-circle" size={20} color="#5A7EB0" />
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderShareEventCard = () => (
-    <View style={styles.shareEventCard}>
-      <YStack flex={1} gap={2}>
-        <Text style={styles.shareEventTitle}>{t.chat.shareEvent}</Text>
-        <Text style={styles.shareEventSubtitle}>{t.chat.shareEventSubtitle}</Text>
-      </YStack>
-      <Pressable onPress={handleInvite} style={styles.inviteButton}>
-        <Text style={styles.inviteButtonText}>{t.chat.invite}</Text>
-        <Ionicons name="share-outline" size={16} color={DARK_THEME.textPrimary} />
-      </Pressable>
-    </View>
+    <Pressable style={styles.shareEventCard} onPress={handleInvite}>
+      <XStack alignItems="center" gap={10}>
+        <View style={styles.shareEventIcon}>
+          <Ionicons name="share-social-outline" size={18} color="#5A7EB0" />
+        </View>
+        <Text style={styles.shareEventTitle} numberOfLines={1} flex={1}>
+          {t.chat.shareInvite} — {t.chat.inviteFriendsToJoin}
+        </Text>
+        <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+      </XStack>
+    </Pressable>
   );
 
   const renderChannelSection = (category: ChannelCategory, title: string) => {
@@ -446,6 +569,9 @@ export default function CommunicationScreen() {
         {/* Tabs */}
         {renderTabs()}
       </View>
+
+      {/* Event Selector */}
+      {renderEventSelector()}
 
       {/* Content — swipe left/right to switch tabs */}
       <Animated.View style={[{ flex: 1 }, swipeAnimStyle]} {...swipeHandlers}>
@@ -606,36 +732,24 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   shareEventCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#5A7EB0',
+    backgroundColor: 'rgba(45, 55, 72, 0.5)',
     borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
     marginBottom: 20,
-    gap: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  shareEventIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   shareEventTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: DARK_THEME.textPrimary,
-  },
-  shareEventSubtitle: {
-    fontSize: 12,
-    color: 'rgba(255, 255, 255, 0.85)',
-    lineHeight: 16,
-  },
-  inviteButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-    gap: 4,
-  },
-  inviteButtonText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: DARK_THEME.textPrimary,
   },
@@ -731,5 +845,87 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
+  },
+  // Event Selector — Prominent blue card with city image
+  eventSelectorWrapper: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    zIndex: 10,
+  },
+  eventSelectorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#5A7EB0',
+    borderRadius: 16,
+    padding: 14,
+  },
+  eventSelectorImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+  },
+  eventSelectorLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.7)',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  eventSelectorName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  eventSelectorDate: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  eventSelectorChevron: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  eventDropdown: {
+    marginTop: 6,
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: DARK_THEME.glassBorder,
+    overflow: 'hidden',
+  },
+  eventDropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: DARK_THEME.glassBorder,
+  },
+  eventDropdownItemActive: {
+    backgroundColor: 'rgba(90, 126, 176, 0.12)',
+  },
+  eventDropdownImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+  },
+  eventDropdownText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: DARK_THEME.textSecondary,
+  },
+  eventDropdownTextActive: {
+    color: '#5A7EB0',
+    fontWeight: '700',
+  },
+  eventDropdownDate: {
+    fontSize: 11,
+    color: DARK_THEME.textTertiary,
   },
 });
