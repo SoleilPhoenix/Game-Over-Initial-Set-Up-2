@@ -78,6 +78,7 @@ export default function ManageInvitationsScreen() {
   const [expandedSlot, setExpandedSlot] = useState<number | null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [activeEmailSlot, setActiveEmailSlot] = useState<number | null>(null);
+  const [showHonoreeInfo, setShowHonoreeInfo] = useState(false);
   const [emailSuggestions, setEmailSuggestions] = useState<string[]>([]);
   const emailBlurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -154,7 +155,7 @@ export default function ManageInvitationsScreen() {
           index: i + 1,
           role: 'guest',
           name: localDetails
-            ? `${localDetails.firstName} ${localDetails.lastName}`.trim()
+            ? [localDetails.firstName, localDetails.lastName].filter(Boolean).join(' ')
             : '',
           email: localDetails?.email || '',
           phone: localDetails?.phone || '',
@@ -319,6 +320,11 @@ export default function ManageInvitationsScreen() {
               <View style={[styles.roleBadge, { backgroundColor: roleBadge.bg }]}>
                 <Text style={[styles.roleBadgeText, { color: roleBadge.color }]}>{roleBadge.label}</Text>
               </View>
+              {slot.role === 'honoree' && (
+                <Pressable onPress={() => setShowHonoreeInfo(true)} hitSlop={10}>
+                  <Ionicons name="information-circle-outline" size={17} color="#F59E0B" />
+                </Pressable>
+              )}
             </XStack>
 
             {/* Contact info (for filled slots) */}
@@ -557,36 +563,8 @@ export default function ManageInvitationsScreen() {
           </Text>
         </XStack>
 
-        {/* Slot Cards — inject honoree info banner before the honoree slot */}
-        {slots.map((slot) => (
-          <View key={`slot-wrapper-${slot.role}-${slot.index}`}>
-            {slot.role === 'honoree' && (
-              <View style={styles.honoreeInfoBanner}>
-                <XStack gap={10} alignItems="flex-start">
-                  <View style={styles.honoreeInfoIcon}>
-                    <Ionicons name="notifications" size={16} color="#F59E0B" />
-                  </View>
-                  <YStack flex={1} gap={6}>
-                    <Text style={styles.honoreeInfoTitle}>
-                      {(t.manageInvitations as any).honoreeAutoNotified}
-                    </Text>
-                    <Text style={styles.honoreeInfoBody}>
-                      {(t.manageInvitations as any).honoreeNotificationBody
-                        .replace('{{time}}', (t.manageInvitations as any).honoreeNotificationTime)}
-                    </Text>
-                    <View style={styles.honoreePrivacyRow}>
-                      <Ionicons name="eye-off-outline" size={13} color="#10B981" />
-                      <Text style={styles.honoreePrivacyText}>
-                        {(t.manageInvitations as any).honoreePrivacyNote}
-                      </Text>
-                    </View>
-                  </YStack>
-                </XStack>
-              </View>
-            )}
-            {renderSlotCard(slot)}
-          </View>
-        ))}
+        {/* Slot Cards */}
+        {slots.map((slot) => renderSlotCard(slot))}
       </ScrollView>
 
       {/* Invite All Footer */}
@@ -601,6 +579,38 @@ export default function ManageInvitationsScreen() {
           {t.manageInvitations.inviteAll}
         </Button>
       </View>
+
+      {/* Honoree Info Popup */}
+      {showHonoreeInfo && (
+        <Pressable style={styles.infoOverlay} onPress={() => setShowHonoreeInfo(false)}>
+          <Pressable style={[styles.infoSheet, { paddingBottom: insets.bottom + 20 }]} onPress={() => {}}>
+            <View style={styles.infoHandle} />
+            <XStack gap={12} alignItems="center" marginBottom={14}>
+              <View style={styles.infoIconCircle}>
+                <Ionicons name="notifications" size={20} color="#F59E0B" />
+              </View>
+              <YStack flex={1}>
+                <Text style={styles.infoTitle}>
+                  {(t.manageInvitations as any).honoreeAutoNotified}
+                </Text>
+              </YStack>
+              <Pressable onPress={() => setShowHonoreeInfo(false)} hitSlop={8}>
+                <Ionicons name="close-circle" size={22} color={DARK_THEME.textTertiary} />
+              </Pressable>
+            </XStack>
+            <Text style={styles.infoBody}>
+              {(t.manageInvitations as any).honoreeNotificationBody
+                .replace('{{time}}', (t.manageInvitations as any).honoreeNotificationTime)}
+            </Text>
+            <XStack alignItems="center" gap={6} marginTop={12} style={styles.infoPrivacyRow}>
+              <Ionicons name="eye-off-outline" size={14} color="#10B981" />
+              <Text style={styles.infoPrivacyText}>
+                {(t.manageInvitations as any).honoreePrivacyNote}
+              </Text>
+            </XStack>
+          </Pressable>
+        </Pressable>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -739,47 +749,58 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
-  honoreeInfoBanner: {
-    backgroundColor: 'rgba(245, 158, 11, 0.08)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.25)',
-    padding: 14,
-    marginBottom: 8,
+  infoOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+    zIndex: 200,
   },
-  honoreeInfoIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  infoSheet: {
+    backgroundColor: '#1E2329',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  infoHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignSelf: 'center',
+    marginBottom: 18,
+  },
+  infoIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(245, 158, 11, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 1,
   },
-  honoreeInfoTitle: {
-    fontSize: 13,
+  infoTitle: {
+    fontSize: 15,
     fontWeight: '700',
     color: '#F59E0B',
   },
-  honoreeInfoBody: {
-    fontSize: 12,
+  infoBody: {
+    fontSize: 14,
     color: DARK_THEME.textSecondary,
-    lineHeight: 17,
+    lineHeight: 20,
   },
-  honoreeInfoHighlight: {
-    fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+  infoPrivacyRow: {
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  honoreePrivacyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 2,
-  },
-  honoreePrivacyText: {
-    fontSize: 11,
+  infoPrivacyText: {
+    fontSize: 13,
     color: '#10B981',
     fontWeight: '500',
+    flex: 1,
   },
   suggestionBox: {
     backgroundColor: DARK_THEME.surface,
