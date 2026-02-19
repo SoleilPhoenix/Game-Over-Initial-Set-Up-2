@@ -567,16 +567,17 @@ export default function ManageInvitationsScreen() {
                     <Ionicons name="notifications" size={16} color="#F59E0B" />
                   </View>
                   <YStack flex={1} gap={6}>
-                    <Text style={styles.honoreeInfoTitle}>Honoree wird automatisch benachrichtigt</Text>
+                    <Text style={styles.honoreeInfoTitle}>
+                      {(t.manageInvitations as any).honoreeAutoNotified}
+                    </Text>
                     <Text style={styles.honoreeInfoBody}>
-                      Der Ehrengast erhält{' '}
-                      <Text style={styles.honoreeInfoHighlight}>15 Minuten vor der ersten Aktivität</Text>
-                      {' '}eine Einladung zur App und wird zur Teilnahme aufgefordert.
+                      {(t.manageInvitations as any).honoreeNotificationBody
+                        .replace('{{time}}', (t.manageInvitations as any).honoreeNotificationTime)}
                     </Text>
                     <View style={styles.honoreePrivacyRow}>
                       <Ionicons name="eye-off-outline" size={13} color="#10B981" />
                       <Text style={styles.honoreePrivacyText}>
-                        Budget & Kosten werden dem Ehrengast nicht angezeigt
+                        {(t.manageInvitations as any).honoreePrivacyNote}
                       </Text>
                     </View>
                   </YStack>

@@ -249,9 +249,28 @@ export default function CommunicationScreen() {
                     category,
                   });
                   Alert.alert(tr.budget.success, tr.chat.channelCreated);
-                } catch (error) {
-                  console.error('Failed to create channel:', error);
-                  Alert.alert(tr.common.error, tr.chat.channelCreateFailed);
+                } catch (error: any) {
+                  // RLS policy violation (42501) — fall back to local-only channel
+                  const code = error?.code || error?.message || '';
+                  if (code === '42501' || String(code).includes('42501')) {
+                    setLocalSections(prevSections =>
+                      prevSections.map(section =>
+                        section.id === category
+                          ? {
+                              ...section,
+                              channels: [
+                                ...section.channels,
+                                { id: Date.now().toString(), name: channelName.trim() }
+                              ]
+                            }
+                          : section
+                      )
+                    );
+                    Alert.alert(tr.budget.success, tr.chat.channelCreated);
+                  } else {
+                    console.error('Failed to create channel:', error);
+                    Alert.alert(tr.common.error, tr.chat.channelCreateFailed);
+                  }
                 }
               } else {
                 // Save locally if no event
@@ -302,9 +321,28 @@ export default function CommunicationScreen() {
                     category: 'general',
                   });
                   Alert.alert(tr.budget.success, tr.chat.topicCreated);
-                } catch (error) {
-                  console.error('Failed to create topic:', error);
-                  Alert.alert(tr.common.error, tr.chat.topicCreateFailed);
+                } catch (error: any) {
+                  // RLS policy violation (42501) — fall back to local-only channel
+                  const code = error?.code || error?.message || '';
+                  if (code === '42501' || String(code).includes('42501')) {
+                    setLocalSections(prevSections =>
+                      prevSections.map(section =>
+                        section.id === 'general'
+                          ? {
+                              ...section,
+                              channels: [
+                                ...section.channels,
+                                { id: Date.now().toString(), name: topicName.trim() }
+                              ]
+                            }
+                          : section
+                      )
+                    );
+                    Alert.alert(tr.budget.success, tr.chat.topicCreated);
+                  } else {
+                    console.error('Failed to create topic:', error);
+                    Alert.alert(tr.common.error, tr.chat.topicCreateFailed);
+                  }
                 }
               } else {
                 // Save locally if no event

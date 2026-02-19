@@ -566,6 +566,10 @@ const en = {
     inviteMessage: "You're invited to {{name}}'s party! Join us on Game Over: {{link}}",
     slots: '{{filled}}/{{total}} Slots Filled',
     emptySlots: 'Fill in guest details and send invitations',
+    honoreeAutoNotified: 'Honoree will be automatically notified',
+    honoreeNotificationBody: 'The honoree will receive an invitation to the app {{time}} before the first activity and will be asked to join.',
+    honoreeNotificationTime: '15 minutes',
+    honoreePrivacyNote: 'Budget & costs are not shown to the honoree',
   },
 
   // ─── Chat ──────────────────────────────────────

@@ -550,6 +550,10 @@ const de: TranslationKeys = {
     inviteMessage: 'Du bist zu {{name}}s Party eingeladen! Mach mit auf Game Over: {{link}}',
     slots: '{{filled}}/{{total}} Plätze besetzt',
     emptySlots: 'Gastdaten ausfüllen und Einladungen senden',
+    honoreeAutoNotified: 'Ehrengast wird automatisch benachrichtigt',
+    honoreeNotificationBody: 'Der Ehrengast erhält {{time}} vor der ersten Aktivität eine Einladung zur App und wird zur Teilnahme aufgefordert.',
+    honoreeNotificationTime: '15 Minuten',
+    honoreePrivacyNote: 'Budget & Kosten werden dem Ehrengast nicht angezeigt',
   },
 
   // ─── Chat ──────────────────────────────────────
