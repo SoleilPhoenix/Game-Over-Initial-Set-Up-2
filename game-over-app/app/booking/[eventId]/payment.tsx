@@ -380,27 +380,51 @@ export default function PaymentScreen() {
                   <Ionicons name="checkmark-circle" size={24} color="#258CF4" />
                 </XStack>
 
-                {/* Platform-specific Pay — Coming Soon */}
+                {/* Apple Pay — Coming Soon */}
                 <XStack
                   padding="$3"
                   backgroundColor="$backgroundHover"
                   borderRadius="$lg"
                   alignItems="center"
                   gap="$3"
-                  opacity={0.5}
+                  opacity={0.45}
                 >
-                  <Ionicons
-                    name={Platform.OS === 'ios' ? 'logo-apple' : 'logo-google'}
-                    size={22}
-                    color="white"
-                  />
+                  <Ionicons name="logo-apple" size={22} color="white" />
                   <YStack flex={1}>
-                    <Text fontSize="$3" fontWeight="600" color="$textPrimary">
-                      {Platform.OS === 'ios' ? 'Apple Pay' : 'Google Pay'}
-                    </Text>
-                    <Text fontSize="$1" color="$textSecondary">
-                      Coming Soon
-                    </Text>
+                    <Text fontSize="$3" fontWeight="600" color="$textPrimary">Apple Pay</Text>
+                    <Text fontSize="$1" color="$textSecondary">Coming Soon</Text>
+                  </YStack>
+                </XStack>
+
+                {/* Google Pay — Coming Soon */}
+                <XStack
+                  padding="$3"
+                  backgroundColor="$backgroundHover"
+                  borderRadius="$lg"
+                  alignItems="center"
+                  gap="$3"
+                  opacity={0.45}
+                >
+                  <Ionicons name="logo-google" size={22} color="white" />
+                  <YStack flex={1}>
+                    <Text fontSize="$3" fontWeight="600" color="$textPrimary">Google Pay</Text>
+                    <Text fontSize="$1" color="$textSecondary">Coming Soon</Text>
+                  </YStack>
+                </XStack>
+
+                {/* PayPal — Coming Soon */}
+                <XStack
+                  padding="$3"
+                  backgroundColor="$backgroundHover"
+                  borderRadius="$lg"
+                  alignItems="center"
+                  gap="$3"
+                  opacity={0.45}
+                >
+                  <Ionicons name="logo-paypal" size={22} color="#009CDE" />
+                  <YStack flex={1}>
+                    <Text fontSize="$3" fontWeight="600" color="$textPrimary">PayPal</Text>
+                    <Text fontSize="$1" color="$textSecondary">Coming Soon</Text>
                   </YStack>
                 </XStack>
               </YStack>
