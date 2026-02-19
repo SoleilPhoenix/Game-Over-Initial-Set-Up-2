@@ -8,14 +8,30 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ScrollView, Share, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 
 // ─── Phone Formatting ──────────────────────────
-/** Auto-formats German mobile numbers (01x prefix) as XXXX-XXXXXXX */
+/** Auto-formats German phone numbers with dash after prefix */
 function formatGermanPhone(text: string): string {
+  // Strip all non-digits except leading +
+  const hasPlus = text.trimStart().startsWith('+');
   const digits = text.replace(/\D/g, '');
-  // Only auto-dash for German mobile (01x prefix) once prefix is complete
+
+  // International format: +49 or 49 prefix (e.g. 4915254904344)
+  if (digits.startsWith('49') && digits.length > 2) {
+    const national = digits.slice(2); // strip country code
+    // Mobile: 15x / 16x / 17x — dash after 3-digit prefix
+    if (/^1[567]\d/.test(national) && national.length > 3) {
+      return `+49 ${national.slice(0, 3)}-${national.slice(3, 13)}`;
+    }
+    // Other: just show +49 prefix
+    return `+49 ${national.slice(0, 13)}`;
+  }
+
+  // Local German mobile (01x prefix) — dash after 4-digit prefix
   if (digits.startsWith('01') && digits.length > 4) {
     return digits.slice(0, 4) + '-' + digits.slice(4, 15);
   }
-  return digits.slice(0, 15);
+
+  const prefix = hasPlus ? '+' : '';
+  return prefix + digits.slice(0, 15);
 }
 
 // ─── Email Autocomplete ────────────────────────

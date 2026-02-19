@@ -568,7 +568,7 @@ const en = {
     emptySlots: 'Fill in guest details and send invitations',
     honoreeAutoNotified: 'Honoree will be automatically notified',
     honoreeNotificationBody: 'The honoree will receive an invitation to the app {{time}} before the first activity and will be asked to join.',
-    honoreeNotificationTime: '15 minutes',
+    honoreeNotificationTime: '1 hour',
     honoreePrivacyNote: 'Budget & costs are not shown to the honoree',
   },
 

@@ -392,26 +392,14 @@ export default function EventsScreen() {
 
           {/* Content */}
           <YStack flex={1} marginLeft={14}>
-            {/* Title row with menu */}
-            <XStack justifyContent="space-between" alignItems="flex-start">
-              <Text
-                style={styles.eventTitle}
-                numberOfLines={1}
-                ellipsizeMode="tail"
-              >
-                {eventTitle}
-              </Text>
-              <Pressable
-                style={styles.menuButton}
-                hitSlop={8}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  // TODO: Show menu
-                }}
-              >
-                <Ionicons name="ellipsis-horizontal" size={18} color={DARK_THEME.textSecondary} />
-              </Pressable>
-            </XStack>
+            {/* Title */}
+            <Text
+              style={styles.eventTitle}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {eventTitle}
+            </Text>
 
             {/* Date */}
             <XStack alignItems="center" gap={6} marginTop={4}>
@@ -939,9 +927,6 @@ const styles = StyleSheet.create({
     color: DARK_THEME.textPrimary,
     flex: 1,
     marginRight: 8,
-  },
-  menuButton: {
-    padding: 4,
   },
   dateText: {
     fontSize: 14,

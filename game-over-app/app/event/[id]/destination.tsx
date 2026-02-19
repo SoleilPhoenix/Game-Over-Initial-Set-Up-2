@@ -12,6 +12,7 @@ import { Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
+import { useTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 
@@ -23,7 +24,7 @@ interface LocalPlace {
 }
 
 interface CityData {
-  tagline: string;
+  tagline: { en: string; de: string };
   lat: number;
   lon: number;
   taxi: { label: string; number: string };
@@ -37,7 +38,7 @@ interface CityData {
 
 const CITY_DATA: Record<string, CityData> = {
   berlin: {
-    tagline: 'Hauptstadt der Nacht — Capital of the Night',
+    tagline: { en: 'Capital of the Night', de: 'Hauptstadt der Nacht' },
     lat: 52.5200,
     lon: 13.4050,
     taxi: { label: 'Taxi Berlin', number: '030 202020' },
@@ -112,7 +113,7 @@ const CITY_DATA: Record<string, CityData> = {
     },
   },
   hamburg: {
-    tagline: 'Gateway to the World — Tor zur Welt',
+    tagline: { en: 'Gateway to the World', de: 'Tor zur Welt' },
     lat: 53.5753,
     lon: 10.0153,
     taxi: { label: 'Hansa-Taxi', number: '040 211211' },
@@ -187,7 +188,7 @@ const CITY_DATA: Record<string, CityData> = {
     },
   },
   hannover: {
-    tagline: 'Größer als du denkst — Bigger than you think',
+    tagline: { en: 'Bigger than you think', de: 'Größer als du denkst' },
     lat: 52.3759,
     lon: 9.7320,
     taxi: { label: 'ÜSTRA Taxi', number: '0511 38101' },
@@ -264,7 +265,7 @@ const CITY_DATA: Record<string, CityData> = {
 };
 
 const FALLBACK_CITY: CityData = {
-  tagline: 'Explore your destination',
+  tagline: { en: 'Explore your destination', de: 'Entdecke dein Ziel' },
   lat: 52.5200,
   lon: 13.4050,
   taxi: { label: 'Local Taxi', number: '110' },
@@ -277,20 +278,31 @@ const FALLBACK_CITY: CityData = {
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-/** Open city location — uses HTTPS Apple/Google Maps URLs (works in Expo Go) */
-function openMapsForCity(lat: number, lon: number, label: string) {
+/** Open city in Maps — searches by name so the city overview opens (not a pin) */
+function openMapsForCity(_lat: number, _lon: number, label: string) {
   const encoded = encodeURIComponent(label);
   if (Platform.OS === 'ios') {
-    Linking.openURL(`https://maps.apple.com/?q=${encoded}&ll=${lat},${lon}`);
+    Linking.openURL(`https://maps.apple.com/?q=${encoded}`);
   } else {
-    Linking.openURL(`https://maps.google.com/?q=${lat},${lon}`);
+    Linking.openURL(`https://maps.google.com/?q=${encoded}`);
   }
 }
 
-/** Open Google weather search — always shows correct city, works in Expo Go */
+/** Open native Weather app; falls back to Google weather search */
 function openWeather(_lat: number, _lon: number, cityName: string) {
-  const query = encodeURIComponent(`Wetter ${cityName}`);
-  Linking.openURL(`https://www.google.com/search?q=${query}`);
+  if (Platform.OS === 'ios') {
+    Linking.canOpenURL('weather://').then(supported => {
+      if (supported) {
+        Linking.openURL('weather://');
+      } else {
+        const query = encodeURIComponent(`Wetter ${cityName}`);
+        Linking.openURL(`https://www.google.com/search?q=${query}`);
+      }
+    });
+  } else {
+    const query = encodeURIComponent(`Wetter ${cityName}`);
+    Linking.openURL(`https://www.google.com/search?q=${query}`);
+  }
 }
 
 /** Open city transit authority website directly */
@@ -323,6 +335,7 @@ export default function DestinationScreen() {
   const insets = useSafeAreaInsets();
   const [popupCategory, setPopupCategory] = useState<PopupCategory>(null);
 
+  const { language } = useTranslation();
   const { data: event, isLoading } = useEvent(id);
   const { data: booking } = useBooking(id);
 
@@ -337,6 +350,7 @@ export default function DestinationScreen() {
   const cityName = event.city?.name || 'Berlin';
   const citySlug = cityName.toLowerCase() as keyof typeof CITY_DATA;
   const city = CITY_DATA[citySlug] || FALLBACK_CITY;
+  const cityTagline = city.tagline[language as 'en' | 'de'] ?? city.tagline.en;
 
   // German emergency contacts — same for all cities
   const emergencyContacts = [
@@ -411,7 +425,7 @@ export default function DestinationScreen() {
         <View style={styles.heroContent}>
           <Text style={styles.heroSupertitle}>DESTINATION GUIDE</Text>
           <Text style={styles.heroTitle}>{cityName}</Text>
-          <Text style={styles.heroSubtitle}>{city.tagline}</Text>
+          <Text style={styles.heroSubtitle}>{cityTagline}</Text>
         </View>
       </View>
 
@@ -453,7 +467,9 @@ export default function DestinationScreen() {
               </View>
               <YStack flex={1}>
                 <Text style={styles.tipLabel}>Check local weather</Text>
-                <Text style={styles.tipUrl}>Google Wetter — {cityName}</Text>
+                <Text style={styles.tipUrl}>
+                  {Platform.OS === 'ios' ? 'Weather App' : `Wetter ${cityName}`}
+                </Text>
               </YStack>
               <Ionicons name="open-outline" size={15} color={DARK_THEME.textTertiary} />
             </XStack>

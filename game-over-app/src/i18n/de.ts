@@ -552,7 +552,7 @@ const de: TranslationKeys = {
     emptySlots: 'Gastdaten ausfüllen und Einladungen senden',
     honoreeAutoNotified: 'Ehrengast wird automatisch benachrichtigt',
     honoreeNotificationBody: 'Der Ehrengast erhält {{time}} vor der ersten Aktivität eine Einladung zur App und wird zur Teilnahme aufgefordert.',
-    honoreeNotificationTime: '15 Minuten',
+    honoreeNotificationTime: '1 Stunde',
     honoreePrivacyNote: 'Budget & Kosten werden dem Ehrengast nicht angezeigt',
   },
 
