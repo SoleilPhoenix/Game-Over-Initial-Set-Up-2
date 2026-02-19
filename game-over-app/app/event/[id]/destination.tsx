@@ -33,6 +33,7 @@ interface CityData {
     attractions: LocalPlace[];
     dining: LocalPlace[];
     entertainment: LocalPlace[];
+    sports: LocalPlace[];
   };
 }
 
@@ -110,6 +111,14 @@ const CITY_DATA: Record<string, CityData> = {
         { name: 'Ballhaus Berlin', type: 'Ballroom', description: 'Classic ballroom with live swing, tango and salsa nights — dancing history still alive in Berlin.' },
         { name: 'Clärchens Ballhaus', type: 'Ballroom', description: 'The most romantic venue in Berlin — historic 1913 ballroom with regular dancing evenings.' },
       ],
+      sports: [
+        { name: 'Hertha BSC', type: 'Football', description: 'Berlin\'s historic Bundesliga club, playing at the Olympiastadion since 1963 — the "Old Lady" of German football.' },
+        { name: '1. FC Union Berlin', type: 'Football', description: 'Beloved working-class club that rose to the Bundesliga — famous for fan-driven culture and intense derbies against Hertha.' },
+        { name: 'Alba Berlin', type: 'Basketball', description: 'Germany\'s most successful basketball club, 11× BBL champions and regular EuroLeague contender.' },
+        { name: 'Füchse Berlin', type: 'Handball', description: 'Top-tier Bundesliga handball club known for exciting play, fan atmosphere and European ambitions.' },
+        { name: 'Eisbären Berlin', type: 'Ice Hockey', description: '8× DEL champions — Berlin\'s beloved ice hockey club playing at the Mercedes-Benz Arena.' },
+        { name: 'Wasserfreunde Spandau 04', type: 'Water Polo', description: 'The world\'s most successful water polo club, with 14 German titles and pan-European dominance.' },
+      ],
     },
   },
   hamburg: {
@@ -184,6 +193,14 @@ const CITY_DATA: Record<string, CityData> = {
         { name: 'Golden Pudel Club', type: 'Club', description: 'Legendary tiny underground club on the harbour — internationally celebrated by music lovers.' },
         { name: 'Club Silencio', type: 'Club', description: 'Chic underground techno and electronic music club with a discerning crowd and quality bookings.' },
         { name: 'Hafenklang', type: 'Live Music', description: 'Intimate and beloved live music venue right on the harbour waterfront in Altona.' },
+      ],
+      sports: [
+        { name: 'Hamburger SV', type: 'Football', description: 'One of Germany\'s founding clubs — the only team never relegated until 2018. The Volksparkstadion is a fortress.' },
+        { name: 'FC St. Pauli', type: 'Football', description: 'The cult club of the Reeperbahn — known worldwide for its anti-fascist values, skull logo, and incredible atmosphere.' },
+        { name: 'Hamburg Towers', type: 'Basketball', description: 'Hamburg\'s rising BBL club, rapidly growing in fan base with an exciting fast-paced playing style.' },
+        { name: 'HSV Handball Hamburg', type: 'Handball', description: 'Historic handball club fighting back through the divisions — deeply embedded in Hamburg\'s sporting identity.' },
+        { name: 'Crocodiles Hamburg', type: 'Ice Hockey', description: 'Hamburg\'s ice hockey representatives in DEL2, building a passionate following in the Volkspark Arena.' },
+        { name: 'Regatta & Sailing', type: 'Sailing', description: 'Hamburg has a centuries-old sailing tradition — the Alster lakes host regattas and yacht clubs year-round.' },
       ],
     },
   },
@@ -260,6 +277,14 @@ const CITY_DATA: Record<string, CityData> = {
         { name: 'Café Glocksee', type: 'Alternative', description: 'Beloved alternative venue in Linden — community concerts, cultural events and DIY spirit.' },
         { name: 'Rooftop Anzeiger-Hochhaus', type: 'Rooftop Bar', description: 'Seasonal rooftop bar at Hannover\'s iconic Art Deco tower with panoramic city views.' },
       ],
+      sports: [
+        { name: 'Hannover 96', type: 'Football', description: 'Proud Bundesliga club with rich history — the HDI-Arena is a cauldron of Lower Saxon passion.' },
+        { name: 'Hannover United', type: 'Basketball', description: 'Hannover\'s basketball representatives, building a loyal fanbase in the ProA division.' },
+        { name: 'TSV Hannover-Burgdorf "Die Recken"', type: 'Handball', description: 'One of the strongest clubs in the Handball Bundesliga — exciting fast-break play and passionate home atmosphere.' },
+        { name: 'Hannover Scorpions', type: 'Ice Hockey', description: 'DEL2 club with a passionate following — fast-paced games at the Eissporthalle am Pferdeturm.' },
+        { name: 'RGH Hannover (Rugby)', type: 'Rugby', description: 'Hannover\'s top rugby club, with a long tradition and regular participation in national league competition.' },
+        { name: 'Equestrian Sport (CHIO/Hannover)', type: 'Equestrian', description: 'Hannover is Germany\'s equestrian capital — home of the world-famous Hannover horse breed and major show jumping events.' },
+      ],
     },
   },
 };
@@ -274,6 +299,7 @@ const FALLBACK_CITY: CityData = {
     attractions: [],
     dining: [],
     entertainment: [],
+    sports: [],
   },
 };
 
@@ -288,12 +314,13 @@ function openMapsForCity(_lat: number, _lon: number, label: string) {
   }
 }
 
-/** Open native Weather app; falls back to Google weather search */
-function openWeather(_lat: number, _lon: number, cityName: string) {
+/** Open native Weather app at the city coordinates; falls back to Google */
+function openWeather(lat: number, lon: number, cityName: string) {
   if (Platform.OS === 'ios') {
+    // weather:// with coordinates opens iOS Weather app at the right city
     Linking.canOpenURL('weather://').then(supported => {
       if (supported) {
-        Linking.openURL('weather://');
+        Linking.openURL(`weather://?lat=${lat}&lon=${lon}`);
       } else {
         const query = encodeURIComponent(`Wetter ${cityName}`);
         Linking.openURL(`https://www.google.com/search?q=${query}`);
@@ -320,12 +347,13 @@ function openHospitalSearch(_lat: number, _lon: number, cityName: string) {
   }
 }
 
-type PopupCategory = 'attractions' | 'dining' | 'entertainment' | null;
+type PopupCategory = 'attractions' | 'dining' | 'entertainment' | 'sports' | null;
 
 const CATEGORY_CONFIG: Record<NonNullable<PopupCategory>, { label: string; icon: string; color: string }> = {
   attractions: { label: 'Local Attractions', icon: 'telescope-outline', color: '#F59E0B' },
   dining: { label: 'Dining Options', icon: 'restaurant-outline', color: '#10B981' },
   entertainment: { label: 'Entertainment', icon: 'musical-notes-outline', color: '#8B5CF6' },
+  sports: { label: 'Sports Teams', icon: 'trophy-outline', color: '#EF4444' },
 };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -743,7 +771,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 16,
     paddingTop: 12,
-    maxHeight: '75%',
+    maxHeight: '90%',
     borderTopWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
