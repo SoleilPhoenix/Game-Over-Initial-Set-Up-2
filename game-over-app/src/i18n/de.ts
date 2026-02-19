@@ -382,6 +382,8 @@ const de: TranslationKeys = {
     filterTotal: 'Gesamt',
     filterCollected: 'Eingezogen',
     filterPending: 'Ausstehend',
+    filterPackage: 'Paket',
+    filterOtherExpenses: 'Weitere Kosten',
     noBudgetTitle: 'Noch kein Budget',
     noBudgetSubtitle: 'Buche ein Paket, um\ndein Event-Budget zu verfolgen',
     totalBudget: 'Gesamtbudget',

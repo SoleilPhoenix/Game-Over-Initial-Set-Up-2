@@ -390,6 +390,8 @@ const en = {
     filterTotal: 'Total',
     filterCollected: 'Collected',
     filterPending: 'Pending',
+    filterPackage: 'Package',
+    filterOtherExpenses: 'Other Expenses',
     noBudgetTitle: 'No Budget Yet',
     noBudgetSubtitle: 'Book a Package to\ntrack your Event Budget',
     totalBudget: 'Total Budget',

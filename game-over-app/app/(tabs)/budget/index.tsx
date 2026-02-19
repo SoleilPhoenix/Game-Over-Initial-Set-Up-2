@@ -34,7 +34,7 @@ const AVATAR_COLORS = [
   'rgba(249, 115, 22, 0.2)', // orange
 ];
 
-type BudgetCategory = 'total' | 'collected' | 'pending';
+type BudgetCategory = 'package' | 'otherExpenses';
 
 export default function BudgetDashboardScreen() {
   const router = useRouter();
@@ -42,9 +42,9 @@ export default function BudgetDashboardScreen() {
   const user = useUser();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<BudgetCategory>('total');
+  const [selectedCategory, setSelectedCategory] = useState<BudgetCategory>('package');
   const { t } = useTranslation();
-  const BUDGET_TABS = ['total', 'collected', 'pending'] as const;
+  const BUDGET_TABS = ['package', 'otherExpenses'] as const;
   const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchCategoryAnimated } = useSwipeTabs(BUDGET_TABS, selectedCategory, setSelectedCategory);
 
   // Fetch user's events
@@ -278,7 +278,7 @@ export default function BudgetDashboardScreen() {
   const renderCategoryTabs = () => (
     <View style={styles.filterContainer}>
       <View style={styles.filterPill}>
-        {(['total', 'collected', 'pending'] as BudgetCategory[]).map((category) => (
+        {(['package', 'otherExpenses'] as BudgetCategory[]).map((category) => (
           <Pressable
             key={category}
             onPress={() => switchCategoryAnimated(category)}
@@ -294,7 +294,7 @@ export default function BudgetDashboardScreen() {
                 selectedCategory === category && styles.filterTabTextActive,
               ]}
             >
-              {category === 'total' ? t.budget.filterTotal : category === 'collected' ? t.budget.filterCollected : t.budget.filterPending}
+              {category === 'package' ? (t.budget as any).filterPackage : (t.budget as any).filterOtherExpenses}
             </Text>
           </Pressable>
         ))}

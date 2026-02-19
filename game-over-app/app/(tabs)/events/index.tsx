@@ -46,7 +46,7 @@ const CITY_UUID_TO_SLUG: Record<string, string> = {
   '550e8400-e29b-41d4-a716-446655440103': 'hannover',
 };
 
-type FilterTab = 'all' | 'organizing' | 'attending';
+type FilterTab = 'organizing' | 'attending';
 
 /** Approximate step completion from card data (full detail only on detail page) */
 const getBookedStepCount = (event: EventWithDetails): number => {
@@ -152,9 +152,9 @@ export default function EventsScreen() {
   const insets = useSafeAreaInsets();
   const user = useUser();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<FilterTab>('all');
+  const [activeFilter, setActiveFilter] = useState<FilterTab>('organizing');
   const { t } = useTranslation();
-  const FILTER_TABS = ['all', 'organizing', 'attending'] as const;
+  const FILTER_TABS = ['organizing', 'attending'] as const;
   const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchFilterAnimated } = useSwipeTabs(FILTER_TABS, activeFilter, setActiveFilter);
 
   const queryClient = useQueryClient();
@@ -316,7 +316,7 @@ export default function EventsScreen() {
   const renderFilterTabs = () => (
     <View style={styles.filterContainer}>
       <View style={styles.filterPill}>
-        {(['all', 'organizing', 'attending'] as FilterTab[]).map((tab) => (
+        {(['organizing', 'attending'] as FilterTab[]).map((tab) => (
           <Pressable
             key={tab}
             onPress={() => switchFilterAnimated(tab)}
@@ -332,7 +332,7 @@ export default function EventsScreen() {
                 activeFilter === tab && styles.filterTabTextActive,
               ]}
             >
-              {tab === 'all' ? t.events.filterAll : tab === 'organizing' ? t.events.filterOrganizing : t.events.filterAttending}
+              {tab === 'organizing' ? t.events.filterOrganizing : t.events.filterAttending}
             </Text>
           </Pressable>
         ))}

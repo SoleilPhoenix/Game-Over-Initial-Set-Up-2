@@ -19,7 +19,7 @@ import { useUser } from '@/stores/authStore';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import type { Database } from '@/lib/supabase/types';
 
-type CommunicationTab = 'chat' | 'voting' | 'decisions';
+type CommunicationTab = 'topics' | 'voting';
 type ChannelCategory = Database['public']['Enums']['channel_category'];
 
 type ChatChannel = Database['public']['Tables']['chat_channels']['Row'];
@@ -39,12 +39,12 @@ export default function CommunicationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useUser();
-  const [selectedTab, setSelectedTab] = useState<CommunicationTab>('chat');
+  const [selectedTab, setSelectedTab] = useState<CommunicationTab>('topics');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
   const { t } = useTranslation();
-  const COMM_TABS = ['chat', 'voting', 'decisions'] as const;
+  const COMM_TABS = ['topics', 'voting'] as const;
   const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchTabAnimated } = useSwipeTabs(COMM_TABS, selectedTab, setSelectedTab);
 
   // Local channel storage for when no event is selected
@@ -373,7 +373,7 @@ export default function CommunicationScreen() {
   const renderTabs = () => (
     <View style={styles.filterContainer}>
       <View style={styles.filterPill}>
-        {(['chat', 'voting', 'decisions'] as CommunicationTab[]).map((tab) => (
+        {(['topics', 'voting'] as CommunicationTab[]).map((tab) => (
           <Pressable
             key={tab}
             onPress={() => switchTabAnimated(tab)}
@@ -389,7 +389,7 @@ export default function CommunicationScreen() {
                 selectedTab === tab && styles.filterTabTextActive,
               ]}
             >
-              {tab === 'chat' ? t.chat.tabChat : tab === 'voting' ? t.chat.tabVoting : t.chat.tabDecisions}
+              {tab === 'topics' ? t.chat.tabChat : t.chat.tabVoting}
             </Text>
           </Pressable>
         ))}
