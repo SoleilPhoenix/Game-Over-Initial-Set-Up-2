@@ -463,6 +463,7 @@ const en = {
     dbConfigTitle: 'Database Configuration',
     dbConfigMessage: 'Chat messages require a database migration to be applied. Please run the pending RLS migrations in Supabase.',
     sendFailed: 'Failed to send message. Please try again.',
+    localChannelNoMessages: 'This is a local channel. Book an event to enable persistent messaging.',
   },
 
   // ─── Notifications Screen ────────────────────

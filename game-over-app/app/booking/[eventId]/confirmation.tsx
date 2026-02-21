@@ -4,7 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { Alert, ImageBackground, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import { YStack, XStack, Text, Spinner } from 'tamagui';
@@ -131,7 +132,7 @@ export default function BookingConfirmationScreen() {
       <ScrollView contentContainerStyle={{ flexGrow: 1, alignItems: 'center', padding: 0 }}>
         {/* Hero Image with Success Overlay */}
         <View style={confirmStyles.heroContainer}>
-          <ImageBackground
+          <KenBurnsImage
             source={resolveImageSource((() => {
               // Derive city + tier from packageId slug (e.g., "berlin-classic")
               if (packageId) {
@@ -144,40 +145,37 @@ export default function BookingConfirmationScreen() {
               const slug = cityId ? (CITY_NAMES[cityId]?.toLowerCase() || 'berlin') : 'berlin';
               return getPackageImage(slug, 'essential');
             })())}
-            style={confirmStyles.heroImage}
-            fadeDuration={0}
-            resizeMode="cover"
-          >
-            <View style={confirmStyles.heroOverlay}>
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View style={confirmStyles.heroOverlay}>
+            <YStack
+              width={80}
+              height={80}
+              borderRadius={40}
+              backgroundColor="rgba(71, 184, 129, 0.2)"
+              alignItems="center"
+              justifyContent="center"
+              marginBottom="$4"
+            >
               <YStack
-                width={80}
-                height={80}
-                borderRadius={40}
-                backgroundColor="rgba(71, 184, 129, 0.2)"
+                width={56}
+                height={56}
+                borderRadius={28}
+                backgroundColor="$success"
                 alignItems="center"
                 justifyContent="center"
-                marginBottom="$4"
               >
-                <YStack
-                  width={56}
-                  height={56}
-                  borderRadius={28}
-                  backgroundColor="$success"
-                  alignItems="center"
-                  justifyContent="center"
-                >
-                  <Ionicons name="checkmark" size={32} color="white" />
-                </YStack>
+                <Ionicons name="checkmark" size={32} color="white" />
               </YStack>
+            </YStack>
 
-              <Text fontSize="$7" fontWeight="800" color="white" textAlign="center" marginBottom="$1">
-                {t.booking.confirmationTitle}
-              </Text>
-              <Text fontSize="$3" color="rgba(255,255,255,0.85)" textAlign="center">
-                {t.booking.confirmationSubtitle}
-              </Text>
-            </View>
-          </ImageBackground>
+            <Text fontSize="$7" fontWeight="800" color="white" textAlign="center" marginBottom="$1">
+              {t.booking.confirmationTitle}
+            </Text>
+            <Text fontSize="$3" color="rgba(255,255,255,0.85)" textAlign="center">
+              {t.booking.confirmationSubtitle}
+            </Text>
+          </View>
         </View>
 
         {/* Booking Details Card */}
@@ -334,13 +332,10 @@ const confirmStyles = StyleSheet.create({
     width: '100%',
     height: 260,
     marginBottom: 24,
-  },
-  heroImage: {
-    width: '100%',
-    height: '100%',
+    overflow: 'hidden',
   },
   heroOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',

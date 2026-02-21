@@ -6,7 +6,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { ScrollView, Pressable, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { YStack, XStack, Text, Image } from 'tamagui';
+import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvent, useUpdateEvent } from '@/hooks/queries/useEvents';
@@ -25,6 +25,7 @@ import {
   type PlanningChecklist,
 } from '@/utils/planningProgress';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
+import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { loadDesiredParticipants, loadChecklist, setChecklistItem } from '@/lib/participantCountCache';
 
 // ─── Planning Tools ────────────────────────────
@@ -381,7 +382,7 @@ export default function EventSummaryScreen() {
             onPress={() => router.push(`/event/${id}/destination`)}
             testID="destination-guide-card"
           >
-            <Image
+            <KenBurnsImage
               source={resolveImageSource(event.hero_image_url || cityImage)}
               style={styles.destinationImage}
               resizeMode="cover"

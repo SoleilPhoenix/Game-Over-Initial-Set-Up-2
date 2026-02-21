@@ -4,7 +4,8 @@
  */
 
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { ScrollView, ImageBackground, Alert } from 'react-native';
+import { ScrollView, Alert, Image, View, StyleSheet } from 'react-native';
+import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -211,132 +212,252 @@ function PackageSelectionCard({
       onPress={() => onSelect(pkg.id)}
       testID={`package-card-${index}`}
     >
-      <ImageBackground
-        source={imageSource}
-        style={{ height: cardHeight }}
-        imageStyle={{ borderRadius: 16 }}
-        fadeDuration={0}
-      >
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.85)']}
-          locations={[0, 0.4, 1]}
-          style={{
-            flex: 1,
-            borderRadius: 16,
-            justifyContent: 'flex-end',
-            padding: 20,
-          }}
-        >
-          {/* Badges: show both Recommendation + Selected when applicable */}
-          {(isBestMatch || isSelected) && (
-            <YStack position="absolute" top={16} left={16} gap="$1.5">
-              {isBestMatch && (
-                <XStack
-                  backgroundColor={DARK_THEME.primary}
-                  paddingHorizontal={12}
-                  paddingVertical={6}
-                  borderRadius={20}
-                  gap="$1.5"
-                  alignItems="center"
-                  alignSelf="flex-start"
-                >
-                  <Ionicons name="sparkles" size={12} color="white" />
-                  <Text color="white" fontSize={11} fontWeight="600">
-                    Recommendation based on preferences
-                  </Text>
-                </XStack>
-              )}
-              {isSelected && (
-                <XStack
-                  backgroundColor="rgba(71, 184, 129, 0.9)"
-                  paddingHorizontal={12}
-                  paddingVertical={6}
-                  borderRadius={20}
-                  gap="$1.5"
-                  alignItems="center"
-                  alignSelf="flex-start"
-                >
-                  <Ionicons name="checkmark-circle" size={12} color="white" />
-                  <Text color="white" fontSize={11} fontWeight="600">
-                    Selected
-                  </Text>
-                </XStack>
-              )}
-            </YStack>
-          )}
-
-          {/* Card Content */}
-          <YStack gap="$3">
-            {/* Title + Price */}
-            <XStack justifyContent="space-between" alignItems="flex-start">
-              <YStack flex={1}>
-                <Text fontSize={22} fontWeight="800" color="white">
-                  {displayName}
-                </Text>
-                <XStack alignItems="center" gap="$1" marginTop="$1">
-                  <Ionicons name="star" size={14} color="#FFB800" />
-                  <Text fontSize={13} fontWeight="600" color="white">
-                    {(pkg.rating || 4.5).toFixed(1)}
-                  </Text>
-                  <Text fontSize={13} color="rgba(255,255,255,0.7)">
-                    ({pkg.review_count || 0} reviews)
-                  </Text>
-                </XStack>
+      {isSelected ? (
+        <KenBurnsImage source={imageSource} style={{ height: cardHeight, borderRadius: 16 }}>
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.85)']}
+            locations={[0, 0.4, 1]}
+            style={{
+              flex: 1,
+              borderRadius: 16,
+              justifyContent: 'flex-end',
+              padding: 20,
+            }}
+          >
+            {/* Badges: show both Recommendation + Selected when applicable */}
+            {(isBestMatch || isSelected) && (
+              <YStack position="absolute" top={16} left={16} gap="$1.5">
+                {isBestMatch && (
+                  <XStack
+                    backgroundColor={DARK_THEME.primary}
+                    paddingHorizontal={12}
+                    paddingVertical={6}
+                    borderRadius={20}
+                    gap="$1.5"
+                    alignItems="center"
+                    alignSelf="flex-start"
+                  >
+                    <Ionicons name="sparkles" size={12} color="white" />
+                    <Text color="white" fontSize={11} fontWeight="600">
+                      Recommendation based on preferences
+                    </Text>
+                  </XStack>
+                )}
+                {isSelected && (
+                  <XStack
+                    backgroundColor="rgba(71, 184, 129, 0.9)"
+                    paddingHorizontal={12}
+                    paddingVertical={6}
+                    borderRadius={20}
+                    gap="$1.5"
+                    alignItems="center"
+                    alignSelf="flex-start"
+                  >
+                    <Ionicons name="checkmark-circle" size={12} color="white" />
+                    <Text color="white" fontSize={11} fontWeight="600">
+                      Selected
+                    </Text>
+                  </XStack>
+                )}
               </YStack>
-              <YStack alignItems="flex-end">
-                <Text fontSize={24} fontWeight="800" color="white">
-                  {displayPrice}
-                </Text>
-                <Text fontSize={12} color="rgba(255,255,255,0.7)">
-                  {priceLabel}
-                </Text>
-              </YStack>
-            </XStack>
+            )}
 
-            {/* Features */}
-            <YStack gap="$2">
-              {features.map((feature: string, i: number) => (
-                <XStack key={i} alignItems="center" gap="$2">
-                  <Ionicons name="checkmark-circle" size={16} color={DARK_THEME.primary} />
-                  <Text fontSize={14} color="rgba(255,255,255,0.9)">{feature}</Text>
-                </XStack>
-              ))}
-            </YStack>
-
-            {/* Actions */}
-            <XStack gap="$2" alignItems="center">
-              <Button
-                flex={1}
-                onPress={() => onSelect(pkg.id)}
-                variant={isSelected ? 'primary' : isBestMatch ? 'primary' : 'outline'}
-                testID={`select-package-${index}`}
-              >
-                {isSelected && isBestMatch
-                  ? 'Recommendation Selected'
-                  : isSelected
-                  ? 'Currently Selected'
-                  : isBestMatch
-                  ? 'Select Recommended'
-                  : 'Select Package'}
-              </Button>
-              <XStack
-                width={44}
-                height={44}
-                borderRadius="$full"
-                backgroundColor="rgba(255,255,255,0.15)"
-                alignItems="center"
-                justifyContent="center"
-                pressStyle={{ opacity: 0.7, backgroundColor: 'rgba(255,255,255,0.25)' }}
-                onPress={() => onViewDetails(pkg.id)}
-                testID={`details-package-${index}`}
-              >
-                <Ionicons name="information-circle-outline" size={22} color="white" />
+            {/* Card Content */}
+            <YStack gap="$3">
+              {/* Title + Price */}
+              <XStack justifyContent="space-between" alignItems="flex-start">
+                <YStack flex={1}>
+                  <Text fontSize={22} fontWeight="800" color="white">
+                    {displayName}
+                  </Text>
+                  <XStack alignItems="center" gap="$1" marginTop="$1">
+                    <Ionicons name="star" size={14} color="#FFB800" />
+                    <Text fontSize={13} fontWeight="600" color="white">
+                      {(pkg.rating || 4.5).toFixed(1)}
+                    </Text>
+                    <Text fontSize={13} color="rgba(255,255,255,0.7)">
+                      ({pkg.review_count || 0} reviews)
+                    </Text>
+                  </XStack>
+                </YStack>
+                <YStack alignItems="flex-end">
+                  <Text fontSize={24} fontWeight="800" color="white">
+                    {displayPrice}
+                  </Text>
+                  <Text fontSize={12} color="rgba(255,255,255,0.7)">
+                    {priceLabel}
+                  </Text>
+                </YStack>
               </XStack>
-            </XStack>
 
-          </YStack>
-        </LinearGradient>
-      </ImageBackground>
+              {/* Features */}
+              <YStack gap="$2">
+                {features.map((feature: string, i: number) => (
+                  <XStack key={i} alignItems="center" gap="$2">
+                    <Ionicons name="checkmark-circle" size={16} color={DARK_THEME.primary} />
+                    <Text fontSize={14} color="rgba(255,255,255,0.9)">{feature}</Text>
+                  </XStack>
+                ))}
+              </YStack>
+
+              {/* Actions */}
+              <XStack gap="$2" alignItems="center">
+                <Button
+                  flex={1}
+                  onPress={() => onSelect(pkg.id)}
+                  variant={isSelected ? 'primary' : isBestMatch ? 'primary' : 'outline'}
+                  testID={`select-package-${index}`}
+                >
+                  {isSelected && isBestMatch
+                    ? 'Recommendation Selected'
+                    : isSelected
+                    ? 'Currently Selected'
+                    : isBestMatch
+                    ? 'Select Recommended'
+                    : 'Select Package'}
+                </Button>
+                <XStack
+                  width={44}
+                  height={44}
+                  borderRadius="$full"
+                  backgroundColor="rgba(255,255,255,0.15)"
+                  alignItems="center"
+                  justifyContent="center"
+                  pressStyle={{ opacity: 0.7, backgroundColor: 'rgba(255,255,255,0.25)' }}
+                  onPress={() => onViewDetails(pkg.id)}
+                  testID={`details-package-${index}`}
+                >
+                  <Ionicons name="information-circle-outline" size={22} color="white" />
+                </XStack>
+              </XStack>
+
+            </YStack>
+          </LinearGradient>
+        </KenBurnsImage>
+      ) : (
+        <View style={{ height: cardHeight, borderRadius: 16, overflow: 'hidden' }}>
+          <Image source={imageSource} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.85)']}
+            locations={[0, 0.4, 1]}
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              borderRadius: 16,
+              justifyContent: 'flex-end',
+              padding: 20,
+            }}
+          >
+            {/* Badges: show both Recommendation + Selected when applicable */}
+            {(isBestMatch || isSelected) && (
+              <YStack position="absolute" top={16} left={16} gap="$1.5">
+                {isBestMatch && (
+                  <XStack
+                    backgroundColor={DARK_THEME.primary}
+                    paddingHorizontal={12}
+                    paddingVertical={6}
+                    borderRadius={20}
+                    gap="$1.5"
+                    alignItems="center"
+                    alignSelf="flex-start"
+                  >
+                    <Ionicons name="sparkles" size={12} color="white" />
+                    <Text color="white" fontSize={11} fontWeight="600">
+                      Recommendation based on preferences
+                    </Text>
+                  </XStack>
+                )}
+                {isSelected && (
+                  <XStack
+                    backgroundColor="rgba(71, 184, 129, 0.9)"
+                    paddingHorizontal={12}
+                    paddingVertical={6}
+                    borderRadius={20}
+                    gap="$1.5"
+                    alignItems="center"
+                    alignSelf="flex-start"
+                  >
+                    <Ionicons name="checkmark-circle" size={12} color="white" />
+                    <Text color="white" fontSize={11} fontWeight="600">
+                      Selected
+                    </Text>
+                  </XStack>
+                )}
+              </YStack>
+            )}
+
+            {/* Card Content */}
+            <YStack gap="$3">
+              {/* Title + Price */}
+              <XStack justifyContent="space-between" alignItems="flex-start">
+                <YStack flex={1}>
+                  <Text fontSize={22} fontWeight="800" color="white">
+                    {displayName}
+                  </Text>
+                  <XStack alignItems="center" gap="$1" marginTop="$1">
+                    <Ionicons name="star" size={14} color="#FFB800" />
+                    <Text fontSize={13} fontWeight="600" color="white">
+                      {(pkg.rating || 4.5).toFixed(1)}
+                    </Text>
+                    <Text fontSize={13} color="rgba(255,255,255,0.7)">
+                      ({pkg.review_count || 0} reviews)
+                    </Text>
+                  </XStack>
+                </YStack>
+                <YStack alignItems="flex-end">
+                  <Text fontSize={24} fontWeight="800" color="white">
+                    {displayPrice}
+                  </Text>
+                  <Text fontSize={12} color="rgba(255,255,255,0.7)">
+                    {priceLabel}
+                  </Text>
+                </YStack>
+              </XStack>
+
+              {/* Features */}
+              <YStack gap="$2">
+                {features.map((feature: string, i: number) => (
+                  <XStack key={i} alignItems="center" gap="$2">
+                    <Ionicons name="checkmark-circle" size={16} color={DARK_THEME.primary} />
+                    <Text fontSize={14} color="rgba(255,255,255,0.9)">{feature}</Text>
+                  </XStack>
+                ))}
+              </YStack>
+
+              {/* Actions */}
+              <XStack gap="$2" alignItems="center">
+                <Button
+                  flex={1}
+                  onPress={() => onSelect(pkg.id)}
+                  variant={isSelected ? 'primary' : isBestMatch ? 'primary' : 'outline'}
+                  testID={`select-package-${index}`}
+                >
+                  {isSelected && isBestMatch
+                    ? 'Recommendation Selected'
+                    : isSelected
+                    ? 'Currently Selected'
+                    : isBestMatch
+                    ? 'Select Recommended'
+                    : 'Select Package'}
+                </Button>
+                <XStack
+                  width={44}
+                  height={44}
+                  borderRadius="$full"
+                  backgroundColor="rgba(255,255,255,0.15)"
+                  alignItems="center"
+                  justifyContent="center"
+                  pressStyle={{ opacity: 0.7, backgroundColor: 'rgba(255,255,255,0.25)' }}
+                  onPress={() => onViewDetails(pkg.id)}
+                  testID={`details-package-${index}`}
+                >
+                  <Ionicons name="information-circle-outline" size={22} color="white" />
+                </XStack>
+              </XStack>
+
+            </YStack>
+          </LinearGradient>
+        </View>
+      )}
     </YStack>
   );
 }

@@ -4,20 +4,88 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar, Alert, Share, Linking } from 'react-native';
+import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar, Alert, Share, Linking, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useChannels, useCreateChannel } from '@/hooks/queries/useChat';
+import { usePolls, useCreatePoll, useVote } from '@/hooks/queries/usePolls';
 import { DARK_THEME } from '@/constants/theme';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { useUser } from '@/stores/authStore';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import type { Database } from '@/lib/supabase/types';
+
+// 10 icon options per category — best match chosen from channel name keywords
+const CATEGORY_ICON_POOLS: Record<string, Array<{ icon: string; keywords: string[] }>> = {
+  general: [
+    { icon: 'chatbubbles',           keywords: ['chat', 'general', 'talk', 'discussion', 'lobby', 'main'] },
+    { icon: 'megaphone',             keywords: ['announcement', 'news', 'update', 'info'] },
+    { icon: 'people',                keywords: ['group', 'team', 'crew', 'gang', 'party', 'get together', 'gather'] },
+    { icon: 'globe',                 keywords: ['travel', 'world', 'global', 'international', 'destination'] },
+    { icon: 'heart',                 keywords: ['love', 'celebrate', 'cheer', 'congrats', 'wedding', 'birthday'] },
+    { icon: 'star',                  keywords: ['vip', 'special', 'premium', 'highlight', 'best'] },
+    { icon: 'flag',                  keywords: ['plan', 'goal', 'event', 'meeting', 'schedule'] },
+    { icon: 'bulb',                  keywords: ['idea', 'tip', 'suggestion', 'advice', 'concept'] },
+    { icon: 'trophy',                keywords: ['win', 'award', 'challenge', 'competition', 'game'] },
+    { icon: 'compass',               keywords: ['explore', 'discover', 'adventure', 'trip', 'tour'] },
+  ],
+  accommodation: [
+    { icon: 'bed',                   keywords: ['room', 'bed', 'sleep', 'suite', 'bedroom', 'allocation'] },
+    { icon: 'home',                  keywords: ['villa', 'house', 'apartment', 'airbnb', 'home', 'rental'] },
+    { icon: 'business',              keywords: ['hotel', 'hostel', 'resort', 'lodge'] },
+    { icon: 'key',                   keywords: ['check-in', 'checkin', 'checkout', 'key', 'access', 'entry'] },
+    { icon: 'location',              keywords: ['address', 'location', 'where', 'place', 'spot'] },
+    { icon: 'map',                   keywords: ['map', 'directions', 'route', 'navigation'] },
+    { icon: 'car',                   keywords: ['parking', 'car', 'transport', 'drive', 'shuttle'] },
+    { icon: 'boat',                  keywords: ['boat', 'yacht', 'cruise', 'sailing', 'sea'] },
+    { icon: 'airplane',              keywords: ['flight', 'airport', 'fly', 'airline', 'plane', 'arrival', 'departure'] },
+    { icon: 'umbrella',              keywords: ['pool', 'beach', 'relax', 'spa', 'lounge'] },
+  ],
+  activities: [
+    { icon: 'game-controller',       keywords: ['game', 'gaming', 'casino', 'poker', 'arcade'] },
+    { icon: 'football',              keywords: ['football', 'soccer', 'sport', 'match', 'stadium'] },
+    { icon: 'bicycle',               keywords: ['bike', 'cycling', 'karting', 'kart', 'race', 'go-kart'] },
+    { icon: 'basketball',            keywords: ['basketball', 'court', 'hoops'] },
+    { icon: 'golf',                  keywords: ['golf', 'tee', 'putting', 'green', 'course'] },
+    { icon: 'fitness',               keywords: ['gym', 'fitness', 'workout', 'sports', 'paintball', 'laser'] },
+    { icon: 'beer-outline',          keywords: ['bar', 'drinks', 'beer', 'pub', 'nightlife', 'club'] },
+    { icon: 'restaurant',            keywords: ['dinner', 'restaurant', 'food', 'brunch', 'lunch', 'steak'] },
+    { icon: 'ticket',                keywords: ['concert', 'show', 'event', 'theater', 'comedy', 'saturday', 'friday', 'night'] },
+    { icon: 'camera',                keywords: ['photo', 'camera', 'shooting', 'memory', 'video'] },
+  ],
+  budget: [
+    { icon: 'cash',                  keywords: ['cash', 'money', 'payment', 'pay', 'fund'] },
+    { icon: 'card',                  keywords: ['card', 'credit', 'debit', 'stripe', 'deposit'] },
+    { icon: 'wallet',                keywords: ['wallet', 'budget', 'spend', 'cost', 'expense'] },
+    { icon: 'calculator',            keywords: ['calculate', 'total', 'split', 'share', 'per person'] },
+    { icon: 'pie-chart',             keywords: ['breakdown', 'overview', 'summary', 'report'] },
+    { icon: 'bar-chart',             keywords: ['tracking', 'progress', 'goal', 'target'] },
+    { icon: 'trending-up',           keywords: ['update', 'change', 'increase', 'extra'] },
+    { icon: 'receipt',               keywords: ['receipt', 'invoice', 'bill', 'reimbursement'] },
+    { icon: 'pricetag',              keywords: ['price', 'fee', 'ticket', 'admission', 'entry'] },
+    { icon: 'gift',                  keywords: ['gift', 'present', 'surprise', 'decoration', 'stag', 'bachelor'] },
+  ],
+};
+
+function pickIconForChannel(channelName: string, category: string): string {
+  const pool = CATEGORY_ICON_POOLS[category];
+  if (!pool) return 'chatbubble-outline';
+  const lower = channelName.toLowerCase();
+  // Find best match by keyword
+  for (const option of pool) {
+    if (option.keywords.some(kw => lower.includes(kw))) {
+      return option.icon;
+    }
+  }
+  // Default: first icon in pool
+  return pool[0].icon;
+}
 
 type CommunicationTab = 'topics' | 'voting';
 type ChannelCategory = Database['public']['Enums']['channel_category'];
@@ -27,6 +95,7 @@ type ChatChannel = Database['public']['Tables']['chat_channels']['Row'];
 type LocalChannel = {
   id: string;
   name: string;
+  icon?: string;
 };
 
 type LocalChannelSection = {
@@ -43,17 +112,34 @@ export default function CommunicationScreen() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
+  const [pollModalVisible, setPollModalVisible] = useState(false);
+  const [pollModalCategory, setPollModalCategory] = useState<ChannelCategory>('general');
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
   const { t } = useTranslation();
   const COMM_TABS = ['topics', 'voting'] as const;
   const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchTabAnimated } = useSwipeTabs(COMM_TABS, selectedTab, setSelectedTab);
 
-  // Local channel storage for when no event is selected
-  const [localSections, setLocalSections] = useState<LocalChannelSection[]>([
-    { id: 'general', title: 'GENERAL', channels: [] },
-    { id: 'accommodation', title: 'ACCOMMODATION', channels: [] },
-    { id: 'activities', title: 'ACTIVITIES', channels: [] },
-    { id: 'budget', title: 'BUDGET', channels: [] },
-  ]);
+  // Per-event local channel storage (keyed by eventId or 'none')
+  const [localChannelsByEvent, setLocalChannelsByEvent] = useState<Record<string, LocalChannelSection[]>>({});
+
+  // Persist localChannelsByEvent to AsyncStorage so channels survive navigation
+  useEffect(() => {
+    AsyncStorage.getItem('localChannelsByEvent').then(raw => {
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw) as Record<string, LocalChannelSection[]>;
+          setLocalChannelsByEvent(parsed);
+        } catch {}
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (Object.keys(localChannelsByEvent).length > 0) {
+      AsyncStorage.setItem('localChannelsByEvent', JSON.stringify(localChannelsByEvent)).catch(() => {});
+    }
+  }, [localChannelsByEvent]);
 
   // Fetch user's events
   const { data: events, refetch: refetchEvents } = useEvents();
@@ -87,6 +173,28 @@ export default function CommunicationScreen() {
 
   // Create channel mutation
   const createChannelMutation = useCreateChannel();
+
+  // Poll hooks
+  const { data: polls = [] } = usePolls(selectedEventId ?? undefined);
+  const createPollMutation = useCreatePoll();
+  const voteMutation = useVote();
+
+  // Derived local sections for current event (per-event map)
+  const DEFAULT_LOCAL_SECTIONS: LocalChannelSection[] = [
+    { id: 'general', title: 'GENERAL', channels: [] },
+    { id: 'accommodation', title: 'ACCOMMODATION', channels: [] },
+    { id: 'activities', title: 'ACTIVITIES', channels: [] },
+    { id: 'budget', title: 'BUDGET', channels: [] },
+  ];
+  const localSections = localChannelsByEvent[selectedEventId ?? 'none'] ?? DEFAULT_LOCAL_SECTIONS;
+
+  const setLocalSectionsForEvent = (updater: (prev: LocalChannelSection[]) => LocalChannelSection[]) => {
+    const key = selectedEventId ?? 'none';
+    setLocalChannelsByEvent(prev => ({
+      ...prev,
+      [key]: updater(prev[key] ?? DEFAULT_LOCAL_SECTIONS),
+    }));
+  };
 
   // Group channels by category (use DB channels if event exists, otherwise local)
   const groupedChannels = useMemo(() => {
@@ -253,14 +361,14 @@ export default function CommunicationScreen() {
                   // RLS policy violation (42501) — fall back to local-only channel
                   const code = error?.code || error?.message || '';
                   if (code === '42501' || String(code).includes('42501')) {
-                    setLocalSections(prevSections =>
+                    setLocalSectionsForEvent(prevSections =>
                       prevSections.map(section =>
                         section.id === category
                           ? {
                               ...section,
                               channels: [
                                 ...section.channels,
-                                { id: Date.now().toString(), name: channelName.trim() }
+                                { id: Date.now().toString(), name: channelName.trim(), icon: pickIconForChannel(channelName.trim(), category) }
                               ]
                             }
                           : section
@@ -274,14 +382,14 @@ export default function CommunicationScreen() {
                 }
               } else {
                 // Save locally if no event
-                setLocalSections(prevSections =>
+                setLocalSectionsForEvent(prevSections =>
                   prevSections.map(section =>
                     section.id === category
                       ? {
                           ...section,
                           channels: [
                             ...section.channels,
-                            { id: Date.now().toString(), name: channelName.trim() }
+                            { id: Date.now().toString(), name: channelName.trim(), icon: pickIconForChannel(channelName.trim(), category) }
                           ]
                         }
                       : section
@@ -325,14 +433,14 @@ export default function CommunicationScreen() {
                   // RLS policy violation (42501) — fall back to local-only channel
                   const code = error?.code || error?.message || '';
                   if (code === '42501' || String(code).includes('42501')) {
-                    setLocalSections(prevSections =>
+                    setLocalSectionsForEvent(prevSections =>
                       prevSections.map(section =>
                         section.id === 'general'
                           ? {
                               ...section,
                               channels: [
                                 ...section.channels,
-                                { id: Date.now().toString(), name: topicName.trim() }
+                                { id: Date.now().toString(), name: topicName.trim(), icon: pickIconForChannel(topicName.trim(), 'general') }
                               ]
                             }
                           : section
@@ -346,14 +454,14 @@ export default function CommunicationScreen() {
                 }
               } else {
                 // Save locally if no event
-                setLocalSections(prevSections =>
+                setLocalSectionsForEvent(prevSections =>
                   prevSections.map(section =>
                     section.id === 'general'
                       ? {
                           ...section,
                           channels: [
                             ...section.channels,
-                            { id: Date.now().toString(), name: topicName.trim() }
+                            { id: Date.now().toString(), name: topicName.trim(), icon: pickIconForChannel(topicName.trim(), 'general') }
                           ]
                         }
                       : section
@@ -367,6 +475,160 @@ export default function CommunicationScreen() {
       'plain-text',
       '',
       'default'
+    );
+  };
+
+  const handleCreatePoll = (category: ChannelCategory) => {
+    setPollModalCategory(category);
+    setPollQuestion('');
+    setPollOptions(['', '']);
+    setPollModalVisible(true);
+  };
+
+  const handleSubmitPoll = async () => {
+    if (!pollQuestion.trim() || !selectedEventId) return;
+    const validOptions = pollOptions.filter(o => o.trim());
+    if (validOptions.length < 2) return;
+    try {
+      await createPollMutation.mutateAsync({
+        poll: {
+          event_id: selectedEventId,
+          title: pollQuestion.trim(),
+          category: pollModalCategory,
+          status: 'active',
+        },
+        options: validOptions,
+      });
+      setPollModalVisible(false);
+    } catch (err) {
+      console.error('Failed to create poll:', err);
+    }
+  };
+
+  const renderVotingTab = () => {
+    if (bookedEvents.length === 0) {
+      return (
+        <View style={styles.lockedBanner}>
+          <Ionicons name="lock-closed-outline" size={18} color={DARK_THEME.textSecondary} />
+          <Text style={styles.lockedBannerText}>{t.chat.bookToUnlock}</Text>
+        </View>
+      );
+    }
+
+    const POLL_CATEGORY_CONFIG: Record<string, { icon: string; color: string; bg: string }> = {
+      accommodation: { icon: 'bed',             color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.15)' },
+      activities:    { icon: 'game-controller', color: '#F97316', bg: 'rgba(249, 115, 22, 0.15)' },
+      budget:        { icon: 'cash',            color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)' },
+      general:       { icon: 'chatbubbles',     color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.15)' },
+    };
+
+    const VOTING_CATEGORIES = [
+      { id: 'general' as const,       label: 'GENERAL',       icon: 'chatbubbles',     color: '#8B5CF6', bg: 'rgba(139,92,246,0.15)' },
+      { id: 'accommodation' as const, label: 'ACCOMMODATION',  icon: 'bed',             color: '#3B82F6', bg: 'rgba(59,130,246,0.15)' },
+      { id: 'activities' as const,    label: 'ACTIVITIES',     icon: 'game-controller', color: '#F97316', bg: 'rgba(249,115,22,0.15)' },
+      { id: 'budget' as const,        label: 'BUDGET',         icon: 'cash',            color: '#10B981', bg: 'rgba(16,185,129,0.15)' },
+    ];
+
+    const handleVote = async (pollId: string, optionId: string) => {
+      try {
+        await voteMutation.mutateAsync({ pollId, optionId });
+      } catch {}
+    };
+
+    return (
+      <>
+        {VOTING_CATEGORIES.map(catDef => {
+          const cfg = POLL_CATEGORY_CONFIG[catDef.id];
+          const catPolls = polls.filter(p => p.category === catDef.id);
+          return (
+            <View key={catDef.id + catDef.label} style={styles.channelSection}>
+              <XStack justifyContent="space-between" alignItems="center" marginBottom={12}>
+                <Text style={styles.sectionTitle}>{catDef.label}</Text>
+                <Pressable
+                  onPress={() => handleCreatePoll(catDef.id)}
+                  style={styles.newPollButton}
+                  hitSlop={8}
+                >
+                  <Text style={styles.newPollButtonText}>New Poll</Text>
+                  <Ionicons name="add-circle" size={18} color="#5A7EB0" />
+                </Pressable>
+              </XStack>
+              {catPolls.length === 0 ? (
+                <View style={styles.emptyChannelBox}>
+                  <Text style={styles.emptyChannelText}>No polls yet</Text>
+                </View>
+              ) : (
+                <YStack gap={12}>
+                  {catPolls.map(poll => {
+                    const totalVotes = poll.options?.reduce((sum, o) => sum + (o.vote_count ?? 0), 0) ?? 0;
+                    const userVoted = !!poll.user_vote;
+                    const statusColor = poll.status === 'active' ? '#10B981' : poll.status === 'closing_soon' ? '#F97316' : '#9CA3AF';
+                    const statusBg   = poll.status === 'active' ? 'rgba(16,185,129,0.15)' : poll.status === 'closing_soon' ? 'rgba(249,115,22,0.15)' : 'rgba(156,163,175,0.15)';
+                    return (
+                      <View key={poll.id} style={styles.pollCard}>
+                        <XStack alignItems="flex-start" gap={10} marginBottom={12}>
+                          <View style={[styles.pollCategoryIcon, { backgroundColor: cfg.bg }]}>
+                            <Ionicons name={cfg.icon as any} size={18} color={cfg.color} />
+                          </View>
+                          <YStack style={{ flex: 1 }} gap={2}>
+                            <Text style={styles.pollTitle}>{poll.title}</Text>
+                          </YStack>
+                          <View style={[styles.pollStatusBadge, { backgroundColor: statusBg }]}>
+                            <Text style={[styles.pollStatusText, { color: statusColor }]}>
+                              {poll.status === 'closing_soon' ? 'CLOSING SOON' : (poll.status ?? 'ACTIVE').toUpperCase()}
+                            </Text>
+                          </View>
+                        </XStack>
+                        <YStack gap={8} marginBottom={12}>
+                          {(poll.options ?? []).map(opt => {
+                            const pct = totalVotes > 0 ? Math.round(((opt.vote_count ?? 0) / totalVotes) * 100) : 0;
+                            const isSelected = poll.user_vote === opt.id;
+                            return (
+                              <Pressable
+                                key={opt.id}
+                                style={[styles.pollOption, isSelected && styles.pollOptionSelected]}
+                                onPress={() => !userVoted && handleVote(poll.id, opt.id)}
+                              >
+                                <View style={[styles.pollRadio, isSelected && styles.pollRadioSelected]}>
+                                  {isSelected && <View style={styles.pollRadioDot} />}
+                                </View>
+                                <Text style={[styles.pollOptionText, isSelected && { color: '#5A7EB0' }, { flex: 1 }]}>
+                                  {opt.label}
+                                </Text>
+                                <Text style={[styles.pollPct, isSelected && { color: '#5A7EB0' }]}>{pct}%</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </YStack>
+                        <XStack justifyContent="space-between" alignItems="center">
+                          <Text style={styles.pollFooter}>
+                            {totalVotes} votes cast{poll.ends_at ? ` \u00b7 Ends ${new Date(poll.ends_at).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}` : ''}
+                          </Text>
+                          {userVoted ? (
+                            <XStack alignItems="center" gap={4}>
+                              <Ionicons name="checkmark-circle" size={14} color="#10B981" />
+                              <Text style={[styles.pollFooter, { color: '#10B981' }]}>You voted</Text>
+                            </XStack>
+                          ) : (
+                            <Text style={[styles.pollFooter, { color: '#5A7EB0' }]}>Tap option to vote</Text>
+                          )}
+                        </XStack>
+                      </View>
+                    );
+                  })}
+                </YStack>
+              )}
+            </View>
+          );
+        })}
+        <Pressable
+          style={styles.newTopicButton}
+          onPress={() => handleCreatePoll('general')}
+        >
+          <Ionicons name="add-circle-outline" size={24} color="#5A7EB0" />
+          <Text style={styles.newTopicText}>Create New Poll</Text>
+        </Pressable>
+      </>
     );
   };
 
@@ -519,8 +781,16 @@ export default function CommunicationScreen() {
     </Pressable>
   );
 
+  const CHANNEL_CATEGORY_CONFIG: Record<ChannelCategory, { icon: string; color: string; bg: string }> = {
+    general:       { icon: 'chatbubbles',     color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.15)' },
+    accommodation: { icon: 'bed',             color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.15)' },
+    activities:    { icon: 'game-controller', color: '#F97316', bg: 'rgba(249, 115, 22, 0.15)' },
+    budget:        { icon: 'cash',            color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)' },
+  };
+
   const renderChannelSection = (category: ChannelCategory, title: string) => {
     const categoryChannels = groupedChannels[category];
+    const catCfg = CHANNEL_CATEGORY_CONFIG[category];
 
     return (
       <View key={category} style={styles.channelSection}>
@@ -536,18 +806,23 @@ export default function CommunicationScreen() {
         </XStack>
         {categoryChannels.length > 0 ? (
           <YStack gap={8}>
-            {categoryChannels.map((channel) => (
-              <Pressable
-                key={channel.id}
-                style={styles.channelItem}
-                onPress={() => {
-                  router.push(`/(tabs)/chat/${channel.id}`);
-                }}
-              >
-                <Ionicons name="chatbubble-outline" size={16} color={DARK_THEME.textSecondary} />
-                <Text style={styles.channelName}>{channel.name}</Text>
-              </Pressable>
-            ))}
+            {categoryChannels.map((channel) => {
+              const iconName = (channel as any).icon ?? pickIconForChannel(channel.name, category);
+              return (
+                <Pressable
+                  key={channel.id}
+                  style={styles.channelItem}
+                  onPress={() => {
+                    router.push(`/(tabs)/chat/${channel.id}?name=${encodeURIComponent(channel.name)}&category=${category}`);
+                  }}
+                >
+                  <View style={[styles.channelIconWrap, { backgroundColor: catCfg.bg }]}>
+                    <Ionicons name={iconName as any} size={16} color={catCfg.color} />
+                  </View>
+                  <Text style={styles.channelName}>{channel.name}</Text>
+                </Pressable>
+              );
+            })}
           </YStack>
         ) : (
           <View style={styles.emptyChannelBox}>
@@ -629,49 +904,120 @@ export default function CommunicationScreen() {
         {/* Share Event Card */}
         {renderShareEventCard()}
 
-        {bookedEvents.length === 0 ? (
-          /* No event booked - show grayed out channels with overlay message */
-          <>
-          <View style={styles.lockedBanner}>
-            <Ionicons name="lock-closed-outline" size={18} color={DARK_THEME.textSecondary} />
-            <Text style={styles.lockedBannerText}>
-              {t.chat.bookToUnlock}
-            </Text>
-          </View>
-          <View style={{ opacity: 0.35, pointerEvents: 'none' as const }}>
-            {renderChannelSection('general', t.chat.general.toUpperCase())}
-            {renderChannelSection('accommodation', t.chat.accommodation.toUpperCase())}
-            {renderChannelSection('activities', t.chat.activities.toUpperCase())}
-            {renderChannelSection('budget', t.chat.budgetCategory.toUpperCase())}
-
-            <View style={styles.channelSection}>
-              <Text style={styles.sectionTitle}>{t.chat.newTopics}</Text>
-              <Pressable style={styles.newTopicButton} onPress={handleCreateNewTopic}>
-                <Ionicons name="add-circle-outline" size={24} color="#5A7EB0" />
-                <Text style={styles.newTopicText}>{t.chat.createNewTopic}</Text>
-              </Pressable>
+        {selectedTab === 'topics' ? (
+          /* Topics tab */
+          bookedEvents.length === 0 ? (
+            /* No event booked - show grayed out channels with overlay message */
+            <>
+            <View style={styles.lockedBanner}>
+              <Ionicons name="lock-closed-outline" size={18} color={DARK_THEME.textSecondary} />
+              <Text style={styles.lockedBannerText}>
+                {t.chat.bookToUnlock}
+              </Text>
             </View>
-          </View>
-          </>
+            <View style={{ opacity: 0.35, pointerEvents: 'none' as const }}>
+              {renderChannelSection('general', t.chat.general.toUpperCase())}
+              {renderChannelSection('accommodation', t.chat.accommodation.toUpperCase())}
+              {renderChannelSection('activities', t.chat.activities.toUpperCase())}
+              {renderChannelSection('budget', t.chat.budgetCategory.toUpperCase())}
+
+              <View style={styles.channelSection}>
+                <Text style={styles.sectionTitle}>{t.chat.newTopics}</Text>
+                <Pressable style={styles.newTopicButton} onPress={handleCreateNewTopic}>
+                  <Ionicons name="add-circle-outline" size={24} color="#5A7EB0" />
+                  <Text style={styles.newTopicText}>{t.chat.createNewTopic}</Text>
+                </Pressable>
+              </View>
+            </View>
+            </>
+          ) : (
+            /* Event booked - show active channels */
+            <>
+              {renderChannelSection('general', t.chat.general.toUpperCase())}
+              {renderChannelSection('accommodation', t.chat.accommodation.toUpperCase())}
+              {renderChannelSection('activities', t.chat.activities.toUpperCase())}
+              {renderChannelSection('budget', t.chat.budgetCategory.toUpperCase())}
+
+              <View style={styles.channelSection}>
+                <Text style={styles.sectionTitle}>{t.chat.newTopics}</Text>
+                <Pressable style={styles.newTopicButton} onPress={handleCreateNewTopic}>
+                  <Ionicons name="add-circle-outline" size={24} color="#5A7EB0" />
+                  <Text style={styles.newTopicText}>{t.chat.createNewTopic}</Text>
+                </Pressable>
+              </View>
+            </>
+          )
         ) : (
-          /* Event booked - show active channels */
-          <>
-            {renderChannelSection('general', t.chat.general.toUpperCase())}
-            {renderChannelSection('accommodation', t.chat.accommodation.toUpperCase())}
-            {renderChannelSection('activities', t.chat.activities.toUpperCase())}
-            {renderChannelSection('budget', t.chat.budgetCategory.toUpperCase())}
-
-            <View style={styles.channelSection}>
-              <Text style={styles.sectionTitle}>{t.chat.newTopics}</Text>
-              <Pressable style={styles.newTopicButton} onPress={handleCreateNewTopic}>
-                <Ionicons name="add-circle-outline" size={24} color="#5A7EB0" />
-                <Text style={styles.newTopicText}>{t.chat.createNewTopic}</Text>
-              </Pressable>
-            </View>
-          </>
+          /* Voting tab */
+          renderVotingTab()
         )}
       </ScrollView>
       </Animated.View>
+
+      {/* Poll Creation Modal */}
+      <Modal
+        visible={pollModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPollModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <View style={styles.modalOverlay}>
+            <ScrollView
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.modalSheet}>
+                <Text style={styles.modalTitle}>New Poll</Text>
+                <Text style={styles.modalLabel}>Question</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  value={pollQuestion}
+                  onChangeText={setPollQuestion}
+                  placeholder="What should we decide?"
+                  placeholderTextColor={DARK_THEME.textTertiary}
+                  multiline={false}
+                />
+                <Text style={styles.modalLabel}>Options</Text>
+                {pollOptions.map((opt, i) => (
+                  <TextInput
+                    key={i}
+                    style={styles.modalInput}
+                    value={opt}
+                    onChangeText={val => {
+                      const updated = [...pollOptions];
+                      updated[i] = val;
+                      setPollOptions(updated);
+                    }}
+                    placeholder={`Option ${i + 1}`}
+                    placeholderTextColor={DARK_THEME.textTertiary}
+                  />
+                ))}
+                {pollOptions.length < 5 && (
+                  <Pressable
+                    onPress={() => setPollOptions(prev => [...prev, ''])}
+                    style={styles.addOptionButton}
+                  >
+                    <Ionicons name="add-circle-outline" size={18} color="#5A7EB0" />
+                    <Text style={styles.addOptionText}>Add Option</Text>
+                  </Pressable>
+                )}
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 20 }}>
+                  <Pressable style={[styles.modalButton, styles.modalButtonCancel]} onPress={() => setPollModalVisible(false)}>
+                    <Text style={styles.modalButtonCancelText}>Cancel</Text>
+                  </Pressable>
+                  <Pressable style={[styles.modalButton, styles.modalButtonCreate]} onPress={handleSubmitPoll}>
+                    <Text style={styles.modalButtonCreateText}>Create Poll</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -965,5 +1311,173 @@ const styles = StyleSheet.create({
   eventDropdownDate: {
     fontSize: 11,
     color: DARK_THEME.textTertiary,
+  },
+  channelIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  newPollButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  newPollButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#5A7EB0',
+  },
+  pollCard: {
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: DARK_THEME.glassBorder,
+  },
+  pollCategoryIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pollTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: DARK_THEME.textPrimary,
+  },
+  pollStatusBadge: {
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  pollStatusText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  pollOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  pollOptionSelected: {
+    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    borderColor: '#5A7EB0',
+  },
+  pollRadio: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: DARK_THEME.textTertiary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pollRadioSelected: {
+    borderColor: '#5A7EB0',
+  },
+  pollRadioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#5A7EB0',
+  },
+  pollOptionText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: DARK_THEME.textSecondary,
+  },
+  pollPct: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: DARK_THEME.textTertiary,
+  },
+  pollFooter: {
+    fontSize: 11,
+    color: DARK_THEME.textTertiary,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: '#1E2329',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DARK_THEME.textPrimary,
+    marginBottom: 20,
+  },
+  modalLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: DARK_THEME.textTertiary,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    marginTop: 12,
+  },
+  modalInput: {
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 14,
+    color: DARK_THEME.textPrimary,
+    borderWidth: 1,
+    borderColor: DARK_THEME.glassBorder,
+    marginBottom: 8,
+  },
+  addOptionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+  },
+  addOptionText: {
+    fontSize: 14,
+    color: '#5A7EB0',
+    fontWeight: '500',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderWidth: 1,
+    borderColor: DARK_THEME.glassBorder,
+  },
+  modalButtonCreate: {
+    backgroundColor: '#5A7EB0',
+  },
+  modalButtonCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: DARK_THEME.textSecondary,
+  },
+  modalButtonCreateText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
 });

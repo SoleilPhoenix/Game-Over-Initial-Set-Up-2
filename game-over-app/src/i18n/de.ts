@@ -455,6 +455,7 @@ const de: TranslationKeys = {
     dbConfigTitle: 'Datenbank-Konfiguration',
     dbConfigMessage: 'Chat-Nachrichten erfordern eine Datenbankmigration. Bitte führe die ausstehenden RLS-Migrationen in Supabase aus.',
     sendFailed: 'Nachricht konnte nicht gesendet werden. Bitte versuche es erneut.',
+    localChannelNoMessages: 'Dies ist ein lokaler Kanal. Buche ein Event, um persistente Nachrichten zu aktivieren.',
   },
 
   // ─── Notifications Screen ────────────────────

@@ -3,13 +3,13 @@
  * City-specific tips, real links, emergency contacts for Berlin / Hamburg / Hannover
  */
 
-import React, { useState } from 'react';
-import { ScrollView, Linking, Platform, Pressable, StyleSheet, View } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { ScrollView, Linking, Platform, Pressable, StyleSheet, View, PanResponder, Animated } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
-import { Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { useTranslation } from '@/i18n';
@@ -314,17 +314,13 @@ function openMapsForCity(_lat: number, _lon: number, label: string) {
   }
 }
 
-/** Open native Weather app at the city coordinates; falls back to Google */
+/** Open native Weather app (iOS) at the event city; falls back to Google on both platforms */
 function openWeather(lat: number, lon: number, cityName: string) {
   if (Platform.OS === 'ios') {
-    // weather:// with coordinates opens iOS Weather app at the right city
-    Linking.canOpenURL('weather://').then(supported => {
-      if (supported) {
-        Linking.openURL(`weather://?lat=${lat}&lon=${lon}`);
-      } else {
-        const query = encodeURIComponent(`Wetter ${cityName}`);
-        Linking.openURL(`https://www.google.com/search?q=${query}`);
-      }
+    const weatherUrl = `weather://?lat=${lat}&lon=${lon}`;
+    Linking.openURL(weatherUrl).catch(() => {
+      const query = encodeURIComponent(`Wetter ${cityName}`);
+      Linking.openURL(`https://www.google.com/search?q=${query}`);
     });
   } else {
     const query = encodeURIComponent(`Wetter ${cityName}`);
@@ -349,6 +345,36 @@ function openHospitalSearch(_lat: number, _lon: number, cityName: string) {
 
 type PopupCategory = 'attractions' | 'dining' | 'entertainment' | 'sports' | null;
 
+interface TeamBadgeConfig {
+  abbr: string;
+  primary: string;
+  secondary: string;
+}
+
+const TEAM_BADGE_CONFIG: Record<string, TeamBadgeConfig> = {
+  // Berlin
+  'Hertha BSC':              { abbr: 'BSC',  primary: '#005DAA', secondary: '#FFFFFF' },
+  '1. FC Union Berlin':      { abbr: 'FCU',  primary: '#E3001A', secondary: '#FFFFFF' },
+  'Alba Berlin':             { abbr: 'ALB',  primary: '#E8002D', secondary: '#FFFFFF' },
+  'Füchse Berlin':           { abbr: 'FÜC',  primary: '#E30613', secondary: '#FFFFFF' },
+  'Eisbären Berlin':         { abbr: 'EIS',  primary: '#003D7C', secondary: '#FFFFFF' },
+  'Wasserfreunde Spandau 04':{ abbr: 'WSP',  primary: '#0057A8', secondary: '#FFFFFF' },
+  // Hamburg
+  'Hamburger SV':            { abbr: 'HSV',  primary: '#001E62', secondary: '#FFFFFF' },
+  'FC St. Pauli':            { abbr: 'FCS',  primary: '#7E3517', secondary: '#FFFFFF' },
+  'Hamburg Towers':          { abbr: 'HTW',  primary: '#0E3577', secondary: '#FF6B00' },
+  'HSV Handball Hamburg':    { abbr: 'HSH',  primary: '#001E62', secondary: '#FFFFFF' },
+  'Crocodiles Hamburg':      { abbr: 'CRO',  primary: '#2D7D46', secondary: '#FFFFFF' },
+  'Regatta & Sailing':       { abbr: 'SAI',  primary: '#0077B6', secondary: '#FFFFFF' },
+  // Hannover
+  'Hannover 96':             { abbr: '96',   primary: '#00A859', secondary: '#000000' },
+  'Hannover United':         { abbr: 'HUN',  primary: '#E8721C', secondary: '#FFFFFF' },
+  'TSV Hannover-Burgdorf "Die Recken"': { abbr: 'REC', primary: '#FFD700', secondary: '#C0001A' },
+  'Hannover Scorpions':      { abbr: 'SCO',  primary: '#1A1A1A', secondary: '#FFD700' },
+  'RGH Hannover (Rugby)':    { abbr: 'RGH',  primary: '#003087', secondary: '#FFFFFF' },
+  'Equestrian Sport (CHIO/Hannover)': { abbr: 'CHI', primary: '#8B6914', secondary: '#FFFFFF' },
+};
+
 const CATEGORY_CONFIG: Record<NonNullable<PopupCategory>, { label: string; icon: string; color: string }> = {
   attractions: { label: 'Local Attractions', icon: 'telescope-outline', color: '#F59E0B' },
   dining: { label: 'Dining Options', icon: 'restaurant-outline', color: '#10B981' },
@@ -362,6 +388,26 @@ export default function DestinationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [popupCategory, setPopupCategory] = useState<PopupCategory>(null);
+
+  const translateY = useRef(new Animated.Value(0)).current;
+  const popupPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5 && Math.abs(gs.dy) > Math.abs(gs.dx),
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) translateY.setValue(gs.dy);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 80) {
+          Animated.timing(translateY, { toValue: 800, duration: 200, useNativeDriver: true }).start(() => {
+            setPopupCategory(null);
+            translateY.setValue(0);
+          });
+        } else {
+          Animated.spring(translateY, { toValue: 0, useNativeDriver: true, tension: 100, friction: 8 }).start();
+        }
+      },
+    })
+  ).current;
 
   const { language } = useTranslation();
   const { data: event, isLoading } = useEvent(id);
@@ -436,11 +482,7 @@ export default function DestinationScreen() {
     <View style={styles.container}>
       {/* ─── Hero Header ─────────────────────────── */}
       <View style={styles.heroContainer}>
-        <Image
-          source={resolveImageSource(heroImage)}
-          style={styles.heroImage}
-          resizeMode="cover"
-        />
+        <KenBurnsImage source={resolveImageSource(heroImage)} style={StyleSheet.absoluteFillObject} />
         <View style={styles.heroOverlay} />
         <Pressable
           style={[styles.backButton, { top: insets.top + 8 }]}
@@ -556,31 +598,48 @@ export default function DestinationScreen() {
 
       {/* ─── In-App Places Popup ──────────────────── */}
       {popupCategory && popupConfig && (
-        <Pressable style={styles.popupOverlay} onPress={() => setPopupCategory(null)}>
-          <Pressable style={[styles.popupSheet, { paddingBottom: insets.bottom + 16 }]} onPress={() => {}}>
-            {/* Handle */}
-            <View style={styles.popupHandle} />
-            {/* Header */}
-            <XStack alignItems="center" gap={10} marginBottom={16}>
-              <View style={[styles.popupIconCircle, { backgroundColor: `${popupConfig.color}22` }]}>
-                <Ionicons name={popupConfig.icon as any} size={20} color={popupConfig.color} />
-              </View>
-              <YStack flex={1}>
-                <Text style={styles.popupTitle}>{popupConfig.label}</Text>
-                <Text style={styles.popupSubtitle}>{cityName} — Top picks</Text>
-              </YStack>
-              <Pressable onPress={() => setPopupCategory(null)} hitSlop={8}>
-                <Ionicons name="close-circle" size={24} color={DARK_THEME.textTertiary} />
-              </Pressable>
-            </XStack>
+        <View style={styles.popupOverlay} pointerEvents="box-none">
+          {/* Backdrop — tap to dismiss */}
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setPopupCategory(null)} />
+          {/* Sheet — separate from backdrop so ScrollView gets all touch events */}
+          <Animated.View style={[styles.popupSheet, { paddingBottom: insets.bottom + 16 }, { transform: [{ translateY }] }]}>
+            {/* Drag handle + Header — pan responder only on fixed header, not the scroll list */}
+            <View {...popupPanResponder.panHandlers}>
+              {/* Handle */}
+              <View style={styles.popupHandle} />
+              {/* Header */}
+              <XStack alignItems="center" gap={10} marginBottom={16}>
+                <View style={[styles.popupIconCircle, { backgroundColor: `${popupConfig.color}22` }]}>
+                  <Ionicons name={popupConfig.icon as any} size={20} color={popupConfig.color} />
+                </View>
+                <YStack flex={1}>
+                  <Text style={styles.popupTitle}>{popupConfig.label}</Text>
+                  <Text style={styles.popupSubtitle}>{cityName} — Top picks</Text>
+                </YStack>
+                <Pressable onPress={() => setPopupCategory(null)} hitSlop={8}>
+                  <Ionicons name="close-circle" size={24} color={DARK_THEME.textTertiary} />
+                </Pressable>
+              </XStack>
+            </View>
             {/* Places list */}
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView scrollEnabled={true} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               {popupPlaces.map((place, i) => (
                 <View key={i} style={styles.placeRow}>
                   <XStack alignItems="flex-start" gap={12}>
-                    <View style={[styles.placeNumber, { backgroundColor: `${popupConfig.color}22` }]}>
-                      <Text style={[styles.placeNumberText, { color: popupConfig.color }]}>{i + 1}</Text>
-                    </View>
+                    <YStack alignItems="center" gap={4}>
+                      <View style={[styles.placeNumber, { backgroundColor: `${popupConfig.color}22` }]}>
+                        <Text style={[styles.placeNumberText, { color: popupConfig.color }]}>{i + 1}</Text>
+                      </View>
+                      {popupCategory === 'sports' && (() => {
+                        const badge = TEAM_BADGE_CONFIG[place.name];
+                        if (!badge) return null;
+                        return (
+                          <View style={[styles.teamBadge, { backgroundColor: badge.primary }]}>
+                            <Text style={[styles.teamBadgeText, { color: badge.secondary }]}>{badge.abbr}</Text>
+                          </View>
+                        );
+                      })()}
+                    </YStack>
                     <YStack flex={1} gap={2}>
                       <XStack alignItems="center" gap={6}>
                         <Text style={styles.placeName}>{place.name}</Text>
@@ -593,8 +652,8 @@ export default function DestinationScreen() {
                 </View>
               ))}
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </Animated.View>
+        </View>
       )}
     </View>
   );
@@ -609,10 +668,6 @@ const styles = StyleSheet.create({
   heroContainer: {
     height: 240,
     position: 'relative',
-  },
-  heroImage: {
-    width: '100%',
-    height: '100%',
   },
   heroOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -764,6 +819,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
     zIndex: 100,
+    // pointerEvents="box-none" applied inline so touches pass through to children
   },
   popupSheet: {
     backgroundColor: '#1E2329',
@@ -838,5 +894,17 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.05)',
     marginTop: 12,
+  },
+  teamBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  teamBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });
