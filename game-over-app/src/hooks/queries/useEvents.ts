@@ -8,6 +8,7 @@ import { eventsRepository, EventWithDetails } from '@/repositories';
 import { useAuthStore } from '@/stores/authStore';
 import type { Database } from '@/lib/supabase/types';
 
+
 type EventInsert = Database['public']['Tables']['events']['Insert'];
 type EventUpdate = Database['public']['Tables']['events']['Update'];
 type EventPreferencesInsert = Database['public']['Tables']['event_preferences']['Insert'];
@@ -36,14 +37,25 @@ export function useEvents() {
 }
 
 /**
- * Fetch a single event by ID
+ * Fetch a single event by ID.
+ * Uses placeholderData from the events list cache so the detail screen
+ * shows immediately without a skeleton on first open.
  */
 export function useEvent(eventId: string | undefined) {
+  const queryClient = useQueryClient();
+  const user = useAuthStore((state) => state.user);
+
   return useQuery({
     queryKey: eventKeys.detail(eventId || ''),
     queryFn: () => eventsRepository.getById(eventId!),
     enabled: !!eventId,
-    staleTime: 60 * 1000, // 1 minute — prefetched from events list
+    staleTime: 60 * 1000,
+    placeholderData: () => {
+      const allEvents = queryClient.getQueryData<EventWithDetails[]>(
+        eventKeys.list(user?.id || '')
+      );
+      return allEvents?.find(e => e.id === eventId);
+    },
   });
 }
 

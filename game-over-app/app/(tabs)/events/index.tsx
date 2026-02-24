@@ -703,16 +703,12 @@ export default function EventsScreen() {
           <XStack alignItems="center" gap={12}>
             <View style={styles.avatarContainer}>
               {userAvatar ? (
-                <Image
-                  source={{ uri: userAvatar }}
-                  style={styles.avatar}
-                />
+                <Image source={{ uri: userAvatar }} style={styles.avatar} />
               ) : (
                 <View style={[styles.avatar, styles.avatarPlaceholder]}>
                   <Text style={styles.avatarInitial}>{userInitial}</Text>
                 </View>
               )}
-              <View style={styles.onlineIndicator} />
             </View>
             <Text style={styles.headerTitle}>{t.events.title}</Text>
           </XStack>

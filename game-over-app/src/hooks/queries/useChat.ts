@@ -123,6 +123,32 @@ export function useMarkChannelAsRead() {
   });
 }
 
+export function useDeleteChannel() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (channelId: string) => channelsRepository.delete(channelId),
+    onMutate: async (channelId: string) => {
+      await queryClient.cancelQueries({ queryKey: chatKeys.all });
+      const snapshot = queryClient.getQueriesData<any[]>({ queryKey: chatKeys.all, exact: false });
+      // Optimistically remove channel from all cached channel lists
+      queryClient.setQueriesData<any[]>(
+        { queryKey: chatKeys.all, exact: false },
+        (old) => Array.isArray(old) ? old.filter((ch: any) => ch.id !== channelId) : old
+      );
+      return { snapshot };
+    },
+    onError: (_err, _channelId, context) => {
+      if (context?.snapshot) {
+        context.snapshot.forEach(([key, data]: [any, any]) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+    },
+    // No onSettled — optimistic update is source of truth on success
+  });
+}
+
 /**
  * Subscribe to realtime messages
  * Uses a ref for the callback to avoid subscription churn

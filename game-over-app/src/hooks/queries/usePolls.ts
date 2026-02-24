@@ -89,7 +89,8 @@ export function useCreatePoll() {
 }
 
 /**
- * Vote on a poll
+ * Vote on a poll (supports changing vote).
+ * Uses optimistic updates for immediate UI feedback.
  */
 export function useVote() {
   const queryClient = useQueryClient();
@@ -105,14 +106,37 @@ export function useVote() {
     }) => {
       return pollsRepository.vote(pollId, optionId, user!.id);
     },
-    onSuccess: (_, { pollId }) => {
-      queryClient.invalidateQueries({
-        queryKey: pollKeys.detail(pollId),
-      });
-      // Also invalidate the event polls list
-      queryClient.invalidateQueries({
-        queryKey: pollKeys.all,
-      });
+    onMutate: async ({ pollId, optionId }) => {
+      // Cancel any in-flight refetches so they don't overwrite optimistic update
+      await queryClient.cancelQueries({ queryKey: pollKeys.all });
+
+      // Optimistically update all matching poll lists in cache
+      queryClient.setQueriesData<PollWithOptions[]>(
+        { queryKey: pollKeys.all, exact: false },
+        (old) => {
+          if (!Array.isArray(old)) return old;
+          return old.map(poll => {
+            if (poll.id !== pollId) return poll;
+            const prevVoteOptionId = poll.user_vote;
+            const updatedOptions = poll.options.map(opt => {
+              let delta = 0;
+              if (opt.id === optionId) delta = 1;                 // new vote
+              if (opt.id === prevVoteOptionId) delta = -1;        // remove old vote
+              return { ...opt, vote_count: Math.max(0, (opt.vote_count ?? 0) + delta) };
+            });
+            return {
+              ...poll,
+              options: updatedOptions,
+              total_votes: updatedOptions.reduce((s, o) => s + (o.vote_count ?? 0), 0),
+              user_vote: optionId,
+            };
+          });
+        }
+      );
+    },
+    onError: () => {
+      // On error only: refetch to rollback optimistic update
+      queryClient.invalidateQueries({ queryKey: pollKeys.all });
     },
   });
 }
@@ -184,5 +208,36 @@ export function useAddPollOption() {
         queryKey: pollKeys.detail(pollId),
       });
     },
+  });
+}
+
+/**
+ * Delete a poll — optimistically removes from cache for instant UI feedback
+ */
+export function useDeletePoll() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (pollId: string) => pollsRepository.delete(pollId),
+    onMutate: async (pollId: string) => {
+      await queryClient.cancelQueries({ queryKey: pollKeys.all });
+      // Snapshot current state for rollback on error
+      const snapshot = queryClient.getQueriesData<PollWithOptions[]>({ queryKey: pollKeys.all, exact: false });
+      // Optimistically remove the poll from all cached poll lists
+      queryClient.setQueriesData<PollWithOptions[]>(
+        { queryKey: pollKeys.all, exact: false },
+        (old) => Array.isArray(old) ? old.filter(p => p.id !== pollId) : old
+      );
+      return { snapshot };
+    },
+    onError: (_err, _pollId, context) => {
+      // Rollback to snapshot on error
+      if (context?.snapshot) {
+        context.snapshot.forEach(([key, data]) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+    },
+    // No onSettled invalidation — the optimistic update is the source of truth on success
   });
 }

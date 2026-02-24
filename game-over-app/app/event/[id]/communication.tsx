@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { FlatList, RefreshControl, Pressable, StyleSheet, Alert, Share, SectionList } from 'react-native';
+import { FlatList, RefreshControl, Pressable, StyleSheet, Alert, SectionList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner, Image } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -137,17 +137,10 @@ export default function CommunicationCenterScreen() {
     });
   }, [eventId, createPollMutation]);
 
-  // Handle share event
-  const handleShareEvent = useCallback(async () => {
-    try {
-      await Share.share({
-        message: `You're invited to ${event?.title || event?.honoree_name + "'s Party"}! Join us using this link: gameover://invite/ABC123`,
-        title: `Join ${event?.title || event?.honoree_name + "'s Party"}`,
-      });
-    } catch (error) {
-      console.error('Share failed:', error);
-    }
-  }, [event]);
+  // Navigate to dedicated Share screen
+  const handleShareEvent = useCallback(() => {
+    router.push(`/event/${eventId}/share`);
+  }, [eventId, router]);
 
   // Handle refresh
   const handleRefresh = useCallback(() => {

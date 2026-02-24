@@ -120,11 +120,20 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 
   // Hide tab bar on chat detail screens (chat/[channelId])
   const currentRoute = state.routes[state.index];
-  const isChannelDetailScreen = currentRoute?.name === 'chat' &&
-    currentRoute?.state?.routes?.[currentRoute.state.index]?.name?.includes('[channelId]');
+  const innerRoute = currentRoute?.state?.routes?.[currentRoute?.state?.index ?? 0];
 
-  if (isChannelDetailScreen) {
-    return null; // Hide tab bar on channel detail screen
+  const isChannelDetailScreen = currentRoute?.name === 'chat' &&
+    innerRoute?.name?.includes('[channelId]');
+
+  // Hide tab bar when chat or budget opened from Event Summary (eventId param present)
+  const isChatFromEventSummary = currentRoute?.name === 'chat' &&
+    (!!(innerRoute?.params as any)?.eventId || !!(currentRoute?.params as any)?.eventId);
+
+  const isBudgetFromEventSummary = currentRoute?.name === 'budget' &&
+    (!!(innerRoute?.params as any)?.eventId || !!(currentRoute?.params as any)?.eventId);
+
+  if (isChannelDetailScreen || isChatFromEventSummary || isBudgetFromEventSummary) {
+    return null;
   }
 
   // Define the correct order of tabs

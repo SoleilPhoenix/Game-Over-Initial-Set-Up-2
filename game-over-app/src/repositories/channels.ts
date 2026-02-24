@@ -124,6 +124,18 @@ export const channelsRepository = {
   },
 
   /**
+   * Delete a channel
+   */
+  async delete(channelId: string): Promise<void> {
+    const { error } = await supabase
+      .from('chat_channels')
+      .delete()
+      .eq('id', channelId);
+
+    if (error) throw error;
+  },
+
+  /**
    * Get total unread count for an event
    */
   async getTotalUnreadCount(eventId: string): Promise<number> {

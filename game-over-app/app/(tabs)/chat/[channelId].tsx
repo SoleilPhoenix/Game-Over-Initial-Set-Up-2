@@ -16,6 +16,7 @@ import {
   useSendMessage,
   useRealtimeMessages,
   useMarkChannelAsRead,
+  useDeleteChannel,
 } from '@/hooks/queries/useChat';
 import { useAuthStore } from '@/stores/authStore';
 import { MessageBubble, MessageInput } from '@/components/chat';
@@ -36,10 +37,11 @@ interface LocalMessage {
 }
 
 export default function ChatChannelScreen() {
-  const { channelId, name: channelNameParam, category: channelCategoryParam } = useLocalSearchParams<{
+  const { channelId, name: channelNameParam, category: channelCategoryParam, icon: channelIconParam } = useLocalSearchParams<{
     channelId: string;
     name?: string;
     category?: string;
+    icon?: string;
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -91,6 +93,51 @@ export default function ChatChannelScreen() {
 
   // Mark as read mutation
   const markAsReadMutation = useMarkChannelAsRead();
+
+  // Delete channel mutation
+  const deleteChannelMutation = useDeleteChannel();
+
+  const handleDeleteChannel = () => {
+    Alert.alert(
+      'Delete Channel',
+      `Are you sure you want to delete "${channelDisplayName}"? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setInfoModalVisible(false);
+            if (!isDbChannel) {
+              // Local channel — remove messages AND channel entry from AsyncStorage
+              // Await all storage operations before navigating to avoid race condition
+              try {
+                await AsyncStorage.removeItem(`local-messages-${channelId}`);
+                const raw = await AsyncStorage.getItem('localChannelsByEvent');
+                if (raw) {
+                  const map = JSON.parse(raw) as Record<string, Array<{ id: string; channels: Array<{ id: string }> }>>;
+                  for (const eventKey of Object.keys(map)) {
+                    for (const section of map[eventKey]) {
+                      section.channels = section.channels.filter((ch: any) => ch.id !== channelId);
+                    }
+                  }
+                  await AsyncStorage.setItem('localChannelsByEvent', JSON.stringify(map));
+                }
+              } catch {}
+              router.back();
+            } else {
+              try {
+                await deleteChannelMutation.mutateAsync(channelId!);
+                router.back();
+              } catch {
+                Alert.alert('Error', 'Could not delete channel.');
+              }
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Combine all messages from paginated data
   const messages = React.useMemo(() => {
@@ -227,20 +274,27 @@ export default function ChatChannelScreen() {
     [user?.id, displayMessages, isDbChannel]
   );
 
+  const CATEGORY_COLORS: Record<string, string> = {
+    general: '#8B5CF6',
+    accommodation: '#3B82F6',
+    activities: '#F97316',
+    budget: '#10B981',
+  };
+
   const getCategoryIcon = (category: string | undefined): keyof typeof Ionicons.glyphMap => {
     switch (category) {
-      case 'general':
-        return 'chatbubbles';
-      case 'activities':
-        return 'bicycle';
-      case 'accommodation':
-        return 'bed';
-      case 'budget':
-        return 'wallet';
-      default:
-        return 'chatbubble';
+      case 'general':       return 'chatbubbles';
+      case 'activities':    return 'game-controller';
+      case 'accommodation': return 'bed';
+      case 'budget':        return 'cash';
+      default:              return 'chatbubble';
     }
   };
+
+  // Use the icon passed from the Topics list, fall back to category default
+  const headerIcon = (channelIconParam ?? getCategoryIcon(channelDisplayCategory)) as keyof typeof Ionicons.glyphMap;
+  const headerColor = CATEGORY_COLORS[channelDisplayCategory ?? 'general'] ?? '#5A7EB0';
+  const headerBg = `${headerColor}26`; // 15% opacity
 
   // Remove full-screen loading - show UI immediately with loading states
   return (
@@ -279,14 +333,14 @@ export default function ChatChannelScreen() {
             width={36}
             height={36}
             borderRadius="$md"
-            backgroundColor="rgba(90, 126, 176, 0.15)"
+            backgroundColor={headerBg}
             alignItems="center"
             justifyContent="center"
           >
             <Ionicons
-              name={getCategoryIcon(channelDisplayCategory)}
+              name={headerIcon}
               size={18}
-              color="#5A7EB0"
+              color={headerColor}
             />
           </YStack>
 
@@ -375,63 +429,81 @@ export default function ChatChannelScreen() {
         </YStack>
       </YStack>
 
-      {/* Channel Info Modal */}
+      {/* Channel Info Modal — bottom sheet */}
       <Modal
         visible={infoModalVisible}
         transparent
-        animationType="fade"
+        animationType="slide"
         onRequestClose={() => setInfoModalVisible(false)}
       >
         <Pressable
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}
           onPress={() => setInfoModalVisible(false)}
         >
           <Pressable
             style={{
               backgroundColor: '#1E2329',
-              borderRadius: 16,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
               padding: 24,
-              width: '80%',
-              gap: 16,
+              paddingBottom: 32,
+              borderTopWidth: 1,
+              borderColor: 'rgba(255,255,255,0.08)',
             }}
             onPress={() => {}}
           >
-            {/* Channel icon + title */}
-            <View style={{ alignItems: 'center', gap: 8 }}>
-              <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: 'rgba(90,126,176,0.15)', alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name={getCategoryIcon(channelDisplayCategory)} size={24} color="#5A7EB0" />
-              </View>
-              <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '700', textAlign: 'center' }}>
+            {/* Header row: title + close */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '700' }}>Channel Info</Text>
+              <Pressable onPress={() => setInfoModalVisible(false)} hitSlop={8}>
+                <Ionicons name="close" size={22} color="#9CA3AF" />
+              </Pressable>
+            </View>
+
+            {/* 1. Category — text only */}
+            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+              <Text style={{ color: headerColor, fontSize: 13, fontWeight: '700', letterSpacing: 0.5 }}>
+                {channelDisplayCategory.toUpperCase()}
+              </Text>
+            </View>
+
+            {/* 2. Channel name */}
+            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+              <Ionicons name="chatbubble-outline" size={18} color={headerColor} />
+              <Text numberOfLines={2} style={{ flex: 1, color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
                 {channelDisplayName}
               </Text>
-              <Text style={{ color: '#9CA3AF', fontSize: 12 }}>#{channelDisplayCategory}</Text>
             </View>
 
-            {/* Divider */}
-            <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.08)' }} />
-
-            {/* Created by */}
-            <View style={{ gap: 6 }}>
-              <Text style={{ color: '#9CA3AF', fontSize: 11, fontWeight: '600', letterSpacing: 0.5 }}>CREATED BY</Text>
+            {/* 3. Created by */}
+            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+              <Ionicons name="person-outline" size={18} color="#9CA3AF" />
               <Text style={{ color: '#D1D5DB', fontSize: 14 }}>
-                {user?.user_metadata?.full_name ?? 'You'}
+                {!isDbChannel
+                  ? (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You')
+                  : '—'}
               </Text>
             </View>
 
-            {/* Category info */}
-            <View style={{ gap: 6 }}>
-              <Text style={{ color: '#9CA3AF', fontSize: 11, fontWeight: '600', letterSpacing: 0.5 }}>CATEGORY</Text>
-              <Text style={{ color: '#D1D5DB', fontSize: 14, textTransform: 'capitalize' }}>
-                {channelDisplayCategory}
+            {/* 4. Created at */}
+            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 20 }}>
+              <Ionicons name="calendar-outline" size={18} color="#9CA3AF" />
+              <Text style={{ color: '#D1D5DB', fontSize: 14 }}>
+                {isDbChannel && channel?.created_at
+                  ? new Date(channel.created_at).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })
+                  : !isDbChannel && channelId
+                    ? new Date(Number(channelId)).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })
+                    : '—'}
               </Text>
             </View>
 
-            {/* Close button */}
+            {/* Delete channel button */}
             <Pressable
-              style={{ backgroundColor: 'rgba(90,126,176,0.15)', borderRadius: 10, padding: 12, alignItems: 'center', marginTop: 4 }}
-              onPress={() => setInfoModalVisible(false)}
+              style={{ backgroundColor: 'rgba(239,68,68,0.15)', borderRadius: 10, padding: 12, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6, borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' }}
+              onPress={handleDeleteChannel}
             >
-              <Text style={{ color: '#5A7EB0', fontWeight: '600', fontSize: 14 }}>Close</Text>
+              <Ionicons name="trash-outline" size={16} color="#EF4444" />
+              <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14 }}>Delete Channel</Text>
             </Pressable>
           </Pressable>
         </Pressable>

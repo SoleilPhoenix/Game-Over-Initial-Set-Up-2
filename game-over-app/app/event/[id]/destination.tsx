@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { ScrollView, Linking, Platform, Pressable, StyleSheet, View, PanResponder, Animated } from 'react-native';
+import { ScrollView, Linking, Platform, Pressable, StyleSheet, View, PanResponder, Animated, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -282,7 +282,7 @@ const CITY_DATA: Record<string, CityData> = {
         { name: 'Hannover United', type: 'Basketball', description: 'Hannover\'s basketball representatives, building a loyal fanbase in the ProA division.' },
         { name: 'TSV Hannover-Burgdorf "Die Recken"', type: 'Handball', description: 'One of the strongest clubs in the Handball Bundesliga — exciting fast-break play and passionate home atmosphere.' },
         { name: 'Hannover Scorpions', type: 'Ice Hockey', description: 'DEL2 club with a passionate following — fast-paced games at the Eissporthalle am Pferdeturm.' },
-        { name: 'RGH Hannover (Rugby)', type: 'Rugby', description: 'Hannover\'s top rugby club, with a long tradition and regular participation in national league competition.' },
+        { name: 'TKH Turn-Klubb zu Hannover', type: 'Multi-Sport', description: 'Founded in 1846 — one of Germany\'s oldest sports clubs, offering gymnastics, athletics and a wide range of disciplines with a proud Lower Saxon tradition.' },
         { name: 'Equestrian Sport (CHIO/Hannover)', type: 'Equestrian', description: 'Hannover is Germany\'s equestrian capital — home of the world-famous Hannover horse breed and major show jumping events.' },
       ],
     },
@@ -314,18 +314,10 @@ function openMapsForCity(_lat: number, _lon: number, label: string) {
   }
 }
 
-/** Open native Weather app (iOS) at the event city; falls back to Google on both platforms */
-function openWeather(lat: number, lon: number, cityName: string) {
-  if (Platform.OS === 'ios') {
-    const weatherUrl = `weather://?lat=${lat}&lon=${lon}`;
-    Linking.openURL(weatherUrl).catch(() => {
-      const query = encodeURIComponent(`Wetter ${cityName}`);
-      Linking.openURL(`https://www.google.com/search?q=${query}`);
-    });
-  } else {
-    const query = encodeURIComponent(`Wetter ${cityName}`);
-    Linking.openURL(`https://www.google.com/search?q=${query}`);
-  }
+/** Open Google Weather for the event city */
+function openWeather(_lat: number, _lon: number, cityName: string) {
+  const query = encodeURIComponent(`Wetter ${cityName}`);
+  Linking.openURL(`https://www.google.com/search?q=${query}`);
 }
 
 /** Open city transit authority website directly */
@@ -371,8 +363,33 @@ const TEAM_BADGE_CONFIG: Record<string, TeamBadgeConfig> = {
   'Hannover United':         { abbr: 'HUN',  primary: '#E8721C', secondary: '#FFFFFF' },
   'TSV Hannover-Burgdorf "Die Recken"': { abbr: 'REC', primary: '#FFD700', secondary: '#C0001A' },
   'Hannover Scorpions':      { abbr: 'SCO',  primary: '#1A1A1A', secondary: '#FFD700' },
-  'RGH Hannover (Rugby)':    { abbr: 'RGH',  primary: '#003087', secondary: '#FFFFFF' },
+  'TKH Turn-Klubb zu Hannover': { abbr: 'TKH', primary: '#CC0000', secondary: '#FFFFFF' },
   'Equestrian Sport (CHIO/Hannover)': { abbr: 'CHI', primary: '#8B6914', secondary: '#FFFFFF' },
+};
+
+// Logos from /src/constants/Sportclubs_Visuals — shown instead of text badge when available
+const TEAM_LOGO_MAP: Record<string, any> = {
+  // Berlin
+  'Hertha BSC':               require('../../../src/constants/Sportclubs_Visuals/Berlin/Hertha_BSC.png'),
+  '1. FC Union Berlin':       require('../../../src/constants/Sportclubs_Visuals/Berlin/1._FC_Union_Berlin.png'),
+  'Alba Berlin':              require('../../../src/constants/Sportclubs_Visuals/Berlin/ALBA_Berlin.png'),
+  'Füchse Berlin':            require('../../../src/constants/Sportclubs_Visuals/Berlin/Füchse_Berlin.png'),
+  'Eisbären Berlin':          require('../../../src/constants/Sportclubs_Visuals/Berlin/Eisbären_Berlin.png'),
+  'Wasserfreunde Spandau 04': require('../../../src/constants/Sportclubs_Visuals/Berlin/Wasserfreunde_Spandau_04.png'),
+  // Hamburg
+  'Hamburger SV':             require('../../../src/constants/Sportclubs_Visuals/Hamburg/Hamburger_SV.png'),
+  'FC St. Pauli':             require('../../../src/constants/Sportclubs_Visuals/Hamburg/FC_St._Pauli.png'),
+  'Hamburg Towers':           require('../../../src/constants/Sportclubs_Visuals/Hamburg/Hamburg_Towers.png'),
+  'HSV Handball Hamburg':     require('../../../src/constants/Sportclubs_Visuals/Hamburg/HSV_Handball_Hamburg.png'),
+  'Crocodiles Hamburg':       require('../../../src/constants/Sportclubs_Visuals/Hamburg/Hamburg_Crocodiles.jpeg'),
+  'Regatta & Sailing':        require('../../../src/constants/Sportclubs_Visuals/Hamburg/Hamburger_Segel_Club.png'),
+  // Hannover
+  'Hannover 96':              require('../../../src/constants/Sportclubs_Visuals/Hannover/Hannover_96.png'),
+  'Hannover United':          require('../../../src/constants/Sportclubs_Visuals/Hannover/Hannover_United.jpeg'),
+  'TSV Hannover-Burgdorf "Die Recken"': require('../../../src/constants/Sportclubs_Visuals/Hannover/TSV_Hannover-Burgdorf.png'),
+  'Hannover Scorpions':       require('../../../src/constants/Sportclubs_Visuals/Hannover/Hannover_Scorpions.png'),
+  'TKH Turn-Klubb zu Hannover': require('../../../src/constants/Sportclubs_Visuals/Hannover/TKH_Turn-Klubb_zu_Hannover.png'),
+  'Equestrian Sport (CHIO/Hannover)': require('../../../src/constants/Sportclubs_Visuals/Hannover/Eqestrian_Sport.png'),
 };
 
 const CATEGORY_CONFIG: Record<NonNullable<PopupCategory>, { label: string; icon: string; color: string }> = {
@@ -538,7 +555,7 @@ export default function DestinationScreen() {
               <YStack flex={1}>
                 <Text style={styles.tipLabel}>Check local weather</Text>
                 <Text style={styles.tipUrl}>
-                  {Platform.OS === 'ios' ? 'Weather App' : `Wetter ${cityName}`}
+                  Google Weather — {cityName}
                 </Text>
               </YStack>
               <Ionicons name="open-outline" size={15} color={DARK_THEME.textTertiary} />
@@ -631,13 +648,23 @@ export default function DestinationScreen() {
                         <Text style={[styles.placeNumberText, { color: popupConfig.color }]}>{i + 1}</Text>
                       </View>
                       {popupCategory === 'sports' && (() => {
+                        const logo = TEAM_LOGO_MAP[place.name];
                         const badge = TEAM_BADGE_CONFIG[place.name];
-                        if (!badge) return null;
-                        return (
-                          <View style={[styles.teamBadge, { backgroundColor: badge.primary }]}>
-                            <Text style={[styles.teamBadgeText, { color: badge.secondary }]}>{badge.abbr}</Text>
-                          </View>
-                        );
+                        if (logo) {
+                          return (
+                            <View style={styles.teamLogoWrap}>
+                              <Image source={logo} style={styles.teamLogo} resizeMode="contain" />
+                            </View>
+                          );
+                        }
+                        if (badge) {
+                          return (
+                            <View style={[styles.teamBadge, { backgroundColor: badge.primary }]}>
+                              <Text style={[styles.teamBadgeText, { color: badge.secondary }]}>{badge.abbr}</Text>
+                            </View>
+                          );
+                        }
+                        return null;
                       })()}
                     </YStack>
                     <YStack flex={1} gap={2}>
@@ -906,5 +933,18 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  teamLogoWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  teamLogo: {
+    width: 34,
+    height: 34,
   },
 });

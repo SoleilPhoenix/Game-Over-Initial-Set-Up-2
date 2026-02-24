@@ -31,8 +31,8 @@ import { loadDesiredParticipants, loadChecklist, setChecklistItem } from '@/lib/
 // ─── Planning Tools ────────────────────────────
 const TOOL_CONFIGS = [
   { key: 'invitations', icon: 'people', iconBg: 'rgba(236, 72, 153, 0.15)', iconColor: '#EC4899', route: 'participants', isTab: false },
-  { key: 'communication', icon: 'chatbubbles', iconBg: 'rgba(59, 130, 246, 0.15)', iconColor: '#3B82F6', route: '/(tabs)/chat', isTab: true },
-  { key: 'budget', icon: 'wallet', iconBg: 'rgba(16, 185, 129, 0.15)', iconColor: '#10B981', route: '/(tabs)/budget', isTab: true },
+  { key: 'communication', icon: 'chatbubbles', iconBg: 'rgba(59, 130, 246, 0.15)', iconColor: '#3B82F6', route: '/(tabs)/chat', isTab: true, passEventId: true },
+  { key: 'budget', icon: 'wallet', iconBg: 'rgba(16, 185, 129, 0.15)', iconColor: '#10B981', route: '/(tabs)/budget', isTab: true, passEventId: true },
   { key: 'packages', icon: 'gift', iconBg: 'rgba(139, 92, 246, 0.15)', iconColor: '#8B5CF6', route: 'packages', isTab: false },
 ] as const;
 
@@ -314,7 +314,12 @@ export default function EventSummaryScreen() {
               <Pressable
                 key={tool.key}
                 style={({ pressed }) => [styles.toolCard, pressed && styles.toolCardPressed]}
-                onPress={() => router.push(tool.isTab ? tool.route as any : `/event/${id}/${tool.route}`)}
+                onPress={() => {
+                  const route = tool.isTab
+                    ? ((tool as any).passEventId ? `${tool.route}?eventId=${id}` : tool.route)
+                    : `/event/${id}/${tool.route}`;
+                  router.push(route as any);
+                }}
                 testID={`planning-tool-${tool.key}`}
               >
                 <View style={[styles.toolIconCircle, { backgroundColor: tool.iconBg }]}>

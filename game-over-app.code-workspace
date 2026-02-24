@@ -1,9 +1,7 @@
 {
-	"folders": [
-		{
-			"name": "game-over-app",
-			"path": "game-over-app"
-		}
-	],
-	"settings": {}
+    "folders": [
+        {
+            "path": "game-over-app"
+        }
+    ]
 }

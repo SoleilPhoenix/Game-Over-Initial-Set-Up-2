@@ -3,11 +3,11 @@
  * Compact single-line invite banner matching the Chat share card style
  */
 
-import React, { useCallback, useState } from 'react';
-import { Share, Pressable, StyleSheet, Alert, View } from 'react-native';
+import React from 'react';
+import { Pressable, StyleSheet } from 'react-native';
 import { XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
-import * as Clipboard from 'expo-clipboard';
+import { useRouter } from 'expo-router';
 import { DARK_THEME } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
 
@@ -19,69 +19,20 @@ interface ShareEventBannerProps {
   participantCount?: number;
 }
 
-export function ShareEventBanner({
-  eventId,
-  eventTitle,
-  inviteCode,
-  onGenerateInvite,
-  participantCount = 0,
-}: ShareEventBannerProps) {
-  const [isLoading, setIsLoading] = useState(false);
+export function ShareEventBanner({ eventId }: ShareEventBannerProps) {
+  const router = useRouter();
   const { t } = useTranslation();
-
-  const getShareUrl = useCallback(async () => {
-    let code = inviteCode;
-
-    if (!code && onGenerateInvite) {
-      setIsLoading(true);
-      try {
-        code = await onGenerateInvite();
-      } catch (error) {
-        console.error('Failed to generate invite:', error);
-        Alert.alert('Error', 'Failed to generate invite link. Please try again.');
-        setIsLoading(false);
-        return null;
-      }
-      setIsLoading(false);
-    }
-
-    if (!code) {
-      Alert.alert('Error', 'Could not create invite link.');
-      return null;
-    }
-
-    return `gameover://invite/${code}`;
-  }, [inviteCode, onGenerateInvite]);
-
-  const handleShare = useCallback(async () => {
-    const shareUrl = await getShareUrl();
-    if (!shareUrl) return;
-
-    try {
-      await Share.share({
-        message: `You're invited to ${eventTitle}! Join us using this link: ${shareUrl}`,
-        title: `Join ${eventTitle}`,
-      });
-    } catch (error) {
-      console.error('Failed to share:', error);
-    }
-  }, [eventTitle, getShareUrl]);
-
-  const subtext = participantCount > 0
-    ? `${participantCount} member${participantCount !== 1 ? 's' : ''} joined`
-    : (t.eventDetail as any).shareSubtext || 'Share invite link to get started';
 
   return (
     <Pressable
       style={styles.card}
-      onPress={handleShare}
-      disabled={isLoading}
+      onPress={() => router.push(`/event/${eventId}/share`)}
       testID="share-event-banner"
     >
       <XStack alignItems="center" gap={10}>
-        <View style={styles.iconCircle}>
+        <XStack style={styles.iconCircle} alignItems="center" justifyContent="center">
           <Ionicons name="share-social-outline" size={18} color="#5A7EB0" />
-        </View>
+        </XStack>
         <Text style={styles.title} numberOfLines={1} flex={1}>
           {(t.chat as any).shareInvite || 'Share Invite'} — {(t.chat as any).inviteFriendsToJoin || 'Invite Friends to Join'}
         </Text>

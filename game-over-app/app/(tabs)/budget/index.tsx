@@ -4,9 +4,9 @@
  * Matches the dark theme glassmorphic design from UI specifications
  */
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, View, Image, FlatList, StatusBar } from 'react-native';
-import { useRouter } from 'expo-router';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, View, Image, FlatList, StatusBar, PanResponder } from 'react-native';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -38,9 +38,10 @@ type BudgetCategory = 'package' | 'otherExpenses';
 
 export default function BudgetDashboardScreen() {
   const router = useRouter();
+  const { eventId: eventIdParam } = useLocalSearchParams<{ eventId?: string }>();
   const insets = useSafeAreaInsets();
   const user = useUser();
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(eventIdParam || null);
   const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<BudgetCategory>('package');
   const { t } = useTranslation();
@@ -77,10 +78,10 @@ export default function BudgetDashboardScreen() {
     router.push('/notifications');
   };
 
-  // Auto-select nearest booked event
+  // Auto-select nearest booked event (skip if opened from Event Summary)
   const hasAutoSelected = React.useRef(false);
   useEffect(() => {
-    if (hasAutoSelected.current || bookedEvents.length === 0) return;
+    if (hasAutoSelected.current || bookedEvents.length === 0 || eventIdParam) return;
     hasAutoSelected.current = true;
     const now = Date.now();
     const sorted = [...bookedEvents].sort((a, b) => {
@@ -172,6 +173,26 @@ export default function BudgetDashboardScreen() {
   // Only show loading for booking/participants data when we have events
   const isLoading = hasBookedEvents && (bookingLoading || participantsLoading);
 
+  // Navigate back to Event Summary when opened from it
+  const handleBack = useCallback(() => {
+    router.back();
+  }, [router]);
+
+  // Stable ref so swipe PanResponder always calls the latest handleBack
+  const handleBackRef = useRef(handleBack);
+  useEffect(() => { handleBackRef.current = handleBack; }, [handleBack]);
+
+  // Left-edge swipe to go back when opened from Event Summary
+  const swipeBackResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) =>
+        gs.dx > 20 && Math.abs(gs.dy) < 60 && gs.moveX < 40,
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx > 40) handleBackRef.current();
+      },
+    })
+  ).current;
+
   // Event selector
   const selectedEventName = selectedEvent
     ? (selectedEvent.title || (selectedEvent.honoree_name ? `${selectedEvent.honoree_name}'s Event` : 'Event'))
@@ -187,7 +208,7 @@ export default function BudgetDashboardScreen() {
       <View style={styles.eventSelectorWrapper}>
         <Pressable
           style={styles.eventSelectorCard}
-          onPress={() => bookedEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
+          onPress={() => !eventIdParam && bookedEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
           testID="budget-event-selector"
         >
           <Image
@@ -210,7 +231,7 @@ export default function BudgetDashboardScreen() {
               </Text>
             )}
           </View>
-          {bookedEvents.length > 1 && (
+          {!eventIdParam && bookedEvents.length > 1 && (
             <View style={styles.eventSelectorChevron}>
               <Ionicons
                 name={eventSelectorOpen ? 'chevron-up' : 'chevron-down'}
@@ -221,7 +242,7 @@ export default function BudgetDashboardScreen() {
           )}
         </Pressable>
 
-        {eventSelectorOpen && (
+        {!eventIdParam && eventSelectorOpen && (
           <View style={styles.eventDropdown}>
             {[...bookedEvents]
               .sort((a, b) => {
@@ -322,7 +343,6 @@ export default function BudgetDashboardScreen() {
                     <Text style={styles.avatarInitial}>{userInitial}</Text>
                   </View>
                 )}
-                <View style={styles.onlineIndicator} />
               </View>
               <Text style={styles.headerTitle}>Budget</Text>
             </XStack>
@@ -385,7 +405,7 @@ export default function BudgetDashboardScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} {...(eventIdParam ? swipeBackResponder.panHandlers : {})}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Background */}
@@ -397,21 +417,30 @@ export default function BudgetDashboardScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
         <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
-          {/* Avatar and Title */}
+          {/* Back button (from Event Summary) or Avatar */}
           <XStack alignItems="center" gap={12}>
-            <View style={styles.avatarContainer}>
-              {userAvatar ? (
-                <Image
-                  source={{ uri: userAvatar }}
-                  style={styles.avatar}
-                />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Text style={styles.avatarInitial}>{userInitial}</Text>
-                </View>
-              )}
-              <View style={styles.onlineIndicator} />
-            </View>
+            {eventIdParam ? (
+              <Pressable
+                onPress={handleBack}
+                hitSlop={8}
+                style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
+              >
+                <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+              </Pressable>
+            ) : (
+              <View style={styles.avatarContainer}>
+                {userAvatar ? (
+                  <Image
+                    source={{ uri: userAvatar }}
+                    style={styles.avatar}
+                  />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                    <Text style={styles.avatarInitial}>{userInitial}</Text>
+                  </View>
+                )}
+              </View>
+            )}
             <Text style={styles.headerTitle}>Budget</Text>
           </XStack>
 

@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { DARK_THEME } from '@/constants/theme';
 import { preloadPackageImages } from '@/constants/packageImages';
+import { preloadSportLogos } from '@/constants/sportLogos';
 import config from '../tamagui.config';
 
 // Crisp Chat — native module, not available in Expo Go
@@ -61,6 +62,7 @@ function RootLayoutNav() {
     initialize();
     // Preload package images during splash screen to eliminate loading delays
     preloadPackageImages().catch(() => {});
+    preloadSportLogos().catch(() => {});
   }, [initialize]);
 
   // Sync user info with Crisp when session changes (with identity verification)
