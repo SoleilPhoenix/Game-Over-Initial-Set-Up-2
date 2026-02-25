@@ -185,9 +185,14 @@ export default function BudgetDashboardScreen() {
   const isLoading = hasBookedEvents && (bookingLoading || participantsLoading);
 
   // Navigate back to Event Summary when opened from it
+  // Use explicit navigation to avoid going to Chat when stacked from Event Summary → Chat → Budget
   const handleBack = useCallback(() => {
-    router.back();
-  }, [router]);
+    if (eventIdParam) {
+      router.navigate(`/event/${eventIdParam}` as any);
+    } else {
+      router.back();
+    }
+  }, [router, eventIdParam]);
 
   // Stable ref so swipe PanResponder always calls the latest handleBack
   const handleBackRef = useRef(handleBack);
@@ -485,6 +490,8 @@ export default function BudgetDashboardScreen() {
         }
       >
         <>
+          {selectedCategory === 'package' ? (
+            <>
             {/* Total Budget Card */}
             <View style={styles.glassCard}>
               {/* Gradient blur effect */}
@@ -628,20 +635,23 @@ export default function BudgetDashboardScreen() {
                 })}
               </View>
             </YStack>
-
+            </>
+          ) : (
+            <>
             {/* Hidden Cost Alerts */}
             <YStack marginBottom="$4">
-              <Text
-                fontSize={12}
-                fontWeight="700"
-                color={DARK_THEME.textTertiary}
-                textTransform="uppercase"
-                letterSpacing={0.8}
-                marginBottom="$3"
-                marginLeft="$1"
-              >
-                {t.budget.hiddenCostAlerts}
-              </Text>
+              <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
+                <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
+                  {t.budget.hiddenCostAlerts}
+                </Text>
+                <Pressable
+                  onPress={() => Alert.alert('Add Expense', 'Expense tracking coming soon.')}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                >
+                  <Ionicons name="add-circle-outline" size={16} color={DARK_THEME.primary} />
+                  <Text fontSize={12} fontWeight="500" color={DARK_THEME.primary}>Add</Text>
+                </Pressable>
+              </XStack>
               <View style={[styles.glassCard, styles.emptyStateCard]}>
                 <View style={styles.emptyStateIcon}>
                   <Ionicons name="shield-checkmark" size={24} color="rgba(52, 211, 153, 0.8)" />
@@ -657,19 +667,19 @@ export default function BudgetDashboardScreen() {
 
             {/* Refund Tracking */}
             <YStack marginBottom="$6">
-              <Text
-                fontSize={12}
-                fontWeight="700"
-                color={DARK_THEME.textTertiary}
-                textTransform="uppercase"
-                letterSpacing={0.8}
-                marginBottom="$3"
-                marginLeft="$1"
-              >
-                {t.budget.refundTracking}
-              </Text>
+              <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
+                <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
+                  {t.budget.refundTracking}
+                </Text>
+                <Pressable
+                  onPress={() => Alert.alert('Add Refund', 'Refund tracking coming soon.')}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                >
+                  <Ionicons name="add-circle-outline" size={16} color={DARK_THEME.primary} />
+                  <Text fontSize={12} fontWeight="500" color={DARK_THEME.primary}>Add</Text>
+                </Pressable>
+              </XStack>
               <View style={styles.glassCard}>
-                {/* Example refund items */}
                 <Pressable style={[styles.refundRow, styles.contributionRowBorder]}>
                   <XStack alignItems="center" gap="$3" flex={1}>
                     <View style={styles.refundIcon}>
@@ -685,9 +695,7 @@ export default function BudgetDashboardScreen() {
                     </YStack>
                   </XStack>
                   <YStack alignItems="flex-end">
-                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
-                      +$500.00
-                    </Text>
+                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>+$500.00</Text>
                     <View style={styles.processingBadge}>
                       <Text style={styles.processingText}>{t.budget.processing}</Text>
                     </View>
@@ -709,9 +717,7 @@ export default function BudgetDashboardScreen() {
                     </YStack>
                   </XStack>
                   <YStack alignItems="flex-end">
-                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
-                      +$12.50
-                    </Text>
+                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>+$12.50</Text>
                     <View style={styles.receivedBadge}>
                       <Text style={styles.receivedText}>{t.budget.received}</Text>
                     </View>
@@ -719,6 +725,8 @@ export default function BudgetDashboardScreen() {
                 </Pressable>
               </View>
             </YStack>
+            </>
+          )}
 
             {/* Footer */}
             <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" marginTop="$2">

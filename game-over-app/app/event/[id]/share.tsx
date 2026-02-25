@@ -31,8 +31,8 @@ const SOCIALS: Array<{
     renderIcon: () => (
       <RNImage
         source={require('../../../assets/instagram-logo.png')}
-        style={{ width: 48, height: 48, borderRadius: 12 }}
-        resizeMode="contain"
+        style={{ width: 48, height: 48 }}
+        resizeMode="cover"
       />
     ),
     onPress: async () => {
@@ -47,7 +47,7 @@ const SOCIALS: Array<{
     key: 'whatsapp',
     label: 'WhatsApp',
     bgColor: '#25D366',
-    renderIcon: () => <Ionicons name="logo-whatsapp" size={24} color="#FFFFFF" />,
+    renderIcon: () => <Ionicons name="logo-whatsapp" size={28} color="#FFFFFF" />,
     onPress: async (_msg, url) => {
       const text = encodeURIComponent(`${_msg}\n\n${url}`);
       const waUrl = `whatsapp://send?text=${text}`;
@@ -62,7 +62,7 @@ const SOCIALS: Array<{
     renderIcon: () => (
       <RNImage
         source={require('../../../assets/tiktok-logo.png')}
-        style={{ width: 26, height: 26 }}
+        style={{ width: 30, height: 30 }}
         resizeMode="contain"
       />
     ),
@@ -74,12 +74,12 @@ const SOCIALS: Array<{
   {
     key: 'snapchat',
     label: 'Snapchat',
-    bgColor: 'transparent',
+    bgColor: '#FFFC00',
     renderIcon: () => (
       <RNImage
         source={require('../../../assets/snapchat-logo.png')}
-        style={{ width: 48, height: 48, borderRadius: 12 }}
-        resizeMode="contain"
+        style={{ width: 48, height: 48 }}
+        resizeMode="cover"
       />
     ),
     onPress: async () => {
@@ -91,7 +91,7 @@ const SOCIALS: Array<{
     key: 'facebook',
     label: 'Facebook',
     bgColor: '#1877F2',
-    renderIcon: () => <Ionicons name="logo-facebook" size={24} color="#FFFFFF" />,
+    renderIcon: () => <Ionicons name="logo-facebook" size={28} color="#FFFFFF" />,
     onPress: async (_msg, url) => {
       const shareUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
       const fbUrl = `fb://facewebmodal/f?href=${encodeURIComponent(shareUrl)}`;
@@ -105,7 +105,7 @@ const SOCIALS: Array<{
     bgColor: '#000000',
     renderIcon: () => (
       <YStack alignItems="center" justifyContent="center">
-        <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFFFFF', lineHeight: 22 }}>𝕏</Text>
+        <Text style={{ fontSize: 22, fontWeight: '900', color: '#FFFFFF', lineHeight: 26 }}>𝕏</Text>
       </YStack>
     ),
     onPress: async (_msg, url) => {
@@ -440,9 +440,10 @@ const styles = StyleSheet.create({
   socialIconCircle: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   socialLabel: {
     flex: 1,

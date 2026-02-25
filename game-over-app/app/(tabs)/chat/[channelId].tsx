@@ -348,9 +348,12 @@ export default function ChatChannelScreen() {
             <Text fontSize="$4" fontWeight="700" color="$textPrimary" numberOfLines={1}>
               {channelDisplayName}
             </Text>
-            <Text fontSize="$1" color="$textSecondary">
-              #{channelDisplayCategory}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: headerColor }} />
+              <Text style={{ fontSize: 11, color: DARK_THEME.textTertiary, letterSpacing: 0.6, fontWeight: '500' }}>
+                {channelDisplayCategory.toUpperCase()}
+              </Text>
+            </View>
           </YStack>
 
           <XStack
