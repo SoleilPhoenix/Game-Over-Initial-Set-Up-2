@@ -8,7 +8,7 @@ import { Pressable, StyleSheet, Linking, Alert, Share, ScrollView, View, Image a
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useCreateInvite } from '@/hooks/queries/useInvites';
@@ -27,8 +27,14 @@ const SOCIALS: Array<{
   {
     key: 'instagram',
     label: 'Instagram',
-    bgColor: '#E1306C',
-    renderIcon: () => <MaterialCommunityIcons name="instagram" size={24} color="#FFFFFF" />,
+    bgColor: 'transparent',
+    renderIcon: () => (
+      <RNImage
+        source={require('../../../assets/instagram-logo.png')}
+        style={{ width: 48, height: 48, borderRadius: 12 }}
+        resizeMode="contain"
+      />
+    ),
     onPress: async () => {
       await Linking.openURL('instagram://story-camera').catch(() =>
         Linking.openURL('instagram://').catch(() =>
@@ -56,7 +62,7 @@ const SOCIALS: Array<{
     renderIcon: () => (
       <RNImage
         source={require('../../../assets/tiktok-logo.png')}
-        style={{ width: 34, height: 34 }}
+        style={{ width: 26, height: 26 }}
         resizeMode="contain"
       />
     ),
@@ -68,8 +74,14 @@ const SOCIALS: Array<{
   {
     key: 'snapchat',
     label: 'Snapchat',
-    bgColor: '#FFFC00',
-    renderIcon: () => <MaterialCommunityIcons name="snapchat" size={26} color="#000000" />,
+    bgColor: 'transparent',
+    renderIcon: () => (
+      <RNImage
+        source={require('../../../assets/snapchat-logo.png')}
+        style={{ width: 48, height: 48, borderRadius: 12 }}
+        resizeMode="contain"
+      />
+    ),
     onPress: async () => {
       const supported = await Linking.canOpenURL('snapchat://').catch(() => false);
       await Linking.openURL(supported ? 'snapchat://' : 'https://www.snapchat.com/');

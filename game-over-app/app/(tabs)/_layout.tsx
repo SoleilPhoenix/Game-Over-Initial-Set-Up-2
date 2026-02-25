@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { DARK_THEME } from '@/constants/theme';
 import { useWizardStore } from '@/stores/wizardStore';
+import { useTabBarStore } from '@/stores/tabBarStore';
 import { useTranslation, getTranslation } from '@/i18n';
 
 type IconName = 'calendar' | 'calendar-outline' | 'chatbubbles' | 'chatbubbles-outline' |
@@ -117,6 +118,7 @@ function FABButton() {
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
+  const tabBarHidden = useTabBarStore((s) => s.hidden);
 
   // Hide tab bar on chat detail screens (chat/[channelId])
   const currentRoute = state.routes[state.index];
@@ -132,7 +134,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const isBudgetFromEventSummary = currentRoute?.name === 'budget' &&
     (!!(innerRoute?.params as any)?.eventId || !!(currentRoute?.params as any)?.eventId);
 
-  if (isChannelDetailScreen || isChatFromEventSummary || isBudgetFromEventSummary) {
+  if (tabBarHidden || isChannelDetailScreen || isChatFromEventSummary || isBudgetFromEventSummary) {
     return null;
   }
 

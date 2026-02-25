@@ -469,7 +469,7 @@ export default function ChatChannelScreen() {
 
             {/* 2. Channel name */}
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 10 }}>
-              <Ionicons name="chatbubble-outline" size={18} color={headerColor} />
+              <Ionicons name={headerIcon} size={18} color={headerColor} />
               <Text numberOfLines={2} style={{ flex: 1, color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
                 {channelDisplayName}
               </Text>

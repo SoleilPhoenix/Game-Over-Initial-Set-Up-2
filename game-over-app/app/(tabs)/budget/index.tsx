@@ -6,8 +6,8 @@
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, View, Image, FlatList, StatusBar, PanResponder } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { YStack, XStack, Text, Spinner } from 'tamagui';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +16,7 @@ import { useBooking } from '@/hooks/queries/useBookings';
 import { useParticipants } from '@/hooks/queries/useParticipants';
 import { useUser } from '@/stores/authStore';
 import { DARK_THEME } from '@/constants/theme';
+import { useTabBarStore } from '@/stores/tabBarStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
@@ -45,6 +46,16 @@ export default function BudgetDashboardScreen() {
   const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<BudgetCategory>('package');
   const { t } = useTranslation();
+  const setTabBarHidden = useTabBarStore((s) => s.setHidden);
+
+  // Hide tab bar when opened from Event Summary (eventIdParam present)
+  useFocusEffect(
+    useCallback(() => {
+      if (eventIdParam) setTabBarHidden(true);
+      return () => setTabBarHidden(false);
+    }, [eventIdParam])
+  );
+
   const BUDGET_TABS = ['package', 'otherExpenses'] as const;
   const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchCategoryAnimated } = useSwipeTabs(BUDGET_TABS, selectedCategory, setSelectedCategory);
 
@@ -467,18 +478,13 @@ export default function BudgetDashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
+            refreshing={isRefetching || isLoading}
             onRefresh={handleRefresh}
             tintColor={DARK_THEME.primary}
           />
         }
       >
-        {isLoading ? (
-          <YStack flex={1} justifyContent="center" alignItems="center" padding="$8">
-            <Spinner size="large" color={DARK_THEME.primary} />
-          </YStack>
-        ) : (
-          <>
+        <>
             {/* Total Budget Card */}
             <View style={styles.glassCard}>
               {/* Gradient blur effect */}
@@ -718,8 +724,7 @@ export default function BudgetDashboardScreen() {
             <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" marginTop="$2">
               {t.budget.dataUpdated}
             </Text>
-          </>
-        )}
+        </>
       </ScrollView>
       </Animated.View>
     </View>
