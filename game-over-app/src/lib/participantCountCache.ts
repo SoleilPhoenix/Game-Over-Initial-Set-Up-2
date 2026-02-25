@@ -95,3 +95,36 @@ export async function loadGuestDetails(eventId: string): Promise<Record<number, 
   } catch {}
   return {};
 }
+
+// ─── Budget Info Cache (demo-mode events) ────
+export interface BudgetInfo {
+  totalCents: number;
+  perPersonCents: number;
+  payingCount: number;
+}
+
+const BUDGET_KEY = 'budget_info';
+const budgetCache: Record<string, BudgetInfo> = {};
+
+export async function setBudgetInfo(eventId: string, info: BudgetInfo): Promise<void> {
+  budgetCache[eventId] = info;
+  try {
+    const raw = await AsyncStorage.getItem(BUDGET_KEY);
+    const data = raw ? JSON.parse(raw) : {};
+    data[eventId] = info;
+    await AsyncStorage.setItem(BUDGET_KEY, JSON.stringify(data));
+  } catch {}
+}
+
+export async function loadBudgetInfo(eventId: string): Promise<BudgetInfo | undefined> {
+  if (budgetCache[eventId]) return budgetCache[eventId];
+  try {
+    const raw = await AsyncStorage.getItem(BUDGET_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      Object.assign(budgetCache, data);
+      return data[eventId];
+    }
+  } catch {}
+  return undefined;
+}

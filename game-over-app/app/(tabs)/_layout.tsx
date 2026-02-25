@@ -127,12 +127,17 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const isChannelDetailScreen = currentRoute?.name === 'chat' &&
     innerRoute?.name?.includes('[channelId]');
 
-  // Hide tab bar when chat or budget opened from Event Summary (eventId param present)
-  const isChatFromEventSummary = currentRoute?.name === 'chat' &&
-    (!!(innerRoute?.params as any)?.eventId || !!(currentRoute?.params as any)?.eventId);
+  // Recursively check if any nested route has an eventId param
+  const routeHasEventId = (route: any): boolean => {
+    if (!route) return false;
+    if ((route.params as any)?.eventId) return true;
+    if (route.state?.routes) return route.state.routes.some(routeHasEventId);
+    return false;
+  };
 
-  const isBudgetFromEventSummary = currentRoute?.name === 'budget' &&
-    (!!(innerRoute?.params as any)?.eventId || !!(currentRoute?.params as any)?.eventId);
+  // Hide tab bar when chat or budget opened from Event Summary (eventId param present)
+  const isChatFromEventSummary = currentRoute?.name === 'chat' && routeHasEventId(currentRoute);
+  const isBudgetFromEventSummary = currentRoute?.name === 'budget' && routeHasEventId(currentRoute);
 
   if (tabBarHidden || isChannelDetailScreen || isChatFromEventSummary || isBudgetFromEventSummary) {
     return null;

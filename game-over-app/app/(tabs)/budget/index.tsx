@@ -20,6 +20,7 @@ import { useTabBarStore } from '@/stores/tabBarStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
+import { loadBudgetInfo, loadDesiredParticipants, loadGuestDetails, type BudgetInfo, type GuestDetail } from '@/lib/participantCountCache';
 import type { Database } from '@/lib/supabase/types';
 
 type Event = Database['public']['Tables']['events']['Row'] & {
@@ -45,6 +46,9 @@ export default function BudgetDashboardScreen() {
   const [selectedEventId, setSelectedEventId] = useState<string | null>(eventIdParam || null);
   const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<BudgetCategory>('package');
+  const [cachedBudget, setCachedBudget] = useState<BudgetInfo | null>(null);
+  const [cachedParticipantCount, setCachedParticipantCount] = useState<number | null>(null);
+  const [cachedGuests, setCachedGuests] = useState<Record<number, GuestDetail>>({});
   const { t } = useTranslation();
   const setTabBarHidden = useTabBarStore((s) => s.setHidden);
 
@@ -118,25 +122,43 @@ export default function BudgetDashboardScreen() {
 
   const selectedEvent = bookedEvents.find((e: Event) => e.id === selectedEventId);
 
-  // Calculate budget stats
+  // Load cached budget + participant data for demo-mode events (no DB booking record)
+  useEffect(() => {
+    if (!selectedEventId) return;
+    loadBudgetInfo(selectedEventId).then(info => setCachedBudget(info ?? null));
+    loadDesiredParticipants(selectedEventId).then(count => setCachedParticipantCount(count ?? null));
+    loadGuestDetails(selectedEventId).then(guests => setCachedGuests(guests ?? {}));
+  }, [selectedEventId]);
+
+  // Calculate budget stats — fall back to cache when DB booking doesn't exist
   const budgetStats = useMemo(() => {
-    if (!booking || !participants) {
+    // Demo mode: no DB booking record — build from cached data or estimates
+    if (!booking) {
+      const guestCount = Object.keys(cachedGuests).length;
+      const payingCount = cachedBudget?.payingCount
+        || (cachedParticipantCount ? cachedParticipantCount - 1 : 0)
+        || guestCount
+        || 0;
+      const perPerson = cachedBudget?.perPersonCents || 14900; // €149 default (classic tier)
+      const total = cachedBudget?.totalCents || (payingCount * perPerson);
+      const deposit = Math.round(total * 0.25);
       return {
-        totalBudget: 0,
-        collected: 0,
-        pending: 0,
-        percentage: 0,
-        paidCount: 0,
-        pendingCount: 0,
+        totalBudget: total,
+        collected: deposit,
+        pending: total - deposit,
+        percentage: total > 0 ? Math.round((deposit / total) * 100) : 0,
+        paidCount: 1, // organizer paid deposit
+        pendingCount: Math.max(0, payingCount - 1),
+        perPerson,
       };
     }
 
-    const totalBudget = booking.total_amount_cents || 0;
+    const totalBudget = booking!.total_amount_cents || 0;
     let collected = 0;
     let paidCount = 0;
     let pendingCount = 0;
 
-    participants.forEach((p) => {
+    (participants ?? []).forEach((p) => {
       if (p.payment_status === 'paid') {
         collected += p.contribution_amount_cents || 0;
         paidCount++;
@@ -151,15 +173,16 @@ export default function BudgetDashboardScreen() {
       pending: totalBudget - collected,
       percentage: totalBudget > 0 ? Math.round((collected / totalBudget) * 100) : 0,
       paidCount,
+      perPerson: booking!.per_person_cents || 0,
       pendingCount,
     };
-  }, [booking, participants]);
+  }, [booking, participants, cachedBudget, cachedParticipantCount, cachedGuests]);
 
   // Format currency
   const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat('en-US', {
+    return new Intl.NumberFormat('de-DE', {
       style: 'currency',
-      currency: 'USD',
+      currency: 'EUR',
     }).format(cents / 100);
   };
 
@@ -185,7 +208,8 @@ export default function BudgetDashboardScreen() {
   const isLoading = hasBookedEvents && (bookingLoading || participantsLoading);
 
   // Navigate back to Event Summary when opened from it
-  // Use explicit navigation to avoid going to Chat when stacked from Event Summary → Chat → Budget
+  // router.back() doesn't work for cross-navigator (tab → stack) navigation,
+  // so we navigate explicitly to the event screen when eventIdParam is present.
   const handleBack = useCallback(() => {
     if (eventIdParam) {
       router.navigate(`/event/${eventIdParam}` as any);
@@ -194,20 +218,43 @@ export default function BudgetDashboardScreen() {
     }
   }, [router, eventIdParam]);
 
-  // Stable ref so swipe PanResponder always calls the latest handleBack
-  const handleBackRef = useRef(handleBack);
-  useEffect(() => { handleBackRef.current = handleBack; }, [handleBack]);
+  // Keep a ref to the back handler so the PanResponder (created once) always calls current logic
+  const backHandlerRef = useRef(handleBack);
+  useEffect(() => { backHandlerRef.current = handleBack; }, [handleBack]);
 
-  // Left-edge swipe to go back when opened from Event Summary
+  // Left-edge swipe to go back when opened from Event Summary — identical to Chat
   const swipeBackResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gs) =>
         gs.dx > 20 && Math.abs(gs.dy) < 60 && gs.moveX < 40,
       onPanResponderRelease: (_, gs) => {
-        if (gs.dx > 40) handleBackRef.current();
+        if (gs.dx > 40) backHandlerRef.current();
       },
     })
   ).current;
+
+  // Build demo participant list when no DB booking record exists
+  const demoParticipants = useMemo(() => {
+    if (booking) return null; // real data — use DB participants
+    const guestCount = Object.keys(cachedGuests).length;
+    const totalPaying = (cachedBudget?.payingCount
+      || (cachedParticipantCount ? cachedParticipantCount - 1 : 0)
+      || guestCount
+      || 0);
+    if (totalPaying === 0) return null;
+    const list: Array<{ id: string; name: string; status: 'paid' | 'pending'; amount: number }> = [];
+    // Organizer (current user) — paid the 25% deposit
+    list.push({ id: 'organizer', name: userName, status: 'paid', amount: budgetStats.collected });
+    // Other participants from guest details cache or placeholders
+    for (let i = 1; i < totalPaying; i++) {
+      const guest = cachedGuests[i];
+      const name = guest?.firstName
+        ? `${guest.firstName}${guest.lastName ? ' ' + guest.lastName : ''}`
+        : `Guest ${i}`;
+      list.push({ id: `g-${i}`, name, status: 'pending', amount: budgetStats.perPerson });
+    }
+    return list;
+  }, [booking, cachedBudget, cachedParticipantCount, cachedGuests, userName, budgetStats]);
 
   // Event selector
   const selectedEventName = selectedEvent
@@ -535,11 +582,11 @@ export default function BudgetDashboardScreen() {
                   <XStack alignItems="center" gap="$1.5">
                     <View style={styles.statDot} />
                     <Text fontSize={12} fontWeight="500" color={DARK_THEME.textSecondary}>
-                      {t.budget.spent} ({budgetStats.percentage}%)
+                      {t.budget.spent.replace('{{percentage}}', String(budgetStats.percentage))}
                     </Text>
                   </XStack>
                   <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary}>
-                    {formatCurrency(budgetStats.pending)} {t.budget.remaining}
+                    {t.budget.remaining.replace('{{amount}}', formatCurrency(budgetStats.pending))}
                   </Text>
                 </XStack>
               </YStack>
@@ -561,52 +608,49 @@ export default function BudgetDashboardScreen() {
               </XStack>
 
               <View style={styles.glassCard}>
-                {participants?.map((participant, index) => {
-                  const isPaid = participant.payment_status === 'paid';
-                  const isPending = participant.payment_status === 'pending';
-                  const perPerson = booking?.per_person_cents || 0;
+                {/* Use demo participants when no DB booking, otherwise DB participants */}
+                {(demoParticipants || participants)?.map((participantRaw, index) => {
+                  type DemoP = { id: string; name: string; status: 'paid' | 'pending'; amount: number };
+                  const isDemo = !!demoParticipants;
+                  // Normalise to common shape
+                  const name = isDemo
+                    ? (participantRaw as DemoP).name
+                    : (((participantRaw as any).profile?.full_name) || (participantRaw as any).profile?.email?.split('@')[0] || '—');
+                  const isPaid = isDemo
+                    ? (participantRaw as DemoP).status === 'paid'
+                    : (participantRaw as any).payment_status === 'paid';
+                  const isPending = !isPaid;
+                  const amountForRow = isDemo
+                    ? (participantRaw as DemoP).amount
+                    : (booking?.per_person_cents || budgetStats.perPerson || 0);
+                  const isCurrentUser = index === 0;
                   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
-                  const initials = (participant.profile?.full_name || 'U')
-                    .split(' ')
-                    .map(n => n[0])
-                    .join('')
-                    .toUpperCase()
-                    .slice(0, 2);
-                  const isCurrentUser = index === 0; // Simplified - would check actual user
+                  const initials = (name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2)) || '?';
+                  const key = (participantRaw as any).id as string;
 
                   return (
-                    <Pressable
-                      key={participant.id}
+                    <View
+                      key={key}
                       style={[
                         styles.contributionRow,
-                        index !== (participants?.length || 0) - 1 && styles.contributionRowBorder,
+                        index !== ((demoParticipants || participants)?.length || 0) - 1 && styles.contributionRowBorder,
                       ]}
                     >
                       <XStack alignItems="center" gap="$3" flex={1}>
-                        {/* Avatar */}
-                        {participant.profile?.avatar_url ? (
-                          <View style={styles.participantAvatarGradient}>
-                            <Image
-                              source={{ uri: participant.profile.avatar_url }}
-                              style={styles.participantAvatar}
-                            />
-                          </View>
-                        ) : (
-                          <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
-                            <Text style={styles.participantInitialsText}>{initials}</Text>
-                          </View>
-                        )}
+                        {/* Avatar initials */}
+                        <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
+                          <Text style={styles.participantInitialsText}>{initials}</Text>
+                        </View>
 
                         {/* Info */}
                         <YStack>
                           <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
-                            {participant.profile?.full_name || 'Unknown'}
-                            {isCurrentUser && ` (${t.budget.you})`}
+                            {name}{isCurrentUser ? ` ${t.budget.you}` : ''}
                           </Text>
                           <Text fontSize={12} color={DARK_THEME.textTertiary}>
                             {isPending
-                              ? `${formatCurrency(perPerson - (participant.contribution_amount_cents || 0))} ${t.budget.remaining}`
-                              : `${formatCurrency(perPerson)} ${t.budget.contribution}`
+                              ? t.budget.remaining.replace('{{amount}}', formatCurrency(amountForRow))
+                              : t.budget.contribution.replace('{{amount}}', formatCurrency(amountForRow))
                             }
                           </Text>
                         </YStack>
@@ -630,7 +674,7 @@ export default function BudgetDashboardScreen() {
                           {isPaid ? t.budget.paid : t.budget.pending}
                         </Text>
                       </View>
-                    </Pressable>
+                    </View>
                   );
                 })}
               </View>

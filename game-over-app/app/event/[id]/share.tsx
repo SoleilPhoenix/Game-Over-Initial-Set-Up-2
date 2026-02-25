@@ -78,8 +78,8 @@ const SOCIALS: Array<{
     renderIcon: () => (
       <RNImage
         source={require('../../../assets/snapchat-logo.png')}
-        style={{ width: 48, height: 48 }}
-        resizeMode="cover"
+        style={{ width: 48, height: 28 }}
+        resizeMode="contain"
       />
     ),
     onPress: async () => {

@@ -30,3 +30,14 @@ export const SPORT_LOGO_ASSETS = [
 export async function preloadSportLogos(): Promise<void> {
   await Asset.loadAsync(SPORT_LOGO_ASSETS);
 }
+
+// Social share logo assets — preloaded to eliminate 1-second load delay on share screen
+const SHARE_LOGO_ASSETS = [
+  require('../../assets/tiktok-logo.png'),
+  require('../../assets/snapchat-logo.png'),
+  require('../../assets/instagram-logo.png'),
+];
+
+export async function preloadShareImages(): Promise<void> {
+  await Asset.loadAsync(SHARE_LOGO_ASSETS);
+}

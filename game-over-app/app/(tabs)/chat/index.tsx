@@ -1395,12 +1395,12 @@ export default function CommunicationScreen() {
                   {/* 2. Poll title — uses same icon as the poll card */}
                   <XStack gap={10} alignItems="center" marginBottom={10}>
                     <Ionicons name={pollIcon as any} size={18} color={catCfg.color} />
-                    <Text numberOfLines={2} style={{ flex: 1, color: DARK_THEME.textPrimary, fontSize: 15, fontWeight: '600' }}>{pollInfoModal.title}</Text>
+                    <Text numberOfLines={2} style={{ flex: 1, color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>{pollInfoModal.title}</Text>
                   </XStack>
                   {/* 3. Creator */}
                   <XStack gap={10} alignItems="center" marginBottom={10}>
-                    <Ionicons name="person-outline" size={18} color={DARK_THEME.textSecondary} />
-                    <Text style={{ color: DARK_THEME.textSecondary, fontSize: 14 }}>
+                    <Ionicons name="person-outline" size={18} color={catCfg.color} />
+                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
                       {pollInfoModal.created_by === user?.id
                         ? (user?.user_metadata?.full_name ?? 'You')
                         : 'Another member'}
@@ -1408,8 +1408,8 @@ export default function CommunicationScreen() {
                   </XStack>
                   {/* 4. Date */}
                   <XStack gap={10} alignItems="center" marginBottom={10}>
-                    <Ionicons name="calendar-outline" size={18} color={DARK_THEME.textSecondary} />
-                    <Text style={{ color: DARK_THEME.textSecondary, fontSize: 14 }}>
+                    <Ionicons name="calendar-outline" size={18} color={catCfg.color} />
+                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
                       {pollInfoModal.created_at
                         ? new Date(pollInfoModal.created_at).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })
                         : '—'}
@@ -1417,9 +1417,9 @@ export default function CommunicationScreen() {
                   </XStack>
                   {/* 5. Vote status */}
                   <XStack gap={10} alignItems="center" marginBottom={20}>
-                    <Ionicons name="stats-chart-outline" size={18} color={DARK_THEME.textSecondary} />
-                    <Text style={{ color: DARK_THEME.textSecondary, fontSize: 14 }}>
-                      {pollInfoModal.total_votes} vote{pollInfoModal.total_votes !== 1 ? 's' : ''} · <Text style={{ color: catCfg.color, fontWeight: '600' }}>{(pollInfoModal.status ?? 'active').toUpperCase()}</Text>
+                    <Ionicons name="stats-chart-outline" size={18} color={catCfg.color} />
+                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
+                      {pollInfoModal.total_votes} vote{pollInfoModal.total_votes !== 1 ? 's' : ''} · {(pollInfoModal.status ?? 'active').toUpperCase()}
                     </Text>
                   </XStack>
                   {pollInfoModal.created_by === user?.id && (

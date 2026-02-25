@@ -348,12 +348,6 @@ export default function ChatChannelScreen() {
             <Text fontSize="$4" fontWeight="700" color="$textPrimary" numberOfLines={1}>
               {channelDisplayName}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: headerColor }} />
-              <Text style={{ fontSize: 11, color: DARK_THEME.textTertiary, letterSpacing: 0.6, fontWeight: '500' }}>
-                {channelDisplayCategory.toUpperCase()}
-              </Text>
-            </View>
           </YStack>
 
           <XStack
@@ -473,15 +467,15 @@ export default function ChatChannelScreen() {
             {/* 2. Channel name */}
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 10 }}>
               <Ionicons name={headerIcon} size={18} color={headerColor} />
-              <Text numberOfLines={2} style={{ flex: 1, color: '#FFFFFF', fontSize: 15, fontWeight: '600' }}>
+              <Text numberOfLines={2} style={{ flex: 1, color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
                 {channelDisplayName}
               </Text>
             </View>
 
             {/* 3. Created by */}
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 10 }}>
-              <Ionicons name="person-outline" size={18} color="#9CA3AF" />
-              <Text style={{ color: '#D1D5DB', fontSize: 14 }}>
+              <Ionicons name="person-outline" size={18} color={headerColor} />
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
                 {!isDbChannel
                   ? (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You')
                   : '—'}
@@ -490,8 +484,8 @@ export default function ChatChannelScreen() {
 
             {/* 4. Created at */}
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 20 }}>
-              <Ionicons name="calendar-outline" size={18} color="#9CA3AF" />
-              <Text style={{ color: '#D1D5DB', fontSize: 14 }}>
+              <Ionicons name="calendar-outline" size={18} color={headerColor} />
+              <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
                 {isDbChannel && channel?.created_at
                   ? new Date(channel.created_at).toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })
                   : !isDbChannel && channelId

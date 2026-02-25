@@ -17,7 +17,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useTranslation, getTranslation } from '@/i18n';
-import { setDesiredParticipants } from '@/lib/participantCountCache';
+import { setDesiredParticipants, setBudgetInfo } from '@/lib/participantCountCache';
 
 // Fallback packages for draft mode
 const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; price_per_person_cents: number }> = {
@@ -177,9 +177,14 @@ export default function PaymentScreen() {
           if (updateError) {
             console.warn('Event status update failed (non-blocking):', updateError.message);
           }
-          // Cache desired participant count for event summary screens
+          // Cache desired participant count + budget info for event summary/budget screens
           const totalParticipants = pricing.payingParticipantCount + (excludeHonoree ? 1 : 0);
           setDesiredParticipants(eventId, totalParticipants).catch(() => {});
+          setBudgetInfo(eventId, {
+            totalCents: pricing.totalCents,
+            perPersonCents: pricing.perPersonCents,
+            payingCount: pricing.payingParticipantCount,
+          }).catch(() => {});
         }
 
         setPaymentStep('confirming');
