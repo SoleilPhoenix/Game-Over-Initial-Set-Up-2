@@ -38,6 +38,14 @@ const AVATAR_COLORS = [
 
 type BudgetCategory = 'package' | 'otherExpenses';
 
+const EXPENSE_CATEGORIES = [
+  { key: 'accommodation', icon: 'bed-outline', color: '#3B82F6', bg: 'rgba(59,130,246,0.15)', labelKey: 'expenseAccommodation' },
+  { key: 'food', icon: 'restaurant-outline', color: '#F97316', bg: 'rgba(249,115,22,0.15)', labelKey: 'expenseFood' },
+  { key: 'activities', icon: 'game-controller-outline', color: '#8B5CF6', bg: 'rgba(139,92,246,0.15)', labelKey: 'expenseActivities' },
+  { key: 'transport', icon: 'car-outline', color: '#10B981', bg: 'rgba(16,185,129,0.15)', labelKey: 'expenseTransport' },
+  { key: 'gifts', icon: 'gift-outline', color: '#EC4899', bg: 'rgba(236,72,153,0.15)', labelKey: 'expenseGifts' },
+] as const;
+
 export default function BudgetDashboardScreen() {
   const router = useRouter();
   const { eventId: eventIdParam } = useLocalSearchParams<{ eventId?: string }>();
@@ -207,19 +215,29 @@ export default function BudgetDashboardScreen() {
   // Only show loading for booking/participants data when we have events
   const isLoading = hasBookedEvents && (bookingLoading || participantsLoading);
 
-  // Navigate back — identical to Chat: router.back() gives the correct
-  // back-slide animation (Event Summary slides in from the left)
+  // Navigate back — when opened from Event Summary, go directly to it;
+  // otherwise router.back() gives the correct slide animation
   const handleBack = useCallback(() => {
-    router.back();
-  }, [router]);
+    if (eventIdParam) {
+      router.navigate(`/event/${eventIdParam}` as any);
+    } else {
+      router.back();
+    }
+  }, [router, eventIdParam]);
 
-  // Left-edge swipe to go back when opened from Event Summary — identical to Chat
+  // Left-edge swipe to go back when opened from Event Summary
   const swipeBackResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gs) =>
         gs.dx > 20 && Math.abs(gs.dy) < 60 && gs.moveX < 40,
       onPanResponderRelease: (_, gs) => {
-        if (gs.dx > 40) router.back();
+        if (gs.dx > 40) {
+          if (eventIdParam) {
+            router.navigate(`/event/${eventIdParam}` as any);
+          } else {
+            router.back();
+          }
+        }
       },
     })
   ).current;
@@ -244,8 +262,13 @@ export default function BudgetDashboardScreen() {
         : `Guest ${i}`;
       list.push({ id: `g-${i}`, name, status: 'pending', amount: budgetStats.perPerson });
     }
+    // Add honoree if they have a name (shown as a pending participant at the bottom)
+    const honoreeName = selectedEvent?.honoree_name;
+    if (honoreeName) {
+      list.push({ id: 'honoree', name: honoreeName, status: 'pending', amount: budgetStats.perPerson });
+    }
     return list;
-  }, [booking, cachedBudget, cachedParticipantCount, cachedGuests, userName, budgetStats]);
+  }, [booking, cachedBudget, cachedParticipantCount, cachedGuests, userName, budgetStats, selectedEvent]);
 
   // Event selector
   const selectedEventName = selectedEvent
@@ -673,11 +696,11 @@ export default function BudgetDashboardScreen() {
             </>
           ) : (
             <>
-            {/* Hidden Cost Alerts */}
+            {/* Expense Breakdown */}
             <YStack marginBottom="$4">
               <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
                 <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
-                  {t.budget.hiddenCostAlerts}
+                  {(t.budget as any).expenseBreakdown}
                 </Text>
                 <Pressable
                   onPress={() => Alert.alert('Add Expense', 'Expense tracking coming soon.')}
@@ -687,16 +710,29 @@ export default function BudgetDashboardScreen() {
                   <Text fontSize={12} fontWeight="500" color={DARK_THEME.primary}>Add</Text>
                 </Pressable>
               </XStack>
-              <View style={[styles.glassCard, styles.emptyStateCard]}>
-                <View style={styles.emptyStateIcon}>
-                  <Ionicons name="shield-checkmark" size={24} color="rgba(52, 211, 153, 0.8)" />
-                </View>
-                <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary} marginBottom="$1">
-                  {t.budget.noHiddenCosts}
-                </Text>
-                <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" maxWidth={220} lineHeight={18}>
-                  {t.budget.noHiddenCostsDesc}
-                </Text>
+              <View style={styles.glassCard}>
+                {EXPENSE_CATEGORIES.map((item, index) => (
+                  <Pressable
+                    key={item.key}
+                    style={[styles.refundRow, index < EXPENSE_CATEGORIES.length - 1 && styles.contributionRowBorder]}
+                    onPress={() => Alert.alert('Add Expense', 'Expense tracking coming soon.')}
+                  >
+                    <XStack alignItems="center" gap="$3" flex={1}>
+                      <View style={[styles.refundIcon, { backgroundColor: item.bg }]}>
+                        <Ionicons name={item.icon as any} size={18} color={item.color} />
+                      </View>
+                      <YStack>
+                        <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
+                          {(t.budget as any)[item.labelKey]}
+                        </Text>
+                        <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                          {(t.budget as any).expenseEstimated}
+                        </Text>
+                      </YStack>
+                    </XStack>
+                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textTertiary}>—</Text>
+                  </Pressable>
+                ))}
               </View>
             </YStack>
 
@@ -730,7 +766,7 @@ export default function BudgetDashboardScreen() {
                     </YStack>
                   </XStack>
                   <YStack alignItems="flex-end">
-                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>+$500.00</Text>
+                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>+€250</Text>
                     <View style={styles.processingBadge}>
                       <Text style={styles.processingText}>{t.budget.processing}</Text>
                     </View>
@@ -740,7 +776,7 @@ export default function BudgetDashboardScreen() {
                 <Pressable style={styles.refundRow}>
                   <XStack alignItems="center" gap="$3" flex={1}>
                     <View style={styles.refundIcon}>
-                      <Ionicons name="car-outline" size={18} color={DARK_THEME.textSecondary} />
+                      <Ionicons name="storefront-outline" size={18} color={DARK_THEME.textSecondary} />
                     </View>
                     <YStack>
                       <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
@@ -752,7 +788,7 @@ export default function BudgetDashboardScreen() {
                     </YStack>
                   </XStack>
                   <YStack alignItems="flex-end">
-                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>+$12.50</Text>
+                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>+€80</Text>
                     <View style={styles.receivedBadge}>
                       <Text style={styles.receivedText}>{t.budget.received}</Text>
                     </View>

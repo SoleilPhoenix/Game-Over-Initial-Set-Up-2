@@ -458,6 +458,9 @@ export default function CommunicationScreen() {
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
   const [participantCount, setParticipantCount] = useState<number>(0);
+  const [channelInputModal, setChannelInputModal] = useState<{ visible: boolean; category: ChannelCategory | null }>({ visible: false, category: null });
+  const [channelInputValue, setChannelInputValue] = useState('');
+  const channelInputRef = useRef<TextInput | null>(null);
   const { t } = useTranslation();
   const COMM_TABS = ['topics', 'voting'] as const;
   const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchTabAnimated } = useSwipeTabs(COMM_TABS, selectedTab, setSelectedTab);
@@ -654,158 +657,52 @@ export default function CommunicationScreen() {
   };
 
   const handleAddChannel = (category: ChannelCategory) => {
-    const tr = getTranslation();
-    const categoryTitles: Record<ChannelCategory, string> = {
-      general: tr.chat.general,
-      accommodation: tr.chat.accommodation,
-      activities: tr.chat.activities,
-      budget: tr.chat.budgetCategory,
-    };
+    setChannelInputValue('');
+    setChannelInputModal({ visible: true, category });
+    setTimeout(() => channelInputRef.current?.focus(), 150);
+  };
 
-    Alert.prompt(
-      tr.chat.newChannelTitle.replace('{{category}}', categoryTitles[category]),
-      tr.chat.newChannelMessage,
-      [
-        {
-          text: tr.common.cancel,
-          style: 'cancel',
-        },
-        {
-          text: tr.chat.create,
-          onPress: async (channelName?: string) => {
-            const raw = channelName?.trim();
-            if (raw) {
-              const name = raw.charAt(0).toUpperCase() + raw.slice(1);
-              if (selectedEventId) {
-                // Save to database if event exists
-                try {
-                  await createChannelMutation.mutateAsync({
-                    event_id: selectedEventId,
-                    name,
-                    category,
-                  });
-                  Alert.alert(tr.budget.success, tr.chat.channelCreated);
-                } catch (error: any) {
-                  // RLS policy violation (42501) — fall back to local-only channel
-                  const code = error?.code || error?.message || '';
-                  if (code === '42501' || String(code).includes('42501')) {
-                    setLocalSectionsForEvent(prevSections =>
-                      prevSections.map(section =>
-                        section.id === category
-                          ? {
-                              ...section,
-                              channels: [
-                                ...section.channels,
-                                { id: Date.now().toString(), name, icon: pickIconForChannel(name, category) }
-                              ]
-                            }
-                          : section
-                      )
-                    );
-                    Alert.alert(tr.budget.success, tr.chat.channelCreated);
-                  } else {
-                    console.error('Failed to create channel:', error);
-                    Alert.alert(tr.common.error, tr.chat.channelCreateFailed);
-                  }
-                }
-              } else {
-                // Save locally if no event
-                setLocalSectionsForEvent(prevSections =>
-                  prevSections.map(section =>
-                    section.id === category
-                      ? {
-                          ...section,
-                          channels: [
-                            ...section.channels,
-                            { id: Date.now().toString(), name, icon: pickIconForChannel(name, category) }
-                          ]
-                        }
-                      : section
-                  )
-                );
-              }
-            }
-          },
-        },
-      ],
-      'plain-text',
-      '',
-      'default'
-    );
+  const handleChannelCreate = async () => {
+    const category = channelInputModal.category;
+    setChannelInputModal({ visible: false, category: null });
+    if (!category) return;
+    const raw = channelInputValue.trim();
+    if (!raw) return;
+    const tr = getTranslation();
+    const name = raw.charAt(0).toUpperCase() + raw.slice(1);
+    if (selectedEventId) {
+      try {
+        await createChannelMutation.mutateAsync({ event_id: selectedEventId, name, category });
+        Alert.alert(tr.budget.success, tr.chat.channelCreated);
+      } catch (error: any) {
+        const code = error?.code || error?.message || '';
+        if (code === '42501' || String(code).includes('42501')) {
+          setLocalSectionsForEvent(prevSections =>
+            prevSections.map(section =>
+              section.id === category
+                ? { ...section, channels: [...section.channels, { id: Date.now().toString(), name, icon: pickIconForChannel(name, category) }] }
+                : section
+            )
+          );
+          Alert.alert(tr.budget.success, tr.chat.channelCreated);
+        } else {
+          console.error('Failed to create channel:', error);
+          Alert.alert(tr.common.error, tr.chat.channelCreateFailed);
+        }
+      }
+    } else {
+      setLocalSectionsForEvent(prevSections =>
+        prevSections.map(section =>
+          section.id === category
+            ? { ...section, channels: [...section.channels, { id: Date.now().toString(), name, icon: pickIconForChannel(name, category) }] }
+            : section
+        )
+      );
+    }
   };
 
   const handleCreateNewTopic = () => {
-    const tr = getTranslation();
-    Alert.prompt(
-      tr.chat.newTopicLabel,
-      tr.chat.newTopicMessage,
-      [
-        {
-          text: tr.common.cancel,
-          style: 'cancel',
-        },
-        {
-          text: tr.chat.create,
-          onPress: async (topicName?: string) => {
-            const rawTopic = topicName?.trim();
-            if (rawTopic) {
-              const topicNameCapitalized = rawTopic.charAt(0).toUpperCase() + rawTopic.slice(1);
-              if (selectedEventId) {
-                // Save to database if event exists
-                try {
-                  await createChannelMutation.mutateAsync({
-                    event_id: selectedEventId,
-                    name: topicNameCapitalized,
-                    category: 'general',
-                  });
-                  Alert.alert(tr.budget.success, tr.chat.topicCreated);
-                } catch (error: any) {
-                  // RLS policy violation (42501) — fall back to local-only channel
-                  const code = error?.code || error?.message || '';
-                  if (code === '42501' || String(code).includes('42501')) {
-                    setLocalSectionsForEvent(prevSections =>
-                      prevSections.map(section =>
-                        section.id === 'general'
-                          ? {
-                              ...section,
-                              channels: [
-                                ...section.channels,
-                                { id: Date.now().toString(), name: topicNameCapitalized, icon: pickIconForChannel(topicNameCapitalized, 'general') }
-                              ]
-                            }
-                          : section
-                      )
-                    );
-                    Alert.alert(tr.budget.success, tr.chat.topicCreated);
-                  } else {
-                    console.error('Failed to create topic:', error);
-                    Alert.alert(tr.common.error, tr.chat.topicCreateFailed);
-                  }
-                }
-              } else {
-                // Save locally if no event
-                setLocalSectionsForEvent(prevSections =>
-                  prevSections.map(section =>
-                    section.id === 'general'
-                      ? {
-                          ...section,
-                          channels: [
-                            ...section.channels,
-                            { id: Date.now().toString(), name: topicNameCapitalized, icon: pickIconForChannel(topicNameCapitalized, 'general') }
-                          ]
-                        }
-                      : section
-                  )
-                );
-              }
-            }
-          },
-        },
-      ],
-      'plain-text',
-      '',
-      'default'
-    );
+    handleAddChannel('general');
   };
 
   const handleCreatePoll = (category: ChannelCategory) => {
@@ -1137,9 +1034,10 @@ export default function CommunicationScreen() {
           <Text style={styles.sectionTitle}>{title}</Text>
           <Pressable
             onPress={() => handleAddChannel(category)}
-            style={styles.addButton}
+            style={styles.newPollButton}
             hitSlop={8}
           >
+            <Text style={[styles.newPollButtonText, { color: catCfg.color }]}>{(t.chat as any).newChatLabel}</Text>
             <Ionicons name="add-circle" size={18} color={catCfg.color} />
           </Pressable>
         </XStack>
@@ -1164,9 +1062,9 @@ export default function CommunicationScreen() {
             })}
           </YStack>
         ) : (
-          <View style={styles.emptyChannelBox}>
+          <Pressable onPress={() => handleAddChannel(category)} style={styles.emptyChannelBox}>
             <Text style={styles.emptyChannelText}>{t.chat.noChannels}</Text>
-          </View>
+          </Pressable>
         )}
       </View>
     );
@@ -1440,6 +1338,52 @@ export default function CommunicationScreen() {
             })()}
           </Pressable>
         </Pressable>
+      </Modal>
+
+      {/* Channel Name Input Modal */}
+      <Modal
+        visible={channelInputModal.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setChannelInputModal({ visible: false, category: null })}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1 }}
+        >
+          <Pressable style={styles.modalOverlay} onPress={() => setChannelInputModal({ visible: false, category: null })}>
+            <Pressable style={styles.modalSheet} onPress={() => {}}>
+              <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
+                <Text style={styles.modalTitle}>{(t.chat as any).newChatLabel}</Text>
+                <Pressable onPress={() => setChannelInputModal({ visible: false, category: null })} hitSlop={8}>
+                  <Ionicons name="close" size={22} color={DARK_THEME.textTertiary} />
+                </Pressable>
+              </XStack>
+              <TextInput
+                ref={channelInputRef}
+                value={channelInputValue}
+                onChangeText={setChannelInputValue}
+                autoCapitalize="sentences"
+                placeholder={(getTranslation().chat as any).newChannelMessage}
+                placeholderTextColor={DARK_THEME.textTertiary}
+                returnKeyType="done"
+                onSubmitEditing={handleChannelCreate}
+                style={styles.modalInput}
+              />
+              <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                <Pressable
+                  style={[styles.modalButton, styles.modalButtonCancel]}
+                  onPress={() => setChannelInputModal({ visible: false, category: null })}
+                >
+                  <Text style={styles.modalButtonCancelText}>{getTranslation().common.cancel}</Text>
+                </Pressable>
+                <Pressable style={[styles.modalButton, styles.modalButtonCreate]} onPress={handleChannelCreate}>
+                  <Text style={styles.modalButtonCreateText}>{getTranslation().chat.create}</Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
