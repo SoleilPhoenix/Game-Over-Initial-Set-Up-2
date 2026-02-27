@@ -21,6 +21,7 @@ import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import { loadBudgetInfo, loadDesiredParticipants, loadGuestDetails, type BudgetInfo, type GuestDetail } from '@/lib/participantCountCache';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Database } from '@/lib/supabase/types';
 
 type Event = Database['public']['Tables']['events']['Row'] & {
@@ -130,9 +131,18 @@ export default function BudgetDashboardScreen() {
   const [expenseViewMode, setExpenseViewMode] = useState<'list' | 'form'>('form');
   const [expenseDescription, setExpenseDescription] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
-  const [expensePaidBy, setExpensePaidBy] = useState<'you' | 'split'>('you');
+  const [expensePaidBy, setExpensePaidBy] = useState<'you' | 'split' | 'other'>('you');
+  const [expensePaidByPerson, setExpensePaidByPerson] = useState<string | null>(null);
   const [expenseContributors, setExpenseContributors] = useState<string[]>([]);
-  const [addedExpenses, setAddedExpenses] = useState<Array<{ categoryKey: string; description: string; amount: string; paidBy: 'you' | 'split'; contributors: string[] }>>([]);
+  const [addedExpenses, setAddedExpenses] = useState<Array<{
+    categoryKey: string; description: string; amount: string;
+    paidBy: 'you' | 'split' | 'other'; paidByPerson?: string | null; contributors: string[];
+  }>>([]);
+
+  // Custom categories (user-created)
+  const [customCategories, setCustomCategories] = useState<ExpenseCategory[]>([]);
+  const [customCategoryModalVisible, setCustomCategoryModalVisible] = useState(false);
+  const [customCategoryLabel, setCustomCategoryLabel] = useState('');
 
   // Refund modal
   const [refundModalVisible, setRefundModalVisible] = useState(false);
@@ -151,21 +161,30 @@ export default function BudgetDashboardScreen() {
     setExpenseDescription('');
     setExpenseAmount('');
     setExpensePaidBy('you');
-    setExpenseContributors(allContributorsRef.current.map(c => c.id)); // pre-select all
+    setExpensePaidByPerson(null);
+    setExpenseContributors([]); // not pre-selected — user chooses who contributes
     setExpenseModalVisible(true);
   }, [addedExpenses]);
 
   const submitExpense = useCallback(() => {
     if (!expenseDescription.trim() || !expenseAmount.trim() || !expenseCategoryKey) return;
-    setAddedExpenses(prev => [...prev, {
+    const newExpense = {
       categoryKey: expenseCategoryKey,
       description: expenseDescription.trim(),
       amount: expenseAmount.trim(),
       paidBy: expensePaidBy,
+      paidByPerson: expensePaidBy === 'other' ? expensePaidByPerson : null,
       contributors: expenseContributors,
-    }]);
+    };
+    setAddedExpenses(prev => {
+      const updated = [...prev, newExpense];
+      if (selectedEventId) {
+        AsyncStorage.setItem(`gameover:expenses:${selectedEventId}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
     setExpenseModalVisible(false);
-  }, [expenseDescription, expenseAmount, expenseCategoryKey, expensePaidBy, expenseContributors]);
+  }, [expenseDescription, expenseAmount, expenseCategoryKey, expensePaidBy, expensePaidByPerson, expenseContributors, selectedEventId]);
 
   const openRefundModal = useCallback(() => {
     setRefundTemplateKey(null);
@@ -176,9 +195,15 @@ export default function BudgetDashboardScreen() {
 
   const submitRefund = useCallback(() => {
     if (!refundDescription.trim() || !refundAmount.trim()) return;
-    setAddedRefunds(prev => [...prev, { description: refundDescription.trim(), amount: refundAmount.trim(), status: 'processing' }]);
+    setAddedRefunds(prev => {
+      const updated = [...prev, { description: refundDescription.trim(), amount: refundAmount.trim(), status: 'processing' as const }];
+      if (selectedEventId) {
+        AsyncStorage.setItem(`gameover:refunds:${selectedEventId}`, JSON.stringify(updated));
+      }
+      return updated;
+    });
     setRefundModalVisible(false);
-  }, [refundDescription, refundAmount]);
+  }, [refundDescription, refundAmount, selectedEventId]);
 
   // Hide tab bar when opened from Event Summary (eventIdParam present)
   useFocusEffect(
@@ -250,12 +275,27 @@ export default function BudgetDashboardScreen() {
 
   const selectedEvent = bookedEvents.find((e: Event) => e.id === selectedEventId);
 
-  // Load cached budget + participant data for demo-mode events (no DB booking record)
+  // Load all persisted data when event changes
   useEffect(() => {
     if (!selectedEventId) return;
+    // Reset local state before loading new event's data
+    setAddedExpenses([]);
+    setAddedRefunds([]);
+    setCustomCategories([]);
+    // Budget cache
     loadBudgetInfo(selectedEventId).then(info => setCachedBudget(info ?? null));
     loadDesiredParticipants(selectedEventId).then(count => setCachedParticipantCount(count ?? null));
     loadGuestDetails(selectedEventId).then(guests => setCachedGuests(guests ?? {}));
+    // Persisted expenses / refunds / custom categories
+    AsyncStorage.getItem(`gameover:expenses:${selectedEventId}`).then(json => {
+      if (json) try { setAddedExpenses(JSON.parse(json)); } catch {}
+    });
+    AsyncStorage.getItem(`gameover:refunds:${selectedEventId}`).then(json => {
+      if (json) try { setAddedRefunds(JSON.parse(json)); } catch {}
+    });
+    AsyncStorage.getItem(`gameover:custom_cats:${selectedEventId}`).then(json => {
+      if (json) try { setCustomCategories(JSON.parse(json)); } catch {}
+    });
   }, [selectedEventId]);
 
   // Calculate budget stats — fall back to cache when DB booking doesn't exist
@@ -397,6 +437,19 @@ export default function BudgetDashboardScreen() {
   }, [demoParticipants, participants]);
   // Keep ref in sync so openExpenseModal always has the latest list
   allContributorsRef.current = allContributors;
+
+  // All expense categories (preset + user-created)
+  const allExpenseCategories = useMemo<ExpenseCategory[]>(
+    () => [...EXPENSE_CATEGORIES, ...customCategories],
+    [customCategories]
+  );
+
+  // Helper: save custom categories to AsyncStorage
+  const saveCustomCategories = useCallback((cats: ExpenseCategory[]) => {
+    if (selectedEventId) {
+      AsyncStorage.setItem(`gameover:custom_cats:${selectedEventId}`, JSON.stringify(cats));
+    }
+  }, [selectedEventId]);
 
   // Event selector
   const selectedEventName = selectedEvent
@@ -839,49 +892,88 @@ export default function BudgetDashboardScreen() {
                 </Pressable>
               </XStack>
               <View style={styles.glassCard}>
-                {EXPENSE_CATEGORIES.map((item, index) => {
+                {allExpenseCategories.map((item, index) => {
                   const catExpenses = addedExpenses.filter(e => e.categoryKey === item.key);
                   const totalCents = catExpenses.reduce((sum, e) => {
                     const val = parseFloat(e.amount.replace(',', '.'));
                     return sum + (isNaN(val) ? 0 : val);
                   }, 0);
+                  const showBorder = index < allExpenseCategories.length - 1 || true; // always border between rows
                   return (
-                    <Pressable
-                      key={item.key}
-                      style={[styles.refundRow, index < EXPENSE_CATEGORIES.length - 1 && styles.contributionRowBorder]}
-                      onPress={() => openExpenseModal(item.key)}
-                    >
-                      <XStack alignItems="center" gap="$3" flex={1}>
-                        <View style={[styles.refundIcon, { backgroundColor: item.bg }]}>
-                          <Ionicons name={item.icon as any} size={18} color={item.color} />
-                        </View>
-                        <YStack>
-                          <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
-                            {(t.budget as any)[item.labelKey]}
-                          </Text>
-                          {catExpenses.length > 0 ? (
-                            <Text fontSize={12} color={DARK_THEME.textTertiary}>
-                              {catExpenses.length} expense{catExpenses.length > 1 ? 's' : ''}
+                    <View key={item.key}>
+                      {/* Category header row */}
+                      <View style={[styles.refundRow, styles.contributionRowBorder]}>
+                        <XStack alignItems="center" gap="$3" flex={1}>
+                          <View style={[styles.refundIcon, { backgroundColor: item.bg }]}>
+                            <Ionicons name={item.icon as any} size={18} color={item.color} />
+                          </View>
+                          <YStack>
+                            <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
+                              {item.labelKey in t.budget ? (t.budget as any)[item.labelKey] : item.labelKey}
                             </Text>
-                          ) : item.packageNote ? (
-                            <>
-                              <Text fontSize={12} color={DARK_THEME.textTertiary}>Extra cost beyond package</Text>
-                              <Text fontSize={11} color="rgba(156,163,175,0.65)">Pre & post-event</Text>
-                            </>
-                          ) : (
-                            <Text fontSize={12} color={DARK_THEME.textTertiary}>
-                              {(t.budget as any).expenseEstimated}
+                            {catExpenses.length === 0 && item.packageNote && (
+                              <>
+                                <Text fontSize={12} color={DARK_THEME.textTertiary}>Extra cost beyond package</Text>
+                                <Text fontSize={11} color="rgba(156,163,175,0.65)">Pre & post-event</Text>
+                              </>
+                            )}
+                            {catExpenses.length === 0 && !item.packageNote && (
+                              <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                                {(t.budget as any).expenseEstimated}
+                              </Text>
+                            )}
+                          </YStack>
+                        </XStack>
+                        <XStack alignItems="center" gap={8}>
+                          {catExpenses.length > 0 && (
+                            <Text fontSize={14} fontWeight="600" color={item.color}>
+                              €{totalCents.toFixed(2).replace('.', ',')}
                             </Text>
                           )}
-                        </YStack>
-                      </XStack>
-                      {catExpenses.length > 0
-                        ? <Text fontSize={14} fontWeight="600" color={item.color}>€{totalCents.toFixed(2).replace('.', ',')}</Text>
-                        : <Text fontSize={14} fontWeight="500" color={DARK_THEME.textTertiary}>—</Text>
-                      }
-                    </Pressable>
+                          <Pressable
+                            onPress={() => openExpenseModal(item.key)}
+                            hitSlop={8}
+                            style={styles.categoryAddBtn}
+                          >
+                            <Ionicons name="add-circle" size={22} color={item.color} />
+                          </Pressable>
+                        </XStack>
+                      </View>
+                      {/* Expanded sub-items */}
+                      {catExpenses.map((exp, ei) => (
+                        <View
+                          key={ei}
+                          style={[
+                            styles.expenseSubRow,
+                            ei < catExpenses.length - 1 && styles.expenseSubRowBorder,
+                          ]}
+                        >
+                          <View style={styles.expenseSubIndent} />
+                          <Text style={styles.expenseSubDesc} numberOfLines={1}>{exp.description}</Text>
+                          <Text style={[styles.expenseSubAmount, { color: item.color }]}>
+                            €{exp.amount}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
                   );
                 })}
+                {/* Add custom category row */}
+                <Pressable
+                  style={styles.addCustomCategoryRow}
+                  onPress={() => {
+                    setCustomCategoryLabel('');
+                    setCustomCategoryModalVisible(true);
+                  }}
+                >
+                  <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
+                    <Ionicons name="add" size={18} color={DARK_THEME.textTertiary} />
+                  </View>
+                  <Text style={{ fontSize: 14, color: DARK_THEME.textTertiary, flex: 1 }}>
+                    Add custom category
+                  </Text>
+                  <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                </Pressable>
               </View>
             </YStack>
 
@@ -914,7 +1006,13 @@ export default function BudgetDashboardScreen() {
                       processingLabel={t.budget.securityHold}
                       processingText={t.budget.processing}
                       showBorder={i < addedRefunds.length - 1}
-                      onDelete={() => setAddedRefunds(prev => prev.filter((_, idx) => idx !== i))}
+                      onDelete={() => {
+                        const updated = addedRefunds.filter((_, idx) => idx !== i);
+                        setAddedRefunds(updated);
+                        if (selectedEventId) {
+                          AsyncStorage.setItem(`gameover:refunds:${selectedEventId}`, JSON.stringify(updated));
+                        }
+                      }}
                     />
                   ))
                 )}
@@ -952,7 +1050,7 @@ export default function BudgetDashboardScreen() {
                         <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
                       </Pressable>
                     </XStack>
-                    {EXPENSE_CATEGORIES.map(cat => (
+                    {allExpenseCategories.map(cat => (
                       <Pressable
                         key={cat.key}
                         style={styles.templateRow}
@@ -963,13 +1061,16 @@ export default function BudgetDashboardScreen() {
                           setExpenseDescription('');
                           setExpenseAmount('');
                           setExpensePaidBy('you');
-                          setExpenseContributors(allContributors.map(c => c.id));
+                          setExpensePaidByPerson(null);
+                          setExpenseContributors([]);
                         }}
                       >
                         <View style={[styles.refundIcon, { backgroundColor: cat.bg }]}>
                           <Ionicons name={cat.icon as any} size={18} color={cat.color} />
                         </View>
-                        <Text style={styles.templateLabel}>{(t.budget as any)[cat.labelKey]}</Text>
+                        <Text style={styles.templateLabel}>
+                          {cat.labelKey in t.budget ? (t.budget as any)[cat.labelKey] : cat.labelKey}
+                        </Text>
                         <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
                       </Pressable>
                     ))}
@@ -977,7 +1078,7 @@ export default function BudgetDashboardScreen() {
                 ) : expenseViewMode === 'list' ? (
                   /* ── Mode 2: Existing expenses list ── */
                   (() => {
-                    const expCat = EXPENSE_CATEGORIES.find(c => c.key === expenseCategoryKey)!;
+                    const expCat = allExpenseCategories.find(c => c.key === expenseCategoryKey)!;
                     const catExpenses = addedExpenses.filter(e => e.categoryKey === expenseCategoryKey);
                     return (
                       <>
@@ -986,7 +1087,9 @@ export default function BudgetDashboardScreen() {
                             <Ionicons name={expCat.icon as any} size={22} color={expCat.color} />
                           </View>
                           <YStack flex={1}>
-                            <Text style={styles.modalTitle}>{(t.budget as any)[expCat.labelKey]}</Text>
+                            <Text style={styles.modalTitle}>
+                              {expCat.labelKey in t.budget ? (t.budget as any)[expCat.labelKey] : expCat.labelKey}
+                            </Text>
                             <Text style={styles.modalNote}>{catExpenses.length} expense{catExpenses.length !== 1 ? 's' : ''}</Text>
                           </YStack>
                           <Pressable onPress={() => setExpenseModalVisible(false)} hitSlop={10}>
@@ -998,7 +1101,9 @@ export default function BudgetDashboardScreen() {
                             <YStack flex={1}>
                               <Text style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}>{exp.description}</Text>
                               <Text style={{ fontSize: 11, color: DARK_THEME.textTertiary }}>
-                                {exp.paidBy === 'you' ? 'Paid by you' : 'Split equally'}
+                                {exp.paidBy === 'you' ? 'Paid by you'
+                                  : exp.paidBy === 'other' ? `Paid by ${exp.paidByPerson || 'other'}`
+                                  : 'Split equally'}
                                 {exp.contributors.length > 0 ? ` · ${exp.contributors.length} contributors` : ''}
                               </Text>
                             </YStack>
@@ -1012,7 +1117,8 @@ export default function BudgetDashboardScreen() {
                             setExpenseDescription('');
                             setExpenseAmount('');
                             setExpensePaidBy('you');
-                            setExpenseContributors(allContributors.map(c => c.id));
+                            setExpensePaidByPerson(null);
+                            setExpenseContributors([]);
                           }}
                         >
                           <Ionicons name="add" size={18} color="#FFFFFF" />
@@ -1027,7 +1133,7 @@ export default function BudgetDashboardScreen() {
                 ) : (
                   /* ── Mode 3: Expense form with contributor selection ── */
                   (() => {
-                    const expCat = EXPENSE_CATEGORIES.find(c => c.key === expenseCategoryKey)!;
+                    const expCat = allExpenseCategories.find(c => c.key === expenseCategoryKey)!;
                     const hasExisting = addedExpenses.filter(e => e.categoryKey === expenseCategoryKey).length > 0;
                     return (
                       <>
@@ -1036,7 +1142,9 @@ export default function BudgetDashboardScreen() {
                             <Ionicons name={expCat.icon as any} size={22} color={expCat.color} />
                           </View>
                           <YStack flex={1}>
-                            <Text style={styles.modalTitle}>{(t.budget as any)[expCat.labelKey]}</Text>
+                            <Text style={styles.modalTitle}>
+                              {expCat.labelKey in t.budget ? (t.budget as any)[expCat.labelKey] : expCat.labelKey}
+                            </Text>
                             {expCat.packageNote && (
                               <Text style={styles.modalNote}>{(t.budget as any).expensePackageNote || 'Extra costs beyond package'}</Text>
                             )}
@@ -1064,19 +1172,39 @@ export default function BudgetDashboardScreen() {
                           keyboardType="decimal-pad"
                         />
                         <Text style={styles.inputLabel}>Who paid?</Text>
-                        <XStack gap={10} style={{ marginBottom: 20 }}>
-                          {(['you', 'split'] as const).map(opt => (
+                        <XStack gap={8} style={{ marginBottom: expensePaidBy === 'other' ? 12 : 20 }}>
+                          {(['you', 'split', 'other'] as const).map(opt => (
                             <Pressable
                               key={opt}
                               style={[styles.paidByButton, expensePaidBy === opt && styles.paidByButtonActive]}
-                              onPress={() => setExpensePaidBy(opt)}
+                              onPress={() => { setExpensePaidBy(opt); if (opt !== 'other') setExpensePaidByPerson(null); }}
                             >
                               <Text style={[styles.paidByText, expensePaidBy === opt && styles.paidByTextActive]}>
-                                {opt === 'you' ? 'You' : 'Split equally'}
+                                {opt === 'you' ? 'You' : opt === 'split' ? 'Split' : 'Someone else'}
                               </Text>
                             </Pressable>
                           ))}
                         </XStack>
+                        {/* Person picker when "Someone else" is selected */}
+                        {expensePaidBy === 'other' && allContributors.length > 0 && (
+                          <View style={{ marginBottom: 20 }}>
+                            {allContributors.map(c => {
+                              const sel = expensePaidByPerson === c.id;
+                              return (
+                                <Pressable
+                                  key={c.id}
+                                  style={[styles.contributorRow, sel && styles.contributorRowSelected]}
+                                  onPress={() => setExpensePaidByPerson(sel ? null : c.id)}
+                                >
+                                  <Text style={styles.contributorName}>{c.name}</Text>
+                                  <View style={[styles.contributorCheck, sel && styles.contributorCheckSelected]}>
+                                    {sel && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
+                                  </View>
+                                </Pressable>
+                              );
+                            })}
+                          </View>
+                        )}
                         {allContributors.length > 0 && (
                           <>
                             <Text style={styles.inputLabel}>Who should contribute?</Text>
@@ -1200,6 +1328,68 @@ export default function BudgetDashboardScreen() {
                   </Pressable>
                 </>
               )}
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ─── Custom Category Modal ─── */}
+      <Modal
+        visible={customCategoryModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCustomCategoryModalVisible(false)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <Pressable style={{ flex: 1 }} onPress={() => setCustomCategoryModalVisible(false)} />
+            <View style={styles.modalSheet}>
+              <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
+                <Text style={styles.modalTitle}>New Category</Text>
+                <Pressable onPress={() => setCustomCategoryModalVisible(false)} hitSlop={10}>
+                  <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                </Pressable>
+              </XStack>
+              <Text style={styles.inputLabel}>Category name</Text>
+              <TextInput
+                style={styles.modalInput}
+                placeholder="e.g. Decorations, Photography..."
+                placeholderTextColor={DARK_THEME.textTertiary}
+                value={customCategoryLabel}
+                onChangeText={setCustomCategoryLabel}
+                autoCapitalize="sentences"
+                autoFocus
+              />
+              <Pressable
+                style={[styles.submitButton, !customCategoryLabel.trim() && styles.submitButtonDisabled]}
+                disabled={!customCategoryLabel.trim()}
+                onPress={() => {
+                  const key = `custom_${Date.now()}`;
+                  const newCat: ExpenseCategory = {
+                    key,
+                    labelKey: customCategoryLabel.trim(),
+                    icon: 'pricetag-outline',
+                    color: '#A78BFA',
+                    bg: 'rgba(167,139,250,0.15)',
+                    packageNote: false,
+                  };
+                  const updated = [...customCategories, newCat];
+                  setCustomCategories(updated);
+                  saveCustomCategories(updated);
+                  setCustomCategoryModalVisible(false);
+                  // Open expense form directly for new category
+                  setExpenseCategoryKey(key);
+                  setExpenseViewMode('form');
+                  setExpenseDescription('');
+                  setExpenseAmount('');
+                  setExpensePaidBy('you');
+                  setExpensePaidByPerson(null);
+                  setExpenseContributors([]);
+                  setExpenseModalVisible(true);
+                }}
+              >
+                <Text style={styles.submitButtonText}>Create & Add Expense</Text>
+              </Pressable>
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -1741,5 +1931,40 @@ const styles = StyleSheet.create({
   contributorCheckSelected: {
     backgroundColor: '#5A7EB0',
     borderColor: '#5A7EB0',
+  },
+  categoryAddBtn: {
+    padding: 2,
+  },
+  expenseSubRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 7,
+    paddingRight: 16,
+    backgroundColor: 'rgba(0,0,0,0.12)',
+  },
+  expenseSubRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.04)',
+  },
+  expenseSubIndent: {
+    width: 52, // aligns with icon+gap in parent row
+  },
+  expenseSubDesc: {
+    flex: 1,
+    fontSize: 12,
+    color: DARK_THEME.textSecondary,
+  },
+  expenseSubAmount: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  addCustomCategoryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: DARK_THEME.borderLight,
   },
 });
