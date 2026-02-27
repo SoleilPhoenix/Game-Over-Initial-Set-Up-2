@@ -207,20 +207,11 @@ export default function BudgetDashboardScreen() {
   // Only show loading for booking/participants data when we have events
   const isLoading = hasBookedEvents && (bookingLoading || participantsLoading);
 
-  // Navigate back to Event Summary when opened from it
-  // router.back() doesn't work for cross-navigator (tab → stack) navigation,
-  // so we navigate explicitly to the event screen when eventIdParam is present.
+  // Navigate back — identical to Chat: router.back() gives the correct
+  // back-slide animation (Event Summary slides in from the left)
   const handleBack = useCallback(() => {
-    if (eventIdParam) {
-      router.navigate(`/event/${eventIdParam}` as any);
-    } else {
-      router.back();
-    }
-  }, [router, eventIdParam]);
-
-  // Keep a ref to the back handler so the PanResponder (created once) always calls current logic
-  const backHandlerRef = useRef(handleBack);
-  useEffect(() => { backHandlerRef.current = handleBack; }, [handleBack]);
+    router.back();
+  }, [router]);
 
   // Left-edge swipe to go back when opened from Event Summary — identical to Chat
   const swipeBackResponder = useRef(
@@ -228,7 +219,7 @@ export default function BudgetDashboardScreen() {
       onMoveShouldSetPanResponder: (_, gs) =>
         gs.dx > 20 && Math.abs(gs.dy) < 60 && gs.moveX < 40,
       onPanResponderRelease: (_, gs) => {
-        if (gs.dx > 40) backHandlerRef.current();
+        if (gs.dx > 40) router.back();
       },
     })
   ).current;

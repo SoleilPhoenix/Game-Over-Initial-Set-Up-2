@@ -673,13 +673,15 @@ export default function CommunicationScreen() {
         {
           text: tr.chat.create,
           onPress: async (channelName?: string) => {
-            if (channelName && channelName.trim()) {
+            const raw = channelName?.trim();
+            if (raw) {
+              const name = raw.charAt(0).toUpperCase() + raw.slice(1);
               if (selectedEventId) {
                 // Save to database if event exists
                 try {
                   await createChannelMutation.mutateAsync({
                     event_id: selectedEventId,
-                    name: channelName.trim(),
+                    name,
                     category,
                   });
                   Alert.alert(tr.budget.success, tr.chat.channelCreated);
@@ -694,7 +696,7 @@ export default function CommunicationScreen() {
                               ...section,
                               channels: [
                                 ...section.channels,
-                                { id: Date.now().toString(), name: channelName.trim(), icon: pickIconForChannel(channelName.trim(), category) }
+                                { id: Date.now().toString(), name, icon: pickIconForChannel(name, category) }
                               ]
                             }
                           : section
@@ -715,7 +717,7 @@ export default function CommunicationScreen() {
                           ...section,
                           channels: [
                             ...section.channels,
-                            { id: Date.now().toString(), name: channelName.trim(), icon: pickIconForChannel(channelName.trim(), category) }
+                            { id: Date.now().toString(), name, icon: pickIconForChannel(name, category) }
                           ]
                         }
                       : section
@@ -745,13 +747,15 @@ export default function CommunicationScreen() {
         {
           text: tr.chat.create,
           onPress: async (topicName?: string) => {
-            if (topicName && topicName.trim()) {
+            const rawTopic = topicName?.trim();
+            if (rawTopic) {
+              const topicNameCapitalized = rawTopic.charAt(0).toUpperCase() + rawTopic.slice(1);
               if (selectedEventId) {
                 // Save to database if event exists
                 try {
                   await createChannelMutation.mutateAsync({
                     event_id: selectedEventId,
-                    name: topicName.trim(),
+                    name: topicNameCapitalized,
                     category: 'general',
                   });
                   Alert.alert(tr.budget.success, tr.chat.topicCreated);
@@ -766,7 +770,7 @@ export default function CommunicationScreen() {
                               ...section,
                               channels: [
                                 ...section.channels,
-                                { id: Date.now().toString(), name: topicName.trim(), icon: pickIconForChannel(topicName.trim(), 'general') }
+                                { id: Date.now().toString(), name: topicNameCapitalized, icon: pickIconForChannel(topicNameCapitalized, 'general') }
                               ]
                             }
                           : section
@@ -787,7 +791,7 @@ export default function CommunicationScreen() {
                           ...section,
                           channels: [
                             ...section.channels,
-                            { id: Date.now().toString(), name: topicName.trim(), icon: pickIconForChannel(topicName.trim(), 'general') }
+                            { id: Date.now().toString(), name: topicNameCapitalized, icon: pickIconForChannel(topicNameCapitalized, 'general') }
                           ]
                         }
                       : section
@@ -1136,7 +1140,7 @@ export default function CommunicationScreen() {
             style={styles.addButton}
             hitSlop={8}
           >
-            <Ionicons name="add" size={20} color="#5A7EB0" />
+            <Ionicons name="add-circle" size={18} color={catCfg.color} />
           </Pressable>
         </XStack>
         {categoryChannels.length > 0 ? (

@@ -142,7 +142,7 @@ export default function ShareEventScreen() {
     : 'TBD';
 
   const citySlug = event?.city?.name?.toLowerCase() || 'berlin';
-  const heroImage = getEventImage(citySlug);
+  const heroImage = getEventImage(citySlug, event?.hero_image_url ?? undefined);
 
   const getInviteUrl = useCallback(async (): Promise<string> => {
     if (inviteCode) return `https://game-over.app/invite/${inviteCode}`;
