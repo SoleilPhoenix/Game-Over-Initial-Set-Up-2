@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, View, Image, FlatList, StatusBar, PanResponder } from 'react-native';
+import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, View, Image, FlatList, StatusBar, PanResponder, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -38,17 +38,29 @@ const AVATAR_COLORS = [
 
 type BudgetCategory = 'package' | 'otherExpenses';
 
-const EXPENSE_CATEGORIES = [
-  { key: 'accommodation', icon: 'bed-outline', color: '#3B82F6', bg: 'rgba(59,130,246,0.15)', labelKey: 'expenseAccommodation' },
-  { key: 'food', icon: 'restaurant-outline', color: '#F97316', bg: 'rgba(249,115,22,0.15)', labelKey: 'expenseFood' },
-  { key: 'activities', icon: 'game-controller-outline', color: '#8B5CF6', bg: 'rgba(139,92,246,0.15)', labelKey: 'expenseActivities' },
-  { key: 'transport', icon: 'car-outline', color: '#10B981', bg: 'rgba(16,185,129,0.15)', labelKey: 'expenseTransport' },
-  { key: 'gifts', icon: 'gift-outline', color: '#EC4899', bg: 'rgba(236,72,153,0.15)', labelKey: 'expenseGifts' },
-] as const;
+type ExpenseCategory = { key: string; icon: string; color: string; bg: string; labelKey: string; packageNote: boolean };
+const EXPENSE_CATEGORIES: ExpenseCategory[] = [
+  { key: 'gifts',         icon: 'gift-outline',            color: '#EC4899', bg: 'rgba(236,72,153,0.15)',  labelKey: 'expenseGifts',         packageNote: false },
+  { key: 'transport',     icon: 'car-outline',             color: '#10B981', bg: 'rgba(16,185,129,0.15)',  labelKey: 'expenseTransport',     packageNote: false },
+  { key: 'accommodation', icon: 'bed-outline',             color: '#3B82F6', bg: 'rgba(59,130,246,0.15)',  labelKey: 'expenseAccommodation', packageNote: false },
+  { key: 'activities',    icon: 'game-controller-outline', color: '#8B5CF6', bg: 'rgba(139,92,246,0.15)', labelKey: 'expenseActivities',    packageNote: true },
+  { key: 'food',          icon: 'restaurant-outline',      color: '#F97316', bg: 'rgba(249,115,22,0.15)',  labelKey: 'expenseFood',          packageNote: true },
+];
+
+const REFUND_TEMPLATES = [
+  { key: 'hotel_deposit',    label: 'Hotel Security Deposit',  icon: 'home-outline',            color: '#3B82F6', bg: 'rgba(59,130,246,0.15)'  },
+  { key: 'venue_deposit',    label: 'Event Venue Deposit',     icon: 'storefront-outline',      color: '#8B5CF6', bg: 'rgba(139,92,246,0.15)'  },
+  { key: 'activity_payment', label: 'Activity Pre-payment',    icon: 'game-controller-outline', color: '#F97316', bg: 'rgba(249,115,22,0.15)'  },
+  { key: 'transport_prepay', label: 'Transport Pre-payment',   icon: 'car-outline',             color: '#10B981', bg: 'rgba(16,185,129,0.15)'  },
+  { key: 'restaurant_deposit', label: 'Restaurant Deposit',   icon: 'restaurant-outline',      color: '#EC4899', bg: 'rgba(236,72,153,0.15)'  },
+];
 
 export default function BudgetDashboardScreen() {
   const router = useRouter();
-  const { eventId: eventIdParam } = useLocalSearchParams<{ eventId?: string }>();
+  // eventId = opened via /(tabs)/budget?eventId=xxx (old approach, kept for safety)
+  // id     = opened via /event/[id]/budget (event-stack, router.back() works correctly)
+  const { eventId: rawEventIdParam, id: pathId } = useLocalSearchParams<{ eventId?: string; id?: string }>();
+  const eventIdParam = rawEventIdParam || pathId;
   const insets = useSafeAreaInsets();
   const user = useUser();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(eventIdParam || null);
@@ -59,6 +71,48 @@ export default function BudgetDashboardScreen() {
   const [cachedGuests, setCachedGuests] = useState<Record<number, GuestDetail>>({});
   const { t } = useTranslation();
   const setTabBarHidden = useTabBarStore((s) => s.setHidden);
+
+  // Expense modal
+  const [expenseModalVisible, setExpenseModalVisible] = useState(false);
+  const [expenseCategoryKey, setExpenseCategoryKey] = useState<string | null>(null);
+  const [expenseDescription, setExpenseDescription] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expensePaidBy, setExpensePaidBy] = useState<'you' | 'split'>('you');
+  const [addedExpenses, setAddedExpenses] = useState<Array<{ categoryKey: string; description: string; amount: string; paidBy: 'you' | 'split' }>>([]);
+
+  // Refund modal
+  const [refundModalVisible, setRefundModalVisible] = useState(false);
+  const [refundTemplateKey, setRefundTemplateKey] = useState<string | null>(null);
+  const [refundDescription, setRefundDescription] = useState('');
+  const [refundAmount, setRefundAmount] = useState('');
+  const [addedRefunds, setAddedRefunds] = useState<Array<{ description: string; amount: string; status: 'processing' | 'received' }>>([]);
+
+  const openExpenseModal = useCallback((categoryKey: string) => {
+    setExpenseCategoryKey(categoryKey);
+    setExpenseDescription('');
+    setExpenseAmount('');
+    setExpensePaidBy('you');
+    setExpenseModalVisible(true);
+  }, []);
+
+  const submitExpense = useCallback(() => {
+    if (!expenseDescription.trim() || !expenseAmount.trim() || !expenseCategoryKey) return;
+    setAddedExpenses(prev => [...prev, { categoryKey: expenseCategoryKey, description: expenseDescription.trim(), amount: expenseAmount.trim(), paidBy: expensePaidBy }]);
+    setExpenseModalVisible(false);
+  }, [expenseDescription, expenseAmount, expenseCategoryKey, expensePaidBy]);
+
+  const openRefundModal = useCallback(() => {
+    setRefundTemplateKey(null);
+    setRefundDescription('');
+    setRefundAmount('');
+    setRefundModalVisible(true);
+  }, []);
+
+  const submitRefund = useCallback(() => {
+    if (!refundDescription.trim() || !refundAmount.trim()) return;
+    setAddedRefunds(prev => [...prev, { description: refundDescription.trim(), amount: refundAmount.trim(), status: 'processing' }]);
+    setRefundModalVisible(false);
+  }, [refundDescription, refundAmount]);
 
   // Hide tab bar when opened from Event Summary (eventIdParam present)
   useFocusEffect(
@@ -215,29 +269,19 @@ export default function BudgetDashboardScreen() {
   // Only show loading for booking/participants data when we have events
   const isLoading = hasBookedEvents && (bookingLoading || participantsLoading);
 
-  // Navigate back — when opened from Event Summary, go directly to it;
-  // otherwise router.back() gives the correct slide animation
+  // Navigate back — always use router.back(); when accessed via /event/[id]/budget
+  // the stack correctly returns to Event Summary without any loops
   const handleBack = useCallback(() => {
-    if (eventIdParam) {
-      router.navigate(`/event/${eventIdParam}` as any);
-    } else {
-      router.back();
-    }
-  }, [router, eventIdParam]);
+    router.back();
+  }, [router]);
 
-  // Left-edge swipe to go back when opened from Event Summary
+  // Left-edge swipe to go back
   const swipeBackResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gs) =>
         gs.dx > 20 && Math.abs(gs.dy) < 60 && gs.moveX < 40,
       onPanResponderRelease: (_, gs) => {
-        if (gs.dx > 40) {
-          if (eventIdParam) {
-            router.navigate(`/event/${eventIdParam}` as any);
-          } else {
-            router.back();
-          }
-        }
+        if (gs.dx > 40) router.back();
       },
     })
   ).current;
@@ -703,7 +747,7 @@ export default function BudgetDashboardScreen() {
                   {(t.budget as any).expenseBreakdown}
                 </Text>
                 <Pressable
-                  onPress={() => Alert.alert('Add Expense', 'Expense tracking coming soon.')}
+                  onPress={() => setExpenseModalVisible(true)}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 >
                   <Ionicons name="add-circle-outline" size={16} color={DARK_THEME.primary} />
@@ -711,28 +755,42 @@ export default function BudgetDashboardScreen() {
                 </Pressable>
               </XStack>
               <View style={styles.glassCard}>
-                {EXPENSE_CATEGORIES.map((item, index) => (
-                  <Pressable
-                    key={item.key}
-                    style={[styles.refundRow, index < EXPENSE_CATEGORIES.length - 1 && styles.contributionRowBorder]}
-                    onPress={() => Alert.alert('Add Expense', 'Expense tracking coming soon.')}
-                  >
-                    <XStack alignItems="center" gap="$3" flex={1}>
-                      <View style={[styles.refundIcon, { backgroundColor: item.bg }]}>
-                        <Ionicons name={item.icon as any} size={18} color={item.color} />
-                      </View>
-                      <YStack>
-                        <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
-                          {(t.budget as any)[item.labelKey]}
-                        </Text>
-                        <Text fontSize={12} color={DARK_THEME.textTertiary}>
-                          {(t.budget as any).expenseEstimated}
-                        </Text>
-                      </YStack>
-                    </XStack>
-                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textTertiary}>—</Text>
-                  </Pressable>
-                ))}
+                {EXPENSE_CATEGORIES.map((item, index) => {
+                  const catExpenses = addedExpenses.filter(e => e.categoryKey === item.key);
+                  const totalCents = catExpenses.reduce((sum, e) => {
+                    const val = parseFloat(e.amount.replace(',', '.'));
+                    return sum + (isNaN(val) ? 0 : val);
+                  }, 0);
+                  return (
+                    <Pressable
+                      key={item.key}
+                      style={[styles.refundRow, index < EXPENSE_CATEGORIES.length - 1 && styles.contributionRowBorder]}
+                      onPress={() => openExpenseModal(item.key)}
+                    >
+                      <XStack alignItems="center" gap="$3" flex={1}>
+                        <View style={[styles.refundIcon, { backgroundColor: item.bg }]}>
+                          <Ionicons name={item.icon as any} size={18} color={item.color} />
+                        </View>
+                        <YStack>
+                          <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
+                            {(t.budget as any)[item.labelKey]}
+                          </Text>
+                          <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                            {catExpenses.length > 0
+                              ? `${catExpenses.length} expense${catExpenses.length > 1 ? 's' : ''}`
+                              : item.packageNote
+                                ? (t.budget as any).expensePackageNote || 'Extra costs beyond package'
+                                : (t.budget as any).expenseEstimated}
+                          </Text>
+                        </YStack>
+                      </XStack>
+                      {catExpenses.length > 0
+                        ? <Text fontSize={14} fontWeight="600" color={item.color}>€{totalCents.toFixed(2).replace('.', ',')}</Text>
+                        : <Text fontSize={14} fontWeight="500" color={DARK_THEME.textTertiary}>—</Text>
+                      }
+                    </Pressable>
+                  );
+                })}
               </View>
             </YStack>
 
@@ -743,7 +801,7 @@ export default function BudgetDashboardScreen() {
                   {t.budget.refundTracking}
                 </Text>
                 <Pressable
-                  onPress={() => Alert.alert('Add Refund', 'Refund tracking coming soon.')}
+                  onPress={openRefundModal}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 >
                   <Ionicons name="add-circle-outline" size={16} color={DARK_THEME.primary} />
@@ -794,6 +852,27 @@ export default function BudgetDashboardScreen() {
                     </View>
                   </YStack>
                 </Pressable>
+
+                {/* Dynamically added refunds */}
+                {addedRefunds.map((refund, i) => (
+                  <View key={i} style={[styles.refundRow, styles.contributionRowBorder]}>
+                    <XStack alignItems="center" gap="$3" flex={1}>
+                      <View style={styles.refundIcon}>
+                        <Ionicons name="receipt-outline" size={18} color={DARK_THEME.textSecondary} />
+                      </View>
+                      <YStack>
+                        <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>{refund.description}</Text>
+                        <Text fontSize={12} color={DARK_THEME.textTertiary}>{t.budget.securityHold}</Text>
+                      </YStack>
+                    </XStack>
+                    <YStack alignItems="flex-end">
+                      <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>+€{refund.amount}</Text>
+                      <View style={styles.processingBadge}>
+                        <Text style={styles.processingText}>{t.budget.processing}</Text>
+                      </View>
+                    </YStack>
+                  </View>
+                ))}
               </View>
             </YStack>
             </>
@@ -806,6 +885,186 @@ export default function BudgetDashboardScreen() {
         </>
       </ScrollView>
       </Animated.View>
+
+      {/* ─── Expense Modal ─── */}
+      <Modal
+        visible={expenseModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setExpenseModalVisible(false)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <Pressable style={{ flex: 1 }} onPress={() => setExpenseModalVisible(false)} />
+            <View style={styles.modalSheet}>
+              {/* Category picker if opened from global "Add" button */}
+              {!expenseCategoryKey ? (
+                <>
+                  <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
+                    <Text style={styles.modalTitle}>Select Category</Text>
+                    <Pressable onPress={() => setExpenseModalVisible(false)} hitSlop={10}>
+                      <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                    </Pressable>
+                  </XStack>
+                  {EXPENSE_CATEGORIES.map(cat => (
+                    <Pressable
+                      key={cat.key}
+                      style={styles.templateRow}
+                      onPress={() => setExpenseCategoryKey(cat.key)}
+                    >
+                      <View style={[styles.refundIcon, { backgroundColor: cat.bg }]}>
+                        <Ionicons name={cat.icon as any} size={18} color={cat.color} />
+                      </View>
+                      <Text style={styles.templateLabel}>{(t.budget as any)[cat.labelKey]}</Text>
+                      <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                    </Pressable>
+                  ))}
+                </>
+              ) : (
+                /* Expense form */
+                (() => {
+                  const expCat = EXPENSE_CATEGORIES.find(c => c.key === expenseCategoryKey)!;
+                  return (
+                    <>
+                      <XStack alignItems="center" gap={12} marginBottom={20}>
+                        <View style={[styles.modalCatIcon, { backgroundColor: expCat.bg }]}>
+                          <Ionicons name={expCat.icon as any} size={22} color={expCat.color} />
+                        </View>
+                        <YStack flex={1}>
+                          <Text style={styles.modalTitle}>{(t.budget as any)[expCat.labelKey]}</Text>
+                          {expCat.packageNote && (
+                            <Text style={styles.modalNote}>{(t.budget as any).expensePackageNote || 'Extra costs beyond package'}</Text>
+                          )}
+                        </YStack>
+                        <Pressable onPress={() => setExpenseModalVisible(false)} hitSlop={10}>
+                          <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                        </Pressable>
+                      </XStack>
+                      <Text style={styles.inputLabel}>What was this expense for?</Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder="e.g. Hotel booking, train tickets..."
+                        placeholderTextColor={DARK_THEME.textTertiary}
+                        value={expenseDescription}
+                        onChangeText={setExpenseDescription}
+                        autoCapitalize="sentences"
+                      />
+                      <Text style={styles.inputLabel}>Amount (€)</Text>
+                      <TextInput
+                        style={styles.modalInput}
+                        placeholder="0.00"
+                        placeholderTextColor={DARK_THEME.textTertiary}
+                        value={expenseAmount}
+                        onChangeText={setExpenseAmount}
+                        keyboardType="decimal-pad"
+                      />
+                      <Text style={styles.inputLabel}>Who paid?</Text>
+                      <XStack gap={10} style={{ marginBottom: 20 }}>
+                        {(['you', 'split'] as const).map(opt => (
+                          <Pressable
+                            key={opt}
+                            style={[styles.paidByButton, expensePaidBy === opt && styles.paidByButtonActive]}
+                            onPress={() => setExpensePaidBy(opt)}
+                          >
+                            <Text style={[styles.paidByText, expensePaidBy === opt && styles.paidByTextActive]}>
+                              {opt === 'you' ? 'You' : 'Split equally'}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </XStack>
+                      <Pressable
+                        style={[styles.submitButton, (!expenseDescription.trim() || !expenseAmount.trim()) && styles.submitButtonDisabled]}
+                        onPress={submitExpense}
+                        disabled={!expenseDescription.trim() || !expenseAmount.trim()}
+                      >
+                        <Text style={styles.submitButtonText}>Add Expense</Text>
+                      </Pressable>
+                      <Pressable style={{ marginTop: 12, alignItems: 'center' }} onPress={() => setExpenseCategoryKey(null)}>
+                        <Text style={{ color: DARK_THEME.textSecondary, fontSize: 13 }}>← Change category</Text>
+                      </Pressable>
+                    </>
+                  );
+                })()
+              )}
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* ─── Refund Modal ─── */}
+      <Modal
+        visible={refundModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRefundModalVisible(false)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <Pressable style={{ flex: 1 }} onPress={() => setRefundModalVisible(false)} />
+            <View style={styles.modalSheet}>
+              <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
+                <Text style={styles.modalTitle}>Track a Refund</Text>
+                <Pressable onPress={() => setRefundModalVisible(false)} hitSlop={10}>
+                  <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                </Pressable>
+              </XStack>
+
+              {!refundTemplateKey ? (
+                /* Template selection */
+                <>
+                  <Text style={styles.inputLabel}>Choose a refund type</Text>
+                  {REFUND_TEMPLATES.map(tmpl => (
+                    <Pressable
+                      key={tmpl.key}
+                      style={styles.templateRow}
+                      onPress={() => {
+                        setRefundTemplateKey(tmpl.key);
+                        setRefundDescription(tmpl.label);
+                      }}
+                    >
+                      <View style={[styles.refundIcon, { backgroundColor: tmpl.bg }]}>
+                        <Ionicons name={tmpl.icon as any} size={18} color={tmpl.color} />
+                      </View>
+                      <Text style={styles.templateLabel}>{tmpl.label}</Text>
+                      <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                    </Pressable>
+                  ))}
+                </>
+              ) : (
+                /* Refund form */
+                <>
+                  <Text style={styles.inputLabel}>Description</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    value={refundDescription}
+                    onChangeText={setRefundDescription}
+                    autoCapitalize="sentences"
+                  />
+                  <Text style={styles.inputLabel}>Expected Amount (€)</Text>
+                  <TextInput
+                    style={styles.modalInput}
+                    placeholder="0.00"
+                    placeholderTextColor={DARK_THEME.textTertiary}
+                    value={refundAmount}
+                    onChangeText={setRefundAmount}
+                    keyboardType="decimal-pad"
+                  />
+                  <Pressable
+                    style={[styles.submitButton, (!refundDescription.trim() || !refundAmount.trim()) && styles.submitButtonDisabled]}
+                    onPress={submitRefund}
+                    disabled={!refundDescription.trim() || !refundAmount.trim()}
+                  >
+                    <Text style={styles.submitButtonText}>Track Refund</Text>
+                  </Pressable>
+                  <Pressable style={{ marginTop: 12, alignItems: 'center' }} onPress={() => setRefundTemplateKey(null)}>
+                    <Text style={{ color: DARK_THEME.textSecondary, fontSize: 13 }}>← Change type</Text>
+                  </Pressable>
+                </>
+              )}
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -1189,5 +1448,106 @@ const styles = StyleSheet.create({
   filterTabTextActive: {
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  // ─── Modals ────────────────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: DARK_THEME.textPrimary,
+  },
+  modalNote: {
+    fontSize: 11,
+    color: DARK_THEME.textTertiary,
+    marginTop: 2,
+  },
+  modalCatIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inputLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: DARK_THEME.textSecondary,
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  modalInput: {
+    backgroundColor: DARK_THEME.surface,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: DARK_THEME.textPrimary,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  paidByButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    backgroundColor: DARK_THEME.surface,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  paidByButtonActive: {
+    backgroundColor: 'rgba(90,126,176,0.2)',
+    borderColor: '#5A7EB0',
+  },
+  paidByText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: DARK_THEME.textSecondary,
+  },
+  paidByTextActive: {
+    color: '#5A7EB0',
+    fontWeight: '700',
+  },
+  submitButton: {
+    backgroundColor: '#5A7EB0',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  submitButtonDisabled: {
+    backgroundColor: 'rgba(90,126,176,0.3)',
+  },
+  submitButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  templateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  templateLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: DARK_THEME.textPrimary,
   },
 });

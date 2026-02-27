@@ -412,6 +412,7 @@ const en = {
     expenseTransport: 'Transport',
     expenseGifts: 'Gifts & Decoration',
     expenseEstimated: 'Est. cost — tap to add',
+    expensePackageNote: 'Extra costs beyond package (pre & post-event)',
     hiddenCostAlerts: 'Expense Breakdown',
     noHiddenCosts: 'No hidden costs detected',
     noHiddenCostsDesc: 'Great job! All expenses are accounted for within the agreed budget.',

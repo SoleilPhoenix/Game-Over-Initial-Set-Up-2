@@ -404,6 +404,7 @@ const de: TranslationKeys = {
     expenseTransport: 'Transport',
     expenseGifts: 'Geschenke & Deko',
     expenseEstimated: 'Geschätzte Kosten — tippen zum Hinzufügen',
+    expensePackageNote: 'Zusätzliche Kosten außerhalb des Pakets (vor & nach dem Event)',
     hiddenCostAlerts: 'Ausgabenübersicht',
     noHiddenCosts: 'Keine versteckten Kosten',
     noHiddenCostsDesc: 'Gut gemacht! Alle Ausgaben sind im vereinbarten Budget enthalten.',

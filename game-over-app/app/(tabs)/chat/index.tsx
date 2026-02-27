@@ -780,14 +780,14 @@ export default function CommunicationScreen() {
                   style={styles.newPollButton}
                   hitSlop={8}
                 >
-                  <Text style={styles.newPollButtonText}>New Poll</Text>
+                  <Text style={[styles.newPollButtonText, { color: cfg.color }]}>New Poll</Text>
                   <Ionicons name="add-circle" size={18} color={cfg.color} />
                 </Pressable>
               </XStack>
               {catPolls.length === 0 ? (
-                <View style={styles.emptyChannelBox}>
+                <Pressable onPress={() => handleCreatePoll(catDef.id)} style={styles.emptyChannelBox}>
                   <Text style={styles.emptyChannelText}>No polls yet</Text>
-                </View>
+                </Pressable>
               ) : (
                 <YStack gap={12}>
                   {catPolls.map(poll => {

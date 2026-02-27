@@ -32,7 +32,7 @@ import { loadDesiredParticipants, loadChecklist, setChecklistItem } from '@/lib/
 const TOOL_CONFIGS = [
   { key: 'invitations', icon: 'people', iconBg: 'rgba(236, 72, 153, 0.15)', iconColor: '#EC4899', route: 'participants', isTab: false },
   { key: 'communication', icon: 'chatbubbles', iconBg: 'rgba(59, 130, 246, 0.15)', iconColor: '#3B82F6', route: '/(tabs)/chat', isTab: true, passEventId: true },
-  { key: 'budget', icon: 'wallet', iconBg: 'rgba(16, 185, 129, 0.15)', iconColor: '#10B981', route: '/(tabs)/budget', isTab: true, passEventId: true },
+  { key: 'budget', icon: 'wallet', iconBg: 'rgba(16, 185, 129, 0.15)', iconColor: '#10B981', route: 'budget', isTab: false },
   { key: 'packages', icon: 'gift', iconBg: 'rgba(139, 92, 246, 0.15)', iconColor: '#8B5CF6', route: 'packages', isTab: false },
 ] as const;
 
