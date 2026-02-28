@@ -290,6 +290,64 @@ This document tracks all tasks that must be completed before launching the Game 
 
 ---
 
+## Future App Iterations — Twilio / Communication Platform
+
+**Status:** 💡 Planned — Not required for v1 launch. Revisit after initial user feedback.
+
+These services build on top of the v1 Twilio integration (SendGrid email, SMS, WhatsApp) and unlock more powerful communication and engagement features.
+
+### Delivery & Read Receipts (High Priority — Phase 2)
+**What it does:** Twilio POSTs a webhook to your server when a message status changes. Lets you show the organizer which guests received, opened, or read each invitation — live, inside the app.
+
+- [ ] Create `twilio-status-webhook` Supabase Edge Function
+- [ ] Handle SMS/WhatsApp status callbacks: `queued` → `sent` → `delivered` → `failed`
+- [ ] Handle WhatsApp `read` status (blue ticks confirmed)
+- [ ] Handle SendGrid email events: `delivered`, `opened`, `clicked`, `bounced`, `spam_reported`, `unsubscribed`
+- [ ] Update `guest_invitations.status` in DB on each callback
+- [ ] Show per-guest delivery status in Manage Invitations screen (delivered ✓, read 👁, failed ✗)
+- [ ] Register webhook URLs in Twilio Console and SendGrid settings
+
+### Inbound SMS Replies (Medium Priority — Phase 2)
+**What it does:** If a guest replies `YES` / `JA` / `NO` to the invite SMS, Twilio fires a webhook. Auto-update RSVP status without the guest needing to download the app.
+
+- [ ] Purchase a Twilio German inbound-capable long number or short code
+- [ ] Create `twilio-inbound-sms` Edge Function to parse guest replies
+- [ ] Map inbound phone number back to `guest_invitations` record
+- [ ] Auto-update RSVP / participant status on YES/JA response
+- [ ] Send confirmation reply: "Thanks! We've noted your RSVP. Download Game Over: https://game-over.app"
+
+### Twilio Verify — Phone Verification (Medium Priority — Phase 2)
+**What it does:** When a guest clicks the invite link and signs up, silently confirm their phone number matches the one the organizer entered. More robust than Supabase's built-in OTP.
+
+- [ ] Evaluate replacing Supabase SMS OTP with Twilio Verify for phone auth
+- [ ] Add Twilio Verify step during guest RSVP / account creation flow
+- [ ] Handle Verify webhook callbacks for verification results
+- [ ] Cost: ~€0.05 per verification
+
+### Twilio Conversations API (Low Priority — Phase 3)
+**What it does:** Unified omnichannel messaging — SMS, WhatsApp, and in-app chat in one thread per event. Would replace or augment the current Supabase realtime chat with a managed platform.
+
+- [ ] Evaluate replacing Supabase realtime chat with Twilio Conversations
+- [ ] Assess migration path from current `chat_channels` / `messages` DB tables
+- [ ] Prototype a Conversations-backed event chat channel
+- [ ] Consider hybrid: keep in-app chat on Supabase, use Conversations for external SMS/WA guests only
+
+### Twilio Flex / Customer Support (Low Priority — Phase 3)
+**What it does:** Full contact centre platform. Would replace or augment the current Crisp chat support widget with a Twilio-native solution that unifies all communication channels (SMS, WhatsApp, email, in-app) in one agent dashboard.
+
+- [ ] Evaluate replacing Crisp with Twilio Flex for customer support
+- [ ] Assess cost vs. Crisp at expected support volume
+
+### Marketing & Lifecycle Campaigns (Phase 3)
+**What it does:** SendGrid Marketing Campaigns lets you send segmented bulk emails (re-engagement, feature announcements, event reminders) to your full user base — not just transactional one-to-one.
+
+- [ ] Set up SendGrid Marketing Campaigns for user lifecycle emails
+- [ ] Design email sequences: welcome series, event reminder 7d before, post-event review request
+- [ ] Configure unsubscribe groups (transactional vs. marketing) — required for GDPR
+- [ ] Integrate Supabase user segments with SendGrid contact lists
+
+---
+
 ## Notes
 
 - This checklist should be reviewed and updated as you progress through development

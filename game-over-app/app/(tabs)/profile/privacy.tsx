@@ -61,7 +61,7 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '7. Data Retention',
-      body: 'We retain your personal data only for as long as necessary to fulfill the purposes for which it was collected, including: Active account data is retained while your account is active; Booking and transaction records are retained for 7 years for legal and tax purposes; Chat messages are retained for the duration of the event and 90 days after; You may request deletion of your account and associated data at any time.',
+      body: 'We retain your personal data only for as long as necessary to fulfill the purposes for which it was collected, including: Active account data is retained while your account is active; Booking and transaction records are retained for 7 years for legal and tax purposes; Chat messages are retained for the duration of the event and 90 days after; Phone numbers entered by event organisers are used solely to send event invitations via SMS or WhatsApp and are deleted 90 days after the event date; You may request deletion of your account and associated data at any time.',
     },
     {
       title: '8. Cookies and Tracking',
@@ -69,7 +69,7 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '9. Third-Party Services',
-      body: "The App integrates with the following third-party services: Stripe (payment processing) \u2014 governed by Stripe's Privacy Policy; Supabase (backend infrastructure) \u2014 data hosted in EU; Expo (app distribution and push notifications); Apple and Google (authentication via Sign in with Apple / Google OAuth). Each of these services has its own privacy policy that governs their handling of your data.",
+      body: "The App integrates with the following third-party services: Stripe (payment processing) \u2014 governed by Stripe's Privacy Policy; Supabase (backend infrastructure) \u2014 data hosted in EU; Twilio (SMS and WhatsApp messaging) and Twilio SendGrid (email delivery) \u2014 phone numbers and email addresses are transmitted to Twilio solely to deliver event invitations; Expo (app distribution and push notifications); Apple and Google (authentication via Sign in with Apple / Google OAuth). Each of these services has its own privacy policy that governs their handling of your data.",
     },
     {
       title: "10. Children's Privacy",
@@ -111,7 +111,7 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '7. Datenspeicherung',
-      body: 'Wir speichern Ihre personenbezogenen Daten nur so lange, wie es zur Erfüllung der Zwecke erforderlich ist, für die sie erhoben wurden, einschließlich: Aktive Kontodaten werden aufbewahrt, solange Ihr Konto aktiv ist; Buchungs- und Transaktionsdaten werden aus steuer- und handelsrechtlichen Gründen 7 Jahre aufbewahrt; Chat-Nachrichten werden für die Dauer des Events und 90 Tage danach aufbewahrt; Sie können jederzeit die Löschung Ihres Kontos und der zugehörigen Daten beantragen.',
+      body: 'Wir speichern Ihre personenbezogenen Daten nur so lange, wie es zur Erfüllung der Zwecke erforderlich ist, für die sie erhoben wurden, einschließlich: Aktive Kontodaten werden aufbewahrt, solange Ihr Konto aktiv ist; Buchungs- und Transaktionsdaten werden aus steuer- und handelsrechtlichen Gründen 7 Jahre aufbewahrt; Chat-Nachrichten werden für die Dauer des Events und 90 Tage danach aufbewahrt; Von Event-Organisatoren eingegebene Telefonnummern werden ausschließlich zum Versand von Event-Einladungen per SMS oder WhatsApp verwendet und 90 Tage nach dem Event-Datum gelöscht; Sie können jederzeit die Löschung Ihres Kontos und der zugehörigen Daten beantragen.',
     },
     {
       title: '8. Cookies und Tracking',
@@ -119,7 +119,7 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '9. Dienste Dritter',
-      body: 'Die App integriert folgende Dienste Dritter: Stripe (Zahlungsabwicklung) \u2014 geregelt durch die Datenschutzrichtlinie von Stripe; Supabase (Backend-Infrastruktur) \u2014 Daten in der EU gehostet; Expo (App-Verteilung und Push-Benachrichtigungen); Apple und Google (Authentifizierung über „Mit Apple anmelden" / Google OAuth). Jeder dieser Dienste hat eine eigene Datenschutzrichtlinie, die den Umgang mit Ihren Daten regelt.',
+      body: 'Die App integriert folgende Dienste Dritter: Stripe (Zahlungsabwicklung) \u2014 geregelt durch die Datenschutzrichtlinie von Stripe; Supabase (Backend-Infrastruktur) \u2014 Daten in der EU gehostet; Twilio (SMS- und WhatsApp-Versand) und Twilio SendGrid (E-Mail-Zustellung) \u2014 Telefonnummern und E-Mail-Adressen werden ausschließlich zur Zustellung von Event-Einladungen an Twilio übermittelt; Expo (App-Verteilung und Push-Benachrichtigungen); Apple und Google (Authentifizierung über „Mit Apple anmelden" / Google OAuth). Jeder dieser Dienste hat eine eigene Datenschutzrichtlinie, die den Umgang mit Ihren Daten regelt.',
     },
     {
       title: '10. Datenschutz für Kinder',
