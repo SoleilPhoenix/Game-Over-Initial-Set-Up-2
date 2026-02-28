@@ -131,12 +131,12 @@ export default function BudgetDashboardScreen() {
   const [expenseViewMode, setExpenseViewMode] = useState<'list' | 'form'>('form');
   const [expenseDescription, setExpenseDescription] = useState('');
   const [expenseAmount, setExpenseAmount] = useState('');
-  const [expensePaidBy, setExpensePaidBy] = useState<'you' | 'split' | 'other'>('you');
+  const [expensePaidBy, setExpensePaidBy] = useState<'you' | 'other'>('you');
   const [expensePaidByPerson, setExpensePaidByPerson] = useState<string | null>(null);
   const [expenseContributors, setExpenseContributors] = useState<string[]>([]);
   const [addedExpenses, setAddedExpenses] = useState<Array<{
     categoryKey: string; description: string; amount: string;
-    paidBy: 'you' | 'split' | 'other'; paidByPerson?: string | null; contributors: string[];
+    paidBy: 'you' | 'other'; paidByPerson?: string | null; contributors: string[];
   }>>([]);
 
   // Custom categories (user-created)
@@ -154,7 +154,11 @@ export default function BudgetDashboardScreen() {
   // Ref always holds latest contributors — avoids declaration-order TDZ issue with useCallback
   const allContributorsRef = useRef<Array<{ id: string; name: string }>>([]);
 
+  // Track which expense index is being edited (null = creating new)
+  const [editingExpenseIndex, setEditingExpenseIndex] = useState<number | null>(null);
+
   const openExpenseModal = useCallback((categoryKey: string) => {
+    setEditingExpenseIndex(null);
     setExpenseCategoryKey(categoryKey);
     const existing = addedExpenses.filter(e => e.categoryKey === categoryKey);
     setExpenseViewMode(existing.length > 0 ? 'list' : 'form');
@@ -162,7 +166,21 @@ export default function BudgetDashboardScreen() {
     setExpenseAmount('');
     setExpensePaidBy('you');
     setExpensePaidByPerson(null);
-    setExpenseContributors([]); // not pre-selected — user chooses who contributes
+    setExpenseContributors([]);
+    setExpenseModalVisible(true);
+  }, [addedExpenses]);
+
+  const openEditExpense = useCallback((globalIdx: number) => {
+    const exp = addedExpenses[globalIdx];
+    if (!exp) return;
+    setEditingExpenseIndex(globalIdx);
+    setExpenseCategoryKey(exp.categoryKey);
+    setExpenseDescription(exp.description);
+    setExpenseAmount(exp.amount);
+    setExpensePaidBy(exp.paidBy);
+    setExpensePaidByPerson(exp.paidByPerson || null);
+    setExpenseContributors(exp.contributors);
+    setExpenseViewMode('form');
     setExpenseModalVisible(true);
   }, [addedExpenses]);
 
@@ -177,14 +195,17 @@ export default function BudgetDashboardScreen() {
       contributors: expenseContributors,
     };
     setAddedExpenses(prev => {
-      const updated = [...prev, newExpense];
+      const updated = editingExpenseIndex !== null
+        ? prev.map((e, i) => i === editingExpenseIndex ? newExpense : e)
+        : [...prev, newExpense];
       if (selectedEventId) {
         AsyncStorage.setItem(`gameover:expenses:${selectedEventId}`, JSON.stringify(updated));
       }
       return updated;
     });
+    setEditingExpenseIndex(null);
     setExpenseModalVisible(false);
-  }, [expenseDescription, expenseAmount, expenseCategoryKey, expensePaidBy, expensePaidByPerson, expenseContributors, selectedEventId]);
+  }, [expenseDescription, expenseAmount, expenseCategoryKey, expensePaidBy, expensePaidByPerson, expenseContributors, selectedEventId, editingExpenseIndex]);
 
   const openRefundModal = useCallback(() => {
     setRefundTemplateKey(null);
@@ -437,6 +458,12 @@ export default function BudgetDashboardScreen() {
   }, [demoParticipants, participants]);
   // Keep ref in sync so openExpenseModal always has the latest list
   allContributorsRef.current = allContributors;
+
+  // For "Someone else paid" — only guests (no organizer, no honoree)
+  const payerOptions = useMemo(
+    () => allContributors.filter(c => c.id !== 'organizer' && c.id !== 'honoree'),
+    [allContributors]
+  );
 
   // All expense categories (preset + user-created)
   const allExpenseCategories = useMemo<ExpenseCategory[]>(
@@ -901,8 +928,8 @@ export default function BudgetDashboardScreen() {
                   const showBorder = index < allExpenseCategories.length - 1 || true; // always border between rows
                   return (
                     <View key={item.key}>
-                      {/* Category header row */}
-                      <View style={[styles.refundRow, styles.contributionRowBorder]}>
+                      {/* Category header row — tap anywhere to open modal */}
+                      <Pressable style={[styles.refundRow, styles.contributionRowBorder]} onPress={() => openExpenseModal(item.key)}>
                         <XStack alignItems="center" gap="$3" flex={1}>
                           <View style={[styles.refundIcon, { backgroundColor: item.bg }]}>
                             <Ionicons name={item.icon as any} size={18} color={item.color} />
@@ -938,23 +965,28 @@ export default function BudgetDashboardScreen() {
                             <Ionicons name="add-circle" size={22} color={item.color} />
                           </Pressable>
                         </XStack>
-                      </View>
-                      {/* Expanded sub-items */}
-                      {catExpenses.map((exp, ei) => (
-                        <View
-                          key={ei}
-                          style={[
-                            styles.expenseSubRow,
-                            ei < catExpenses.length - 1 && styles.expenseSubRowBorder,
-                          ]}
-                        >
-                          <View style={styles.expenseSubIndent} />
-                          <Text style={styles.expenseSubDesc} numberOfLines={1}>{exp.description}</Text>
-                          <Text style={[styles.expenseSubAmount, { color: item.color }]}>
-                            €{exp.amount}
-                          </Text>
-                        </View>
-                      ))}
+                      </Pressable>
+                      {/* Expanded sub-items — tap to edit */}
+                      {catExpenses.map((exp, ei) => {
+                        const globalIdx = addedExpenses.indexOf(exp);
+                        return (
+                          <Pressable
+                            key={ei}
+                            style={[
+                              styles.expenseSubRow,
+                              ei < catExpenses.length - 1 && styles.expenseSubRowBorder,
+                            ]}
+                            onPress={() => openEditExpense(globalIdx)}
+                          >
+                            <View style={styles.expenseSubIndent} />
+                            <Text style={styles.expenseSubDesc} numberOfLines={1}>{exp.description}</Text>
+                            <Ionicons name="pencil-outline" size={12} color={DARK_THEME.textTertiary} style={{ marginRight: 4 }} />
+                            <Text style={[styles.expenseSubAmount, { color: item.color }]}>
+                              €{exp.amount}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
                     </View>
                   );
                 })}
@@ -1040,6 +1072,7 @@ export default function BudgetDashboardScreen() {
           <View style={styles.modalOverlay}>
             <Pressable style={{ flex: 1 }} onPress={() => setExpenseModalVisible(false)} />
             <View style={styles.modalSheet}>
+              <View style={styles.modalDragHandle} />
               <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
                 {!expenseCategoryKey ? (
                   /* ── Mode 1: Category picker ── */
@@ -1074,6 +1107,21 @@ export default function BudgetDashboardScreen() {
                         <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
                       </Pressable>
                     ))}
+                    {/* Add custom category */}
+                    <Pressable
+                      style={styles.templateRow}
+                      onPress={() => {
+                        setExpenseModalVisible(false);
+                        setCustomCategoryLabel('');
+                        setCustomCategoryModalVisible(true);
+                      }}
+                    >
+                      <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
+                        <Ionicons name="add" size={18} color={DARK_THEME.textTertiary} />
+                      </View>
+                      <Text style={[styles.templateLabel, { color: DARK_THEME.textTertiary }]}>Add custom category</Text>
+                      <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                    </Pressable>
                   </>
                 ) : expenseViewMode === 'list' ? (
                   /* ── Mode 2: Existing expenses list ── */
@@ -1096,20 +1144,34 @@ export default function BudgetDashboardScreen() {
                             <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
                           </Pressable>
                         </XStack>
-                        {catExpenses.map((exp, i) => (
-                          <View key={i} style={[styles.expenseListRow, i < catExpenses.length - 1 && styles.contributionRowBorder]}>
-                            <YStack flex={1}>
-                              <Text style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}>{exp.description}</Text>
-                              <Text style={{ fontSize: 11, color: DARK_THEME.textTertiary }}>
-                                {exp.paidBy === 'you' ? 'Paid by you'
-                                  : exp.paidBy === 'other' ? `Paid by ${exp.paidByPerson || 'other'}`
-                                  : 'Split equally'}
-                                {exp.contributors.length > 0 ? ` · ${exp.contributors.length} contributors` : ''}
-                              </Text>
-                            </YStack>
-                            <Text style={{ fontSize: 14, fontWeight: '600', color: expCat.color }}>€{exp.amount}</Text>
-                          </View>
-                        ))}
+                        {catExpenses.map((exp, i) => {
+                          const globalIdx = addedExpenses.indexOf(exp);
+                          return (
+                            <Pressable
+                              key={i}
+                              style={[styles.expenseListRow, i < catExpenses.length - 1 && styles.contributionRowBorder]}
+                              onPress={() => {
+                                setEditingExpenseIndex(globalIdx);
+                                setExpenseDescription(exp.description);
+                                setExpenseAmount(exp.amount);
+                                setExpensePaidBy(exp.paidBy);
+                                setExpensePaidByPerson(exp.paidByPerson || null);
+                                setExpenseContributors(exp.contributors);
+                                setExpenseViewMode('form');
+                              }}
+                            >
+                              <YStack flex={1}>
+                                <Text style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}>{exp.description}</Text>
+                                <Text style={{ fontSize: 11, color: DARK_THEME.textTertiary }}>
+                                  {exp.paidBy === 'other' ? `Paid by ${exp.paidByPerson || 'someone else'}` : 'Paid by you'}
+                                  {exp.contributors.length > 0 ? ` · ${exp.contributors.length} contributors` : ''}
+                                </Text>
+                              </YStack>
+                              <Ionicons name="pencil-outline" size={14} color={DARK_THEME.textTertiary} style={{ marginRight: 6 }} />
+                              <Text style={{ fontSize: 14, fontWeight: '600', color: expCat.color }}>€{exp.amount}</Text>
+                            </Pressable>
+                          );
+                        })}
                         <Pressable
                           style={[styles.submitButton, { marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
                           onPress={() => {
@@ -1172,23 +1234,23 @@ export default function BudgetDashboardScreen() {
                           keyboardType="decimal-pad"
                         />
                         <Text style={styles.inputLabel}>Who paid?</Text>
-                        <XStack gap={8} style={{ marginBottom: expensePaidBy === 'other' ? 12 : 20 }}>
-                          {(['you', 'split', 'other'] as const).map(opt => (
+                        <XStack gap={10} style={{ marginBottom: expensePaidBy === 'other' ? 12 : 20 }}>
+                          {(['you', 'other'] as const).map(opt => (
                             <Pressable
                               key={opt}
                               style={[styles.paidByButton, expensePaidBy === opt && styles.paidByButtonActive]}
                               onPress={() => { setExpensePaidBy(opt); if (opt !== 'other') setExpensePaidByPerson(null); }}
                             >
                               <Text style={[styles.paidByText, expensePaidBy === opt && styles.paidByTextActive]}>
-                                {opt === 'you' ? 'You' : opt === 'split' ? 'Split' : 'Someone else'}
+                                {opt === 'you' ? 'You' : 'Someone else'}
                               </Text>
                             </Pressable>
                           ))}
                         </XStack>
-                        {/* Person picker when "Someone else" is selected */}
-                        {expensePaidBy === 'other' && allContributors.length > 0 && (
+                        {/* Person picker when "Someone else" is selected — guests only */}
+                        {expensePaidBy === 'other' && payerOptions.length > 0 && (
                           <View style={{ marginBottom: 20 }}>
-                            {allContributors.map(c => {
+                            {payerOptions.map(c => {
                               const sel = expensePaidByPerson === c.id;
                               return (
                                 <Pressable
@@ -1205,34 +1267,44 @@ export default function BudgetDashboardScreen() {
                             })}
                           </View>
                         )}
-                        {allContributors.length > 0 && (
-                          <>
-                            <Text style={styles.inputLabel}>Who should contribute?</Text>
-                            {allContributors.map(contributor => {
-                              const selected = expenseContributors.includes(contributor.id);
-                              return (
-                                <Pressable
-                                  key={contributor.id}
-                                  style={[styles.contributorRow, selected && styles.contributorRowSelected]}
-                                  onPress={() => setExpenseContributors(prev =>
-                                    selected ? prev.filter(id => id !== contributor.id) : [...prev, contributor.id]
-                                  )}
-                                >
-                                  <Text style={styles.contributorName}>{contributor.name}</Text>
-                                  <View style={[styles.contributorCheck, selected && styles.contributorCheckSelected]}>
-                                    {selected && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
-                                  </View>
-                                </Pressable>
-                              );
-                            })}
-                          </>
-                        )}
+                        {/* Contributors — payer is always excluded to avoid duplication */}
+                        {(() => {
+                          const payerExcludedId = expensePaidBy === 'you'
+                            ? (allContributors[0]?.id || null)
+                            : expensePaidByPerson;
+                          const contributorOptions = allContributors.filter(c => c.id !== payerExcludedId);
+                          if (contributorOptions.length === 0) return null;
+                          return (
+                            <>
+                              <Text style={styles.inputLabel}>Who should contribute?</Text>
+                              {contributorOptions.map(contributor => {
+                                const selected = expenseContributors.includes(contributor.id);
+                                return (
+                                  <Pressable
+                                    key={contributor.id}
+                                    style={[styles.contributorRow, selected && styles.contributorRowSelected]}
+                                    onPress={() => setExpenseContributors(prev =>
+                                      selected ? prev.filter(id => id !== contributor.id) : [...prev, contributor.id]
+                                    )}
+                                  >
+                                    <Text style={styles.contributorName}>{contributor.name}</Text>
+                                    <View style={[styles.contributorCheck, selected && styles.contributorCheckSelected]}>
+                                      {selected && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
+                                    </View>
+                                  </Pressable>
+                                );
+                              })}
+                            </>
+                          );
+                        })()}
                         <Pressable
                           style={[styles.submitButton, { marginTop: 20 }, (!expenseDescription.trim() || !expenseAmount.trim()) && styles.submitButtonDisabled]}
                           onPress={submitExpense}
                           disabled={!expenseDescription.trim() || !expenseAmount.trim()}
                         >
-                          <Text style={styles.submitButtonText}>Add Expense</Text>
+                          <Text style={styles.submitButtonText}>
+                            {editingExpenseIndex !== null ? 'Save Changes' : 'Add Expense'}
+                          </Text>
                         </Pressable>
                         <Pressable
                           style={{ marginTop: 12, alignItems: 'center' }}
@@ -1269,6 +1341,7 @@ export default function BudgetDashboardScreen() {
           <View style={styles.modalOverlay}>
             <Pressable style={{ flex: 1 }} onPress={() => setRefundModalVisible(false)} />
             <View style={styles.modalSheet}>
+              <View style={styles.modalDragHandle} />
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
                 <Text style={styles.modalTitle}>Track a Refund</Text>
                 <Pressable onPress={() => setRefundModalVisible(false)} hitSlop={10}>
@@ -1296,6 +1369,17 @@ export default function BudgetDashboardScreen() {
                       <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
                     </Pressable>
                   ))}
+                  {/* Custom refund */}
+                  <Pressable
+                    style={styles.templateRow}
+                    onPress={() => { setRefundTemplateKey('custom'); setRefundDescription(''); }}
+                  >
+                    <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
+                      <Ionicons name="add" size={18} color={DARK_THEME.textTertiary} />
+                    </View>
+                    <Text style={[styles.templateLabel, { color: DARK_THEME.textTertiary }]}>Custom description</Text>
+                    <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                  </Pressable>
                 </>
               ) : (
                 /* Refund form */
@@ -1344,6 +1428,7 @@ export default function BudgetDashboardScreen() {
           <View style={styles.modalOverlay}>
             <Pressable style={{ flex: 1 }} onPress={() => setCustomCategoryModalVisible(false)} />
             <View style={styles.modalSheet}>
+              <View style={styles.modalDragHandle} />
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
                 <Text style={styles.modalTitle}>New Category</Text>
                 <Pressable onPress={() => setCustomCategoryModalVisible(false)} hitSlop={10}>
@@ -1789,10 +1874,19 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
+    paddingTop: 12,
     paddingBottom: 40,
     borderTopWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     maxHeight: '85%',
+  },
+  modalDragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignSelf: 'center',
+    marginBottom: 16,
   },
   modalTitle: {
     fontSize: 18,

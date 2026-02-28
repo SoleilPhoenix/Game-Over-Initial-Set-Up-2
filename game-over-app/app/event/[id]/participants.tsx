@@ -269,14 +269,21 @@ export default function ManageInvitationsScreen() {
       Alert.alert('No phone numbers', 'Add phone numbers to guest slots first.');
       return;
     }
-    const phoneList = allPhones.join(Platform.OS === 'ios' ? ',' : ';');
+    const uniquePhones = [...new Set(allPhones)];
+    const phoneList = uniquePhones.join(Platform.OS === 'ios' ? ',' : ';');
     const encoded = encodeURIComponent(inviteMessage);
     const url = Platform.OS === 'ios'
       ? `sms:${phoneList}&body=${encoded}`
       : `sms:${phoneList}?body=${encoded}`;
-    const can = await Linking.canOpenURL(url);
-    if (can) Linking.openURL(url);
-    else Alert.alert('Cannot open SMS', 'Please send SMS manually.');
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(
+        'Cannot open SMS app',
+        `Copy the message manually and send to:\n${uniquePhones.join('\n')}`,
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   const handleSendEmail = async () => {
@@ -284,12 +291,19 @@ export default function ManageInvitationsScreen() {
       Alert.alert('No email addresses', 'Add email addresses to guest slots first.');
       return;
     }
+    const uniqueEmails = [...new Set(allEmails)];
     const subject = encodeURIComponent(`You're invited to ${event?.honoree_name || 'the party'}! 🎉`);
     const body = encodeURIComponent(inviteMessage);
-    const url = `mailto:${allEmails.join(',')}?subject=${subject}&body=${body}`;
-    const can = await Linking.canOpenURL(url);
-    if (can) Linking.openURL(url);
-    else Alert.alert('Cannot open Mail', 'Please send the email manually.');
+    const url = `mailto:${uniqueEmails.join(',')}?subject=${subject}&body=${body}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(
+        'Cannot open Mail app',
+        `Copy the invite and send manually to:\n${uniqueEmails.join('\n')}`,
+        [{ text: 'OK' }]
+      );
+    }
   };
 
   const handleShareAll = async () => {
