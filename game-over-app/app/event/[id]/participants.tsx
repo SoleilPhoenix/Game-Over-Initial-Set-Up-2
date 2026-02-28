@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { ScrollView, Share, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { ScrollView, Share, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Modal, Linking, Alert } from 'react-native';
 
 // ─── Phone Formatting ──────────────────────────
 /** Auto-formats German phone numbers with dash after prefix */
@@ -93,6 +93,7 @@ export default function ManageInvitationsScreen() {
   const [guestDetails, setGuestDetails] = useState<Record<number, GuestDetails>>({});
   const [expandedSlot, setExpandedSlot] = useState<number | null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteModalVisible, setInviteModalVisible] = useState(false);
   const [activeEmailSlot, setActiveEmailSlot] = useState<number | null>(null);
   const [showHonoreeInfo, setShowHonoreeInfo] = useState(false);
   const [emailSuggestions, setEmailSuggestions] = useState<string[]>([]);
@@ -249,30 +250,64 @@ export default function ManageInvitationsScreen() {
     setEmailSuggestions([]);
   };
 
-  const handleInviteAll = async () => {
-    setInviteLoading(true);
-    try {
-      // Collect all emails from filled guest slots
-      const guestEmails = slots
-        .filter(s => s.role === 'guest' && s.email)
-        .map(s => s.email);
+  // Compose the invitation message
+  const inviteMessage = useMemo(() => {
+    const inviteLink = `https://game-over.app/invite/${id}`;
+    return `🎉 You're invited to celebrate ${event?.honoree_name || 'the party'}!\n\nJoin us on Game Over and RSVP here:\n${inviteLink}`;
+  }, [id, event?.honoree_name]);
 
-      const inviteCode = `${id}-${Date.now().toString(36)}`;
-      const inviteLink = `https://game-over.app/invite/${inviteCode}`;
-      const message = t.manageInvitations.inviteMessage
-        .replace('{{name}}', event?.honoree_name || 'the party')
-        .replace('{{link}}', inviteLink);
+  // Guests with phone or email
+  const invitableGuests = useMemo(
+    () => slots.filter(s => s.role !== 'organizer' && (s.email || s.phone)),
+    [slots]
+  );
+  const allEmails = useMemo(() => invitableGuests.map(s => s.email).filter(Boolean), [invitableGuests]);
+  const allPhones = useMemo(() => invitableGuests.map(s => s.phone).filter(Boolean), [invitableGuests]);
 
-      await Share.share({
-        message,
-        title: t.manageInvitations.title,
-      });
-    } catch (error) {
-      console.error('Failed to share invites:', error);
-    } finally {
-      setInviteLoading(false);
+  const handleSendSMS = async () => {
+    if (allPhones.length === 0) {
+      Alert.alert('No phone numbers', 'Add phone numbers to guest slots first.');
+      return;
     }
+    const phoneList = allPhones.join(Platform.OS === 'ios' ? ',' : ';');
+    const encoded = encodeURIComponent(inviteMessage);
+    const url = Platform.OS === 'ios'
+      ? `sms:${phoneList}&body=${encoded}`
+      : `sms:${phoneList}?body=${encoded}`;
+    const can = await Linking.canOpenURL(url);
+    if (can) Linking.openURL(url);
+    else Alert.alert('Cannot open SMS', 'Please send SMS manually.');
   };
+
+  const handleSendEmail = async () => {
+    if (allEmails.length === 0) {
+      Alert.alert('No email addresses', 'Add email addresses to guest slots first.');
+      return;
+    }
+    const subject = encodeURIComponent(`You're invited to ${event?.honoree_name || 'the party'}! 🎉`);
+    const body = encodeURIComponent(inviteMessage);
+    const url = `mailto:${allEmails.join(',')}?subject=${subject}&body=${body}`;
+    const can = await Linking.canOpenURL(url);
+    if (can) Linking.openURL(url);
+    else Alert.alert('Cannot open Mail', 'Please send the email manually.');
+  };
+
+  const handleShareAll = async () => {
+    try {
+      await Share.share({ message: inviteMessage, title: 'Game Over Invitation' });
+    } catch {}
+  };
+
+  const handleOpenWhatsApp = (phone: string, name: string) => {
+    const clean = phone.replace(/[\s\-\(\)]/g, '');
+    const intlPhone = clean.startsWith('+') ? clean.slice(1) : clean.startsWith('0') ? `49${clean.slice(1)}` : clean;
+    const url = `https://wa.me/${intlPhone}?text=${encodeURIComponent(inviteMessage)}`;
+    Linking.openURL(url).catch(() =>
+      Alert.alert('WhatsApp not available', `Send a message to ${name} manually at ${phone}`)
+    );
+  };
+
+  const handleInviteAll = () => setInviteModalVisible(true);
 
   const getRoleBadge = (role: SlotRole) => {
     switch (role) {
@@ -531,6 +566,7 @@ export default function ManageInvitationsScreen() {
   }
 
   return (
+    <>
     <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -628,6 +664,84 @@ export default function ManageInvitationsScreen() {
         </Pressable>
       )}
     </KeyboardAvoidingView>
+
+      {/* ─── Invite Channel Modal ─── */}
+      <Modal
+        visible={inviteModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setInviteModalVisible(false)}
+      >
+        <View style={styles.inviteOverlay}>
+          <Pressable style={{ flex: 1 }} onPress={() => setInviteModalVisible(false)} />
+          <View style={styles.inviteSheet}>
+            {/* Header */}
+            <View style={styles.inviteHandle} />
+            <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
+              <Text style={styles.inviteTitle}>Invite All Guests</Text>
+              <Pressable onPress={() => setInviteModalVisible(false)} hitSlop={10}>
+                <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+              </Pressable>
+            </XStack>
+
+            {/* Message preview */}
+            <View style={styles.invitePreview}>
+              <Text style={styles.invitePreviewText} numberOfLines={4}>{inviteMessage}</Text>
+            </View>
+
+            {/* Bulk channels */}
+            <Text style={styles.inviteSectionLabel}>SEND TO ALL</Text>
+            <XStack gap={10} marginBottom={20}>
+              <Pressable style={styles.inviteChannelBtn} onPress={handleSendEmail}>
+                <Ionicons name="mail-outline" size={22} color="#3B82F6" />
+                <Text style={[styles.inviteChannelLabel, { color: '#3B82F6' }]}>Email</Text>
+                <Text style={styles.inviteChannelCount}>{allEmails.length} guests</Text>
+              </Pressable>
+              <Pressable style={styles.inviteChannelBtn} onPress={handleSendSMS}>
+                <Ionicons name="chatbubble-outline" size={22} color="#10B981" />
+                <Text style={[styles.inviteChannelLabel, { color: '#10B981' }]}>SMS</Text>
+                <Text style={styles.inviteChannelCount}>{allPhones.length} guests</Text>
+              </Pressable>
+              <Pressable style={styles.inviteChannelBtn} onPress={handleShareAll}>
+                <Ionicons name="share-outline" size={22} color={DARK_THEME.textSecondary} />
+                <Text style={[styles.inviteChannelLabel, { color: DARK_THEME.textSecondary }]}>Share</Text>
+                <Text style={styles.inviteChannelCount}>all apps</Text>
+              </Pressable>
+            </XStack>
+
+            {/* Per-guest WhatsApp */}
+            {invitableGuests.filter(g => g.phone).length > 0 && (
+              <>
+                <Text style={styles.inviteSectionLabel}>WHATSAPP — PER GUEST</Text>
+                <ScrollView style={{ maxHeight: 220 }} showsVerticalScrollIndicator={false}>
+                  {invitableGuests.filter(g => g.phone).map((guest, i) => (
+                    <Pressable
+                      key={i}
+                      style={styles.inviteGuestRow}
+                      onPress={() => handleOpenWhatsApp(guest.phone, guest.name || `Guest ${i + 1}`)}
+                    >
+                      <View style={styles.inviteGuestAvatar}>
+                        <Text style={styles.inviteGuestInitial}>
+                          {(guest.name || '?').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <YStack flex={1}>
+                        <Text style={styles.inviteGuestName}>{guest.name || `Guest ${i + 1}`}</Text>
+                        <Text style={styles.inviteGuestPhone}>{guest.phone}</Text>
+                      </YStack>
+                      <View style={styles.inviteWABtn}>
+                        <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+                        <Text style={styles.inviteWALabel}>Open</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
@@ -849,5 +963,117 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: DARK_THEME.glassBorder,
     flexDirection: 'row',
+  },
+  // ─── Invite Modal ───
+  inviteOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  inviteSheet: {
+    backgroundColor: '#1E2329',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 32,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  inviteHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  inviteTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: DARK_THEME.textPrimary,
+  },
+  invitePreview: {
+    backgroundColor: DARK_THEME.deepNavy,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  invitePreviewText: {
+    fontSize: 13,
+    color: DARK_THEME.textSecondary,
+    lineHeight: 20,
+  },
+  inviteSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: DARK_THEME.textTertiary,
+    letterSpacing: 0.8,
+    marginBottom: 10,
+  },
+  inviteChannelBtn: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+    paddingVertical: 14,
+    gap: 4,
+  },
+  inviteChannelLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  inviteChannelCount: {
+    fontSize: 11,
+    color: DARK_THEME.textTertiary,
+  },
+  inviteGuestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+    gap: 10,
+  },
+  inviteGuestAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: DARK_THEME.deepNavy,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteGuestInitial: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: DARK_THEME.textPrimary,
+  },
+  inviteGuestName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: DARK_THEME.textPrimary,
+  },
+  inviteGuestPhone: {
+    fontSize: 12,
+    color: DARK_THEME.textTertiary,
+    marginTop: 1,
+  },
+  inviteWABtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(37, 211, 102, 0.12)',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  inviteWALabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#25D366',
   },
 });
