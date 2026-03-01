@@ -772,7 +772,7 @@ export default function BudgetDashboardScreen() {
                     {t.budget.totalBudget}
                   </Text>
                   <View style={styles.statusBadge}>
-                    <Text style={styles.statusText}>{t.budget.onTrack}</Text>
+                    <Text style={styles.statusText}>{formatCurrency(budgetStats.totalBudget)}</Text>
                   </View>
                 </XStack>
 

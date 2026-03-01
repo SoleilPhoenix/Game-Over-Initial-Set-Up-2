@@ -192,8 +192,12 @@ serve(async (req: Request) => {
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // ── Parse & validate request ──
-    const { eventId, channel } = await req.json() as { eventId: string; channel: Channel };
+    // ── Parse & validate request (parse body once — req.json() consumes the stream) ──
+    const { eventId, channel, guests: guestsRaw } = await req.json() as {
+      eventId: string;
+      channel: Channel;
+      guests: GuestSlot[];
+    };
 
     if (!eventId || !channel) {
       return new Response(
@@ -226,16 +230,8 @@ serve(async (req: Request) => {
       (event.profiles as any)?.full_name ?? 'Your friend';
     const honoreeName: string = event.honoree_name ?? 'the guest of honour';
 
-    // ── Fetch guest details from cache (stored in AsyncStorage on device) ──
-    // Guest slots are stored in the participantCountCache on the device.
-    // The app passes guest contact data via a separate guests[] param in the request body.
-    // Re-parse to get guests (we accept them from the app to avoid a separate DB table).
-    const body = await req.clone().json() as {
-      eventId: string;
-      channel: Channel;
-      guests: GuestSlot[];
-    };
-    const guests: GuestSlot[] = body.guests ?? [];
+    // ── Guests were already parsed from the request body above ──
+    const guests: GuestSlot[] = guestsRaw ?? [];
 
     if (guests.length === 0) {
       return new Response(

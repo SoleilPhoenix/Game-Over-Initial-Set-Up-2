@@ -32,7 +32,6 @@ export function MessageInput({
 
     onSend(trimmedMessage);
     setMessage('');
-    Keyboard.dismiss();
   }, [message, onSend, isLoading, disabled]);
 
   const canSend = message.trim().length > 0 && !isLoading && !disabled;

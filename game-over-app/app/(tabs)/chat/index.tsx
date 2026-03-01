@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useChannels, useCreateChannel } from '@/hooks/queries/useChat';
-import { usePolls, useCreatePoll, useVote, useDeletePoll } from '@/hooks/queries/usePolls';
+import { usePolls, useCreatePoll, useVote, useDeletePoll, useAddPollOption } from '@/hooks/queries/usePolls';
 import { DARK_THEME } from '@/constants/theme';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
@@ -461,6 +461,32 @@ export default function CommunicationScreen() {
   const [channelInputModal, setChannelInputModal] = useState<{ visible: boolean; category: ChannelCategory | null }>({ visible: false, category: null });
   const [channelInputValue, setChannelInputValue] = useState('');
   const channelInputRef = useRef<TextInput | null>(null);
+
+  // ── Swipe-to-dismiss for bottom sheet modals ──
+  const pollSheetY = useRef(new Animated.Value(0)).current;
+  const channelSheetY = useRef(new Animated.Value(0)).current;
+  const pollInfoSheetY = useRef(new Animated.Value(0)).current;
+
+  const makeSheetPan = (animY: Animated.Value, onClose: () => void) =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 5 && gs.dy > 0,
+      onPanResponderMove: (_, gs) => { if (gs.dy > 0) animY.setValue(gs.dy); },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 80) {
+          Animated.timing(animY, { toValue: 600, duration: 200, useNativeDriver: true }).start(() => {
+            onClose();
+            animY.setValue(0);
+          });
+        } else {
+          Animated.spring(animY, { toValue: 0, useNativeDriver: true }).start();
+        }
+      },
+    });
+
+  const pollSheetPan = useRef(makeSheetPan(pollSheetY, () => setPollModalVisible(false))).current;
+  const channelSheetPan = useRef(makeSheetPan(channelSheetY, () => setChannelInputModal({ visible: false, category: null }))).current;
+  const pollInfoSheetPan = useRef(makeSheetPan(pollInfoSheetY, () => setPollInfoModal(null))).current;
   const { t } = useTranslation();
   const COMM_TABS = ['topics', 'voting'] as const;
   const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchTabAnimated } = useSwipeTabs(COMM_TABS, selectedTab, setSelectedTab);
@@ -569,7 +595,9 @@ export default function CommunicationScreen() {
   const createPollMutation = useCreatePoll();
   const voteMutation = useVote();
   const deletePollMutation = useDeletePoll();
+  const addOptionMutation = useAddPollOption();
   const [pollInfoModal, setPollInfoModal] = useState<import('@/repositories/polls').PollWithOptions | null>(null);
+  const [newOptionText, setNewOptionText] = useState('');
   const optionInputRefs = useRef<Array<import('react-native').TextInput | null>>([]);
 
   // Derived local sections for current event (per-event map)
@@ -1211,13 +1239,20 @@ export default function CommunicationScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           style={{ flex: 1 }}
         >
-          <View style={styles.modalOverlay}>
+          <Pressable style={styles.modalOverlay} onPress={() => setPollModalVisible(false)}>
             <ScrollView
               contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
               keyboardShouldPersistTaps="handled"
             >
-              <View style={styles.modalSheet}>
-                <Text style={styles.modalTitle}>New Poll</Text>
+              <Pressable onPress={() => {}}>
+              <Animated.View style={[styles.modalSheet, { transform: [{ translateY: pollSheetY }] }]}>
+                <View style={styles.modalHandle} {...pollSheetPan.panHandlers} />
+                <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
+                  <Text style={styles.modalTitle}>New Poll</Text>
+                  <Pressable onPress={() => setPollModalVisible(false)} hitSlop={10}>
+                    <Ionicons name="close" size={22} color={DARK_THEME.textTertiary} />
+                  </Pressable>
+                </XStack>
                 <Text style={styles.modalLabel}>Question</Text>
                 <TextInput
                   style={styles.modalInput}
@@ -1264,9 +1299,10 @@ export default function CommunicationScreen() {
                     <Text style={styles.modalButtonCreateText}>Create Poll</Text>
                   </Pressable>
                 </View>
-              </View>
+              </Animated.View>
+              </Pressable>
             </ScrollView>
-          </View>
+          </Pressable>
         </KeyboardAvoidingView>
       </Modal>
 
@@ -1278,7 +1314,9 @@ export default function CommunicationScreen() {
         onRequestClose={() => setPollInfoModal(null)}
       >
         <Pressable style={styles.modalOverlay} onPress={() => setPollInfoModal(null)}>
-          <Pressable style={styles.modalSheet} onPress={() => {}}>
+          <Pressable onPress={() => {}}>
+          <Animated.View style={[styles.modalSheet, { transform: [{ translateY: pollInfoSheetY }] }]}>
+            <View style={styles.modalHandle} {...pollInfoSheetPan.panHandlers} />
             <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
               <Text style={styles.modalTitle}>Poll Info</Text>
               <Pressable onPress={() => setPollInfoModal(null)} hitSlop={8}>
@@ -1325,17 +1363,41 @@ export default function CommunicationScreen() {
                     </Text>
                   </XStack>
                   {pollInfoModal.created_by === user?.id && (
-                    <Pressable
-                      style={[styles.modalButton, { backgroundColor: 'rgba(239,68,68,0.15)', borderColor: 'rgba(239,68,68,0.3)', borderWidth: 1, flex: 0, alignSelf: 'stretch' }]}
-                      onPress={() => handleDeletePoll(pollInfoModal)}
-                    >
-                      <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                      <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14, marginLeft: 6 }}>Delete Poll</Text>
-                    </Pressable>
+                    <>
+                      {/* Add Option row */}
+                      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' }}>
+                        <TextInput
+                          style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
+                          placeholder="Add new option…"
+                          placeholderTextColor={DARK_THEME.textTertiary}
+                          value={newOptionText}
+                          onChangeText={setNewOptionText}
+                        />
+                        <Pressable
+                          style={{ backgroundColor: '#5A7EB0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 }}
+                          onPress={async () => {
+                            const label = newOptionText.trim();
+                            if (!label || !pollInfoModal) return;
+                            await addOptionMutation.mutateAsync({ pollId: pollInfoModal.id, label });
+                            setNewOptionText('');
+                          }}
+                        >
+                          <Ionicons name="add" size={20} color="#FFFFFF" />
+                        </Pressable>
+                      </View>
+                      <Pressable
+                        style={[styles.modalButton, { backgroundColor: 'rgba(239,68,68,0.15)', borderColor: 'rgba(239,68,68,0.3)', borderWidth: 1, flex: 0, alignSelf: 'stretch' }]}
+                        onPress={() => handleDeletePoll(pollInfoModal)}
+                      >
+                        <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                        <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14, marginLeft: 6 }}>Delete Poll</Text>
+                      </Pressable>
+                    </>
                   )}
                 </>
               );
             })()}
+          </Animated.View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1352,7 +1414,9 @@ export default function CommunicationScreen() {
           style={{ flex: 1 }}
         >
           <Pressable style={styles.modalOverlay} onPress={() => setChannelInputModal({ visible: false, category: null })}>
-            <Pressable style={styles.modalSheet} onPress={() => {}}>
+            <Pressable onPress={() => {}}>
+            <Animated.View style={[styles.modalSheet, { transform: [{ translateY: channelSheetY }] }]}>
+              <View style={styles.modalHandle} {...channelSheetPan.panHandlers} />
               <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
                 <Text style={styles.modalTitle}>{(t.chat as any).newChatLabel}</Text>
                 <Pressable onPress={() => setChannelInputModal({ visible: false, category: null })} hitSlop={8}>
@@ -1381,6 +1445,7 @@ export default function CommunicationScreen() {
                   <Text style={styles.modalButtonCreateText}>{getTranslation().chat.create}</Text>
                 </Pressable>
               </View>
+              </Animated.View>
             </Pressable>
           </Pressable>
         </KeyboardAvoidingView>
@@ -1786,11 +1851,18 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
+  modalHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: DARK_THEME.textPrimary,
-    marginBottom: 20,
   },
   modalLabel: {
     fontSize: 12,

@@ -407,18 +407,6 @@ export default function EventsScreen() {
               <Text style={styles.dateText}>{dateRange}</Text>
             </XStack>
 
-            {/* Role badge */}
-            <XStack alignItems="center" gap={8} marginTop={8}>
-              <View style={[
-                styles.roleBadge,
-                role === 'organizer' ? styles.roleBadgeOrganizer : styles.roleBadgeGuest
-              ]}>
-                <Text style={styles.roleBadgeText}>
-                  {role === 'organizer' ? t.events.organizer : t.events.guest}
-                </Text>
-              </View>
-            </XStack>
-
             {/* Days left + payment status row */}
             {(daysLeft || paymentStatus) && (
               <XStack alignItems="center" gap={8} marginTop={6}>

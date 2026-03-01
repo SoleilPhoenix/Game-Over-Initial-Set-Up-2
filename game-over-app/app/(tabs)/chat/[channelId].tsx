@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useRef, useEffect, useState } from 'react';
-import { FlatList, KeyboardAvoidingView, Modal, Platform, Keyboard, Alert, Pressable, View } from 'react-native';
+import { Animated, PanResponder, FlatList, KeyboardAvoidingView, Modal, Platform, Keyboard, Alert, Pressable, View, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
@@ -50,6 +50,22 @@ export default function ChatChannelScreen() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [infoModalVisible, setInfoModalVisible] = useState(false);
   const [localMessages, setLocalMessages] = useState<LocalMessage[]>([]);
+  const infoSheetY = useRef(new Animated.Value(0)).current;
+  const infoSheetPan = useRef(PanResponder.create({
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 5 && gs.dy > 0,
+    onPanResponderMove: (_, gs) => { if (gs.dy > 0) infoSheetY.setValue(gs.dy); },
+    onPanResponderRelease: (_, gs) => {
+      if (gs.dy > 80) {
+        Animated.timing(infoSheetY, { toValue: 600, duration: 200, useNativeDriver: true }).start(() => {
+          setInfoModalVisible(false);
+          infoSheetY.setValue(0);
+        });
+      } else {
+        Animated.spring(infoSheetY, { toValue: 0, useNativeDriver: true }).start();
+      }
+    },
+  })).current;
   const { t } = useTranslation();
 
   // Local channels have a timestamp ID — skip all DB operations for them
@@ -437,7 +453,8 @@ export default function ChatChannelScreen() {
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' }}
           onPress={() => setInfoModalVisible(false)}
         >
-          <Pressable
+          <Pressable onPress={() => {}}>
+          <Animated.View
             style={{
               backgroundColor: '#1E2329',
               borderTopLeftRadius: 24,
@@ -446,9 +463,11 @@ export default function ChatChannelScreen() {
               paddingBottom: 32,
               borderTopWidth: 1,
               borderColor: 'rgba(255,255,255,0.08)',
+              transform: [{ translateY: infoSheetY }],
             }}
-            onPress={() => {}}
           >
+            {/* Drag handle */}
+            <View style={channelStyles.handle} {...infoSheetPan.panHandlers} />
             {/* Header row: title + close */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '700' }}>Channel Info</Text>
@@ -502,9 +521,21 @@ export default function ChatChannelScreen() {
               <Ionicons name="trash-outline" size={16} color="#EF4444" />
               <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14 }}>Delete Channel</Text>
             </Pressable>
+          </Animated.View>
           </Pressable>
         </Pressable>
       </Modal>
     </KeyboardAvoidingView>
   );
 }
+
+const channelStyles = StyleSheet.create({
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+});
