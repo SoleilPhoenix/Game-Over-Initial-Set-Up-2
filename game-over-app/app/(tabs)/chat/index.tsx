@@ -786,7 +786,7 @@ export default function CommunicationScreen() {
               </XStack>
               {catPolls.length === 0 ? (
                 <Pressable onPress={() => handleCreatePoll(catDef.id)} style={styles.emptyChannelBox}>
-                  <Text style={styles.emptyChannelText}>No polls yet</Text>
+                  <Text style={styles.emptyChannelText}>No polls yet — tap to create</Text>
                 </Pressable>
               ) : (
                 <YStack gap={12}>

@@ -356,3 +356,90 @@ export function getPaymentReminderEmailHtml(params: PaymentReminderParams): stri
     bodyHtml,
   });
 }
+
+// ─── Guest Invite Email ─────────────────────────────────────
+
+interface GuestInviteEmailParams {
+  organizerName: string;
+  honoreeName: string;
+  inviteUrl: string;         // https://game-over.app/invite/{code}
+  guestFirstName?: string;   // personalise greeting if known
+}
+
+export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string {
+  const { organizerName, honoreeName, inviteUrl, guestFirstName } = params;
+  const greeting = guestFirstName ? `Hi ${guestFirstName},` : 'Hi there,';
+
+  const bodyHtml = `
+    <p style="margin:0 0 16px;color:#FFFFFF;font-size:16px;line-height:1.5;">
+      ${greeting}
+    </p>
+
+    <p style="margin:0 0 24px;color:#D1D5DB;font-size:15px;line-height:1.6;">
+      <strong style="color:#FFFFFF;">${organizerName}</strong> is planning something special
+      for <strong style="color:#FFFFFF;">${honoreeName}</strong> and you're on the guest list!
+    </p>
+
+    <!-- Highlight box -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+      <tr>
+        <td style="background:linear-gradient(135deg,rgba(90,126,176,0.2),rgba(139,92,246,0.15));border:1px solid rgba(90,126,176,0.3);border-radius:14px;padding:24px;text-align:center;">
+          <p style="margin:0 0 8px;font-size:32px;">🎉</p>
+          <p style="margin:0 0 6px;color:#FFFFFF;font-size:18px;font-weight:700;">
+            You're invited to celebrate
+          </p>
+          <p style="margin:0;color:#5A7EB0;font-size:22px;font-weight:800;">
+            ${honoreeName}
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <!-- What to do -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+      <tr>
+        <td style="background-color:#23272F;border-radius:12px;padding:24px;">
+          <p style="margin:0 0 16px;color:#FFFFFF;font-size:14px;font-weight:600;">How it works:</p>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="padding-bottom:12px;">
+                <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
+                  <strong style="color:#FFFFFF;">1.</strong> Tap the button below to join the group
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-bottom:12px;">
+                <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
+                  <strong style="color:#FFFFFF;">2.</strong> Download Game Over and RSVP
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td>
+                <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
+                  <strong style="color:#FFFFFF;">3.</strong> Chat, vote on plans, and track costs with the group
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    ${ctaButton("Join the Party 🥂", inviteUrl)}
+
+    <p style="margin:0 0 24px;color:#6B7280;font-size:12px;text-align:center;line-height:1.5;">
+      This invite link is personal to you and expires in 30 days.<br>
+      If you did not expect this invitation, you can safely ignore this email.
+    </p>
+
+    ${supportLine()}`;
+
+  return baseLayout({
+    title: `You're invited to celebrate ${honoreeName}!`,
+    subtitle: `Invitation from ${organizerName}`,
+    accentColor: '#5A7EB0',
+    bodyHtml,
+  });
+}

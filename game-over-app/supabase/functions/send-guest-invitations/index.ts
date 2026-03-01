@@ -1,0 +1,375 @@
+/**
+ * send-guest-invitations Edge Function
+ *
+ * Sends event invitations from Game Over's own platform accounts.
+ * Supports three channels: email (SendGrid), SMS (Twilio), WhatsApp (Twilio).
+ *
+ * Flow per guest slot:
+ *  1. Validate contact (SendGrid Email Validation or Twilio Lookup)
+ *  2. Generate unique invite code (30-day expiry)
+ *  3. Send via Twilio / SendGrid
+ *  4. Record result in guest_invitations table
+ *
+ * Required Supabase secrets:
+ *   SENDGRID_API_KEY      — Twilio SendGrid full-access key
+ *   TWILIO_ACCOUNT_SID    — Twilio account SID
+ *   TWILIO_AUTH_TOKEN     — Twilio auth token
+ *   TWILIO_SMS_FROM       — e.g. "GameOver" (alphanumeric sender ID)
+ *   TWILIO_WHATSAPP_FROM  — e.g. "whatsapp:+49..." (WhatsApp Business number)
+ */
+
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { sendEmail } from '../_shared/email.ts';
+import { getGuestInviteEmailHtml } from '../_shared/email-templates.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+// ─── Types ───────────────────────────────────────────────────
+
+type Channel = 'email' | 'sms' | 'whatsapp';
+type SendStatus = 'sent' | 'failed' | 'invalid';
+
+interface GuestSlot {
+  slotIndex: number;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+}
+
+interface GuestResult {
+  slotIndex: number;
+  status: SendStatus;
+  recipient: string;  // masked
+  error?: string;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@');
+  if (!domain) return '***';
+  return `${local.slice(0, 2)}**@${domain}`;
+}
+
+function maskPhone(phone: string): string {
+  return `${phone.slice(0, 5)}***`;
+}
+
+function generateCode(): string {
+  // 8-char alphanumeric code, URL-safe
+  return Array.from(crypto.getRandomValues(new Uint8Array(6)))
+    .map(b => b.toString(36).padStart(2, '0'))
+    .join('')
+    .toUpperCase()
+    .slice(0, 8);
+}
+
+// ─── Validation ───────────────────────────────────────────────
+
+async function validateEmail(email: string): Promise<{ valid: boolean; reason?: string }> {
+  const apiKey = Deno.env.get('SENDGRID_API_KEY');
+  if (!apiKey) return { valid: true }; // skip validation if no key
+
+  try {
+    const res = await fetch('https://api.sendgrid.com/v3/validations/email', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, source: 'game-over-invite' }),
+    });
+    if (!res.ok) return { valid: true }; // fail open — don't block on API error
+    const data = await res.json();
+    const verdict: string = data.result?.verdict ?? 'Valid';
+    if (verdict === 'Invalid') return { valid: false, reason: 'invalid email address' };
+    return { valid: true };
+  } catch {
+    return { valid: true }; // fail open
+  }
+}
+
+async function validatePhone(phone: string): Promise<{ valid: boolean; reason?: string }> {
+  const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
+  const token = Deno.env.get('TWILIO_AUTH_TOKEN');
+  if (!sid || !token) return { valid: true }; // skip if no credentials
+
+  try {
+    const encoded = encodeURIComponent(phone);
+    const res = await fetch(
+      `https://lookups.twilio.com/v2/PhoneNumbers/${encoded}?Fields=line_type_intelligence`,
+      {
+        headers: {
+          'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
+        },
+      }
+    );
+    if (!res.ok) return { valid: true }; // fail open
+    const data = await res.json();
+    const lineType: string = data.line_type_intelligence?.type ?? 'mobile';
+    if (lineType === 'landline' || lineType === 'voip') {
+      return { valid: false, reason: `${lineType} number — cannot receive SMS/WhatsApp` };
+    }
+    return { valid: true };
+  } catch {
+    return { valid: true }; // fail open
+  }
+}
+
+// ─── Sending ──────────────────────────────────────────────────
+
+async function sendSMS(to: string, body: string): Promise<{ success: boolean; error?: string }> {
+  const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
+  const token = Deno.env.get('TWILIO_AUTH_TOKEN');
+  const from = Deno.env.get('TWILIO_SMS_FROM') ?? 'GameOver';
+
+  if (!sid || !token) return { success: false, error: 'Twilio not configured' };
+
+  const params = new URLSearchParams({ To: to, From: from, Body: body });
+
+  const res = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    }
+  );
+
+  if (res.ok) return { success: true };
+  const err = await res.json();
+  return { success: false, error: err.message ?? `Twilio error ${res.status}` };
+}
+
+async function sendWhatsApp(to: string, body: string): Promise<{ success: boolean; error?: string }> {
+  const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
+  const token = Deno.env.get('TWILIO_AUTH_TOKEN');
+  const from = Deno.env.get('TWILIO_WHATSAPP_FROM');
+
+  if (!sid || !token || !from) {
+    return { success: false, error: 'WhatsApp not configured — TWILIO_WHATSAPP_FROM missing' };
+  }
+
+  // Normalise recipient to whatsapp: prefix
+  const toFormatted = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
+
+  const params = new URLSearchParams({ To: toFormatted, From: from, Body: body });
+
+  const res = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    }
+  );
+
+  if (res.ok) return { success: true };
+  const err = await res.json();
+  return { success: false, error: err.message ?? `Twilio WhatsApp error ${res.status}` };
+}
+
+// ─── Main handler ─────────────────────────────────────────────
+
+serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, serviceRoleKey);
+
+    // ── Parse & validate request ──
+    const { eventId, channel } = await req.json() as { eventId: string; channel: Channel };
+
+    if (!eventId || !channel) {
+      return new Response(
+        JSON.stringify({ error: 'eventId and channel are required' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+    if (!['email', 'sms', 'whatsapp'].includes(channel)) {
+      return new Response(
+        JSON.stringify({ error: 'channel must be email, sms, or whatsapp' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    // ── Fetch event details ──
+    const { data: event, error: eventError } = await supabase
+      .from('events')
+      .select('id, title, honoree_name, created_by, profiles:created_by(full_name)')
+      .eq('id', eventId)
+      .single();
+
+    if (eventError || !event) {
+      return new Response(
+        JSON.stringify({ error: 'Event not found' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
+      );
+    }
+
+    const organizerName: string =
+      (event.profiles as any)?.full_name ?? 'Your friend';
+    const honoreeName: string = event.honoree_name ?? 'the guest of honour';
+
+    // ── Fetch guest details from cache (stored in AsyncStorage on device) ──
+    // Guest slots are stored in the participantCountCache on the device.
+    // The app passes guest contact data via a separate guests[] param in the request body.
+    // Re-parse to get guests (we accept them from the app to avoid a separate DB table).
+    const body = await req.clone().json() as {
+      eventId: string;
+      channel: Channel;
+      guests: GuestSlot[];
+    };
+    const guests: GuestSlot[] = body.guests ?? [];
+
+    if (guests.length === 0) {
+      return new Response(
+        JSON.stringify({ error: 'No guests provided' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      );
+    }
+
+    // ── Filter to guests with contact for this channel ──
+    const eligible = guests.filter(g =>
+      channel === 'email' ? !!g.email : !!g.phone
+    );
+
+    if (eligible.length === 0) {
+      return new Response(
+        JSON.stringify({
+          sent: 0, failed: 0, invalid: 0,
+          results: [],
+          message: `No guests have ${channel === 'email' ? 'email addresses' : 'phone numbers'} entered.`,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    }
+
+    // ── Process each guest ──
+    const results: GuestResult[] = [];
+    let sentCount = 0;
+    let failedCount = 0;
+    let invalidCount = 0;
+
+    for (const guest of eligible) {
+      const contact = channel === 'email' ? guest.email! : guest.phone!;
+
+      // 1. Validate
+      let validation: { valid: boolean; reason?: string };
+      if (channel === 'email') {
+        validation = await validateEmail(contact);
+      } else {
+        validation = await validatePhone(contact);
+      }
+
+      if (!validation.valid) {
+        invalidCount++;
+        results.push({
+          slotIndex: guest.slotIndex,
+          status: 'invalid',
+          recipient: channel === 'email' ? maskEmail(contact) : maskPhone(contact),
+          error: validation.reason,
+        });
+        await supabase.from('guest_invitations').insert({
+          event_id: eventId,
+          slot_index: guest.slotIndex,
+          channel,
+          recipient: contact,
+          status: 'invalid',
+          error: validation.reason,
+        });
+        continue;
+      }
+
+      // 2. Generate unique invite code
+      const code = generateCode();
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      await supabase.from('invite_codes').insert({
+        event_id: eventId,
+        code,
+        max_uses: 1,
+        expires_at: expiresAt,
+      });
+      const inviteUrl = `https://game-over.app/invite/${code}`;
+
+      // 3. Build message body
+      const guestName = guest.firstName ?? '';
+      const smsBody =
+        `🎉 You're invited to celebrate ${honoreeName}!\n\n` +
+        `${organizerName} is planning the ultimate party and wants you there.\n\n` +
+        `Join Game Over and RSVP here:\n${inviteUrl}\n\n` +
+        `Reply STOP to opt out.`;
+
+      // 4. Send
+      let sendResult: { success: boolean; error?: string };
+
+      if (channel === 'email') {
+        const html = getGuestInviteEmailHtml({
+          organizerName,
+          honoreeName,
+          inviteUrl,
+          guestFirstName: guest.firstName,
+        });
+        const subject = `You're invited to celebrate ${honoreeName}! 🎉`;
+        sendResult = await sendEmail({ to: contact, subject, html });
+
+      } else if (channel === 'sms') {
+        sendResult = await sendSMS(contact, smsBody);
+
+      } else {
+        sendResult = await sendWhatsApp(contact, smsBody);
+      }
+
+      // 5. Record result
+      const status: SendStatus = sendResult.success ? 'sent' : 'failed';
+      if (sendResult.success) sentCount++; else failedCount++;
+
+      results.push({
+        slotIndex: guest.slotIndex,
+        status,
+        recipient: channel === 'email' ? maskEmail(contact) : maskPhone(contact),
+        error: sendResult.error,
+      });
+
+      await supabase.from('guest_invitations').insert({
+        event_id: eventId,
+        slot_index: guest.slotIndex,
+        channel,
+        recipient: contact,
+        status,
+        error: sendResult.error ?? null,
+        invite_code: code,
+      });
+
+      console.log(`[${channel}] slot=${guest.slotIndex} status=${status}`);
+    }
+
+    return new Response(
+      JSON.stringify({ sent: sentCount, failed: failedCount, invalid: invalidCount, results }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+    );
+
+  } catch (error) {
+    console.error('send-guest-invitations error:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(
+      JSON.stringify({ error: message }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
+  }
+});
