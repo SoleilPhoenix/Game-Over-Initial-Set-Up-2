@@ -281,25 +281,30 @@ serve(async (req: Request) => {
           recipient: channel === 'email' ? maskEmail(contact) : maskPhone(contact),
           error: validation.reason,
         });
-        await supabase.from('guest_invitations').insert({
+        // Non-blocking — record failure but don't crash if table is unavailable
+        supabase.from('guest_invitations').insert({
           event_id: eventId,
           slot_index: guest.slotIndex,
           channel,
           recipient: contact,
           status: 'invalid',
           error: validation.reason,
+        }).then(({ error }) => {
+          if (error) console.warn('[guest_invitations] insert failed (invalid):', error.message);
         });
         continue;
       }
 
-      // 2. Generate unique invite code
+      // 2. Generate unique invite code and store it (non-blocking)
       const code = generateCode();
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      await supabase.from('invite_codes').insert({
+      supabase.from('invite_codes').insert({
         event_id: eventId,
         code,
         max_uses: 1,
         expires_at: expiresAt,
+      }).then(({ error }) => {
+        if (error) console.warn('[invite_codes] insert failed:', error.message);
       });
       const inviteUrl = `https://game-over.app/invite/${code}`;
 
@@ -342,7 +347,8 @@ serve(async (req: Request) => {
         error: sendResult.error,
       });
 
-      await supabase.from('guest_invitations').insert({
+      // Non-blocking — record send result but don't crash if table is unavailable
+      supabase.from('guest_invitations').insert({
         event_id: eventId,
         slot_index: guest.slotIndex,
         channel,
@@ -350,6 +356,8 @@ serve(async (req: Request) => {
         status,
         error: sendResult.error ?? null,
         invite_code: code,
+      }).then(({ error }) => {
+        if (error) console.warn('[guest_invitations] insert failed (sent):', error.message);
       });
 
       console.log(`[${channel}] slot=${guest.slotIndex} status=${status}`);

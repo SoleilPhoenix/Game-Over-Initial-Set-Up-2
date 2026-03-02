@@ -469,8 +469,7 @@ export default function CommunicationScreen() {
 
   const makeSheetPan = (animY: Animated.Value, onClose: () => void) =>
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dy) > 5 && gs.dy > 0,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8 && Math.abs(gs.dy) > Math.abs(gs.dx),
       onPanResponderMove: (_, gs) => { if (gs.dy > 0) animY.setValue(gs.dy); },
       onPanResponderRelease: (_, gs) => {
         if (gs.dy > 80) {
@@ -1246,7 +1245,9 @@ export default function CommunicationScreen() {
             >
               <Pressable onPress={() => {}}>
               <Animated.View style={[styles.modalSheet, { transform: [{ translateY: pollSheetY }] }]}>
-                <View style={styles.modalHandle} {...pollSheetPan.panHandlers} />
+                <View style={styles.modalHandleArea} {...pollSheetPan.panHandlers}>
+                  <View style={styles.modalHandle} />
+                </View>
                 <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
                   <Text style={styles.modalTitle}>New Poll</Text>
                   <Pressable onPress={() => setPollModalVisible(false)} hitSlop={10}>
@@ -1316,13 +1317,16 @@ export default function CommunicationScreen() {
         <Pressable style={styles.modalOverlay} onPress={() => setPollInfoModal(null)}>
           <Pressable onPress={() => {}}>
           <Animated.View style={[styles.modalSheet, { transform: [{ translateY: pollInfoSheetY }] }]}>
-            <View style={styles.modalHandle} {...pollInfoSheetPan.panHandlers} />
+            <View style={styles.modalHandleArea} {...pollInfoSheetPan.panHandlers}>
+              <View style={styles.modalHandle} />
+            </View>
             <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
               <Text style={styles.modalTitle}>Poll Info</Text>
               <Pressable onPress={() => setPollInfoModal(null)} hitSlop={8}>
                 <Ionicons name="close" size={22} color={DARK_THEME.textTertiary} />
               </Pressable>
             </XStack>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {pollInfoModal && (() => {
               const catCfg = POLL_CATEGORY_CONFIG_CONST[pollInfoModal.category ?? 'general'] ?? POLL_CATEGORY_CONFIG_CONST.general;
               const pollIcon = pickIconForChannel(pollInfoModal.title);
@@ -1397,6 +1401,7 @@ export default function CommunicationScreen() {
                 </>
               );
             })()}
+            </ScrollView>
           </Animated.View>
           </Pressable>
         </Pressable>
@@ -1416,7 +1421,9 @@ export default function CommunicationScreen() {
           <Pressable style={styles.modalOverlay} onPress={() => setChannelInputModal({ visible: false, category: null })}>
             <Pressable onPress={() => {}}>
             <Animated.View style={[styles.modalSheet, { transform: [{ translateY: channelSheetY }] }]}>
-              <View style={styles.modalHandle} {...channelSheetPan.panHandlers} />
+              <View style={styles.modalHandleArea} {...channelSheetPan.panHandlers}>
+                <View style={styles.modalHandle} />
+              </View>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
                 <Text style={styles.modalTitle}>{(t.chat as any).newChatLabel}</Text>
                 <Pressable onPress={() => setChannelInputModal({ visible: false, category: null })} hitSlop={8}>
@@ -1851,13 +1858,18 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
+  modalHandleArea: {
+    alignSelf: 'stretch',
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
   modalHandle: {
     width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: 'rgba(255,255,255,0.18)',
-    alignSelf: 'center',
-    marginBottom: 20,
   },
   modalTitle: {
     fontSize: 18,

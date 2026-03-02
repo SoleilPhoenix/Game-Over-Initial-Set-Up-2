@@ -772,7 +772,7 @@ export default function BudgetDashboardScreen() {
                     {t.budget.totalBudget}
                   </Text>
                   <View style={styles.statusBadge}>
-                    <Text style={styles.statusText}>{formatCurrency(budgetStats.totalBudget)}</Text>
+                    <Text style={styles.statusText}>{t.budget.onTrack}</Text>
                   </View>
                 </XStack>
 
@@ -807,9 +807,12 @@ export default function BudgetDashboardScreen() {
                       {t.budget.spent.replace('{{percentage}}', String(budgetStats.percentage))}
                     </Text>
                   </XStack>
-                  <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary}>
-                    {t.budget.remaining.replace('{{amount}}', formatCurrency(budgetStats.pending))}
-                  </Text>
+                  <XStack alignItems="center" gap="$1.5">
+                    <View style={[styles.statDot, { backgroundColor: '#7B1C2A' }]} />
+                    <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary}>
+                      {t.budget.remaining.replace('{{amount}}', formatCurrency(budgetStats.pending))}
+                    </Text>
+                  </XStack>
                 </XStack>
               </YStack>
             </View>
@@ -1593,7 +1596,7 @@ const styles = StyleSheet.create({
   },
   progressContainer: {
     height: 12,
-    backgroundColor: 'rgba(107, 114, 128, 0.5)',
+    backgroundColor: '#6B1A2A',
     borderRadius: 6,
     overflow: 'hidden',
     marginBottom: 12,
