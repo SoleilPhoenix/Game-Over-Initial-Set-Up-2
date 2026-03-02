@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, View, Image, FlatList, StatusBar, PanResponder, Modal, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -156,6 +156,30 @@ export default function BudgetDashboardScreen() {
 
   // Track which expense index is being edited (null = creating new)
   const [editingExpenseIndex, setEditingExpenseIndex] = useState<number | null>(null);
+
+  // Drag-to-dismiss for budget modals (matches destination.tsx pattern)
+  const expenseSheetY = useRef(new Animated.Value(0)).current;
+  const refundSheetY = useRef(new Animated.Value(0)).current;
+  const customCatSheetY = useRef(new Animated.Value(0)).current;
+
+  const makeModalPan = (sheetY: Animated.Value, onClose: () => void) =>
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5 && Math.abs(gs.dy) > Math.abs(gs.dx),
+      onPanResponderMove: (_, gs) => { if (gs.dy > 0) sheetY.setValue(gs.dy); },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 80) {
+          Animated.timing(sheetY, { toValue: 800, duration: 200, useNativeDriver: true }).start(() => {
+            onClose(); sheetY.setValue(0);
+          });
+        } else {
+          Animated.spring(sheetY, { toValue: 0, useNativeDriver: true, tension: 100, friction: 8 }).start();
+        }
+      },
+    });
+
+  const expenseSheetPan = useRef(makeModalPan(expenseSheetY, () => setExpenseModalVisible(false))).current;
+  const refundSheetPan = useRef(makeModalPan(refundSheetY, () => setRefundModalVisible(false))).current;
+  const customCatSheetPan = useRef(makeModalPan(customCatSheetY, () => setCustomCategoryModalVisible(false))).current;
 
   const openExpenseModal = useCallback((categoryKey: string) => {
     setEditingExpenseIndex(null);
@@ -767,39 +791,40 @@ export default function BudgetDashboardScreen() {
               <View style={styles.gradientBlur} />
 
               <YStack gap="$2" style={{ position: 'relative', zIndex: 1 }}>
+                {/* Labels row: Deposit (left) | Total Package Price + amount (right) */}
                 <XStack justifyContent="space-between" alignItems="flex-start" marginBottom="$1">
                   <Text fontSize={14} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.5}>
                     {t.budget.totalBudget}
                   </Text>
-                  <View style={styles.statusBadge}>
-                    <Text style={styles.statusText}>{t.budget.onTrack}</Text>
-                  </View>
+                  <YStack alignItems="flex-end">
+                    <Text fontSize={12} fontWeight="600" color={DARK_THEME.textTertiary} letterSpacing={0.3}>
+                      {t.budget.onTrack}
+                    </Text>
+                    <Text fontSize={18} fontWeight="700" color={DARK_THEME.textPrimary} letterSpacing={-0.5}>
+                      {formatCurrency(budgetStats.totalBudget)}
+                    </Text>
+                  </YStack>
                 </XStack>
 
-                <XStack alignItems="baseline" gap="$2" marginBottom="$4">
-                  <Text fontSize={36} fontWeight="700" color={DARK_THEME.textPrimary} letterSpacing={-1}>
-                    {formatCurrency(budgetStats.collected)}
-                  </Text>
-                  <Text fontSize={14} fontWeight="500" color={DARK_THEME.textTertiary}>
-                    {t.budget.ofAmount.replace('{{amount}}', formatCurrency(budgetStats.totalBudget))}
-                  </Text>
-                </XStack>
+                {/* Large deposit amount */}
+                <Text fontSize={36} fontWeight="700" color={DARK_THEME.textPrimary} letterSpacing={-1} marginBottom="$3">
+                  {formatCurrency(budgetStats.collected)}
+                </Text>
 
-                {/* Progress Bar */}
+                {/* Progress Bar: blue = paid, bordeaux = remaining */}
                 <View style={styles.progressContainer}>
                   <View
                     style={[styles.progressBar, { width: `${budgetStats.percentage}%`, backgroundColor: DARK_THEME.primary }]}
                   />
                 </View>
 
-                {/* Stats Row */}
-                <XStack
-                  justifyContent="space-between"
-                  alignItems="center"
+                {/* Stats — stacked, one dot per line */}
+                <YStack
                   paddingTop="$3"
                   marginTop="$1"
                   borderTopWidth={1}
                   borderTopColor={DARK_THEME.borderLight}
+                  gap={6}
                 >
                   <XStack alignItems="center" gap="$1.5">
                     <View style={styles.statDot} />
@@ -810,10 +835,10 @@ export default function BudgetDashboardScreen() {
                   <XStack alignItems="center" gap="$1.5">
                     <View style={[styles.statDot, { backgroundColor: '#7B1C2A' }]} />
                     <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary}>
-                      {t.budget.remaining.replace('{{amount}}', formatCurrency(budgetStats.pending))}
+                      {(t.budget as any).remainingDue.replace('{{amount}}', formatCurrency(budgetStats.pending))}
                     </Text>
                   </XStack>
-                </XStack>
+                </YStack>
               </YStack>
             </View>
 
@@ -868,22 +893,23 @@ export default function BudgetDashboardScreen() {
                         </View>
 
                         {/* Info */}
-                        <YStack>
-                          <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
+                        <YStack flex={1}>
+                          <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary} numberOfLines={1}>
                             {name}{isCurrentUser ? ` ${t.budget.you}` : ''}
                           </Text>
-                          <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                          <Text fontSize={12} color={DARK_THEME.textTertiary} numberOfLines={1}>
                             {isPending
-                              ? t.budget.remaining.replace('{{amount}}', formatCurrency(amountForRow))
+                              ? (t.budget as any).pendingOwes.replace('{{amount}}', formatCurrency(amountForRow))
                               : t.budget.contribution.replace('{{amount}}', formatCurrency(amountForRow))
                             }
                           </Text>
                         </YStack>
                       </XStack>
 
-                      {/* Status Badge */}
+                      {/* Status Badge — flexShrink: 0 prevents it from being pushed off-screen */}
                       <View style={[
                         styles.paymentBadge,
+                        { flexShrink: 0 },
                         isPaid && styles.paidBadge,
                         isPending && styles.pendingBadge,
                       ]}>
@@ -1064,18 +1090,15 @@ export default function BudgetDashboardScreen() {
       </ScrollView>
       </Animated.View>
 
-      {/* ─── Expense Modal ─── */}
-      <Modal
-        visible={expenseModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setExpenseModalVisible(false)}
-      >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <View style={styles.modalOverlay}>
-            <Pressable style={{ flex: 1 }} onPress={() => setExpenseModalVisible(false)} />
-            <View style={styles.modalSheet}>
-              <View style={styles.modalDragHandle} />
+      {/* ─── Expense Popup — inline, no Modal (matches destination.tsx drag pattern) ─── */}
+      {expenseModalVisible && (
+        <View style={styles.popupOverlay} pointerEvents="box-none">
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setExpenseModalVisible(false)} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
+            <Animated.View style={[styles.modalSheet, { transform: [{ translateY: expenseSheetY }] }]}>
+              <View {...expenseSheetPan.panHandlers} style={styles.modalDragHandleArea}>
+                <View style={styles.modalDragHandle} />
+              </View>
               <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
                 {!expenseCategoryKey ? (
                   /* ── Mode 1: Category picker ── */
@@ -1328,30 +1351,27 @@ export default function BudgetDashboardScreen() {
                   })()
                 )}
               </ScrollView>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </View>
+      )}
 
-      {/* ─── Refund Modal ─── */}
-      <Modal
-        visible={refundModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setRefundModalVisible(false)}
-      >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <View style={styles.modalOverlay}>
-            <Pressable style={{ flex: 1 }} onPress={() => setRefundModalVisible(false)} />
-            <View style={styles.modalSheet}>
-              <View style={styles.modalDragHandle} />
+      {/* ─── Refund Popup — inline, no Modal (matches destination.tsx drag pattern) ─── */}
+      {refundModalVisible && (
+        <View style={styles.popupOverlay} pointerEvents="box-none">
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setRefundModalVisible(false)} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
+            <Animated.View style={[styles.modalSheet, { transform: [{ translateY: refundSheetY }] }]}>
+              <View {...refundSheetPan.panHandlers} style={styles.modalDragHandleArea}>
+                <View style={styles.modalDragHandle} />
+              </View>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
                 <Text style={styles.modalTitle}>Track a Refund</Text>
                 <Pressable onPress={() => setRefundModalVisible(false)} hitSlop={10}>
                   <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
                 </Pressable>
               </XStack>
-
+              <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
               {!refundTemplateKey ? (
                 /* Template selection */
                 <>
@@ -1410,28 +1430,26 @@ export default function BudgetDashboardScreen() {
                   >
                     <Text style={styles.submitButtonText}>Track Refund</Text>
                   </Pressable>
-                  <Pressable style={{ marginTop: 12, alignItems: 'center' }} onPress={() => setRefundTemplateKey(null)}>
+                  <Pressable style={{ marginTop: 12, marginBottom: 8, alignItems: 'center' }} onPress={() => setRefundTemplateKey(null)}>
                     <Text style={{ color: DARK_THEME.textSecondary, fontSize: 13 }}>← Change type</Text>
                   </Pressable>
                 </>
               )}
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+              </ScrollView>
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </View>
+      )}
 
-      {/* ─── Custom Category Modal ─── */}
-      <Modal
-        visible={customCategoryModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setCustomCategoryModalVisible(false)}
-      >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <View style={styles.modalOverlay}>
-            <Pressable style={{ flex: 1 }} onPress={() => setCustomCategoryModalVisible(false)} />
-            <View style={styles.modalSheet}>
-              <View style={styles.modalDragHandle} />
+      {/* ─── Custom Category Popup — inline, no Modal (matches destination.tsx drag pattern) ─── */}
+      {customCategoryModalVisible && (
+        <View style={styles.popupOverlay} pointerEvents="box-none">
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setCustomCategoryModalVisible(false)} />
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
+            <Animated.View style={[styles.modalSheet, { transform: [{ translateY: customCatSheetY }] }]}>
+              <View {...customCatSheetPan.panHandlers} style={styles.modalDragHandleArea}>
+                <View style={styles.modalDragHandle} />
+              </View>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
                 <Text style={styles.modalTitle}>New Category</Text>
                 <Pressable onPress={() => setCustomCategoryModalVisible(false)} hitSlop={10}>
@@ -1478,10 +1496,10 @@ export default function BudgetDashboardScreen() {
               >
                 <Text style={styles.submitButtonText}>Create & Add Expense</Text>
               </Pressable>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+            </Animated.View>
+          </KeyboardAvoidingView>
+        </View>
+      )}
     </View>
   );
 }
@@ -1867,10 +1885,17 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   // ─── Modals ────────────────────────────────────
-  modalOverlay: {
-    flex: 1,
+  popupOverlay: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
+    zIndex: 100,
+  },
+  modalDragHandleArea: {
+    alignSelf: 'stretch',
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalSheet: {
     backgroundColor: DARK_THEME.surfaceCard,
