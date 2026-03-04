@@ -188,7 +188,7 @@ export function useUpdatePollStatus() {
 }
 
 /**
- * Add option to a poll
+ * Add option to a poll — optimistically adds to cache for instant UI feedback
  */
 export function useAddPollOption() {
   const queryClient = useQueryClient();
@@ -203,10 +203,72 @@ export function useAddPollOption() {
     }) => {
       return pollsRepository.addOption(pollId, label);
     },
-    onSuccess: (_, { pollId }) => {
-      queryClient.invalidateQueries({
-        queryKey: pollKeys.detail(pollId),
-      });
+    onSuccess: (newOption, { pollId }) => {
+      // Optimistically add the new option to all cached poll lists
+      queryClient.setQueriesData<PollWithOptions[]>(
+        { queryKey: pollKeys.all, exact: false },
+        (old) => {
+          if (!Array.isArray(old)) return old;
+          return old.map(poll => {
+            if (poll.id !== pollId) return poll;
+            return {
+              ...poll,
+              options: [
+                ...poll.options,
+                { ...newOption, vote_count: 0 },
+              ],
+            };
+          });
+        }
+      );
+      // Also invalidate to sync with server
+      queryClient.invalidateQueries({ queryKey: pollKeys.all });
+    },
+  });
+}
+
+/**
+ * Delete a poll option — optimistically removes from cache
+ */
+export function useDeletePollOption() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      optionId,
+    }: {
+      optionId: string;
+      pollId: string;
+    }) => {
+      return pollsRepository.deleteOption(optionId);
+    },
+    onMutate: async ({ optionId, pollId }) => {
+      await queryClient.cancelQueries({ queryKey: pollKeys.all });
+      const snapshot = queryClient.getQueriesData<PollWithOptions[]>({ queryKey: pollKeys.all, exact: false });
+      queryClient.setQueriesData<PollWithOptions[]>(
+        { queryKey: pollKeys.all, exact: false },
+        (old) => {
+          if (!Array.isArray(old)) return old;
+          return old.map(poll => {
+            if (poll.id !== pollId) return poll;
+            return {
+              ...poll,
+              options: poll.options.filter(o => o.id !== optionId),
+            };
+          });
+        }
+      );
+      return { snapshot };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.snapshot) {
+        context.snapshot.forEach(([key, data]) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: pollKeys.all });
     },
   });
 }

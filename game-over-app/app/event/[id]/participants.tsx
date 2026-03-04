@@ -270,6 +270,10 @@ export default function ManageInvitationsScreen() {
     setActiveChannel(channel);
     setInviteSendStatus('sending');
 
+    // Ensure the session token is fresh — an expired JWT causes a 401 at the
+    // Supabase edge function runtime before our code even runs
+    await supabase.auth.refreshSession().catch(() => {});
+
     // Build guest payload from current slot/guestDetails state
     const guests = slots
       .filter(s => s.role !== 'organizer')
@@ -286,7 +290,15 @@ export default function ManageInvitationsScreen() {
     });
 
     if (error) {
-      Alert.alert('Send failed', error.message ?? 'Unknown error');
+      // Decode actual error body from the function response (Supabase client wraps
+      // non-2xx responses in a generic FunctionsHttpError — real detail is in context)
+      let detail = error.message ?? 'Unknown error';
+      try {
+        const body = await (error as any).context?.json?.();
+        if (body?.error) detail = body.error;
+        else if (body?.detail) detail = body.detail;
+      } catch {}
+      Alert.alert('Send failed', detail);
       setInviteSendStatus('idle');
       return;
     }
@@ -711,12 +723,16 @@ export default function ManageInvitationsScreen() {
                     <Text style={styles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
                   </Pressable>
                   <Pressable
-                    style={[styles.inviteChannelBtn, !hasPhones && styles.inviteChannelBtnDisabled]}
-                    onPress={() => hasPhones && handleSendViaChannel('whatsapp')}
+                    style={styles.inviteChannelBtn}
+                    onPress={() => Alert.alert(
+                      'WhatsApp — Coming Soon',
+                      'WhatsApp invitations require a verified Meta Business Account. We\'re working on it! In the meantime, please use Email or SMS.',
+                      [{ text: 'OK' }]
+                    )}
                   >
-                    <Ionicons name="logo-whatsapp" size={22} color={hasPhones ? '#25D366' : DARK_THEME.textTertiary} />
-                    <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#25D366' : DARK_THEME.textTertiary }]}>WhatsApp</Text>
-                    <Text style={styles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
+                    <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
+                    <Text style={[styles.inviteChannelLabel, { color: '#25D366' }]}>WhatsApp</Text>
+                    <Text style={styles.inviteChannelCount}>Coming soon</Text>
                   </Pressable>
                 </XStack>
                 <Pressable style={{ alignItems: 'center', paddingVertical: 8 }} onPress={handleShareFallback}>

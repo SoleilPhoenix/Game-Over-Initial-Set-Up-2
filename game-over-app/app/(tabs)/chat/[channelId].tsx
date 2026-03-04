@@ -466,8 +466,10 @@ export default function ChatChannelScreen() {
               transform: [{ translateY: infoSheetY }],
             }}
           >
-            {/* Drag handle */}
-            <View style={channelStyles.handle} {...infoSheetPan.panHandlers} />
+            {/* Drag handle — large touch area covers full top zone */}
+            <View style={channelStyles.handleArea} {...infoSheetPan.panHandlers}>
+              <View style={channelStyles.handle} />
+            </View>
             {/* Header row: title + close */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '700' }}>Channel Info</Text>
@@ -530,12 +532,18 @@ export default function ChatChannelScreen() {
 }
 
 const channelStyles = StyleSheet.create({
+  handleArea: {
+    alignSelf: 'stretch',
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
   handle: {
     width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: 'rgba(255,255,255,0.18)',
     alignSelf: 'center',
-    marginBottom: 20,
   },
 });

@@ -283,4 +283,16 @@ export const pollsRepository = {
     if (error) throw error;
     return data;
   },
+
+  /**
+   * Delete a poll option
+   */
+  async deleteOption(optionId: string): Promise<void> {
+    const { error } = await supabase
+      .from('poll_options')
+      .delete()
+      .eq('id', optionId);
+
+    if (error) throw error;
+  },
 };
