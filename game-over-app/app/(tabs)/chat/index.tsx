@@ -638,12 +638,14 @@ export default function CommunicationScreen() {
     };
 
     if (selectedEventId && dbChannels.length > 0) {
-      // Use database channels if event is selected
-      dbChannels.forEach(channel => {
-        if (groups[channel.category]) {
-          groups[channel.category].push(channel);
-        }
-      });
+      // Use database channels if event is selected — newest first
+      [...dbChannels]
+        .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
+        .forEach(channel => {
+          if (groups[channel.category]) {
+            groups[channel.category].push(channel);
+          }
+        });
     } else {
       // Use local channels otherwise
       localSections.forEach(section => {
@@ -719,7 +721,7 @@ export default function CommunicationScreen() {
           setLocalSectionsForEvent(prevSections =>
             prevSections.map(section =>
               section.id === category
-                ? { ...section, channels: [...section.channels, { id: Date.now().toString(), name, icon: pickIconForChannel(name, category) }] }
+                ? { ...section, channels: [{ id: Date.now().toString(), name, icon: pickIconForChannel(name, category) }, ...section.channels] }
                 : section
             )
           );
@@ -733,7 +735,7 @@ export default function CommunicationScreen() {
       setLocalSectionsForEvent(prevSections =>
         prevSections.map(section =>
           section.id === category
-            ? { ...section, channels: [...section.channels, { id: Date.now().toString(), name, icon: pickIconForChannel(name, category) }] }
+            ? { ...section, channels: [{ id: Date.now().toString(), name, icon: pickIconForChannel(name, category) }, ...section.channels] }
             : section
         )
       );
@@ -809,7 +811,8 @@ export default function CommunicationScreen() {
       <>
         {VOTING_CATEGORIES.map(catDef => {
           const cfg = POLL_CATEGORY_CONFIG[catDef.id];
-          const catPolls = polls.filter(p => p.category === catDef.id);
+          const catPolls = [...polls.filter(p => p.category === catDef.id)]
+            .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime());
           return (
             <View key={catDef.id + catDef.label} style={styles.channelSection}>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={12}>

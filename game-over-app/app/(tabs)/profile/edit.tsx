@@ -20,11 +20,20 @@ export default function EditProfileScreen() {
   const insets = useSafeAreaInsets();
   const user = useUser();
 
-  const [fullName, setFullName] = useState(user?.user_metadata?.full_name || '');
+  const [firstName, setFirstName] = useState(() => {
+    const full = (user?.user_metadata?.full_name || '').trim();
+    return full.split(' ')[0] || '';
+  });
+  const [lastName, setLastName] = useState(() => {
+    const full = (user?.user_metadata?.full_name || '').trim();
+    const parts = full.split(' ');
+    return parts.slice(1).join(' ');
+  });
   const [isSaving, setIsSaving] = useState(false);
 
   const userEmail = user?.email || '';
-  const userInitials = fullName
+  const fullNameCombined = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
+  const userInitials = fullNameCombined
     .split(' ')
     .map((n: string) => n[0])
     .join('')
@@ -32,15 +41,15 @@ export default function EditProfileScreen() {
     .slice(0, 2) || 'U';
 
   const handleSave = async () => {
-    if (!fullName.trim()) {
-      Alert.alert('Error', 'Please enter your name.');
+    if (!firstName.trim()) {
+      Alert.alert('Error', 'Please enter your first name.');
       return;
     }
 
     setIsSaving(true);
     try {
       const { error } = await supabase.auth.updateUser({
-        data: { full_name: fullName.trim() },
+        data: { full_name: fullNameCombined },
       });
 
       if (error) throw error;
@@ -119,7 +128,7 @@ export default function EditProfileScreen() {
           </YStack>
 
           <YStack paddingHorizontal="$4" gap="$5">
-            {/* Full Name Input */}
+            {/* First Name Input */}
             <YStack gap="$2">
               <Text
                 fontSize={11}
@@ -129,18 +138,44 @@ export default function EditProfileScreen() {
                 letterSpacing={1}
                 marginLeft="$1"
               >
-                Full Name
+                First Name
               </Text>
               <View style={styles.inputContainer}>
                 <TextInput
                   style={styles.input}
-                  value={fullName}
-                  onChangeText={setFullName}
-                  placeholder="Enter your name"
+                  value={firstName}
+                  onChangeText={setFirstName}
+                  placeholder="Enter your first name"
                   placeholderTextColor="#6B7280"
                   autoCapitalize="words"
                   autoCorrect={false}
-                  testID="edit-profile-name-input"
+                  testID="edit-profile-firstname-input"
+                />
+              </View>
+            </YStack>
+
+            {/* Last Name Input */}
+            <YStack gap="$2">
+              <Text
+                fontSize={11}
+                fontWeight="600"
+                color={DARK_THEME.textSecondary}
+                textTransform="uppercase"
+                letterSpacing={1}
+                marginLeft="$1"
+              >
+                Last Name
+              </Text>
+              <View style={styles.inputContainer}>
+                <TextInput
+                  style={styles.input}
+                  value={lastName}
+                  onChangeText={setLastName}
+                  placeholder="Enter your last name"
+                  placeholderTextColor="#6B7280"
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  testID="edit-profile-lastname-input"
                 />
               </View>
             </YStack>

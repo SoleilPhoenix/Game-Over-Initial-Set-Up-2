@@ -254,14 +254,14 @@ export default function BudgetDashboardScreen() {
     const tmpl = REFUND_TEMPLATES.find(t => t.key === refundTemplateKey);
     setAddedRefunds(prev => {
       const customColor = CUSTOM_COLORS[prev.length % CUSTOM_COLORS.length];
-      const updated = [...prev, {
+      const updated = [{
         description: refundDescription.trim(),
         amount: refundAmount.trim(),
         status: 'processing' as const,
         icon: tmpl?.icon ?? 'receipt-outline',
         color: tmpl?.color ?? customColor.color,
         bg: tmpl?.bg ?? customColor.bg,
-      }];
+      }, ...prev];
       if (selectedEventId) {
         AsyncStorage.setItem(`gameover:refunds:${selectedEventId}`, JSON.stringify(updated));
       }
@@ -1006,7 +1006,7 @@ export default function BudgetDashboardScreen() {
               </XStack>
               <View style={styles.glassCard}>
                 {allExpenseCategories.map((item, index) => {
-                  const catExpenses = addedExpenses.filter(e => e.categoryKey === item.key);
+                  const catExpenses = [...addedExpenses.filter(e => e.categoryKey === item.key)].reverse();
                   const totalCents = catExpenses.reduce((sum, e) => {
                     const val = parseFloat(e.amount.replace(',', '.'));
                     return sum + (isNaN(val) ? 0 : val);
@@ -1213,7 +1213,7 @@ export default function BudgetDashboardScreen() {
                   /* ── Mode 2: Existing expenses list ── */
                   (() => {
                     const expCat = allExpenseCategories.find(c => c.key === expenseCategoryKey)!;
-                    const catExpenses = addedExpenses.filter(e => e.categoryKey === expenseCategoryKey);
+                    const catExpenses = [...addedExpenses.filter(e => e.categoryKey === expenseCategoryKey)].reverse();
                     return (
                       <>
                         <XStack alignItems="center" gap={12} marginBottom={20}>
