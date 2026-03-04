@@ -333,7 +333,7 @@ serve(async (req: Request) => {
       const smsBody =
         `🎉 ${greeting} invited to ${honoreeName}'s ${partyTypeLabel}!\n\n` +
         `${organizerName} is planning the ultimate celebration on Game Over 🥂\n\n` +
-        `Your all-in-one party app:\n` +
+        `Your all-in-one ${partyTypeLabel} app:\n` +
         `✅ Group chat & live polls with all guests\n` +
         `✅ Budget & payment tracking — no awkward money talk\n` +
         `✅ Every activity & detail in one place\n\n` +
