@@ -129,8 +129,11 @@ const getDaysLeft = (startDate?: string): string | null => {
   if (!startDate) return null;
   const start = new Date(startDate);
   const now = new Date();
-  const diffTime = start.getTime() - now.getTime();
-  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  // Compare calendar dates only (ignore time-of-day) so "Mar 19" always shows
+  // 14 days on Mar 5 regardless of what hour it is
+  const startMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.round((startMidnight.getTime() - nowMidnight.getTime()) / (1000 * 60 * 60 * 24));
   if (diffDays < 0) return null;
   if (diffDays === 0) return 'Today';
   if (diffDays === 1) return '1 day left';

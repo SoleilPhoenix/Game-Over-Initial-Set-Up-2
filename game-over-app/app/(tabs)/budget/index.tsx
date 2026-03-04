@@ -524,19 +524,23 @@ export default function BudgetDashboardScreen() {
     [allContributors]
   );
 
-  // Days until event (for due-date badge and notification trigger)
+  // Days until event (calendar-date comparison — no time-of-day skew)
   const daysUntilEvent = useMemo(() => {
     if (!selectedEvent?.start_date) return null;
-    const diff = new Date(selectedEvent.start_date).getTime() - Date.now();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    const start = new Date(selectedEvent.start_date);
+    const now = new Date();
+    const startMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.round((startMidnight.getTime() - nowMidnight.getTime()) / (1000 * 60 * 60 * 24));
   }, [selectedEvent?.start_date]);
 
-  // Fire a local notification once when event is within 14 days and balance unpaid
+  // Fire a local notification once when event is within 14 days and balance unpaid.
+  // Keyed by days-remaining so it re-fires if the user opens the app on a new day.
   useEffect(() => {
     if (!selectedEventId || !selectedEvent?.start_date) return;
     if (budgetStats.percentage >= 100) return;
     if (daysUntilEvent === null || daysUntilEvent <= 0 || daysUntilEvent > 14) return;
-    const notifKey = `gameover:notif_14day:${selectedEventId}`;
+    const notifKey = `gameover:notif_14day:${selectedEventId}:${daysUntilEvent}`;
     AsyncStorage.getItem(notifKey).then(already => {
       if (already) return;
       const eventName = selectedEvent.title
@@ -930,6 +934,42 @@ export default function BudgetDashboardScreen() {
               </YStack>
             </View>
 
+            {/* Pay Remaining Balance — always visible when balance is unpaid */}
+            {budgetStats.percentage < 100 && budgetStats.pending > 0 && (
+              <Pressable
+                style={styles.payRemainingButton}
+                onPress={() => {
+                  const tr = getTranslation();
+                  Alert.alert(
+                    (tr.budget as any).payRemainingBtn,
+                    `${formatCurrencyRounded(budgetStats.pending)} · ${(tr.budget as any).payRemainingSubtitle}`,
+                    [
+                      { text: tr.profile.cancel, style: 'cancel' },
+                      {
+                        text: 'Pay Now',
+                        onPress: () => {
+                          if (selectedEventId) {
+                            router.push(`/booking/${selectedEventId}/payment` as any);
+                          }
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <View style={styles.payRemainingIcon}>
+                  <Ionicons name="card-outline" size={20} color="#F97316" />
+                </View>
+                <YStack flex={1}>
+                  <Text style={styles.payRemainingTitle}>{(t.budget as any).payRemainingBtn}</Text>
+                  <Text style={styles.payRemainingSubtitleText}>
+                    {formatCurrencyRounded(budgetStats.pending)} · {(t.budget as any).payRemainingSubtitle}
+                  </Text>
+                </YStack>
+                <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+              </Pressable>
+            )}
+
             {/* Group Contributions */}
             <YStack marginBottom="$4">
               <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
@@ -1032,41 +1072,6 @@ export default function BudgetDashboardScreen() {
                 <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
               </Pressable>
 
-              {/* Pay Remaining Balance button */}
-              {budgetStats.percentage < 100 && budgetStats.pending > 0 && (
-                <Pressable
-                  style={styles.payRemainingButton}
-                  onPress={() => {
-                    const tr = getTranslation();
-                    Alert.alert(
-                      (tr.budget as any).payRemainingBtn,
-                      `${formatCurrencyRounded(budgetStats.pending)} · ${(tr.budget as any).payRemainingSubtitle}`,
-                      [
-                        { text: tr.profile.cancel, style: 'cancel' },
-                        {
-                          text: 'Pay Now',
-                          onPress: () => {
-                            if (selectedEventId) {
-                              router.push(`/booking/${selectedEventId}/payment` as any);
-                            }
-                          },
-                        },
-                      ]
-                    );
-                  }}
-                >
-                  <View style={styles.payRemainingIcon}>
-                    <Ionicons name="card-outline" size={20} color="#F97316" />
-                  </View>
-                  <YStack flex={1}>
-                    <Text style={styles.payRemainingTitle}>{(t.budget as any).payRemainingBtn}</Text>
-                    <Text style={styles.payRemainingSubtitleText}>
-                      {formatCurrencyRounded(budgetStats.pending)} · {(t.budget as any).payRemainingSubtitle}
-                    </Text>
-                  </YStack>
-                  <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
-                </Pressable>
-              )}
             </YStack>
             </>
           ) : (
