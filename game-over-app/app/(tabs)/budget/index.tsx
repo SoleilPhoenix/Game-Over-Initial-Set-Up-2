@@ -426,7 +426,7 @@ export default function BudgetDashboardScreen() {
       currency: 'EUR',
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(Math.ceil(cents / 100));
+    }).format(Math.round(cents / 100));
   };
 
   // Navigate to share/invite screen
