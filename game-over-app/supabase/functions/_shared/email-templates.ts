@@ -399,7 +399,7 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
       <tr>
         <td>
-          <p style="margin:0 0 12px;color:#9CA3AF;font-size:13px;text-align:center;">Why join instead of staying on WhatsApp?</p>
+          <p style="margin:0 0 12px;color:#9CA3AF;font-size:13px;text-align:center;">Why join instead of endless back-and-forth coordination?</p>
         </td>
       </tr>
     </table>
@@ -410,14 +410,7 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
             <tr>
               <td style="padding-bottom:14px;">
                 <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
-                  ✅ <strong style="color:#FFFFFF;">No more group chat chaos</strong> — stress-free planning that actually preserves friendships
-                </p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-bottom:14px;">
-                <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
-                  🗳️ <strong style="color:#FFFFFF;">Everyone has a say</strong> — structured voting on activities so no one feels left out
+                  ✅ <strong style="color:#FFFFFF;">Eliminates planning stress</strong> — replaces endless back-and-forth with a simple, guided process
                 </p>
               </td>
             </tr>
@@ -431,14 +424,21 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
             <tr>
               <td style="padding-bottom:14px;">
                 <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
-                  🤖 <strong style="color:#FFFFFF;">AI-curated experiences</strong> — matches activities to what your entire group actually wants
+                  🤖 <strong style="color:#FFFFFF;">AI-curated experiences</strong> — activities matched to what your entire group actually wants
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-bottom:14px;">
+                <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
+                  ⚡ <strong style="color:#FFFFFF;">Everything in one place</strong> — plans, chat, payments &amp; RSVP, ready in minutes not weeks
                 </p>
               </td>
             </tr>
             <tr>
               <td>
                 <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
-                  ⚡ <strong style="color:#FFFFFF;">Everything in one place</strong> — plans, chat, payments &amp; RSVP, ready in minutes not weeks
+                  🤝 <strong style="color:#FFFFFF;">Preserves your friendships</strong> — no coordination chaos that strains relationships long after the celebration
                 </p>
               </td>
             </tr>

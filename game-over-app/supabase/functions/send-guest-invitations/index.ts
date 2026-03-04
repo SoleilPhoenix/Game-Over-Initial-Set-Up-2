@@ -333,12 +333,12 @@ serve(async (req: Request) => {
       const smsBody =
         `🎉 ${greeting} invited to ${honoreeName}'s ${partyTypeLabel}!\n\n` +
         `${organizerName} is organizing the ultimate celebration on Game Over 🥂\n\n` +
-        `Why join instead of staying on WhatsApp?\n` +
-        `✅ No more group chat chaos — stress-free planning\n` +
-        `🗳️ Vote on every activity — your voice counts\n` +
-        `💰 Full budget transparency — zero hidden costs\n` +
-        `🤖 AI-curated experiences that match what YOUR group wants\n` +
-        `⚡ Everything in one place, set up in minutes\n\n` +
+        `Why join instead of endless back-and-forth coordination?\n` +
+        `✅ Eliminates planning stress — simple, guided & stress-free\n` +
+        `💰 Full budget transparency — zero hidden costs or awkward money talk\n` +
+        `🤖 AI-curated experiences matched to what YOUR group actually wants\n` +
+        `⚡ Everything in one place — plans, chat & payments, ready in minutes\n` +
+        `🤝 Preserves your friendships — no coordination chaos after the event\n\n` +
         `Join & RSVP here:\n${inviteUrl}\n\n` +
         `Reply STOP to opt out.`;
 
