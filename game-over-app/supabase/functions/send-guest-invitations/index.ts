@@ -60,6 +60,13 @@ function maskPhone(phone: string): string {
   return `${phone.slice(0, 5)}***`;
 }
 
+/** Normalise to E.164: keep leading + and digits only, strip spaces/dashes/parens */
+function normalisePhone(phone: string): string {
+  const stripped = phone.replace(/[^\d+]/g, '');
+  // Ensure only one leading + (in case input had none, assume international)
+  return stripped.startsWith('+') ? stripped : `+${stripped}`;
+}
+
 function generateCode(): string {
   // 8-char alphanumeric code, URL-safe
   return Array.from(crypto.getRandomValues(new Uint8Array(6)))
@@ -273,7 +280,9 @@ serve(async (req: Request) => {
     let invalidCount = 0;
 
     for (const guest of eligible) {
-      const contact = channel === 'email' ? guest.email! : guest.phone!;
+      const rawContact = channel === 'email' ? guest.email! : guest.phone!;
+      // Normalise phone numbers to E.164 (strip spaces, dashes, parentheses)
+      const contact = channel === 'email' ? rawContact : normalisePhone(rawContact);
 
       // 1. Validate
       let validation: { valid: boolean; reason?: string };
