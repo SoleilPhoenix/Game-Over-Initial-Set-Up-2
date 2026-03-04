@@ -14,7 +14,7 @@ import { useUser, useAuthStore } from '@/stores/authStore';
 import { useFavoritesStore } from '@/stores/favoritesStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
-import { getEventImage, resolveImageSource } from '@/constants/packageImages';
+import { getPackageImage } from '@/constants/packageImages';
 
 interface MenuItemProps {
   icon: string;
@@ -260,9 +260,7 @@ export default function ProfileScreen() {
                       <XStack alignItems="center" gap="$3" flex={1}>
                         <View style={styles.savedPackageThumb}>
                           <Image
-                            source={resolveImageSource(
-                              getEventImage(fav.cityName.toLowerCase(), fav.heroImageUrl)
-                            )}
+                            source={getPackageImage(fav.cityName.toLowerCase(), fav.tier)}
                             style={styles.savedPackageThumbImage}
                             resizeMode="cover"
                           />

@@ -299,7 +299,8 @@ export default function PackageDetailsScreen() {
                     cityId,
                     cityName: CITY_LABELS[cityId] || cityId,
                     pricePerPersonCents: perPersonCents,
-                    heroImageUrl: pkg.hero_image_url,
+                    // Only store heroImageUrl if it's a real URL string (not a require() number)
+                    heroImageUrl: typeof pkg.hero_image_url === 'string' ? pkg.hero_image_url : undefined,
                     savedAt: new Date().toISOString(),
                   });
                 }}
