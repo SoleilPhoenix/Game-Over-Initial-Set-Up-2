@@ -54,6 +54,12 @@ export default function EditProfileScreen() {
 
       if (error) throw error;
 
+      // Also sync to profiles table (used by Edge Functions and server-side features)
+      await supabase
+        .from('profiles')
+        .update({ full_name: fullNameCombined })
+        .eq('id', user!.id);
+
       Alert.alert('Success', 'Profile updated successfully.', [
         { text: 'OK', onPress: () => router.back() },
       ]);

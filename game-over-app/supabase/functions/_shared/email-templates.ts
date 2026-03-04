@@ -395,30 +395,50 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
       </tr>
     </table>
 
-    <!-- What to do -->
+    <!-- Why Game Over -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
+      <tr>
+        <td>
+          <p style="margin:0 0 12px;color:#9CA3AF;font-size:13px;text-align:center;">Why join instead of staying on WhatsApp?</p>
+        </td>
+      </tr>
+    </table>
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
       <tr>
         <td style="background-color:#23272F;border-radius:12px;padding:24px;">
-          <p style="margin:0 0 16px;color:#FFFFFF;font-size:14px;font-weight:600;">How it works:</p>
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             <tr>
-              <td style="padding-bottom:12px;">
+              <td style="padding-bottom:14px;">
                 <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
-                  <strong style="color:#FFFFFF;">1.</strong> Tap the button below to join the group
+                  ✅ <strong style="color:#FFFFFF;">No more group chat chaos</strong> — stress-free planning that actually preserves friendships
                 </p>
               </td>
             </tr>
             <tr>
-              <td style="padding-bottom:12px;">
+              <td style="padding-bottom:14px;">
                 <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
-                  <strong style="color:#FFFFFF;">2.</strong> Download Game Over and RSVP
+                  🗳️ <strong style="color:#FFFFFF;">Everyone has a say</strong> — structured voting on activities so no one feels left out
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-bottom:14px;">
+                <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
+                  💰 <strong style="color:#FFFFFF;">Full budget transparency</strong> — see exactly what you pay for, zero hidden costs or awkward money talks
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding-bottom:14px;">
+                <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
+                  🤖 <strong style="color:#FFFFFF;">AI-curated experiences</strong> — matches activities to what your entire group actually wants
                 </p>
               </td>
             </tr>
             <tr>
               <td>
                 <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
-                  <strong style="color:#FFFFFF;">3.</strong> Chat, vote on plans, and track costs with the group
+                  ⚡ <strong style="color:#FFFFFF;">Everything in one place</strong> — plans, chat, payments &amp; RSVP, ready in minutes not weeks
                 </p>
               </td>
             </tr>

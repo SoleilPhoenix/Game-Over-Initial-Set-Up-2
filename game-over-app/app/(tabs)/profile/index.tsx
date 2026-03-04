@@ -112,7 +112,7 @@ export default function ProfileScreen() {
   const user = useUser();
   const signOut = useAuthStore((state) => state.signOut);
   const favorites = useFavoritesStore((s) => s.favorites);
-  const [imageLoading, setImageLoading] = useState(true);
+  const [imageLoading, setImageLoading] = useState(false);
   const { t, language } = useTranslation();
 
   const userName = user?.user_metadata?.full_name || 'User';
@@ -258,15 +258,18 @@ export default function ProfileScreen() {
                       testID={`saved-package-${index}`}
                     >
                       <XStack alignItems="center" gap="$3">
-                        <View
-                          width={32}
-                          height={32}
-                          borderRadius={16}
-                          backgroundColor="rgba(239, 68, 68, 0.2)"
-                          alignItems="center"
-                          justifyContent="center"
-                        >
-                          <Ionicons name="heart" size={16} color="#EF4444" />
+                        <View style={styles.savedPackageThumb}>
+                          {fav.heroImageUrl ? (
+                            <Image
+                              source={{ uri: fav.heroImageUrl }}
+                              style={styles.savedPackageThumbImage}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={styles.savedPackageThumbFallback}>
+                              <Ionicons name="heart" size={16} color="#EF4444" />
+                            </View>
+                          )}
                         </View>
                         <YStack flex={1}>
                           <Text color={DARK_THEME.textPrimary} fontSize={14} fontWeight="500">
@@ -424,6 +427,24 @@ const styles = StyleSheet.create({
     backgroundColor: DARK_THEME.background,
     borderWidth: 1,
     borderColor: DARK_THEME.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  savedPackageThumb: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  savedPackageThumbImage: {
+    width: 40,
+    height: 40,
+  },
+  savedPackageThumbFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: 'rgba(239, 68, 68, 0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
