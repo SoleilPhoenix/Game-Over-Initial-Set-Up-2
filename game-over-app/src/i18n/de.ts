@@ -475,6 +475,11 @@ const de: TranslationKeys = {
     overcharge: 'Rückerstattung erhalten',
     airbnbDeposit: 'Hotel-Sicherheitskaution',
     uberAdjustment: 'Veranstaltungsort-Kaution',
+    dueInDays: 'Noch {{count}} Tage',
+    payRemainingBtn: 'Restbetrag bezahlen',
+    payRemainingSubtitle: '75% Restbetrag vor dem Event fällig',
+    notif14DayTitle: 'Restzahlung bald fällig',
+    notif14DayBody: '{{eventName}} ist in {{count}} Tagen. Bezahle jetzt deinen Restbetrag von {{amount}}.',
   },
 
   // ─── Chat Screen ─────────────────────────────

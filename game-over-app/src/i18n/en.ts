@@ -483,6 +483,11 @@ const en = {
     overcharge: 'Refund Received',
     airbnbDeposit: 'Hotel Security Deposit',
     uberAdjustment: 'Event Venue Deposit',
+    dueInDays: '{{count}} days left',
+    payRemainingBtn: 'Pay Remaining Balance',
+    payRemainingSubtitle: '75% balance due before event',
+    notif14DayTitle: 'Final Payment Due Soon',
+    notif14DayBody: '{{eventName}} is in {{count}} days. Pay your remaining balance of {{amount}} to secure your booking.',
   },
 
   // ─── Chat Screen ─────────────────────────────

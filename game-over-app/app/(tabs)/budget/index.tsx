@@ -22,6 +22,7 @@ import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import { loadBudgetInfo, loadDesiredParticipants, loadGuestDetails, type BudgetInfo, type GuestDetail } from '@/lib/participantCountCache';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import type { Database } from '@/lib/supabase/types';
 
 type Event = Database['public']['Tables']['events']['Row'] & {
@@ -523,6 +524,40 @@ export default function BudgetDashboardScreen() {
     [allContributors]
   );
 
+  // Days until event (for due-date badge and notification trigger)
+  const daysUntilEvent = useMemo(() => {
+    if (!selectedEvent?.start_date) return null;
+    const diff = new Date(selectedEvent.start_date).getTime() - Date.now();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  }, [selectedEvent?.start_date]);
+
+  // Fire a local notification once when event is within 14 days and balance unpaid
+  useEffect(() => {
+    if (!selectedEventId || !selectedEvent?.start_date) return;
+    if (budgetStats.percentage >= 100) return;
+    if (daysUntilEvent === null || daysUntilEvent <= 0 || daysUntilEvent > 14) return;
+    const notifKey = `gameover:notif_14day:${selectedEventId}`;
+    AsyncStorage.getItem(notifKey).then(already => {
+      if (already) return;
+      const eventName = selectedEvent.title
+        || (selectedEvent.honoree_name ? `${selectedEvent.honoree_name}'s Event` : 'your event');
+      const tr = getTranslation();
+      Notifications.scheduleNotificationAsync({
+        content: {
+          title: (tr.budget as any).notif14DayTitle,
+          body: (tr.budget as any).notif14DayBody
+            .replace('{{eventName}}', eventName)
+            .replace('{{count}}', String(daysUntilEvent))
+            .replace('{{amount}}', formatCurrencyRounded(budgetStats.pending)),
+          data: { screen: '/(tabs)/budget', eventId: selectedEventId },
+          sound: true,
+        },
+        trigger: null,
+      }).catch(() => {});
+      AsyncStorage.setItem(notifKey, 'shown');
+    });
+  }, [selectedEventId, daysUntilEvent, budgetStats.percentage]);
+
   // All expense categories (preset + user-created)
   const allExpenseCategories = useMemo<ExpenseCategory[]>(
     () => [...EXPENSE_CATEGORIES, ...customCategories],
@@ -864,6 +899,16 @@ export default function BudgetDashboardScreen() {
                       <Text fontSize={24} fontWeight="700" color={DARK_THEME.textPrimary} letterSpacing={-0.5}>
                         {formatCurrencyRounded(budgetStats.pending)}
                       </Text>
+                      {daysUntilEvent !== null && daysUntilEvent > 0 && (
+                        <Text
+                          fontSize={11}
+                          fontWeight="600"
+                          color={daysUntilEvent <= 14 ? '#F97316' : DARK_THEME.textTertiary}
+                          letterSpacing={0.2}
+                        >
+                          {(t.budget as any).dueInDays.replace('{{count}}', String(daysUntilEvent))}
+                        </Text>
+                      )}
                     </YStack>
                   </XStack>
                 )}
@@ -986,6 +1031,42 @@ export default function BudgetDashboardScreen() {
                 </Text>
                 <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
               </Pressable>
+
+              {/* Pay Remaining Balance button */}
+              {budgetStats.percentage < 100 && budgetStats.pending > 0 && (
+                <Pressable
+                  style={styles.payRemainingButton}
+                  onPress={() => {
+                    const tr = getTranslation();
+                    Alert.alert(
+                      (tr.budget as any).payRemainingBtn,
+                      `${formatCurrencyRounded(budgetStats.pending)} · ${(tr.budget as any).payRemainingSubtitle}`,
+                      [
+                        { text: tr.profile.cancel, style: 'cancel' },
+                        {
+                          text: 'Pay Now',
+                          onPress: () => {
+                            if (selectedEventId) {
+                              router.push(`/booking/${selectedEventId}/payment` as any);
+                            }
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                >
+                  <View style={styles.payRemainingIcon}>
+                    <Ionicons name="card-outline" size={20} color="#F97316" />
+                  </View>
+                  <YStack flex={1}>
+                    <Text style={styles.payRemainingTitle}>{(t.budget as any).payRemainingBtn}</Text>
+                    <Text style={styles.payRemainingSubtitleText}>
+                      {formatCurrencyRounded(budgetStats.pending)} · {(t.budget as any).payRemainingSubtitle}
+                    </Text>
+                  </YStack>
+                  <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+                </Pressable>
+              )}
             </YStack>
             </>
           ) : (
@@ -1870,6 +1951,35 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: DARK_THEME.textSecondary,
+  },
+  payRemainingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.25)',
+  },
+  payRemainingIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(249, 115, 22, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  payRemainingTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#F97316',
+  },
+  payRemainingSubtitleText: {
+    fontSize: 12,
+    color: DARK_THEME.textTertiary,
+    marginTop: 2,
   },
   emptyIconContainer: {
     marginBottom: 24,
