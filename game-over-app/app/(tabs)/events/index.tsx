@@ -35,7 +35,7 @@ import { SkeletonEventCard } from '@/components/ui/Skeleton';
 import { useTranslation, getTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
 import { getCurrentPhaseLabel } from '@/utils/planningProgress';
-import { getEventImage, resolveImageSource } from '@/constants/packageImages';
+import { getEventImage, resolveImageSource, getPackageImage, getTierFromSlug } from '@/constants/packageImages';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import type { EventWithDetails } from '@/repositories';
 
@@ -401,6 +401,16 @@ export default function EventsScreen() {
               {eventTitle}
             </Text>
 
+            {/* Participant count */}
+            {item.participant_count > 0 && (
+              <XStack alignItems="center" gap={6} marginTop={4}>
+                <Ionicons name="people-outline" size={14} color={DARK_THEME.textTertiary} />
+                <Text style={styles.dateText}>
+                  {item.participant_count} {t.events.participantsLabel || 'participants'}
+                </Text>
+              </XStack>
+            )}
+
             {/* Date */}
             <XStack alignItems="center" gap={6} marginTop={4}>
               <Ionicons name="calendar-outline" size={14} color={DARK_THEME.textTertiary} />
@@ -568,6 +578,17 @@ export default function EventsScreen() {
       }
     }
 
+    // Resolve city slug for package image (handles both UUID and slug inputs)
+    const citySlug = draft.cityId
+      ? (CITY_UUID_TO_SLUG[draft.cityId] || (['berlin', 'hamburg', 'hannover'].includes(draft.cityId) ? draft.cityId : null))
+      : null;
+
+    // Step 4 with a package chosen → show that tier; steps 1-3 → always show Classic (M)
+    const draftImageTier = (draft.currentStep >= 4 && draft.selectedPackageId)
+      ? getTierFromSlug(draft.selectedPackageId)
+      : 'classic';
+    const draftImage = citySlug ? getPackageImage(citySlug, draftImageTier) : null;
+
     // Build subtitle: City · Date · X participants
     const subtitleParts: string[] = [];
     if (cityName) subtitleParts.push(cityName);
@@ -620,9 +641,15 @@ export default function EventsScreen() {
           testID={`draft-event-card-${draft.id}`}
         >
           <XStack alignItems="center" gap={12}>
-            <View style={styles.draftIcon}>
-              <Ionicons name="document-text-outline" size={24} color="#F59E0B" />
-            </View>
+            {draftImage ? (
+              <View style={styles.draftThumbnail}>
+                <Image source={draftImage} style={styles.draftThumbnailImg} resizeMode="cover" />
+              </View>
+            ) : (
+              <View style={styles.draftIcon}>
+                <Ionicons name="document-text-outline" size={24} color="#F59E0B" />
+              </View>
+            )}
             <YStack flex={1}>
               <XStack alignItems="center" gap={8}>
                 <Text style={styles.eventTitle} numberOfLines={1}>{draftTitle}</Text>
@@ -1025,6 +1052,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(245, 158, 11, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  draftThumbnail: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  draftThumbnailImg: {
+    width: '100%',
+    height: '100%',
   },
   draftBadge: {
     paddingHorizontal: 8,

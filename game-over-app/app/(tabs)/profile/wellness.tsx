@@ -3,8 +3,8 @@
  * Interactive wellness hub: toast builder, couple trivia, group pledge, friendship insights
  */
 
-import React, { useState } from 'react';
-import { Pressable, StyleSheet, ScrollView } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { Pressable, StyleSheet, ScrollView, PanResponder } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, View } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,10 +45,23 @@ function ToastBuilder() {
 
   const total = prompts.length;
 
+  // Swipe left → next, swipe right → previous
+  const swipe = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dx < -40) setIndex(i => Math.min(total - 1, i + 1));
+        else if (gs.dx > 40) setIndex(i => Math.max(0, i - 1));
+      },
+    })
+  ).current;
+
   return (
     <View style={styles.card}>
-      {/* Prompt card */}
-      <View style={styles.toastCard}>
+      {/* Prompt card — swipeable area */}
+      <View style={styles.toastCard} {...swipe.panHandlers}>
         <View style={styles.toastIconRow}>
           <View style={styles.toastIconBg}>
             <Ionicons name="wine" size={20} color="#FB923C" />
