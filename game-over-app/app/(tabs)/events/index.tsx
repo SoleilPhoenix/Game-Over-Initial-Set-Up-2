@@ -4,7 +4,8 @@
  * Matches UI mockup: Avatar header, filter tabs, card layout with thumbnails
  */
 
-import React, { useCallback, useRef, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
   Animated,
@@ -156,6 +157,15 @@ export default function EventsScreen() {
   const { t } = useTranslation();
   const FILTER_TABS = ['organizing', 'attending'] as const;
   const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchFilterAnimated } = useSwipeTabs(FILTER_TABS, activeFilter, setActiveFilter);
+
+  // Cache of intended participant counts (set during booking wizard)
+  // DB participant_count only counts joined rows (usually just organizer = 1)
+  const [participantCounts, setParticipantCounts] = useState<Record<string, number>>({});
+  useEffect(() => {
+    AsyncStorage.getItem('desired_participant_counts')
+      .then(raw => { if (raw) setParticipantCounts(JSON.parse(raw)); })
+      .catch(() => {});
+  }, []);
 
   const queryClient = useQueryClient();
   const { data: events, isLoading, error: eventsError, refetch } = useEvents();
@@ -401,15 +411,18 @@ export default function EventsScreen() {
               {eventTitle}
             </Text>
 
-            {/* Participant count */}
-            {item.participant_count > 0 && (
-              <XStack alignItems="center" gap={6} marginTop={4}>
-                <Ionicons name="people-outline" size={14} color={DARK_THEME.textTertiary} />
-                <Text style={styles.dateText}>
-                  {item.participant_count} {t.events.participantsLabel || 'participants'}
-                </Text>
-              </XStack>
-            )}
+            {/* Participant count — prefer cached intended count over DB row count */}
+            {(() => {
+              const count = participantCounts[item.id] ?? item.participant_count;
+              return count > 0 ? (
+                <XStack alignItems="center" gap={6} marginTop={4}>
+                  <Ionicons name="people-outline" size={14} color={DARK_THEME.textTertiary} />
+                  <Text style={styles.dateText}>
+                    {count} {t.events.participantsLabel || 'participants'}
+                  </Text>
+                </XStack>
+              ) : null;
+            })()}
 
             {/* Date */}
             <XStack alignItems="center" gap={6} marginTop={4}>

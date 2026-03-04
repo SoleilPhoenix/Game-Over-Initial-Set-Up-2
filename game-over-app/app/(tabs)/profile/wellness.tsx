@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useRef } from 'react';
-import { Pressable, StyleSheet, ScrollView, PanResponder } from 'react-native';
+import { Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, View } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +34,8 @@ function SectionLabel({ title, subtitle }: { title: string; subtitle?: string })
 function ToastBuilder() {
   const { t } = useTranslation();
   const [index, setIndex] = useState(0);
+  const [cardWidth, setCardWidth] = useState(0);
+  const scrollRef = useRef<ScrollView>(null);
 
   const prompts = [
     t.wellness.toastPrompt1,
@@ -45,34 +47,48 @@ function ToastBuilder() {
 
   const total = prompts.length;
 
-  // Swipe left → next, swipe right → previous
-  const swipe = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gs) =>
-        Math.abs(gs.dx) > 8 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
-      onPanResponderRelease: (_, gs) => {
-        if (gs.dx < -40) setIndex(i => Math.min(total - 1, i + 1));
-        else if (gs.dx > 40) setIndex(i => Math.max(0, i - 1));
-      },
-    })
-  ).current;
+  const goTo = (newIndex: number) => {
+    const clamped = Math.max(0, Math.min(total - 1, newIndex));
+    setIndex(clamped);
+    scrollRef.current?.scrollTo({ x: clamped * cardWidth, animated: true });
+  };
 
   return (
     <View style={styles.card}>
-      {/* Prompt card — swipeable area */}
-      <View style={styles.toastCard} {...swipe.panHandlers}>
-        <View style={styles.toastIconRow}>
-          <View style={styles.toastIconBg}>
-            <Ionicons name="wine" size={20} color="#FB923C" />
-          </View>
-          <Text fontSize={11} color={DARK_THEME.textTertiary}>
-            {index + 1} {t.wellness.toastOf} {total}
-          </Text>
-        </View>
-        <Text fontSize={16} color={DARK_THEME.textPrimary} fontWeight="500" lineHeight={24} marginTop="$3">
-          {prompts[index]}
-        </Text>
+      {/* Horizontal paginated carousel */}
+      <View
+        onLayout={(e) => setCardWidth(e.nativeEvent.layout.width)}
+        style={styles.toastScrollArea}
+      >
+        {cardWidth > 0 && (
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            scrollEventThrottle={16}
+            onMomentumScrollEnd={(e) => {
+              const newIdx = Math.round(e.nativeEvent.contentOffset.x / cardWidth);
+              setIndex(newIdx);
+            }}
+          >
+            {prompts.map((prompt, i) => (
+              <View key={i} style={[styles.toastSlide, { width: cardWidth }]}>
+                <XStack alignItems="center" justifyContent="space-between" marginBottom={12}>
+                  <View style={styles.toastIconBg}>
+                    <Ionicons name="wine" size={20} color="#FB923C" />
+                  </View>
+                  <Text fontSize={11} color={DARK_THEME.textTertiary}>
+                    {i + 1} {t.wellness.toastOf} {total}
+                  </Text>
+                </XStack>
+                <Text fontSize={16} color={DARK_THEME.textPrimary} fontWeight="500" lineHeight={24}>
+                  {prompt}
+                </Text>
+              </View>
+            ))}
+          </ScrollView>
+        )}
       </View>
 
       {/* Progress dots */}
@@ -92,7 +108,7 @@ function ToastBuilder() {
       <XStack justifyContent="space-between" marginTop="$4" gap="$3">
         <Pressable
           style={[styles.toastNavBtn, index === 0 && styles.toastNavBtnDisabled]}
-          onPress={() => setIndex(i => Math.max(0, i - 1))}
+          onPress={() => goTo(index - 1)}
           disabled={index === 0}
         >
           <Ionicons name="chevron-back" size={16} color={index === 0 ? DARK_THEME.textTertiary : DARK_THEME.textPrimary} />
@@ -102,7 +118,7 @@ function ToastBuilder() {
         </Pressable>
         <Pressable
           style={[styles.toastNavBtn, styles.toastNavBtnNext, index === total - 1 && styles.toastNavBtnDisabled]}
-          onPress={() => setIndex(i => Math.min(total - 1, i + 1))}
+          onPress={() => goTo(index + 1)}
           disabled={index === total - 1}
         >
           <Text fontSize={13} color={index === total - 1 ? DARK_THEME.textTertiary : '#FB923C'} fontWeight="600">
@@ -408,14 +424,12 @@ const styles = StyleSheet.create({
     marginLeft: 16,
   },
   // Toast Builder
-  toastCard: {
+  toastScrollArea: {
+    overflow: 'hidden',
+  },
+  toastSlide: {
     padding: 16,
     paddingBottom: 0,
-  },
-  toastIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
   },
   toastIconBg: {
     width: 36,
