@@ -723,16 +723,12 @@ export default function ManageInvitationsScreen() {
                     <Text style={styles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
                   </Pressable>
                   <Pressable
-                    style={styles.inviteChannelBtn}
-                    onPress={() => Alert.alert(
-                      'WhatsApp — Coming Soon',
-                      'WhatsApp invitations require a verified Meta Business Account. We\'re working on it! In the meantime, please use Email or SMS.',
-                      [{ text: 'OK' }]
-                    )}
+                    style={[styles.inviteChannelBtn, !hasPhones && styles.inviteChannelBtnDisabled]}
+                    onPress={() => hasPhones && handleSendViaChannel('whatsapp')}
                   >
-                    <Ionicons name="logo-whatsapp" size={22} color="#25D366" />
-                    <Text style={[styles.inviteChannelLabel, { color: '#25D366' }]}>WhatsApp</Text>
-                    <Text style={styles.inviteChannelCount}>Coming soon</Text>
+                    <Ionicons name="logo-whatsapp" size={22} color={hasPhones ? '#25D366' : DARK_THEME.textTertiary} />
+                    <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#25D366' : DARK_THEME.textTertiary }]}>WhatsApp</Text>
+                    <Text style={styles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
                   </Pressable>
                 </XStack>
                 <Pressable style={{ alignItems: 'center', paddingVertical: 8 }} onPress={handleShareFallback}>
