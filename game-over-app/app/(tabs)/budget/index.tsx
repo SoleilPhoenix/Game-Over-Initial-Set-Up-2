@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, Share, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -56,10 +56,20 @@ const REFUND_TEMPLATES = [
   { key: 'restaurant_deposit', label: 'Restaurant Deposit',   icon: 'restaurant-outline',      color: '#EC4899', bg: 'rgba(236,72,153,0.15)'  },
 ];
 
+// Unique colors for custom categories / custom refunds (never overlap with EXPENSE_CATEGORIES or REFUND_TEMPLATES)
+const CUSTOM_COLORS = [
+  { color: '#06B6D4', bg: 'rgba(6,182,212,0.15)'  },   // cyan
+  { color: '#EAB308', bg: 'rgba(234,179,8,0.15)'  },   // yellow
+  { color: '#F43F5E', bg: 'rgba(244,63,94,0.15)'  },   // rose
+  { color: '#0EA5E9', bg: 'rgba(14,165,233,0.15)' },   // sky
+  { color: '#D97706', bg: 'rgba(217,119,6,0.15)'  },   // amber
+];
+
 function SwipeableRefundRow({
-  description, amount, processingLabel, processingText, showBorder, onDelete,
+  description, amount, processingLabel, processingText, showBorder, onDelete, icon, color, bg,
 }: {
   description: string; amount: string; processingLabel: string; processingText: string; showBorder: boolean; onDelete: () => void;
+  icon?: string; color?: string; bg?: string;
 }) {
   const translateX = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
@@ -89,8 +99,8 @@ function SwipeableRefundRow({
     >
       <View style={styles.refundRow}>
         <XStack alignItems="center" gap="$3" flex={1}>
-          <View style={styles.refundIcon}>
-            <Ionicons name="receipt-outline" size={18} color={DARK_THEME.textSecondary} />
+          <View style={[styles.refundIcon, { backgroundColor: bg ?? 'rgba(255,255,255,0.08)' }]}>
+            <Ionicons name={(icon ?? 'receipt-outline') as any} size={18} color={color ?? DARK_THEME.textSecondary} />
           </View>
           <YStack>
             <Text style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}>{description}</Text>
@@ -149,13 +159,14 @@ export default function BudgetDashboardScreen() {
   const [refundTemplateKey, setRefundTemplateKey] = useState<string | null>(null);
   const [refundDescription, setRefundDescription] = useState('');
   const [refundAmount, setRefundAmount] = useState('');
-  const [addedRefunds, setAddedRefunds] = useState<Array<{ description: string; amount: string; status: 'processing' | 'received' }>>([]);
+  const [addedRefunds, setAddedRefunds] = useState<Array<{ description: string; amount: string; status: 'processing' | 'received'; icon?: string; color?: string; bg?: string; }>>([]);
 
   // Ref always holds latest contributors — avoids declaration-order TDZ issue with useCallback
   const allContributorsRef = useRef<Array<{ id: string; name: string }>>([]);
 
   // Track which expense index is being edited (null = creating new)
   const [editingExpenseIndex, setEditingExpenseIndex] = useState<number | null>(null);
+  const [payerDropdownOpen, setPayerDropdownOpen] = useState(false);
 
   // Drag-to-dismiss for budget modals (matches destination.tsx pattern)
   const expenseSheetY = useRef(new Animated.Value(0)).current;
@@ -240,15 +251,24 @@ export default function BudgetDashboardScreen() {
 
   const submitRefund = useCallback(() => {
     if (!refundDescription.trim() || !refundAmount.trim()) return;
+    const tmpl = REFUND_TEMPLATES.find(t => t.key === refundTemplateKey);
     setAddedRefunds(prev => {
-      const updated = [...prev, { description: refundDescription.trim(), amount: refundAmount.trim(), status: 'processing' as const }];
+      const customColor = CUSTOM_COLORS[prev.length % CUSTOM_COLORS.length];
+      const updated = [...prev, {
+        description: refundDescription.trim(),
+        amount: refundAmount.trim(),
+        status: 'processing' as const,
+        icon: tmpl?.icon ?? 'receipt-outline',
+        color: tmpl?.color ?? customColor.color,
+        bg: tmpl?.bg ?? customColor.bg,
+      }];
       if (selectedEventId) {
         AsyncStorage.setItem(`gameover:refunds:${selectedEventId}`, JSON.stringify(updated));
       }
       return updated;
     });
     setRefundModalVisible(false);
-  }, [refundDescription, refundAmount, selectedEventId]);
+  }, [refundDescription, refundAmount, refundTemplateKey, selectedEventId]);
 
   // Hide tab bar when opened from Event Summary (eventIdParam present)
   useFocusEffect(
@@ -391,7 +411,7 @@ export default function BudgetDashboardScreen() {
     };
   }, [booking, participants, cachedBudget, cachedParticipantCount, cachedGuests]);
 
-  // Format currency
+  // Format currency (with cents)
   const formatCurrency = (cents: number) => {
     return new Intl.NumberFormat('de-DE', {
       style: 'currency',
@@ -399,23 +419,37 @@ export default function BudgetDashboardScreen() {
     }).format(cents / 100);
   };
 
-  // Handle remind all
-  const handleRemindAll = useCallback(() => {
-    const tr = getTranslation();
-    Alert.alert(
-      tr.budget.sendRemindersTitle,
-      tr.budget.sendRemindersMessage.replace('{{count}}', String(budgetStats.pendingCount)),
-      [
-        { text: tr.common.cancel, style: 'cancel' },
-        {
-          text: tr.budget.send,
-          onPress: () => {
-            Alert.alert(tr.budget.success, tr.budget.remindersSent);
-          },
-        },
-      ]
-    );
-  }, [budgetStats.pendingCount]);
+  // Format currency rounded to nearest euro (no decimal places)
+  const formatCurrencyRounded = (cents: number) => {
+    return new Intl.NumberFormat('de-DE', {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(Math.ceil(cents / 100));
+  };
+
+  // Navigate to share/invite screen
+  const handleInvite = useCallback(() => {
+    const effectiveEventId = selectedEventId || eventIdParam;
+    if (effectiveEventId) {
+      router.push(`/event/${effectiveEventId}/share`);
+    } else {
+      Alert.alert('No Event Selected', 'Select an event first to send invitations.');
+    }
+  }, [selectedEventId, eventIdParam, router]);
+
+  // Handle remind all — opens native share sheet (Email, SMS, WhatsApp, etc.)
+  const handleRemindAll = useCallback(async () => {
+    const eventName = selectedEvent
+      ? (selectedEvent.title || (selectedEvent.honoree_name ? `${selectedEvent.honoree_name}'s Event` : 'the event'))
+      : 'the event';
+    const perPerson = formatCurrency(budgetStats.perPerson);
+    const message = `Hi! Just a quick reminder — your payment of ${perPerson} for "${eventName}" is still pending. Please send it to the organizer when you get a chance. Thanks! 🎉`;
+    try {
+      await Share.share({ message, title: 'Payment Reminder' });
+    } catch {}
+  }, [budgetStats.perPerson, selectedEvent]);
 
   // Only show loading for booking/participants data when we have events
   const isLoading = hasBookedEvents && (bookingLoading || participantsLoading);
@@ -791,54 +825,63 @@ export default function BudgetDashboardScreen() {
               <View style={styles.gradientBlur} />
 
               <YStack gap="$2" style={{ position: 'relative', zIndex: 1 }}>
-                {/* Labels row: Deposit (left) | Total Package Price + amount (right) */}
-                <XStack justifyContent="space-between" alignItems="flex-start" marginBottom="$1">
-                  <Text fontSize={14} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.5}>
-                    {t.budget.totalBudget}
-                  </Text>
-                  <YStack alignItems="flex-end">
-                    <Text fontSize={12} fontWeight="600" color={DARK_THEME.textTertiary} letterSpacing={0.3}>
-                      {t.budget.onTrack}
-                    </Text>
-                    <Text fontSize={18} fontWeight="700" color={DARK_THEME.textPrimary} letterSpacing={-0.5}>
-                      {formatCurrency(budgetStats.totalBudget)}
-                    </Text>
-                  </YStack>
-                </XStack>
+                {/* Main stats — dynamic based on payment state */}
+                {budgetStats.percentage >= 100 ? (
+                  /* Fully paid: Package Price left (green), Due €0 right (grey) */
+                  <XStack justifyContent="space-between" alignItems="flex-start" marginBottom="$3">
+                    <YStack gap={4}>
+                      <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.5}>
+                        Total Package Paid
+                      </Text>
+                      <Text fontSize={24} fontWeight="700" color="#10B981" letterSpacing={-0.5}>
+                        {formatCurrencyRounded(budgetStats.totalBudget)}
+                      </Text>
+                    </YStack>
+                    <YStack gap={4} alignItems="flex-end">
+                      <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.3}>
+                        Due
+                      </Text>
+                      <Text fontSize={24} fontWeight="700" color={DARK_THEME.textTertiary} letterSpacing={-0.5}>
+                        {formatCurrencyRounded(0)}
+                      </Text>
+                    </YStack>
+                  </XStack>
+                ) : (
+                  /* Deposit paid, remainder still due */
+                  <XStack justifyContent="space-between" alignItems="flex-start" marginBottom="$3">
+                    <YStack gap={4}>
+                      <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.5}>
+                        Deposit (25%)
+                      </Text>
+                      <Text fontSize={24} fontWeight="700" color="#10B981" letterSpacing={-0.5}>
+                        {formatCurrencyRounded(budgetStats.collected)}
+                      </Text>
+                    </YStack>
+                    <YStack gap={4} alignItems="flex-end">
+                      <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.3}>
+                        Due (75%)
+                      </Text>
+                      <Text fontSize={24} fontWeight="700" color={DARK_THEME.textPrimary} letterSpacing={-0.5}>
+                        {formatCurrencyRounded(budgetStats.pending)}
+                      </Text>
+                    </YStack>
+                  </XStack>
+                )}
 
-                {/* Large deposit amount */}
-                <Text fontSize={36} fontWeight="700" color={DARK_THEME.textPrimary} letterSpacing={-1} marginBottom="$3">
-                  {formatCurrency(budgetStats.collected)}
-                </Text>
-
-                {/* Progress Bar: blue = paid, bordeaux = remaining */}
+                {/* Progress Bar: blue = paid portion, bordeaux background = remaining */}
                 <View style={styles.progressContainer}>
                   <View
-                    style={[styles.progressBar, { width: `${budgetStats.percentage}%`, backgroundColor: DARK_THEME.primary }]}
+                    style={[styles.progressBar, {
+                      width: `${budgetStats.percentage}%`,
+                      backgroundColor: DARK_THEME.primary,
+                    }]}
                   />
                 </View>
 
-                {/* Stats — stacked, one dot per line */}
-                <YStack
-                  paddingTop="$3"
-                  marginTop="$1"
-                  borderTopWidth={1}
-                  borderTopColor={DARK_THEME.borderLight}
-                  gap={6}
-                >
-                  <XStack alignItems="center" gap="$1.5">
-                    <View style={styles.statDot} />
-                    <Text fontSize={12} fontWeight="500" color={DARK_THEME.textSecondary}>
-                      {t.budget.spent.replace('{{percentage}}', String(budgetStats.percentage))}
-                    </Text>
-                  </XStack>
-                  <XStack alignItems="center" gap="$1.5">
-                    <View style={[styles.statDot, { backgroundColor: '#7B1C2A' }]} />
-                    <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary}>
-                      {(t.budget as any).remainingDue.replace('{{amount}}', formatCurrency(budgetStats.pending))}
-                    </Text>
-                  </XStack>
-                </YStack>
+                {/* Total Package Price */}
+                <Text fontSize={15} fontWeight="500" color={DARK_THEME.textTertiary} style={{ marginTop: 4 }}>
+                  {`Total Package Price  ${formatCurrencyRounded(budgetStats.totalBudget)}`}
+                </Text>
               </YStack>
             </View>
 
@@ -857,7 +900,7 @@ export default function BudgetDashboardScreen() {
                 )}
               </XStack>
 
-              <View style={styles.glassCard}>
+              <View style={[styles.glassCard, { paddingHorizontal: 8, paddingTop: 8, paddingBottom: 8 }]}>
                 {/* Use demo participants when no DB booking, otherwise DB participants */}
                 {(demoParticipants || participants)?.map((participantRaw, index) => {
                   type DemoP = { id: string; name: string; status: 'paid' | 'pending'; amount: number };
@@ -886,36 +929,39 @@ export default function BudgetDashboardScreen() {
                         index !== ((demoParticipants || participants)?.length || 0) - 1 && styles.contributionRowBorder,
                       ]}
                     >
-                      <XStack alignItems="center" gap="$3" flex={1}>
-                        {/* Avatar initials */}
-                        <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
-                          <Text style={styles.participantInitialsText}>{initials}</Text>
-                        </View>
+                      {/* Avatar */}
+                      <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
+                        <Text style={styles.participantInitialsText}>{initials}</Text>
+                      </View>
 
-                        {/* Info */}
-                        <YStack flex={1}>
-                          <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary} numberOfLines={1}>
-                            {name}{isCurrentUser ? ` ${t.budget.you}` : ''}
-                          </Text>
-                          <Text fontSize={12} color={DARK_THEME.textTertiary} numberOfLines={1}>
-                            {isPending
-                              ? (t.budget as any).pendingOwes.replace('{{amount}}', formatCurrency(amountForRow))
-                              : t.budget.contribution.replace('{{amount}}', formatCurrency(amountForRow))
-                            }
-                          </Text>
-                        </YStack>
-                      </XStack>
+                      {/* Name + amount — flex: 1 with right margin to keep space for badge */}
+                      <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
+                        <Text
+                          style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}
+                          numberOfLines={1}
+                        >
+                          {name}{isCurrentUser ? ` ${t.budget.you}` : ''}
+                        </Text>
+                        <Text
+                          style={{ fontSize: 12, color: DARK_THEME.textTertiary }}
+                          numberOfLines={1}
+                        >
+                          {isPending
+                            ? t.budget.pendingOwes.replace('{{amount}}', formatCurrency(amountForRow))
+                            : t.budget.contribution.replace('{{amount}}', formatCurrency(amountForRow))
+                          }
+                        </Text>
+                      </View>
 
-                      {/* Status Badge — flexShrink: 0 prevents it from being pushed off-screen */}
+                      {/* Status Badge — compact, top-aligned */}
                       <View style={[
                         styles.paymentBadge,
-                        { flexShrink: 0 },
-                        isPaid && styles.paidBadge,
-                        isPending && styles.pendingBadge,
+                        { flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 },
+                        isPaid ? styles.paidBadge : styles.pendingBadge,
                       ]}>
                         <Ionicons
                           name={isPaid ? 'checkmark' : 'time-outline'}
-                          size={12}
+                          size={10}
                           color={isPaid ? DARK_THEME.success : DARK_THEME.warning}
                         />
                         <Text style={[
@@ -929,6 +975,17 @@ export default function BudgetDashboardScreen() {
                   );
                 })}
               </View>
+
+              {/* Invite button — send invitations via share sheet */}
+              <Pressable style={styles.inviteButton} onPress={handleInvite}>
+                <View style={styles.inviteButtonIcon}>
+                  <Ionicons name="share-social-outline" size={18} color="#5A7EB0" />
+                </View>
+                <Text style={styles.inviteButtonText} numberOfLines={1}>
+                  Invite Guests — Email, SMS, WhatsApp
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+              </Pressable>
             </YStack>
             </>
           ) : (
@@ -1064,6 +1121,9 @@ export default function BudgetDashboardScreen() {
                       key={i}
                       description={refund.description}
                       amount={refund.amount}
+                      icon={refund.icon}
+                      color={refund.color}
+                      bg={refund.bg}
                       processingLabel={t.budget.securityHold}
                       processingText={t.budget.processing}
                       showBorder={i < addedRefunds.length - 1}
@@ -1094,7 +1154,7 @@ export default function BudgetDashboardScreen() {
       {expenseModalVisible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setExpenseModalVisible(false)} />
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
             <Animated.View style={[styles.modalSheet, { transform: [{ translateY: expenseSheetY }] }]}>
               <View {...expenseSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
@@ -1273,24 +1333,54 @@ export default function BudgetDashboardScreen() {
                             </Pressable>
                           ))}
                         </XStack>
-                        {/* Person picker when "Someone else" is selected — guests only */}
+                        {/* Person picker — dropdown button when "Someone else" is selected */}
                         {expensePaidBy === 'other' && payerOptions.length > 0 && (
-                          <View style={{ marginBottom: 20 }}>
-                            {payerOptions.map(c => {
-                              const sel = expensePaidByPerson === c.id;
-                              return (
-                                <Pressable
-                                  key={c.id}
-                                  style={[styles.contributorRow, sel && styles.contributorRowSelected]}
-                                  onPress={() => setExpensePaidByPerson(sel ? null : c.id)}
-                                >
-                                  <Text style={styles.contributorName}>{c.name}</Text>
-                                  <View style={[styles.contributorCheck, sel && styles.contributorCheckSelected]}>
-                                    {sel && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
-                                  </View>
-                                </Pressable>
-                              );
-                            })}
+                          <View style={{ marginBottom: 16 }}>
+                            {/* Dropdown trigger button */}
+                            <Pressable
+                              style={[styles.dropdownButton, expensePaidByPerson && styles.dropdownButtonSelected]}
+                              onPress={() => setPayerDropdownOpen(o => !o)}
+                            >
+                              <Text style={[styles.dropdownButtonText, expensePaidByPerson && { color: DARK_THEME.textPrimary }]}>
+                                {expensePaidByPerson
+                                  ? payerOptions.find(c => c.id === expensePaidByPerson)?.name ?? 'Select person'
+                                  : 'Select person'}
+                              </Text>
+                              <Ionicons
+                                name={payerDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                                size={16}
+                                color={DARK_THEME.textTertiary}
+                              />
+                            </Pressable>
+                            {/* Dropdown list — max 4 rows visible, inner scroll for rest */}
+                            {payerDropdownOpen && (
+                              <View style={[styles.dropdownList, { maxHeight: 176 }]}>
+                                <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                                {payerOptions.map((c, i) => {
+                                  const sel = expensePaidByPerson === c.id;
+                                  return (
+                                    <Pressable
+                                      key={c.id}
+                                      style={[
+                                        styles.dropdownItem,
+                                        sel && styles.dropdownItemSelected,
+                                        i < payerOptions.length - 1 && styles.dropdownItemBorder,
+                                      ]}
+                                      onPress={() => {
+                                        setExpensePaidByPerson(sel ? null : c.id);
+                                        setPayerDropdownOpen(false);
+                                      }}
+                                    >
+                                      <Text style={[styles.dropdownItemText, sel && { color: '#5A7EB0', fontWeight: '700' as const }]}>
+                                        {c.name}
+                                      </Text>
+                                      {sel && <Ionicons name="checkmark" size={16} color="#5A7EB0" />}
+                                    </Pressable>
+                                  );
+                                })}
+                                </ScrollView>
+                              </View>
+                            )}
                           </View>
                         )}
                         {/* Contributors — payer is always excluded to avoid duplication */}
@@ -1360,7 +1450,7 @@ export default function BudgetDashboardScreen() {
       {refundModalVisible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setRefundModalVisible(false)} />
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
             <Animated.View style={[styles.modalSheet, { transform: [{ translateY: refundSheetY }] }]}>
               <View {...refundSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
@@ -1371,7 +1461,7 @@ export default function BudgetDashboardScreen() {
                   <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
                 </Pressable>
               </XStack>
-              <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+              <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
               {!refundTemplateKey ? (
                 /* Template selection */
                 <>
@@ -1424,7 +1514,7 @@ export default function BudgetDashboardScreen() {
                     keyboardType="decimal-pad"
                   />
                   <Pressable
-                    style={[styles.submitButton, (!refundDescription.trim() || !refundAmount.trim()) && styles.submitButtonDisabled]}
+                    style={[styles.submitButton, { marginTop: 8 }, (!refundDescription.trim() || !refundAmount.trim()) && styles.submitButtonDisabled]}
                     onPress={submitRefund}
                     disabled={!refundDescription.trim() || !refundAmount.trim()}
                   >
@@ -1445,7 +1535,7 @@ export default function BudgetDashboardScreen() {
       {customCategoryModalVisible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setCustomCategoryModalVisible(false)} />
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
             <Animated.View style={[styles.modalSheet, { transform: [{ translateY: customCatSheetY }] }]}>
               <View {...customCatSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
@@ -1471,12 +1561,13 @@ export default function BudgetDashboardScreen() {
                 disabled={!customCategoryLabel.trim()}
                 onPress={() => {
                   const key = `custom_${Date.now()}`;
+                  const customCatColor = CUSTOM_COLORS[customCategories.length % CUSTOM_COLORS.length];
                   const newCat: ExpenseCategory = {
                     key,
                     labelKey: customCategoryLabel.trim(),
                     icon: 'pricetag-outline',
-                    color: '#A78BFA',
-                    bg: 'rgba(167,139,250,0.15)',
+                    color: customCatColor.color,
+                    bg: customCatColor.bg,
                     packageNote: false,
                   };
                   const updated = [...customCategories, newCat];
@@ -1631,9 +1722,9 @@ const styles = StyleSheet.create({
   },
   contributionRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 16,
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
   },
   contributionRowBorder: {
     borderBottomWidth: 1,
@@ -1670,10 +1761,10 @@ const styles = StyleSheet.create({
   paymentBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
     borderWidth: 1,
   },
   paidBadge: {
@@ -1685,10 +1776,10 @@ const styles = StyleSheet.create({
     borderColor: `${DARK_THEME.warning}33`,
   },
   paymentBadgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
   emptyStateCard: {
     alignItems: 'center',
@@ -1754,6 +1845,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
+  },
+  inviteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 14,
+    padding: 14,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: DARK_THEME.glassBorder,
+  },
+  inviteButtonIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteButtonText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    color: DARK_THEME.textSecondary,
   },
   emptyIconContainer: {
     marginBottom: 24,
@@ -1903,7 +2019,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 24,
     paddingTop: 12,
-    paddingBottom: 40,
+    paddingBottom: 16,
     borderTopWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     maxHeight: '85%',
@@ -2088,5 +2204,50 @@ const styles = StyleSheet.create({
     gap: 12,
     borderTopWidth: 1,
     borderTopColor: DARK_THEME.borderLight,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: DARK_THEME.surface,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+  },
+  dropdownButtonSelected: {
+    borderColor: '#5A7EB0',
+  },
+  dropdownButtonText: {
+    fontSize: 14,
+    color: DARK_THEME.textTertiary,
+    flex: 1,
+  },
+  dropdownList: {
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    overflow: 'hidden',
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  dropdownItemSelected: {
+    backgroundColor: 'rgba(90,126,176,0.12)',
+  },
+  dropdownItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    color: DARK_THEME.textPrimary,
   },
 });

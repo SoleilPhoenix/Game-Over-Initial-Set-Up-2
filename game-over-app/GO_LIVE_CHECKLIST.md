@@ -210,6 +210,29 @@ This document tracks all tasks that must be completed before launching the Game 
 
 ---
 
+## Communication & Invitations
+
+### SendGrid Email API — Upgrade to Paid Plan
+**Status:** ⏸️ Pending — Required before go-live. Email invitations are currently blocked.
+
+- [ ] **Upgrade SendGrid Email API plan to "Essentials"** (~$19.95/month for 50,000 emails)
+  - Free trial ended July 7, 2025 — email sending via `/v3/mail/send` is blocked
+  - Go to [SendGrid Account Details](https://app.sendgrid.com/account/billing) → **Email API** section → **Change Plan** → select **Essentials**
+  - **Do NOT upgrade Marketing Campaigns** — the app only uses the transactional Email API
+  - Access is restored immediately after upgrade
+
+### Twilio SMS Sender ID
+**Status:** ⏸️ Pending — Update the display name shown to SMS recipients
+
+- [ ] **Update `TWILIO_SMS_FROM` Supabase secret** from `"GameOver"` to `"GameOverApp"` (or preferred name)
+  - Twilio alphanumeric sender IDs: **1–11 characters, letters + numbers only** — no hyphens, dots, or spaces
+  - `"game-over.app"` is **not** a valid alphanumeric sender ID
+  - Recommended value: `"GameOverApp"` (11 chars, fully valid)
+  - Update via: `npx supabase secrets set TWILIO_SMS_FROM=GameOverApp --project-ref stdbvehmjpmqbjyiodqg`
+  - ⚠️ Note: Alphanumeric sender IDs are **not supported in all countries** (e.g. USA requires a registered long number or short code). Verify coverage for your target markets.
+
+---
+
 ## Backend & Infrastructure
 
 ### Supabase Configuration

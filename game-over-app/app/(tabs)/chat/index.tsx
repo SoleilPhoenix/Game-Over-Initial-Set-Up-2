@@ -14,7 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useChannels, useCreateChannel } from '@/hooks/queries/useChat';
-import { usePolls, useCreatePoll, useVote, useDeletePoll, useAddPollOption } from '@/hooks/queries/usePolls';
+import { usePolls, useCreatePoll, useVote, useDeletePoll, useAddPollOption, useDeletePollOption } from '@/hooks/queries/usePolls';
 import { DARK_THEME } from '@/constants/theme';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
@@ -595,9 +595,21 @@ export default function CommunicationScreen() {
   const voteMutation = useVote();
   const deletePollMutation = useDeletePoll();
   const addOptionMutation = useAddPollOption();
+  const deleteOptionMutation = useDeletePollOption();
   const [pollInfoModal, setPollInfoModal] = useState<import('@/repositories/polls').PollWithOptions | null>(null);
   const [newOptionText, setNewOptionText] = useState('');
+
+  // Keep pollInfoModal in sync with latest cache data (uses ref to avoid loop)
+  const pollInfoModalIdRef = useRef<string | null>(null);
+  pollInfoModalIdRef.current = pollInfoModal?.id ?? null;
+  useEffect(() => {
+    const id = pollInfoModalIdRef.current;
+    if (!id) return;
+    const latest = polls.find(p => p.id === id);
+    if (latest) setPollInfoModal(latest);
+  }, [polls]);
   const optionInputRefs = useRef<Array<import('react-native').TextInput | null>>([]);
+  const pollInfoScrollRef = useRef<ScrollView | null>(null);
 
   // Derived local sections for current event (per-event map)
   const DEFAULT_LOCAL_SECTIONS: LocalChannelSection[] = [
@@ -1231,7 +1243,7 @@ export default function CommunicationScreen() {
       {pollModalVisible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setPollModalVisible(false)} />
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
             <Animated.View style={[styles.modalSheet, { transform: [{ translateY: pollSheetY }] }]}>
               <View style={styles.modalHandleArea} {...pollSheetPan.panHandlers}>
                 <View style={styles.modalHandle} />
@@ -1268,28 +1280,30 @@ export default function CommunicationScreen() {
                     placeholderTextColor={DARK_THEME.textTertiary}
                   />
                 ))}
-                {pollOptions.length < 5 && (
-                  <Pressable
-                    onPress={() => {
-                      const newIndex = pollOptions.length;
-                      setPollOptions(prev => [...prev, '']);
-                      setTimeout(() => optionInputRefs.current[newIndex]?.focus(), 50);
-                    }}
-                    style={styles.addOptionButton}
-                  >
-                    <Ionicons name="add-circle-outline" size={18} color="#5A7EB0" />
-                    <Text style={styles.addOptionText}>Add Option</Text>
-                  </Pressable>
-                )}
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 20, marginBottom: 8 }}>
-                  <Pressable style={[styles.modalButton, styles.modalButtonCancel]} onPress={() => setPollModalVisible(false)}>
-                    <Text style={styles.modalButtonCancelText}>Cancel</Text>
-                  </Pressable>
-                  <Pressable style={[styles.modalButton, styles.modalButtonCreate]} onPress={handleSubmitPoll}>
-                    <Text style={styles.modalButtonCreateText}>Create Poll</Text>
-                  </Pressable>
-                </View>
               </ScrollView>
+              {/* Add Option — outside ScrollView so it stays visible above keyboard */}
+              {pollOptions.length < 5 && (
+                <Pressable
+                  onPress={() => {
+                    const newIndex = pollOptions.length;
+                    setPollOptions(prev => [...prev, '']);
+                    setTimeout(() => optionInputRefs.current[newIndex]?.focus(), 50);
+                  }}
+                  style={[styles.addOptionButton, { marginTop: 8, marginBottom: 0 }]}
+                >
+                  <Ionicons name="add-circle-outline" size={18} color="#5A7EB0" />
+                  <Text style={styles.addOptionText}>Add Option</Text>
+                </Pressable>
+              )}
+              {/* Cancel / Create Poll — fixed outside ScrollView so always visible above keyboard */}
+              <View style={{ flexDirection: 'row', gap: 10, paddingTop: 12, paddingBottom: 4 }}>
+                <Pressable style={[styles.modalButton, styles.modalButtonCancel]} onPress={() => setPollModalVisible(false)}>
+                  <Text style={styles.modalButtonCancelText}>Cancel</Text>
+                </Pressable>
+                <Pressable style={[styles.modalButton, styles.modalButtonCreate]} onPress={handleSubmitPoll}>
+                  <Text style={styles.modalButtonCreateText}>Create Poll</Text>
+                </Pressable>
+              </View>
             </Animated.View>
           </KeyboardAvoidingView>
         </View>
@@ -1299,7 +1313,7 @@ export default function CommunicationScreen() {
       {!!pollInfoModal && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setPollInfoModal(null)} />
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
             <Animated.View style={[styles.modalSheet, { transform: [{ translateY: pollInfoSheetY }] }]}>
               <View style={styles.modalHandleArea} {...pollInfoSheetPan.panHandlers}>
                 <View style={styles.modalHandle} />
@@ -1310,7 +1324,7 @@ export default function CommunicationScreen() {
                   <Ionicons name="close" size={22} color={DARK_THEME.textTertiary} />
                 </Pressable>
               </XStack>
-              <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <ScrollView ref={pollInfoScrollRef} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
               {pollInfoModal && (() => {
                 const catCfg = POLL_CATEGORY_CONFIG_CONST[pollInfoModal.category ?? 'general'] ?? POLL_CATEGORY_CONFIG_CONST.general;
                 const pollIcon = pickIconForChannel(pollInfoModal.title);
@@ -1350,42 +1364,75 @@ export default function CommunicationScreen() {
                         {pollInfoModal.total_votes} vote{pollInfoModal.total_votes !== 1 ? 's' : ''} · {(pollInfoModal.status ?? 'active').toUpperCase()}
                       </Text>
                     </XStack>
-                    {pollInfoModal.created_by === user?.id && (
-                      <>
-                        {/* Add Option row */}
-                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12, alignItems: 'center' }}>
-                          <TextInput
-                            style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                            placeholder="Add new option…"
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            value={newOptionText}
-                            onChangeText={setNewOptionText}
-                          />
-                          <Pressable
-                            style={{ backgroundColor: '#5A7EB0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 }}
-                            onPress={async () => {
-                              const label = newOptionText.trim();
-                              if (!label || !pollInfoModal) return;
-                              await addOptionMutation.mutateAsync({ pollId: pollInfoModal.id, label });
-                              setNewOptionText('');
-                            }}
+                    {/* Existing options with delete (owner only) */}
+                    {pollInfoModal.options && pollInfoModal.options.length > 0 && (
+                      <View style={{ marginBottom: 16 }}>
+                        <Text style={[styles.modalLabel, { marginTop: 0 }]}>Options</Text>
+                        {pollInfoModal.options.map(opt => (
+                          <View
+                            key={opt.id}
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}
                           >
-                            <Ionicons name="add" size={20} color="#FFFFFF" />
-                          </Pressable>
-                        </View>
-                        <Pressable
-                          style={[styles.modalButton, { backgroundColor: 'rgba(239,68,68,0.15)', borderColor: 'rgba(239,68,68,0.3)', borderWidth: 1, flex: 0, alignSelf: 'stretch', marginBottom: 8 }]}
-                          onPress={() => handleDeletePoll(pollInfoModal)}
-                        >
-                          <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                          <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14, marginLeft: 6 }}>Delete Poll</Text>
-                        </Pressable>
-                      </>
+                            <View style={{ flex: 1, backgroundColor: DARK_THEME.surfaceCard, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+                              <Text style={{ color: DARK_THEME.textPrimary, fontSize: 14 }}>{opt.label}</Text>
+                              <Text style={{ color: DARK_THEME.textTertiary, fontSize: 11, marginTop: 2 }}>{opt.vote_count ?? 0} vote{(opt.vote_count ?? 0) !== 1 ? 's' : ''}</Text>
+                            </View>
+                            {pollInfoModal.created_by === user?.id && (
+                              <Pressable
+                                style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(239,68,68,0.15)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(239,68,68,0.3)' }}
+                                onPress={() => {
+                                  deleteOptionMutation.mutate({ optionId: opt.id, pollId: pollInfoModal.id });
+                                }}
+                                hitSlop={4}
+                              >
+                                <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                              </Pressable>
+                            )}
+                          </View>
+                        ))}
+                      </View>
                     )}
                   </>
                 );
               })()}
               </ScrollView>
+              {/* Add Option row — outside ScrollView so it stays visible when keyboard opens */}
+              {pollInfoModal?.created_by === user?.id && (
+                <>
+                  <Text style={[styles.modalLabel, { marginTop: 12, marginBottom: 6 }]}>Add Option</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                    <TextInput
+                      style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
+                      placeholder="New option…"
+                      placeholderTextColor={DARK_THEME.textTertiary}
+                      value={newOptionText}
+                      onChangeText={setNewOptionText}
+                    />
+                    <Pressable
+                      style={{ backgroundColor: '#5A7EB0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 }}
+                      onPress={async () => {
+                        const label = newOptionText.trim();
+                        if (!label || !pollInfoModal) return;
+                        await addOptionMutation.mutateAsync({ pollId: pollInfoModal.id, label });
+                        setNewOptionText('');
+                        setTimeout(() => pollInfoScrollRef.current?.scrollToEnd({ animated: true }), 100);
+                      }}
+                    >
+                      <Ionicons name="add" size={20} color="#FFFFFF" />
+                    </Pressable>
+                  </View>
+                </>
+              )}
+              {/* Delete Poll — outside ScrollView so it stays visible when keyboard opens */}
+              {pollInfoModal?.created_by === user?.id && (
+                <Pressable
+                  style={[styles.modalButton, { backgroundColor: 'rgba(239,68,68,0.15)', borderColor: 'rgba(239,68,68,0.3)', borderWidth: 1, flex: 0, alignSelf: 'stretch', marginTop: 12, marginBottom: 4 }]}
+                  onPress={() => handleDeletePoll(pollInfoModal)}
+                >
+                  <Ionicons name="trash-outline" size={16} color="#EF4444" />
+                  <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14, marginLeft: 6 }}>Delete Poll</Text>
+                </Pressable>
+              )}
             </Animated.View>
           </KeyboardAvoidingView>
         </View>
@@ -1395,7 +1442,7 @@ export default function CommunicationScreen() {
       {channelInputModal.visible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setChannelInputModal({ visible: false, category: null })} />
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ width: '100%' }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
             <Animated.View style={[styles.modalSheet, { transform: [{ translateY: channelSheetY }] }]}>
               <View style={styles.modalHandleArea} {...channelSheetPan.panHandlers}>
                 <View style={styles.modalHandle} />
@@ -1830,16 +1877,18 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    paddingBottom: 40,
+    paddingTop: 0,
+    paddingBottom: 16,
     borderTopWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
+    maxHeight: '82%',
   },
   modalHandleArea: {
     alignSelf: 'stretch',
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 12,
   },
   modalHandle: {
     width: 40,

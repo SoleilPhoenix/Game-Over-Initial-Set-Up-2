@@ -213,22 +213,32 @@ serve(async (req: Request) => {
     }
 
     // ── Fetch event details ──
+    // NOTE: events.created_by → auth.users (NOT profiles), so PostgREST cannot
+    // resolve a profiles:created_by(...) join. Two separate queries required.
     const { data: event, error: eventError } = await supabase
       .from('events')
-      .select('id, title, honoree_name, created_by, profiles:created_by(full_name)')
+      .select('id, title, honoree_name, created_by, party_type')
       .eq('id', eventId)
       .single();
 
     if (eventError || !event) {
+      console.error('[fetch event]', eventError?.message ?? 'not found', 'id=', eventId);
       return new Response(
-        JSON.stringify({ error: 'Event not found' }),
+        JSON.stringify({ error: 'Event not found', detail: eventError?.message }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       );
     }
 
-    const organizerName: string =
-      (event.profiles as any)?.full_name ?? 'Your friend';
+    // Fetch organizer's display name (profiles.id = auth.users.id = events.created_by)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', event.created_by)
+      .single();
+
+    const organizerName: string = profile?.full_name ?? 'Your friend';
     const honoreeName: string = event.honoree_name ?? 'the guest of honour';
+    const partyTypeLabel: string = event.party_type === 'bachelorette' ? 'Bachelorette Party' : 'Bachelor Party';
 
     // ── Guests were already parsed from the request body above ──
     const guests: GuestSlot[] = guestsRaw ?? [];
@@ -310,10 +320,15 @@ serve(async (req: Request) => {
 
       // 3. Build message body
       const guestName = guest.firstName ?? '';
+      const greeting = guestName ? `${guestName}, you're` : `You're`;
       const smsBody =
-        `🎉 You're invited to celebrate ${honoreeName}!\n\n` +
-        `${organizerName} is planning the ultimate party and wants you there.\n\n` +
-        `Join Game Over and RSVP here:\n${inviteUrl}\n\n` +
+        `🎉 ${greeting} invited to ${honoreeName}'s ${partyTypeLabel}!\n\n` +
+        `${organizerName} is planning the ultimate celebration on Game Over 🥂\n\n` +
+        `Your all-in-one party app:\n` +
+        `✅ Group chat & live polls with all guests\n` +
+        `✅ Budget & payment tracking — no awkward money talk\n` +
+        `✅ Every activity & detail in one place\n\n` +
+        `Join & RSVP here:\n${inviteUrl}\n\n` +
         `Reply STOP to opt out.`;
 
       // 4. Send
@@ -326,7 +341,7 @@ serve(async (req: Request) => {
           inviteUrl,
           guestFirstName: guest.firstName,
         });
-        const subject = `You're invited to celebrate ${honoreeName}! 🎉`;
+        const subject = `You're invited to ${honoreeName}'s ${partyTypeLabel}! 🎉`;
         sendResult = await sendEmail({ to: contact, subject, html });
 
       } else if (channel === 'sms') {
