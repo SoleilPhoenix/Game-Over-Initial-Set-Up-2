@@ -236,14 +236,19 @@ serve(async (req: Request) => {
       );
     }
 
-    // Fetch organizer's display name (profiles.id = auth.users.id = events.created_by)
+    // Fetch organizer's full name — auth user metadata is always up to date,
+    // profiles.full_name may lag if user hasn't saved since last update.
+    const { data: authUserData } = await supabase.auth.admin.getUserById(event.created_by);
+    const authFullName: string = authUserData?.user?.user_metadata?.full_name ?? '';
+
+    // Fall back to profiles table if auth metadata is empty
     const { data: profile } = await supabase
       .from('profiles')
       .select('full_name')
       .eq('id', event.created_by)
       .single();
 
-    const organizerName: string = profile?.full_name ?? 'Your friend';
+    const organizerName: string = authFullName || profile?.full_name || 'Your friend';
     const honoreeName: string = event.honoree_name ?? 'the guest of honour';
     const partyTypeLabel: string = event.party_type === 'bachelorette' ? 'Bachelorette Party' : 'Bachelor Party';
 
@@ -332,7 +337,7 @@ serve(async (req: Request) => {
       const greeting = guestName ? `${guestName}, you're` : `You're`;
       const smsBody =
         `🎉 ${greeting} invited to ${honoreeName}'s ${partyTypeLabel}!\n\n` +
-        `${organizerName} is organizing the ultimate celebration on Game Over 🥂\n\n` +
+        `${organizerName} is organizing the ultimate celebration on "Game-Over.app" 🥂\n\n` +
         `Why join instead of endless back-and-forth coordination?\n` +
         `✅ Eliminates planning stress — simple, guided & stress-free\n` +
         `💰 Full budget transparency — zero hidden costs or awkward money talk\n` +
