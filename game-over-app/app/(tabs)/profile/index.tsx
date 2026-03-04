@@ -14,6 +14,7 @@ import { useUser, useAuthStore } from '@/stores/authStore';
 import { useFavoritesStore } from '@/stores/favoritesStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
+import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 
 interface MenuItemProps {
   icon: string;
@@ -186,7 +187,6 @@ export default function ProfileScreen() {
                       <Image
                         source={{ uri: userAvatar, cache: 'force-cache' }}
                         style={styles.avatarImage}
-                        onLoadStart={() => setImageLoading(true)}
                         onLoad={() => setImageLoading(false)}
                         onError={() => setImageLoading(false)}
                       />
@@ -257,19 +257,15 @@ export default function ProfileScreen() {
                       onPress={() => router.push(`/package/${fav.id}`)}
                       testID={`saved-package-${index}`}
                     >
-                      <XStack alignItems="center" gap="$3">
+                      <XStack alignItems="center" gap="$3" flex={1}>
                         <View style={styles.savedPackageThumb}>
-                          {fav.heroImageUrl ? (
-                            <Image
-                              source={{ uri: fav.heroImageUrl }}
-                              style={styles.savedPackageThumbImage}
-                              resizeMode="cover"
-                            />
-                          ) : (
-                            <View style={styles.savedPackageThumbFallback}>
-                              <Ionicons name="heart" size={16} color="#EF4444" />
-                            </View>
-                          )}
+                          <Image
+                            source={resolveImageSource(
+                              getEventImage(fav.cityName.toLowerCase(), fav.heroImageUrl)
+                            )}
+                            style={styles.savedPackageThumbImage}
+                            resizeMode="cover"
+                          />
                         </View>
                         <YStack flex={1}>
                           <Text color={DARK_THEME.textPrimary} fontSize={14} fontWeight="500">
@@ -326,7 +322,7 @@ export default function ProfileScreen() {
               iconColor="#F472B6"
               iconBgColor="rgba(244, 114, 182, 0.2)"
               label={t.profile.relationshipHealthCenter}
-              onPress={() => Alert.alert(t.profile.comingSoon, t.profile.comingSoonMessage)}
+              onPress={() => router.push('/profile/wellness')}
               testID="menu-wellness"
             />
             <View style={styles.separator} />
