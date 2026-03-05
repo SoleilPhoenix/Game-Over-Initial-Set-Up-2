@@ -21,6 +21,7 @@ import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import { loadBudgetInfo, loadDesiredParticipants, loadGuestDetails, type BudgetInfo, type GuestDetail } from '@/lib/participantCountCache';
+import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import type { Database } from '@/lib/supabase/types';
@@ -121,6 +122,7 @@ function SwipeableRefundRow({
 
 export default function BudgetDashboardScreen() {
   const router = useRouter();
+  const { hasUnseenUrgency, markUrgencySeen } = useUrgentPayment();
   // eventId = opened via /(tabs)/budget?eventId=xxx (old approach, kept for safety)
   // id     = opened via /event/[id]/budget (event-stack, router.back() works correctly)
   const { eventId: rawEventIdParam, id: pathId } = useLocalSearchParams<{ eventId?: string; id?: string }>();
@@ -309,6 +311,7 @@ export default function BudgetDashboardScreen() {
   }, [refetchEvents]);
 
   const handleNotifications = () => {
+    markUrgencySeen();
     router.push('/notifications');
   };
 
@@ -376,11 +379,13 @@ export default function BudgetDashboardScreen() {
       const perPerson = cachedBudget?.perPersonCents || 14900; // €149 default (classic tier)
       const total = cachedBudget?.totalCents || (payingCount * perPerson);
       const deposit = Math.round(total * 0.25);
+      // Use actual paid amount from cache (full payment vs deposit)
+      const collected = cachedBudget?.paidAmountCents ?? deposit;
       return {
         totalBudget: total,
-        collected: deposit,
-        pending: total - deposit,
-        percentage: total > 0 ? Math.round((deposit / total) * 100) : 0,
+        collected,
+        pending: Math.max(0, total - collected),
+        percentage: total > 0 ? Math.round((collected / total) * 100) : 0,
         paidCount: 1, // organizer paid deposit
         pendingCount: Math.max(0, payingCount - 1),
         perPerson,
@@ -489,7 +494,8 @@ export default function BudgetDashboardScreen() {
       const guest = cachedGuests[i];
       const name = guest?.firstName
         ? `${guest.firstName}${guest.lastName ? ' ' + guest.lastName : ''}`
-        : `Guest ${i}`;
+        // +1 so numbers align with participants screen (organizer = slot 1, first guest = slot 2, etc.)
+        : `Guest ${i + 1}`;
       list.push({ id: `g-${i}`, name, status: 'pending', amount: budgetStats.perPerson });
     }
     // Add honoree ONLY if they pay their own share:
@@ -501,6 +507,10 @@ export default function BudgetDashboardScreen() {
         ? cachedBudget.payingCount >= cachedParticipantCount
         : false;
     if (honoreeName && honoreeIsPaying) {
+      // Remove last guest placeholder so honoree slot doesn't add an extra person.
+      // Loop ran i=1..totalPaying-1, giving totalPaying-1 guests. Together with
+      // organizer + honoree that would be totalPaying+1. Pop one guest to correct.
+      if (list.length > 1) list.pop();
       list.push({ id: 'honoree', name: honoreeName, status: 'pending', amount: budgetStats.perPerson });
     }
     return list;
@@ -734,6 +744,7 @@ export default function BudgetDashboardScreen() {
               testID="notifications-button"
             >
               <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
+              {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
             </Pressable>
           </XStack>
           {renderCategoryTabs()}
@@ -833,6 +844,7 @@ export default function BudgetDashboardScreen() {
             testID="notifications-button"
           >
             <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
+            {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
           </Pressable>
         </XStack>
 
@@ -849,7 +861,7 @@ export default function BudgetDashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching || isLoading}
+            refreshing={isRefetching}
             onRefresh={handleRefresh}
             tintColor={DARK_THEME.primary}
           />
@@ -931,44 +943,40 @@ export default function BudgetDashboardScreen() {
                 <Text fontSize={15} fontWeight="500" color={DARK_THEME.textTertiary} style={{ marginTop: 4 }}>
                   {`Total Package Price  ${formatCurrencyRounded(budgetStats.totalBudget)}`}
                 </Text>
+
+                {/* Pay Remaining Balance — inside card, below total price */}
+                {budgetStats.percentage < 100 && budgetStats.pending > 0 && (
+                  <Pressable
+                    style={styles.payRemainingButton}
+                    onPress={() => {
+                      if (!selectedEventId) return;
+                      // Prefer cached slug over DB package_id (which is a UUID, not a slug)
+                      const packageIdForPayment = cachedBudget?.packageId || (booking as any)?.package_id;
+                      const participantsForPayment = cachedBudget?.payingCount;
+                      const params = new URLSearchParams({ payFull: '1' });
+                      if (packageIdForPayment) params.set('packageId', packageIdForPayment);
+                      if (participantsForPayment) params.set('participants', String(participantsForPayment + 1));
+                      if (selectedEvent?.city_id) params.set('cityId', selectedEvent.city_id);
+                      // Pass remaining amount + full total so payment screen works without package lookup
+                      params.set('amountCents', String(budgetStats.pending));
+                      params.set('totalCents', String(budgetStats.totalBudget));
+                      router.push(`/booking/${selectedEventId}/payment?${params.toString()}` as any);
+                    }}
+                  >
+                    <View style={styles.payRemainingIcon}>
+                      <Ionicons name="card-outline" size={20} color="#F97316" />
+                    </View>
+                    <YStack flex={1}>
+                      <Text style={styles.payRemainingTitle}>{(t.budget as any).payRemainingBtn}</Text>
+                      <Text style={styles.payRemainingSubtitleText}>
+                        {formatCurrencyRounded(budgetStats.pending)} · {(t.budget as any).payRemainingSubtitle}
+                      </Text>
+                    </YStack>
+                    <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+                  </Pressable>
+                )}
               </YStack>
             </View>
-
-            {/* Pay Remaining Balance — always visible when balance is unpaid */}
-            {budgetStats.percentage < 100 && budgetStats.pending > 0 && (
-              <Pressable
-                style={styles.payRemainingButton}
-                onPress={() => {
-                  const tr = getTranslation();
-                  Alert.alert(
-                    (tr.budget as any).payRemainingBtn,
-                    `${formatCurrencyRounded(budgetStats.pending)} · ${(tr.budget as any).payRemainingSubtitle}`,
-                    [
-                      { text: tr.profile.cancel, style: 'cancel' },
-                      {
-                        text: 'Pay Now',
-                        onPress: () => {
-                          if (selectedEventId) {
-                            router.push(`/booking/${selectedEventId}/payment` as any);
-                          }
-                        },
-                      },
-                    ]
-                  );
-                }}
-              >
-                <View style={styles.payRemainingIcon}>
-                  <Ionicons name="card-outline" size={20} color="#F97316" />
-                </View>
-                <YStack flex={1}>
-                  <Text style={styles.payRemainingTitle}>{(t.budget as any).payRemainingBtn}</Text>
-                  <Text style={styles.payRemainingSubtitleText}>
-                    {formatCurrencyRounded(budgetStats.pending)} · {(t.budget as any).payRemainingSubtitle}
-                  </Text>
-                </YStack>
-                <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
-              </Pressable>
-            )}
 
             {/* Group Contributions */}
             <YStack marginBottom="$4">
@@ -1742,6 +1750,17 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#EF4444',
   },
+  notificationUrgentDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#F97316',
+    borderWidth: 2,
+    borderColor: DARK_THEME.surfaceCard,
+  },
   filterContainer: {
     paddingHorizontal: 20,
     marginTop: 10,
@@ -1961,12 +1980,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: 'rgba(249, 115, 22, 0.1)',
-    borderRadius: 14,
+    backgroundColor: 'rgba(249, 115, 22, 0.12)',
+    borderRadius: 0,            // glassCard overflow:hidden clips to card corners
     padding: 14,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(249, 115, 22, 0.25)',
+    marginTop: 16,
+    marginHorizontal: -24,      // extend to glassCard edges (padding: 24)
+    marginBottom: -24,          // extend to glassCard bottom
+    borderTopWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.3)',
   },
   payRemainingIcon: {
     width: 40,

@@ -26,7 +26,7 @@ const STEP_DEFINITIONS: Array<{
 }> = [
   { key: 'invitations_sent', labelKey: 'inviteParticipants', descriptionKey: 'inviteParticipantsDesc', icon: 'mail-outline', auto: true },
   { key: 'group_confirmed', labelKey: 'groupConfirmed', descriptionKey: 'groupConfirmedDesc', icon: 'people-outline', auto: true },
-  { key: 'budget_collected', labelKey: 'collectBudget', descriptionKey: 'collectBudgetDesc', icon: 'wallet-outline', auto: true },
+  { key: 'budget_collected', labelKey: 'collectBudget', descriptionKey: 'collectBudgetDesc', icon: 'wallet-outline', auto: false },
   { key: 'outstanding_payment', labelKey: 'completePayment', descriptionKey: 'completePaymentDesc', icon: 'card-outline', auto: false },
   { key: 'accommodations', labelKey: 'planAccommodation', descriptionKey: 'planAccommodationDesc', icon: 'bed-outline', auto: false },
   { key: 'travel', labelKey: 'organizeTravel', descriptionKey: 'organizeTravelDesc', icon: 'car-outline', auto: false },
@@ -42,6 +42,7 @@ export function calculatePlanningSteps(
   event: EventWithDetails,
   participants: ParticipantWithProfile[] | undefined,
   checklist: PlanningChecklist | undefined,
+  cachedInvitedCount?: number,
 ): PlanningStep[] {
   if (event.status !== 'booked' && event.status !== 'completed') return [];
 
@@ -49,9 +50,9 @@ export function calculatePlanningSteps(
   const threshold = Math.ceil(totalExpected * 0.5);
 
   const participantList = participants || [];
-  const invitedCount = participantList.length;
+  // For step 1: use whichever is higher — DB participants or cached invited count
+  const invitedCount = Math.max(participantList.length, cachedInvitedCount || 0);
   const confirmedCount = participantList.filter(p => p.confirmed_at != null).length;
-  const paidCount = participantList.filter(p => p.payment_status === 'paid').length;
 
   const safeChecklist = checklist || {};
 
@@ -66,8 +67,10 @@ export function calculatePlanningSteps(
         case 'group_confirmed':
           completed = confirmedCount >= threshold;
           break;
-        case 'budget_collected':
-          completed = paidCount >= threshold;
+        case 'final_briefing':
+          // Auto-completes when all 5 manual planning steps (3-7) are checked
+          completed = ['budget_collected', 'outstanding_payment', 'accommodations', 'travel', 'surprise_plan']
+            .every(k => !!safeChecklist[k]);
           break;
       }
     } else {

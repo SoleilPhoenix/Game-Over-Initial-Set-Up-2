@@ -3,9 +3,10 @@
  * Clean header, info card, unified planning progress with checklist, 2×2 planning tools grid
  */
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { ScrollView, Pressable, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,7 +27,7 @@ import {
 } from '@/utils/planningProgress';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
-import { loadDesiredParticipants, loadChecklist, setChecklistItem } from '@/lib/participantCountCache';
+import { loadDesiredParticipants, loadChecklist, setChecklistItem, loadInvitedCount, loadBudgetInfo, type BudgetInfo } from '@/lib/participantCountCache';
 
 // ─── Planning Tools ────────────────────────────
 const TOOL_CONFIGS = [
@@ -52,11 +53,26 @@ export default function EventSummaryScreen() {
   const [cachedParticipants, setCachedParticipants] = useState<number | undefined>(undefined);
   // Load cached checklist state (fallback when DB column unavailable)
   const [localChecklist, setLocalChecklist] = useState<Record<string, boolean>>({});
+  // Load cached invited count (set after sending invitations in participants screen)
+  const [cachedInvitedCount, setCachedInvitedCount] = useState(0);
+  // Load cached budget to detect urgency
+  const [cachedBudget, setCachedBudget] = useState<BudgetInfo | null>(null);
   useEffect(() => {
     if (!id) return;
     loadDesiredParticipants(id).then(setCachedParticipants);
     loadChecklist(id).then(setLocalChecklist);
+    loadBudgetInfo(id).then(info => setCachedBudget(info ?? null));
   }, [id]);
+
+  // Refresh invited count every time this screen gains focus
+  // so returning from Manage Invitations immediately reflects the sent count
+  useFocusEffect(
+    useCallback(() => {
+      if (!id) return;
+      loadInvitedCount(id).then(setCachedInvitedCount);
+      loadChecklist(id).then(setLocalChecklist);
+    }, [id])
+  );
 
   // Planning steps (only for booked events)
   // Use DB planning_checklist if available, fallback to local cache
@@ -72,15 +88,24 @@ export default function EventSummaryScreen() {
       event,
       participants ?? undefined,
       effectiveChecklist,
+      cachedInvitedCount,
     );
-  }, [event, participants, effectiveChecklist]);
+  }, [event, participants, effectiveChecklist, cachedInvitedCount]);
 
   const completedCount = getCompletedCount(planningSteps);
   const progressPct = getProgressPercentage(planningSteps);
   const isBooked = event?.status === 'booked' || event?.status === 'completed';
 
-  // Manual steps (4-7) are locked until all 3 auto steps (1-3) are completed
-  const autoStepsDone = planningSteps.slice(0, 3).every(s => s.completed);
+  // Budget urgency: ≤14 days until event AND balance still unpaid
+  const isBudgetUrgent = useMemo(() => {
+    if (!event?.start_date || !cachedBudget) return false;
+    const start = new Date(event.start_date);
+    const now = new Date();
+    const startMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const daysLeft = Math.round((startMidnight.getTime() - nowMidnight.getTime()) / (1000 * 60 * 60 * 24));
+    return daysLeft >= 0 && daysLeft <= 14 && (cachedBudget.paidAmountCents || 0) < cachedBudget.totalCents;
+  }, [event?.start_date, cachedBudget]);
 
   // Derive package highlight from booking tier — the premium feature of the selected package
   const TIER_HIGHLIGHTS: Record<string, string> = {
@@ -310,10 +335,15 @@ export default function EventSummaryScreen() {
                   : tool.key === 'budget' ? 'budgetTool'
                     : 'packagesTool'
             ];
+            const isUrgentBudgetTool = tool.key === 'budget' && isBudgetUrgent;
             return (
               <Pressable
                 key={tool.key}
-                style={({ pressed }) => [styles.toolCard, pressed && styles.toolCardPressed]}
+                style={({ pressed }) => [
+                  styles.toolCard,
+                  isUrgentBudgetTool && styles.toolCardUrgent,
+                  pressed && styles.toolCardPressed,
+                ]}
                 onPress={() => {
                   const route = tool.isTab
                     ? ((tool as any).passEventId ? `${tool.route}?eventId=${id}` : tool.route)
@@ -322,8 +352,15 @@ export default function EventSummaryScreen() {
                 }}
                 testID={`planning-tool-${tool.key}`}
               >
-                <View style={[styles.toolIconCircle, { backgroundColor: tool.iconBg }]}>
-                  <Ionicons name={tool.icon as any} size={22} color={tool.iconColor} />
+                <View style={[
+                  styles.toolIconCircle,
+                  { backgroundColor: isUrgentBudgetTool ? 'rgba(249, 115, 22, 0.2)' : tool.iconBg },
+                ]}>
+                  <Ionicons
+                    name={tool.icon as any}
+                    size={22}
+                    color={isUrgentBudgetTool ? '#F97316' : tool.iconColor}
+                  />
                 </View>
                 <Text style={styles.toolLabel}>{toolLabel}</Text>
                 <Text style={[styles.toolSubtext, { color: sub.color }]} numberOfLines={1}>
@@ -372,7 +409,7 @@ export default function EventSummaryScreen() {
                   stepNumber={idx + 1}
                   t={t}
                   onToggle={handleToggleChecklist}
-                  locked={!step.auto && !autoStepsDone}
+                  locked={false}
                 />
               </React.Fragment>
             ))}
@@ -466,9 +503,10 @@ function ChecklistRow({
         </Text>
       </YStack>
 
-      {/* Right side: checkbox or lock or AUTO tag */}
+      {/* Right side: AUTO tag + checkbox (aligned with manual checkboxes) */}
       {step.auto ? (
         <XStack alignItems="center" gap={6}>
+          <Text style={styles.autoTag}>AUTO</Text>
           <View style={[
             styles.checkbox,
             step.completed && styles.checkboxAuto,
@@ -477,7 +515,6 @@ function ChecklistRow({
               <Ionicons name="checkmark" size={14} color="#10B981" />
             )}
           </View>
-          <Text style={styles.autoTag}>AUTO</Text>
         </XStack>
       ) : locked ? (
         <Ionicons name="lock-closed" size={14} color={DARK_THEME.textTertiary} />
@@ -623,6 +660,10 @@ const styles = StyleSheet.create({
   toolCardPressed: {
     opacity: 0.85,
     transform: [{ scale: 0.98 }],
+  },
+  toolCardUrgent: {
+    borderColor: '#F97316',
+    borderWidth: 1.5,
   },
   toolIconCircle: {
     width: 44,

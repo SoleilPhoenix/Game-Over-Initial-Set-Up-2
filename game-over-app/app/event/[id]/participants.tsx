@@ -59,7 +59,7 @@ import { useTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
 import { Button } from '@/components/ui/Button';
 import type { ParticipantWithProfile } from '@/repositories';
-import { loadDesiredParticipants, loadGuestDetails, saveGuestDetails, type GuestDetail } from '@/lib/participantCountCache';
+import { loadDesiredParticipants, loadBudgetInfo, loadGuestDetails, saveGuestDetails, setInvitedCount, type GuestDetail } from '@/lib/participantCountCache';
 import { supabase } from '@/lib/supabase/client';
 
 type SlotRole = 'organizer' | 'guest' | 'honoree';
@@ -107,9 +107,13 @@ export default function ManageInvitationsScreen() {
 
   // Load cached desired participant count (set during wizard/booking)
   const [cachedParticipants, setCachedParticipants] = useState<number | undefined>(undefined);
+  const [cachedBudgetTotal, setCachedBudgetTotal] = useState<number | undefined>(undefined);
   useEffect(() => {
     if (!id) return;
     loadDesiredParticipants(id).then(setCachedParticipants);
+    // budgetInfo.totalParticipants is the authoritative count (stored correctly at first payment)
+    // It auto-corrects inflated desired_participant_counts from old payment bug
+    loadBudgetInfo(id).then(info => { if (info?.totalParticipants) setCachedBudgetTotal(info.totalParticipants); });
     loadGuestDetails(id).then((cached) => {
       if (Object.keys(cached).length > 0) setGuestDetails(cached);
     });
@@ -127,7 +131,9 @@ export default function ManageInvitationsScreen() {
     const bookingTotal = booking
       ? booking.paying_participants + (booking.exclude_honoree ? 1 : 0)
       : 0;
-    const totalSlots = cachedParticipants || bookingTotal || 10;
+    // Prefer budgetInfo.totalParticipants (set correctly at first payment) over
+    // desired_participant_counts which may be inflated from old payment bugs
+    const totalSlots = cachedBudgetTotal || cachedParticipants || bookingTotal || 10;
     const result: Slot[] = [];
 
     // Organizer info
@@ -204,7 +210,7 @@ export default function ManageInvitationsScreen() {
     });
 
     return result;
-  }, [event, participants, user, guestDetails, expandedSlot, booking, cachedParticipants]);
+  }, [event, participants, user, guestDetails, expandedSlot, booking, cachedParticipants, cachedBudgetTotal]);
 
   // Stats — "filled" = has email (contact info provided, not just a name)
   const filledCount = slots.filter(s => !!s.email).length;
@@ -305,6 +311,11 @@ export default function ManageInvitationsScreen() {
 
     setInviteResults(data.results ?? []);
     setInviteSendStatus('done');
+    // Track invited count for planning step 1 auto-check
+    const sentCount = (data.results ?? []).filter((r: any) => r.status === 'sent').length;
+    if (sentCount > 0 && id) {
+      setInvitedCount(id, sentCount).catch(() => {});
+    }
   };
 
   const handleShareFallback = async () => {
@@ -338,7 +349,7 @@ export default function ManageInvitationsScreen() {
       case 'pending':
         return { icon: 'time-outline' as const, color: '#F59E0B', label: t.manageInvitations.pending };
       default:
-        return { icon: 'remove-circle-outline' as const, color: DARK_THEME.textTertiary, label: t.manageInvitations.notInvited };
+        return { icon: 'ellipse-outline' as const, color: DARK_THEME.textTertiary, label: t.manageInvitations.notInvited };
     }
   };
 
@@ -348,7 +359,7 @@ export default function ManageInvitationsScreen() {
     const initial = slot.name ? slot.name.charAt(0).toUpperCase() : String(slot.index + 1);
     const isEmpty = slot.role === 'guest' && slot.isEditable && !slot.name && !slot.email;
     const needsContactInfo = (slot.role === 'organizer' && !slot.phone) || (slot.role === 'honoree' && !slot.email);
-    const guestNum = slot.role === 'guest' ? slot.index : 0;
+    const guestNum = slot.role === 'guest' ? slot.index + 1 : 0;
     const displayName = slot.name ||
       t.manageInvitations.guestSlot.replace('{{number}}', String(guestNum));
 

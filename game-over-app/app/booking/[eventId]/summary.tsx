@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { ScrollView, Image } from 'react-native';
+import { ScrollView, Image, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner, Switch } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +22,28 @@ const TIER_LABELS: Record<string, string> = {
   classic: 'Classic (M)',
   grand: 'Grand (L)',
 };
+
+const styles = StyleSheet.create({
+  payOption: {
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: DARK_THEME.border,
+    backgroundColor: DARK_THEME.background,
+    marginBottom: 8,
+  },
+  payOptionLast: {
+    marginBottom: 0,
+  },
+  payOptionActive: {
+    borderColor: 'rgba(71, 184, 129, 0.4)',
+    backgroundColor: 'rgba(71, 184, 129, 0.07)',
+  },
+  payOptionActiveFull: {
+    borderColor: 'rgba(90, 126, 176, 0.4)',
+    backgroundColor: 'rgba(90, 126, 176, 0.07)',
+  },
+});
 
 // Fallback package data for draft mode
 const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; price_per_person_cents: number; hero_image_url: any }> = {
@@ -68,6 +90,9 @@ export default function BookingSummaryScreen() {
   // Resolve package data
   const draftPkg = packageId ? FALLBACK_PKG[packageId] : null;
   const pkg = isDraft ? draftPkg : (bookingFlow.package || draftPkg);
+
+  // Payment option: 'deposit' = pay 25% now, 'full' = pay entire amount now
+  const [paymentOption, setPaymentOption] = useState<'deposit' | 'full'>('deposit');
 
   // Local exclude honoree state
   const [draftExcludeHonoree, setDraftExcludeHonoree] = useState(true);
@@ -123,6 +148,7 @@ export default function BookingSummaryScreen() {
     if (paramCityId) params.set('cityId', paramCityId);
     if (paramParticipants) params.set('participants', paramParticipants);
     params.set('excludeHonoree', excludeHonoree ? '1' : '0');
+    if (paymentOption === 'full') params.set('payFull', '1');
     const qs = params.toString() ? `?${params.toString()}` : '';
     router.push(`/booking/${eventId}/payment${qs}`);
   };
@@ -256,19 +282,81 @@ export default function BookingSummaryScreen() {
 
           <YStack height={1} backgroundColor={DARK_THEME.glassBorder} marginVertical="$2" />
 
-          {/* Deposit Breakdown */}
-          <XStack justifyContent="space-between" marginBottom="$2">
-            <Text fontSize={14} fontWeight="600" color="#47B881">{t.booking.depositLabel}</Text>
-            <Text fontSize={14} fontWeight="700" color="#47B881">
-              {formatPrice(depositCents)}
-            </Text>
-          </XStack>
-          <XStack justifyContent="space-between">
-            <Text fontSize={13} color={DARK_THEME.textTertiary}>{t.booking.remainingBalanceLabel}</Text>
-            <Text fontSize={13} color={DARK_THEME.textTertiary}>
-              {formatPrice(remainingCents)}
-            </Text>
-          </XStack>
+          <YStack height={1} backgroundColor={DARK_THEME.glassBorder} marginVertical="$3" />
+
+          {/* Payment Option Selector */}
+          <Text fontSize={11} fontWeight="700" color={DARK_THEME.textSecondary} textTransform="uppercase" letterSpacing={0.8} marginBottom="$3">
+            {(t.booking as any).payOptionTitle}
+          </Text>
+
+          {/* Option A: Deposit only */}
+          <Pressable
+            style={[styles.payOption, paymentOption === 'deposit' && styles.payOptionActive]}
+            onPress={() => setPaymentOption('deposit')}
+          >
+            <XStack alignItems="flex-start" gap={12}>
+              <YStack
+                width={20} height={20} borderRadius={10} marginTop={2}
+                borderWidth={2}
+                borderColor={paymentOption === 'deposit' ? '#47B881' : DARK_THEME.border}
+                backgroundColor={paymentOption === 'deposit' ? '#47B881' : 'transparent'}
+                alignItems="center" justifyContent="center"
+              >
+                {paymentOption === 'deposit' && (
+                  <YStack width={8} height={8} borderRadius={4} backgroundColor="white" />
+                )}
+              </YStack>
+              <YStack flex={1}>
+                <Text fontSize={14} fontWeight="600" color={paymentOption === 'deposit' ? '#47B881' : DARK_THEME.textPrimary}>
+                  {(t.booking as any).payOptionDeposit}
+                </Text>
+                <Text fontSize={12} color={DARK_THEME.textTertiary} marginTop={2}>
+                  {(t.booking as any).payOptionDepositDesc
+                    .replace('{{deposit}}', formatPrice(depositCents))
+                    .replace('{{remaining}}', formatPrice(remainingCents))}
+                </Text>
+              </YStack>
+            </XStack>
+          </Pressable>
+
+          {/* Option B: Pay in full */}
+          <Pressable
+            style={[styles.payOption, styles.payOptionLast, paymentOption === 'full' && styles.payOptionActiveFull]}
+            onPress={() => setPaymentOption('full')}
+          >
+            <XStack alignItems="flex-start" gap={12}>
+              <YStack
+                width={20} height={20} borderRadius={10} marginTop={2}
+                borderWidth={2}
+                borderColor={paymentOption === 'full' ? DARK_THEME.primary : DARK_THEME.border}
+                backgroundColor={paymentOption === 'full' ? DARK_THEME.primary : 'transparent'}
+                alignItems="center" justifyContent="center"
+              >
+                {paymentOption === 'full' && (
+                  <YStack width={8} height={8} borderRadius={4} backgroundColor="white" />
+                )}
+              </YStack>
+              <YStack flex={1}>
+                <XStack alignItems="center" gap={8}>
+                  <Text fontSize={14} fontWeight="600" color={paymentOption === 'full' ? DARK_THEME.primary : DARK_THEME.textPrimary}>
+                    {(t.booking as any).payOptionFull}
+                  </Text>
+                  <YStack
+                    paddingHorizontal={8} paddingVertical={2} borderRadius={6}
+                    backgroundColor="rgba(90, 126, 176, 0.15)"
+                  >
+                    <Text fontSize={10} fontWeight="700" color={DARK_THEME.primary}>
+                      {(t.booking as any).payOptionFullBadge}
+                    </Text>
+                  </YStack>
+                </XStack>
+                <Text fontSize={12} color={DARK_THEME.textTertiary} marginTop={2}>
+                  {(t.booking as any).payOptionFullDesc
+                    .replace('{{total}}', formatPrice(pricing.totalCents))}
+                </Text>
+              </YStack>
+            </XStack>
+          </Pressable>
         </YStack>
 
         {/* Exclude Honoree */}
@@ -372,7 +460,11 @@ export default function BookingSummaryScreen() {
           testID="proceed-to-payment-button"
         >
           <XStack alignItems="center" gap="$2">
-            <Text fontSize={16} fontWeight="700" color="white">{t.booking.proceedToPaymentDeposit.replace('{{deposit}}', formatPrice(depositCents))}</Text>
+            <Text fontSize={16} fontWeight="700" color="white">
+              {paymentOption === 'full'
+                ? (t.booking as any).payFullButtonLabel.replace('{{amount}}', formatPrice(pricing.totalCents))
+                : t.booking.proceedToPaymentDeposit.replace('{{deposit}}', formatPrice(depositCents))}
+            </Text>
             <Ionicons name="arrow-forward" size={18} color="white" />
           </XStack>
         </Button>

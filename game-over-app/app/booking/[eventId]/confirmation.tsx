@@ -134,16 +134,22 @@ export default function BookingConfirmationScreen() {
         <View style={confirmStyles.heroContainer}>
           <KenBurnsImage
             source={resolveImageSource((() => {
-              // Derive city + tier from packageId slug (e.g., "berlin-classic")
+              // Derive city + tier from packageId slug (e.g., "hamburg-classic").
+              // Guard: UUIDs also contain hyphens — only accept slugs ending with a known tier.
+              const KNOWN_TIERS = ['classic', 'essential', 'grand'];
               if (packageId) {
                 const parts = packageId.split('-');
-                const city = parts.slice(0, -1).join('-') || 'berlin';
-                const tier = parts[parts.length - 1] || 'essential';
-                return getPackageImage(city, tier);
+                const tier = parts[parts.length - 1];
+                const city = parts.slice(0, -1).join('-');
+                if (city && KNOWN_TIERS.includes(tier)) {
+                  return getPackageImage(city, tier);
+                }
               }
-              // Fallback from cityId
-              const slug = cityId ? (CITY_NAMES[cityId]?.toLowerCase() || 'berlin') : 'berlin';
-              return getPackageImage(slug, 'essential');
+              // Fallback: use city image with 'classic' tier (better than forcing 'essential')
+              const slug = cityId
+                ? (CITY_NAMES[cityId]?.toLowerCase() || cityId.toLowerCase() || 'berlin')
+                : 'berlin';
+              return getPackageImage(slug, 'classic');
             })())}
             style={StyleSheet.absoluteFillObject}
           />

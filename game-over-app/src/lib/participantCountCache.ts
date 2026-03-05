@@ -101,6 +101,12 @@ export interface BudgetInfo {
   totalCents: number;
   perPersonCents: number;
   payingCount: number;
+  /** Actual amount paid so far (cents). If absent, budget screen assumes 25% deposit. */
+  paidAmountCents?: number;
+  /** Package slug (e.g. "hamburg-classic") — used for navigation and image display. */
+  packageId?: string;
+  /** Total participant count including honoree — authoritative source to prevent inflation bugs. */
+  totalParticipants?: number;
 }
 
 const BUDGET_KEY = 'budget_info';
@@ -127,4 +133,31 @@ export async function loadBudgetInfo(eventId: string): Promise<BudgetInfo | unde
     }
   } catch {}
   return undefined;
+}
+
+// ─── Invited Guest Count Cache ────────────────
+const INVITED_KEY = 'invited_guest_counts';
+const invitedCache: Record<string, number> = {};
+
+export async function setInvitedCount(eventId: string, count: number): Promise<void> {
+  invitedCache[eventId] = count;
+  try {
+    const raw = await AsyncStorage.getItem(INVITED_KEY);
+    const data = raw ? JSON.parse(raw) : {};
+    data[eventId] = count;
+    await AsyncStorage.setItem(INVITED_KEY, JSON.stringify(data));
+  } catch {}
+}
+
+export async function loadInvitedCount(eventId: string): Promise<number> {
+  if (invitedCache[eventId] !== undefined) return invitedCache[eventId];
+  try {
+    const raw = await AsyncStorage.getItem(INVITED_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      Object.assign(invitedCache, data);
+      return data[eventId] || 0;
+    }
+  } catch {}
+  return 0;
 }

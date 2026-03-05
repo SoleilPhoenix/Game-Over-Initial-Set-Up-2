@@ -8,6 +8,7 @@ import { Animated, PanResponder, ScrollView, RefreshControl, Pressable, StyleShe
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadDesiredParticipants } from '@/lib/participantCountCache';
+import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -445,6 +446,7 @@ type LocalChannelSection = {
 
 export default function CommunicationScreen() {
   const router = useRouter();
+  const { urgentEvent, hasUnseenUrgency, markUrgencySeen } = useUrgentPayment();
   // eventIdParam is set when navigating from Event Summary — pre-selects that event
   const { eventId: eventIdParam } = useLocalSearchParams<{ eventId?: string }>();
   const insets = useSafeAreaInsets();
@@ -663,6 +665,7 @@ export default function CommunicationScreen() {
   };
 
   const handleNotifications = () => {
+    markUrgencySeen();
     router.push('/notifications');
   };
 
@@ -1164,6 +1167,7 @@ export default function CommunicationScreen() {
             testID="notifications-button"
           >
             <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
+            {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
           </Pressable>
         </XStack>
 
@@ -1537,6 +1541,17 @@ const styles = StyleSheet.create({
     backgroundColor: DARK_THEME.surfaceCard,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  notificationUrgentDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#F97316',
+    borderWidth: 2,
+    borderColor: DARK_THEME.surfaceCard,
   },
   notificationDot: {
     position: 'absolute',

@@ -47,7 +47,11 @@ const IS_E2E = process.env.EXPO_PUBLIC_E2E_MODE === 'true';
 type PaymentStep = 'ready' | 'creating_booking' | 'processing_payment' | 'confirming';
 
 export default function PaymentScreen() {
-  const { eventId, packageId, cityId: paramCityId, participants: paramParticipants, excludeHonoree: paramExcludeHonoree } = useLocalSearchParams<{ eventId: string; packageId?: string; cityId?: string; participants?: string; excludeHonoree?: string }>();
+  const { eventId, packageId, cityId: paramCityId, participants: paramParticipants, excludeHonoree: paramExcludeHonoree, payFull: paramPayFull, amountCents: paramAmountCentsStr, totalCents: paramTotalCentsStr } = useLocalSearchParams<{ eventId: string; packageId?: string; cityId?: string; participants?: string; excludeHonoree?: string; payFull?: string; amountCents?: string; totalCents?: string }>();
+  const isFullPayment = paramPayFull === '1';
+  // When navigating from Budget "Pay Remaining Balance", amountCents = remaining balance to pay
+  const paramAmountCents = paramAmountCentsStr ? parseInt(paramAmountCentsStr, 10) : 0;
+  const paramTotalCents = paramTotalCentsStr ? parseInt(paramTotalCentsStr, 10) : 0;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('ready');
@@ -104,14 +108,30 @@ export default function PaymentScreen() {
   // Use bookingFlow pricing when available, fallback to local pricing for instant render
   const pricing = isDraft ? draftPricing : (bookingFlow.pricing || draftPricing);
   const excludeHonoree = isDraft ? honoreeExcluded : bookingFlow.excludeHonoree;
-  // Don't show loading if we already have fallback data to render
-  const isLoading = isDraft ? false : (bookingFlow.isLoading && !draftPricing);
+  // Don't show loading if we already have fallback data OR a direct amountCents param
+  const isLoading = isDraft ? false : (bookingFlow.isLoading && !draftPricing && !paramAmountCents);
+
+  // When navigating from Budget with amountCents (no package in URL), create synthetic values
+  const syntheticPkg = paramAmountCents > 0 && !pkg
+    ? { id: packageId || 'balance', name: 'Package', tier: 'classic', price_per_person_cents: 0 }
+    : null;
+  const syntheticPricing = paramAmountCents > 0 && !pricing
+    ? {
+        packagePriceCents: paramTotalCents || paramAmountCents,
+        serviceFeeCents: 0,
+        totalCents: paramTotalCents || paramAmountCents,
+        perPersonCents: 0,
+        payingParticipantCount: urlParticipantCount || 1,
+      }
+    : null;
+  const activePkg = pkg || syntheticPkg;
+  const activePricing = pricing || syntheticPricing;
 
   const createBookingMutation = useCreateBooking();
   const updatePaymentMutation = useUpdatePaymentStatus();
   const { processPayment, isLoading: isPaymentLoading, showError } = usePaymentSheet();
 
-  if (isLoading || !pkg || !pricing) {
+  if (isLoading || !activePkg || !activePricing) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
         <Spinner size="large" color="$primary" />
@@ -145,7 +165,7 @@ export default function PaymentScreen() {
 
     try {
       // Demo mode: draft events, E2E tests, missing Stripe key, or fallback package (non-UUID ID)
-      const isFallbackPackage = !!(pkg?.id && !UUID_REGEX.test(pkg.id));
+      const isFallbackPackage = !!(activePkg?.id && !UUID_REGEX.test(activePkg.id));
       const useSimulatedPayment = isDraft || IS_E2E || !process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || isFallbackPackage;
 
       if (useSimulatedPayment) {
@@ -178,12 +198,22 @@ export default function PaymentScreen() {
             console.warn('Event status update failed (non-blocking):', updateError.message);
           }
           // Cache desired participant count + budget info for event summary/budget screens
-          const totalParticipants = pricing.payingParticipantCount + (excludeHonoree ? 1 : 0);
-          setDesiredParticipants(eventId, totalParticipants).catch(() => {});
+          // Skip when paying remaining balance — count was already stored during first payment
+          const totalParticipants = activePricing.payingParticipantCount + (excludeHonoree ? 1 : 0);
+          if (totalParticipants > 1 && paramAmountCents === 0) setDesiredParticipants(eventId, totalParticipants).catch(() => {});
+          // paidAmountCents: when paying remaining balance, full total is now paid
+          const newTotalPaid = paramAmountCents > 0
+            ? (paramTotalCents || activePricing.totalCents)  // paying remaining → fully paid
+            : amountDue;                                      // initial deposit or full upfront
           setBudgetInfo(eventId, {
-            totalCents: pricing.totalCents,
-            perPersonCents: pricing.perPersonCents,
-            payingCount: pricing.payingParticipantCount,
+            totalCents: paramTotalCents || activePricing.totalCents,
+            perPersonCents: activePricing.perPersonCents,
+            payingCount: activePricing.payingParticipantCount,
+            paidAmountCents: newTotalPaid,
+            // Store URL-param slug (e.g. "hamburg-classic"), not activePkg.id which may be a DB UUID
+            packageId: packageId || activePkg.id,
+            // Store total participants on first payment only (to prevent inflation on remaining payment)
+            ...(paramAmountCents === 0 && totalParticipants > 1 ? { totalParticipants } : {}),
           }).catch(() => {});
         }
 
@@ -195,8 +225,16 @@ export default function PaymentScreen() {
         if (packageId) confirmParams.set('packageId', packageId);
         if (paramCityId) confirmParams.set('cityId', paramCityId);
         if (paramParticipants) confirmParams.set('participants', paramParticipants);
-        confirmParams.set('total', String(Math.ceil(pricing.totalCents * 0.25)));
-        confirmParams.set('fullTotal', String(pricing.totalCents));
+        // When paying remaining balance, show full cumulative total on confirmation screen
+        const confirmTotal = paramAmountCents > 0
+          ? (paramTotalCents || activePricing.totalCents)
+          : amountDue;
+        confirmParams.set('total', String(confirmTotal));
+        // Only show "X of Y" when total != full total (i.e. initial deposit only)
+        const fullTotalCents = paramTotalCents || activePricing.totalCents;
+        if (fullTotalCents !== confirmTotal) {
+          confirmParams.set('fullTotal', String(fullTotalCents));
+        }
         const qs = confirmParams.toString() ? `?${confirmParams.toString()}` : '';
         router.replace(`/booking/${eventId}/confirmation${qs}`);
         return;
@@ -206,20 +244,20 @@ export default function PaymentScreen() {
       setPaymentStep('creating_booking');
       const booking = await createBookingMutation.mutateAsync({
         event_id: eventId,
-        package_id: pkg.id,
+        package_id: activePkg.id,
         exclude_honoree: excludeHonoree,
-        paying_participants: pricing.payingParticipantCount,
-        package_base_cents: pricing.packagePriceCents,
-        service_fee_cents: pricing.serviceFeeCents,
-        total_amount_cents: pricing.totalCents,
-        per_person_cents: pricing.perPersonCents,
+        paying_participants: activePricing.payingParticipantCount,
+        package_base_cents: activePricing.packagePriceCents,
+        service_fee_cents: activePricing.serviceFeeCents,
+        total_amount_cents: activePricing.totalCents,
+        per_person_cents: activePricing.perPersonCents,
       });
 
       // Process payment with Stripe
       setPaymentStep('processing_payment');
       const { success, error } = await processPayment({
         bookingId: booking.id,
-        amountCents: pricing.totalCents,
+        amountCents: activePricing.totalCents,
         currency: 'eur',
       });
 
@@ -261,8 +299,12 @@ export default function PaymentScreen() {
     }
   };
 
-  // Deposit calculation (25% of total)
-  const depositCents = Math.ceil(pricing.totalCents * 0.25);
+  // Deposit (25%) vs full amount vs remaining balance from Budget screen
+  const depositCents = Math.ceil(activePricing.totalCents * 0.25);
+  // When paramAmountCents is provided (from Budget "Pay Remaining"), that IS the amount due
+  const amountDue = paramAmountCents > 0
+    ? paramAmountCents
+    : (isFullPayment ? activePricing.totalCents : depositCents);
 
   const isProcessing = paymentStep !== 'ready' || isPaymentLoading;
 
@@ -346,14 +388,16 @@ export default function PaymentScreen() {
             <Card testID="payment-amount-card">
               <YStack alignItems="center" gap="$2">
                 <Text fontSize="$2" color="$textSecondary">
-                  {t.booking.depositLabel}
+                  {isFullPayment ? t.booking.totalAmount : t.booking.depositLabel}
                 </Text>
                 <Text fontSize="$9" fontWeight="800" color="$primary">
-                  {formatPrice(depositCents)}
+                  {formatPrice(amountDue)}
                 </Text>
-                <Text fontSize="$2" color="$textSecondary">
-                  {t.booking.totalAmount}: {formatPrice(pricing.totalCents)} {'\u2022'} {t.booking.perPersonGuests.replace('{{price}}', formatPrice(pricing.perPersonCents)).replace('{{count}}', String(pricing.payingParticipantCount))}
-                </Text>
+                {activePricing.perPersonCents > 0 && (
+                  <Text fontSize="$2" color="$textSecondary">
+                    {t.booking.totalAmount}: {formatPrice(paramTotalCents || activePricing.totalCents)} {'\u2022'} {t.booking.perPersonGuests.replace('{{price}}', formatPrice(activePricing.perPersonCents)).replace('{{count}}', String(activePricing.payingParticipantCount))}
+                  </Text>
+                )}
               </YStack>
             </Card>
 
@@ -453,7 +497,7 @@ export default function PaymentScreen() {
                     {(() => {
                       const tierLabels: Record<string, string> = { essential: 'S', classic: 'M', grand: 'L' };
                       const tierNames: Record<string, string> = { essential: 'Essential', classic: 'Classic', grand: 'Grand' };
-                      return pkg.tier ? `${tierNames[pkg.tier] || pkg.tier} (${tierLabels[pkg.tier] || ''})` : pkg.name;
+                      return activePkg.tier ? `${tierNames[activePkg.tier] || activePkg.tier} (${tierLabels[activePkg.tier] || ''})` : activePkg.name;
                     })()}
                   </Text>
                   <Text fontSize="$2" color="$textSecondary">
@@ -465,7 +509,7 @@ export default function PaymentScreen() {
                         const d = new Date(dateStr);
                         return isNaN(d.getTime()) ? null : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                       })(),
-                      `${urlParticipantCount || wizardParticipantCount || pricing?.payingParticipantCount || ''} Guests`,
+                      `${urlParticipantCount || wizardParticipantCount || activePricing.payingParticipantCount || ''} Guests`,
                     ].filter(Boolean).join(' \u2022 ')}
                   </Text>
                 </YStack>
@@ -521,7 +565,9 @@ export default function PaymentScreen() {
             onPress={handlePayment}
             testID="pay-now-button"
           >
-            {t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(depositCents))}
+            {isFullPayment
+              ? (t.booking as any).payFullButtonLabel?.replace('{{amount}}', formatPrice(amountDue)) || t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(amountDue))
+              : t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(depositCents))}
           </Button>
         </XStack>
       )}

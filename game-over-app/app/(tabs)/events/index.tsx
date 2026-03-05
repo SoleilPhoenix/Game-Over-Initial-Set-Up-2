@@ -36,6 +36,8 @@ import { SkeletonEventCard } from '@/components/ui/Skeleton';
 import { useTranslation, getTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
 import { getCurrentPhaseLabel } from '@/utils/planningProgress';
+import type { BudgetInfo } from '@/lib/participantCountCache';
+import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import { getEventImage, resolveImageSource, getPackageImage, getTierFromSlug } from '@/constants/packageImages';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import type { EventWithDetails } from '@/repositories';
@@ -50,16 +52,22 @@ const CITY_UUID_TO_SLUG: Record<string, string> = {
 type FilterTab = 'organizing' | 'attending';
 
 /** Approximate step completion from card data (full detail only on detail page) */
-const getBookedStepCount = (event: EventWithDetails): number => {
+const getBookedStepCount = (
+  event: EventWithDetails,
+  invitedCount = 0,
+  expectedCount = 0,
+): number => {
   const checklist = event.planning_checklist || {};
-  // Steps 1-3 are auto — approximate from participant_count on card
-  // (We don't have full participant details here, so approximate generously)
-  const hasParticipants = event.participant_count > 1; // organizer + at least 1 invite
-  const autoSteps = hasParticipants ? 1 : 0; // invitations_sent approximation
-  // Steps 4-8 from checklist
-  const manualSteps = ['outstanding_payment', 'accommodations', 'travel', 'surprise_plan', 'final_briefing']
+  // Step 1 (invitations_sent) auto: use cached invited count if available
+  const threshold = Math.ceil((expectedCount || event.participant_count || 1) * 0.5);
+  const effective = Math.max(invitedCount, event.participant_count || 0);
+  const step1 = effective >= threshold ? 1 : 0;
+  // Step 2 (group_confirmed) auto: assume done when step 1 is done (invitations → confirmations follow)
+  const step2 = step1;
+  // Steps 3-8 all manual — read from checklist
+  const manualSteps = ['budget_collected', 'outstanding_payment', 'accommodations', 'travel', 'surprise_plan', 'final_briefing']
     .filter(k => checklist[k]).length;
-  return autoSteps + manualSteps;
+  return step1 + step2 + manualSteps;
 };
 
 // Step label key → step number mapping for "Step X:" prefix
@@ -74,7 +82,12 @@ const STEP_NUMBER: Record<string, number> = {
   finalBriefing: 8,
 };
 
-const getProgressConfig = (event: EventWithDetails, t: any): {
+const getProgressConfig = (
+  event: EventWithDetails,
+  t: any,
+  invitedCount = 0,
+  expectedCount = 0,
+): {
   phase: string;
   percentage: number;
   color: string;
@@ -85,7 +98,7 @@ const getProgressConfig = (event: EventWithDetails, t: any): {
   const status = event.status;
   switch (status) {
     case 'booked': {
-      const completed = getBookedStepCount(event);
+      const completed = getBookedStepCount(event, invitedCount, expectedCount);
       const percentage = Math.round((completed / 8) * 100);
       if (completed === 8) {
         return { phase: t.events.allSetReady, percentage: 100, color: '#10B981', icon: 'checkmark-circle', isBooked: true, completedSteps: 8 };
@@ -99,7 +112,7 @@ const getProgressConfig = (event: EventWithDetails, t: any): {
             labelKey: ['inviteParticipants', 'groupConfirmed', 'collectBudget', 'completePayment', 'planAccommodation', 'organizeTravel', 'planSurprise', 'finalBriefing'][i],
             descriptionKey: '',
             completed: i < completed,
-            auto: i < 3,
+            auto: i < 2,
             icon: '',
           }))
       );
@@ -155,6 +168,7 @@ export default function EventsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useUser();
+  const { hasUnseenUrgency, markUrgencySeen } = useUrgentPayment();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('organizing');
   const { t } = useTranslation();
@@ -164,19 +178,55 @@ export default function EventsScreen() {
   // Cache of intended participant counts (set during booking wizard)
   // DB participant_count only counts joined rows (usually just organizer = 1)
   const [participantCounts, setParticipantCounts] = useState<Record<string, number>>({});
+  // Cache of budget info per event (for urgency detection)
+  const [budgetInfos, setBudgetInfos] = useState<Record<string, BudgetInfo>>({});
+  // Cache of invited guest counts (set after sending invitations)
+  const [invitedCounts, setInvitedCounts] = useState<Record<string, number>>({});
   useEffect(() => {
     AsyncStorage.getItem('desired_participant_counts')
       .then(raw => { if (raw) setParticipantCounts(JSON.parse(raw)); })
+      .catch(() => {});
+    AsyncStorage.getItem('budget_info')
+      .then(raw => { if (raw) setBudgetInfos(JSON.parse(raw)); })
+      .catch(() => {});
+    AsyncStorage.getItem('invited_guest_counts')
+      .then(raw => { if (raw) setInvitedCounts(JSON.parse(raw)); })
       .catch(() => {});
   }, []);
 
   const queryClient = useQueryClient();
   const { data: events, isLoading, error: eventsError, refetch } = useEvents();
 
-  // Refetch events when screen gains focus (e.g., returning from booking)
+  // Compute urgency: event ≤14 days away + unpaid balance
+  const getDaysLeftNum = (startDate?: string): number | null => {
+    if (!startDate) return null;
+    const start = new Date(startDate);
+    const now = new Date();
+    const startMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+    const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diff = Math.round((startMidnight.getTime() - nowMidnight.getTime()) / (1000 * 60 * 60 * 24));
+    return diff >= 0 ? diff : null;
+  };
+
+  const isEventUrgent = useCallback((event: EventWithDetails): boolean => {
+    if (event.status !== 'booked') return false;
+    const daysNum = getDaysLeftNum(event.start_date);
+    if (daysNum === null || daysNum > 14) return false;
+    const budget = budgetInfos[event.id];
+    if (!budget) return false;
+    return (budget.paidAmountCents || 0) < budget.totalCents;
+  }, [budgetInfos]);
+
+  // Refetch events + caches when screen gains focus (e.g., returning from booking/invitations)
   useFocusEffect(
     useCallback(() => {
       refetch();
+      AsyncStorage.getItem('invited_guest_counts')
+        .then(raw => { if (raw) setInvitedCounts(JSON.parse(raw)); })
+        .catch(() => {});
+      AsyncStorage.getItem('budget_info')
+        .then(raw => { if (raw) setBudgetInfos(JSON.parse(raw)); })
+        .catch(() => {});
     }, [refetch])
   );
 
@@ -309,6 +359,7 @@ export default function EventsScreen() {
   };
 
   const handleNotifications = () => {
+    markUrgencySeen();
     router.push('/notifications');
   };
 
@@ -321,6 +372,13 @@ export default function EventsScreen() {
       return '100% Paid';
     }
     if (event.status === 'booked') {
+      const budget = budgetInfos[event.id];
+      if (budget && budget.totalCents > 0) {
+        const paid = budget.paidAmountCents || 0;
+        if (paid >= budget.totalCents) return '100% Paid';
+        const pct = Math.round((paid / budget.totalCents) * 100);
+        return `${pct}% Paid`;
+      }
       return '25% Paid';
     }
     return null;
@@ -371,17 +429,23 @@ export default function EventsScreen() {
 
   const renderEventCard = ({ item }: { item: EventWithDetails }) => {
     const role = getUserRole(item);
-    const progress = getProgressConfig(item, t);
+    const progress = getProgressConfig(
+      item, t,
+      invitedCounts[item.id] || 0,
+      budgetInfos[item.id]?.totalParticipants || participantCounts[item.id] || 0,
+    );
     const daysLeft = getDaysLeft(item.start_date);
     const paymentStatus = getPaymentStatus(item);
     const dateRange = formatDateRange(item.start_date, item.end_date);
     const eventTitle = item.title || `${item.honoree_name}'s Event`;
+    const urgent = isEventUrgent(item);
 
     return (
       <Pressable
         onPress={() => handleEventPress(item.id)}
         style={({ pressed }) => [
           styles.eventCard,
+          urgent && styles.eventCardUrgent,
           pressed && styles.eventCardPressed,
         ]}
         testID={`event-card-${item.id}`}
@@ -414,9 +478,9 @@ export default function EventsScreen() {
               {eventTitle}
             </Text>
 
-            {/* Participant count — prefer cached intended count over DB row count */}
+            {/* Participant count — prefer budgetInfo.totalParticipants (authoritative) over cached count */}
             {(() => {
-              const count = participantCounts[item.id] ?? item.participant_count;
+              const count = budgetInfos[item.id]?.totalParticipants ?? participantCounts[item.id] ?? item.participant_count;
               return count > 0 ? (
                 <XStack alignItems="center" gap={6} marginTop={4}>
                   <Ionicons name="people-outline" size={14} color={DARK_THEME.textTertiary} />
@@ -751,6 +815,9 @@ export default function EventsScreen() {
             testID="notifications-button"
           >
             <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
+            {hasUnseenUrgency && (
+              <View style={styles.notificationUrgentDot} />
+            )}
           </Pressable>
         </XStack>
 
@@ -932,6 +999,21 @@ const styles = StyleSheet.create({
   eventCardPressed: {
     opacity: 0.9,
     transform: [{ scale: 0.98 }],
+  },
+  eventCardUrgent: {
+    borderColor: '#F97316',
+    borderWidth: 2,
+  },
+  notificationUrgentDot: {
+    position: 'absolute',
+    top: 8,
+    right: 10,
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    backgroundColor: '#F97316',
+    borderWidth: 1.5,
+    borderColor: DARK_THEME.surfaceCard,
   },
   thumbnailContainer: {
     width: 100,
