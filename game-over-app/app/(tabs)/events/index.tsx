@@ -89,6 +89,8 @@ const getProgressConfig = (
   expectedCount = 0,
 ): {
   phase: string;
+  nextStepNum: number;
+  nextStepLabel: string;
   percentage: number;
   color: string;
   icon: 'ellipse' | 'checkmark-circle';
@@ -101,11 +103,9 @@ const getProgressConfig = (
       const completed = getBookedStepCount(event, invitedCount, expectedCount);
       const percentage = Math.round((completed / 8) * 100);
       if (completed === 8) {
-        return { phase: t.events.allSetReady, percentage: 100, color: '#10B981', icon: 'checkmark-circle', isBooked: true, completedSteps: 8 };
+        return { phase: t.events.allSetReady, nextStepNum: 8, nextStepLabel: '', percentage: 100, color: '#10B981', icon: 'checkmark-circle', isBooked: true, completedSteps: 8 };
       }
-      // Show next step name: "Step X: Label"
       const nextLabelKey = getCurrentPhaseLabel(
-        // Build minimal steps from card data for next step detection
         ['invitations_sent', 'group_confirmed', 'budget_collected', 'outstanding_payment', 'accommodations', 'travel', 'surprise_plan', 'final_briefing']
           .map((key, i) => ({
             key,
@@ -116,11 +116,14 @@ const getProgressConfig = (
             icon: '',
           }))
       );
-      const stepLabel = nextLabelKey ? (t.eventDetail as any)[nextLabelKey] || nextLabelKey : '';
-      const stepNum = nextLabelKey ? STEP_NUMBER[nextLabelKey] || (completed + 1) : (completed + 1);
-      const phase = `Step ${stepNum}/8: ${stepLabel}`;
+      const nextStepLabel = nextLabelKey ? (t.eventDetail as any)[nextLabelKey] || nextLabelKey : '';
+      const nextStepNum = nextLabelKey ? STEP_NUMBER[nextLabelKey] || (completed + 1) : (completed + 1);
+      // "Next Step X of 8" shown as two separate fields so the card can render them
+      const phase = t.events.allSetReady; // fallback, not used when nextStepLabel present
       return {
         phase,
+        nextStepNum,
+        nextStepLabel,
         percentage,
         color: DARK_THEME.primary,
         icon: 'ellipse',
@@ -129,12 +132,12 @@ const getProgressConfig = (
       };
     }
     case 'completed':
-      return { phase: t.events.allSetReady, percentage: 100, color: '#10B981', icon: 'checkmark-circle', isBooked: true, completedSteps: 8 };
+      return { phase: t.events.allSetReady, nextStepNum: 8, nextStepLabel: '', percentage: 100, color: '#10B981', icon: 'checkmark-circle', isBooked: true, completedSteps: 8 };
     case 'planning':
-      return { phase: t.events.planningPhase, percentage: 45, color: '#3B82F6', icon: 'ellipse', isBooked: false, completedSteps: 0 };
+      return { phase: t.events.planningPhase, nextStepNum: 0, nextStepLabel: '', percentage: 45, color: '#3B82F6', icon: 'ellipse', isBooked: false, completedSteps: 0 };
     case 'draft':
     default:
-      return { phase: t.events.planningPhase, percentage: 15, color: '#F59E0B', icon: 'ellipse', isBooked: false, completedSteps: 0 };
+      return { phase: t.events.planningPhase, nextStepNum: 0, nextStepLabel: '', percentage: 15, color: '#F59E0B', icon: 'ellipse', isBooked: false, completedSteps: 0 };
   }
 };
 
@@ -516,15 +519,26 @@ export default function EventsScreen() {
         {/* Progress section */}
         <View style={styles.progressSection}>
           <XStack justifyContent="space-between" alignItems="center" marginBottom={6}>
-            <XStack alignItems="center" gap={6}>
+            <XStack alignItems="center" gap={6} flex={1}>
               <Ionicons
                 name={progress.icon}
                 size={10}
                 color={progress.color}
               />
-              <Text style={[styles.progressLabel, { color: progress.color }]}>
-                {progress.phase}
-              </Text>
+              {progress.isBooked && progress.nextStepLabel ? (
+                <YStack flex={1}>
+                  <Text style={[styles.progressLabel, { color: progress.color }]}>
+                    {'Next Step '}{progress.nextStepNum}{' of 8'}
+                  </Text>
+                  <Text style={[styles.progressLabel, { color: progress.color, opacity: 0.75, fontSize: 10 }]} numberOfLines={1}>
+                    {progress.nextStepLabel}
+                  </Text>
+                </YStack>
+              ) : (
+                <Text style={[styles.progressLabel, { color: progress.color }]}>
+                  {progress.phase}
+                </Text>
+              )}
             </XStack>
             <Text style={[styles.progressPercentage, { color: progress.color }]}>
               {progress.percentage}%

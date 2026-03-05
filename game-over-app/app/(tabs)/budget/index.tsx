@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, Share, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, Share, Modal, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +21,7 @@ import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import { loadBudgetInfo, loadDesiredParticipants, loadGuestDetails, type BudgetInfo, type GuestDetail } from '@/lib/participantCountCache';
+import { supabase } from '@/lib/supabase/client';
 import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
@@ -137,6 +138,10 @@ export default function BudgetDashboardScreen() {
   const [cachedGuests, setCachedGuests] = useState<Record<number, GuestDetail>>({});
   const { t } = useTranslation();
   const setTabBarHidden = useTabBarStore((s) => s.setHidden);
+
+  // Remind-all channel picker modal
+  const [remindModalVisible, setRemindModalVisible] = useState(false);
+  const [remindSending, setRemindSending] = useState<'email' | 'sms' | 'whatsapp' | null>(null);
 
   // Expense modal
   const [expenseModalVisible, setExpenseModalVisible] = useState(false);
@@ -445,17 +450,39 @@ export default function BudgetDashboardScreen() {
     }
   }, [selectedEventId, eventIdParam, router]);
 
-  // Handle remind all — opens native share sheet (Email, SMS, WhatsApp, etc.)
-  const handleRemindAll = useCallback(async () => {
-    const eventName = selectedEvent
-      ? (selectedEvent.title || (selectedEvent.honoree_name ? `${selectedEvent.honoree_name}'s Event` : 'the event'))
-      : 'the event';
-    const perPerson = formatCurrency(budgetStats.perPerson);
-    const message = `Hi! Just a quick reminder — your payment of ${perPerson} for "${eventName}" is still pending. Please send it to the organizer when you get a chance. Thanks! 🎉`;
+  // Remind All — opens channel picker modal instead of direct share
+  const handleRemindAll = useCallback(() => {
+    setRemindModalVisible(true);
+  }, []);
+
+  // Send reminder via chosen channel using the guest-invitations edge function
+  const handleRemindViaChannel = useCallback(async (channel: 'email' | 'sms' | 'whatsapp') => {
+    if (!selectedEventId) return;
+    setRemindSending(channel);
     try {
-      await Share.share({ message, title: 'Payment Reminder' });
-    } catch {}
-  }, [budgetStats.perPerson, selectedEvent]);
+      await supabase.auth.refreshSession().catch(() => {});
+      // Build guest list from cached guest details (pending payers only)
+      const guestDetailsMap = await loadGuestDetails(selectedEventId);
+      const guests = Object.entries(guestDetailsMap).map(([, g]) => ({
+        firstName: g.firstName,
+        lastName: g.lastName,
+        email: g.email,
+        phone: g.phone,
+      })).filter(g => g.email || g.phone);
+
+      const { error } = await supabase.functions.invoke('send-guest-invitations', {
+        body: { eventId: selectedEventId, channel, guests },
+      });
+      if (error) {
+        Alert.alert('Error', 'Could not send reminders. Try again.');
+      }
+    } catch {
+      Alert.alert('Error', 'Could not send reminders. Try again.');
+    } finally {
+      setRemindSending(null);
+      setRemindModalVisible(false);
+    }
+  }, [selectedEventId]);
 
   // Only show loading for booking/participants data when we have events
   const isLoading = hasBookedEvents && (bookingLoading || participantsLoading);
@@ -1685,9 +1712,108 @@ export default function BudgetDashboardScreen() {
           </KeyboardAvoidingView>
         </View>
       )}
+
+      {/* ─── Remind All Channel Picker ─────────────── */}
+      <Modal
+        visible={remindModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRemindModalVisible(false)}
+      >
+        <Pressable style={remindStyles.backdrop} onPress={() => setRemindModalVisible(false)}>
+          <View style={remindStyles.sheet}>
+            <Text style={remindStyles.sheetTitle}>Send Payment Reminder</Text>
+            <Text style={remindStyles.sheetSubtitle}>Choose how to reach your group</Text>
+
+            {([
+              { channel: 'whatsapp' as const, icon: 'logo-whatsapp', label: 'WhatsApp', color: '#25D366' },
+              { channel: 'sms' as const, icon: 'chatbubble-outline' as const, label: 'SMS', color: '#3B82F6' },
+              { channel: 'email' as const, icon: 'mail-outline' as const, label: 'Email', color: '#8B5CF6' },
+            ]).map(({ channel, icon, label, color }) => (
+              <Pressable
+                key={channel}
+                style={({ pressed }) => [remindStyles.channelRow, pressed && { opacity: 0.7 }]}
+                onPress={() => handleRemindViaChannel(channel)}
+                disabled={!!remindSending}
+              >
+                <View style={[remindStyles.channelIcon, { backgroundColor: `${color}22` }]}>
+                  <Ionicons name={icon as any} size={22} color={color} />
+                </View>
+                <Text style={remindStyles.channelLabel}>{label}</Text>
+                {remindSending === channel ? (
+                  <Ionicons name="refresh-outline" size={18} color={DARK_THEME.textTertiary} />
+                ) : (
+                  <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+                )}
+              </Pressable>
+            ))}
+
+            <Pressable style={remindStyles.cancelBtn} onPress={() => setRemindModalVisible(false)}>
+              <Text style={remindStyles.cancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
+
+const remindStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: DARK_THEME.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 40,
+    gap: 4,
+  },
+  sheetTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: DARK_THEME.textPrimary,
+    marginBottom: 4,
+  },
+  sheetSubtitle: {
+    fontSize: 13,
+    color: DARK_THEME.textSecondary,
+    marginBottom: 16,
+  },
+  channelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: DARK_THEME.glassBorder,
+  },
+  channelIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  channelLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: DARK_THEME.textPrimary,
+  },
+  cancelBtn: {
+    marginTop: 16,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  cancelText: {
+    fontSize: 15,
+    color: DARK_THEME.textSecondary,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
