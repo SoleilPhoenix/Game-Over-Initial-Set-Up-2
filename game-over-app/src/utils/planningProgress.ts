@@ -56,7 +56,7 @@ export function calculatePlanningSteps(
 
   const safeChecklist = checklist || {};
 
-  return STEP_DEFINITIONS.map((def) => {
+  const rawSteps = STEP_DEFINITIONS.map((def) => {
     let completed = false;
 
     if (def.auto) {
@@ -86,6 +86,15 @@ export function calculatePlanningSteps(
       icon: def.icon,
     };
   });
+
+  // Enforce sequential completion: a step cannot be complete if any prior step is not.
+  // This prevents old checklist data from showing non-sequential completed states.
+  const steps: PlanningStep[] = [];
+  for (let i = 0; i < rawSteps.length; i++) {
+    const prevComplete = i === 0 || steps[i - 1].completed;
+    steps.push({ ...rawSteps[i], completed: prevComplete ? rawSteps[i].completed : false });
+  }
+  return steps;
 }
 
 /**

@@ -51,23 +51,28 @@ const CITY_UUID_TO_SLUG: Record<string, string> = {
 
 type FilterTab = 'organizing' | 'attending';
 
-/** Approximate step completion from card data (full detail only on detail page) */
+/** Approximate step completion from card data — mirrors calculatePlanningSteps logic */
 const getBookedStepCount = (
   event: EventWithDetails,
   invitedCount = 0,
-  expectedCount = 0,
 ): number => {
   const checklist = event.planning_checklist || {};
-  // Step 1 (invitations_sent) auto: use cached invited count if available
-  const threshold = Math.ceil((expectedCount || event.participant_count || 1) * 0.5);
+  // Mirror calculatePlanningSteps: threshold based on participant_count (not expected/budget count)
+  const threshold = Math.ceil((event.participant_count || 1) * 0.5);
   const effective = Math.max(invitedCount, event.participant_count || 0);
   const step1 = effective >= threshold ? 1 : 0;
-  // Step 2 (group_confirmed) auto: assume done when step 1 is done (invitations → confirmations follow)
+  // Step 2 (group_confirmed): approximate — confirmed count not available on list card
   const step2 = step1;
-  // Steps 3-8 all manual — read from checklist
-  const manualSteps = ['budget_collected', 'outstanding_payment', 'accommodations', 'travel', 'surprise_plan', 'final_briefing']
-    .filter(k => checklist[k]).length;
-  return step1 + step2 + manualSteps;
+  // Steps 3-8 manual — enforce sequential (stop at first incomplete, same as calculatePlanningSteps)
+  const manualKeys = ['budget_collected', 'outstanding_payment', 'accommodations', 'travel', 'surprise_plan', 'final_briefing'];
+  let manualCount = 0;
+  if (step2 === 1) {
+    for (const k of manualKeys) {
+      if (checklist[k]) manualCount++;
+      else break;
+    }
+  }
+  return step1 + step2 + manualCount;
 };
 
 // Step label key → step number mapping for "Step X:" prefix
@@ -86,7 +91,6 @@ const getProgressConfig = (
   event: EventWithDetails,
   t: any,
   invitedCount = 0,
-  expectedCount = 0,
 ): {
   phase: string;
   nextStepNum: number;
@@ -100,7 +104,7 @@ const getProgressConfig = (
   const status = event.status;
   switch (status) {
     case 'booked': {
-      const completed = getBookedStepCount(event, invitedCount, expectedCount);
+      const completed = getBookedStepCount(event, invitedCount);
       const percentage = Math.round((completed / 8) * 100);
       if (completed === 8) {
         return { phase: t.events.allSetReady, nextStepNum: 8, nextStepLabel: '', percentage: 100, color: '#10B981', icon: 'checkmark-circle', isBooked: true, completedSteps: 8 };
@@ -435,7 +439,6 @@ export default function EventsScreen() {
     const progress = getProgressConfig(
       item, t,
       invitedCounts[item.id] || 0,
-      budgetInfos[item.id]?.totalParticipants || participantCounts[item.id] || 0,
     );
     const daysLeft = getDaysLeft(item.start_date);
     const paymentStatus = getPaymentStatus(item);
@@ -526,14 +529,9 @@ export default function EventsScreen() {
                 color={progress.color}
               />
               {progress.isBooked && progress.nextStepLabel ? (
-                <YStack flex={1}>
-                  <Text style={[styles.progressLabel, { color: progress.color }]}>
-                    {'Next Step '}{progress.nextStepNum}{' of 8'}
-                  </Text>
-                  <Text style={[styles.progressLabel, { color: progress.color, opacity: 0.75, fontSize: 10 }]} numberOfLines={1}>
-                    {progress.nextStepLabel}
-                  </Text>
-                </YStack>
+                <Text style={[styles.progressLabel, { color: progress.color }]} numberOfLines={1} flex={1}>
+                  {'Next Step '}{progress.nextStepNum}{' of 8 · '}{progress.nextStepLabel}
+                </Text>
               ) : (
                 <Text style={[styles.progressLabel, { color: progress.color }]}>
                   {progress.phase}
