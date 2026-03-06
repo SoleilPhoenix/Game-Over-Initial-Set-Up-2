@@ -371,27 +371,6 @@ export default function EventSummaryScreen() {
           })}
         </View>
 
-        {/* ─── 14-Day Payment Urgency Banner ────────── */}
-        {isBudgetUrgent && (() => {
-          const start = new Date(event.start_date!);
-          const now = new Date();
-          const startMid = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-          const nowMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-          const daysLeft = Math.round((startMid.getTime() - nowMid.getTime()) / (1000 * 60 * 60 * 24));
-          return (
-            <Pressable
-              style={styles.urgencyBanner}
-              onPress={() => router.push(`/event/${id}/budget`)}
-            >
-              <Ionicons name="warning-outline" size={16} color="#F97316" />
-              <Text style={styles.urgencyBannerText}>
-                {(t.eventDetail as any).urgencyBannerLabel || `Remaining balance due — ${daysLeft} day${daysLeft !== 1 ? 's' : ''} left`}
-              </Text>
-              <Ionicons name="chevron-forward" size={14} color="#F97316" />
-            </Pressable>
-          );
-        })()}
-
         {/* ─── Unified Planning Progress (booked only) ── */}
         {isBooked && planningSteps.length > 0 && (
           <View style={[styles.progressCard, { marginTop: 8 }]}>
@@ -688,25 +667,6 @@ const styles = StyleSheet.create({
   toolCardUrgent: {
     borderColor: '#F97316',
     borderWidth: 1.5,
-  },
-  urgencyBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(249, 115, 22, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(249, 115, 22, 0.4)',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  urgencyBannerText: {
-    flex: 1,
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#F97316',
   },
   toolIconCircle: {
     width: 44,

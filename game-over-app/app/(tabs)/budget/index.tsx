@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, Share, Modal, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { ActivityIndicator, Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, Share, Modal, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -141,7 +141,9 @@ export default function BudgetDashboardScreen() {
 
   // Remind-all channel picker modal
   const [remindModalVisible, setRemindModalVisible] = useState(false);
-  const [remindSending, setRemindSending] = useState<'email' | 'sms' | 'whatsapp' | null>(null);
+  const [remindSendStatus, setRemindSendStatus] = useState<'idle' | 'sending' | 'done'>('idle');
+  const [remindActiveChannel, setRemindActiveChannel] = useState<'email' | 'sms' | 'whatsapp' | null>(null);
+  const [remindResults, setRemindResults] = useState<Array<{ status: string; recipient: string; error?: string }>>([]);
 
   // Expense modal
   const [expenseModalVisible, setExpenseModalVisible] = useState(false);
@@ -440,6 +442,19 @@ export default function BudgetDashboardScreen() {
     }).format(Math.round(cents / 100));
   };
 
+  // Format Deposit and Due so they always sum exactly to the rounded total.
+  // Deposit floors to avoid overcharging upfront; Due = total - deposit (no independent rounding).
+  const formatDepositAndDue = (collectedCents: number, totalCents: number) => {
+    const fmt = (euros: number) => new Intl.NumberFormat('de-DE', {
+      style: 'currency', currency: 'EUR',
+      minimumFractionDigits: 0, maximumFractionDigits: 0,
+    }).format(euros);
+    const depositEuros = Math.floor(collectedCents / 100);
+    const totalEuros = Math.round(totalCents / 100);
+    const dueEuros = totalEuros - depositEuros;
+    return { deposit: fmt(depositEuros), due: fmt(dueEuros) };
+  };
+
   // Navigate to share/invite screen
   const handleInvite = useCallback(() => {
     const effectiveEventId = selectedEventId || eventIdParam;
@@ -450,18 +465,21 @@ export default function BudgetDashboardScreen() {
     }
   }, [selectedEventId, eventIdParam, router]);
 
-  // Remind All — opens channel picker modal instead of direct share
+  // Remind All — opens channel picker modal (same UX as Manage Invitations)
   const handleRemindAll = useCallback(() => {
+    setRemindSendStatus('idle');
+    setRemindResults([]);
+    setRemindActiveChannel(null);
     setRemindModalVisible(true);
   }, []);
 
   // Send reminder via chosen channel using the guest-invitations edge function
   const handleRemindViaChannel = useCallback(async (channel: 'email' | 'sms' | 'whatsapp') => {
     if (!selectedEventId) return;
-    setRemindSending(channel);
+    setRemindActiveChannel(channel);
+    setRemindSendStatus('sending');
     try {
       await supabase.auth.refreshSession().catch(() => {});
-      // Build guest list from cached guest details (pending payers only)
       const guestDetailsMap = await loadGuestDetails(selectedEventId);
       const guests = Object.entries(guestDetailsMap).map(([, g]) => ({
         firstName: g.firstName,
@@ -470,17 +488,24 @@ export default function BudgetDashboardScreen() {
         phone: g.phone,
       })).filter(g => g.email || g.phone);
 
-      const { error } = await supabase.functions.invoke('send-guest-invitations', {
+      const { data, error } = await supabase.functions.invoke('send-guest-invitations', {
         body: { eventId: selectedEventId, channel, guests },
       });
       if (error) {
-        Alert.alert('Error', 'Could not send reminders. Try again.');
+        let detail = error.message ?? 'Unknown error';
+        try {
+          const body = await (error as any).context?.json?.();
+          if (body?.error) detail = body.error;
+        } catch {}
+        Alert.alert('Send failed', detail);
+        setRemindSendStatus('idle');
+        return;
       }
+      setRemindResults(data?.results ?? []);
+      setRemindSendStatus('done');
     } catch {
       Alert.alert('Error', 'Could not send reminders. Try again.');
-    } finally {
-      setRemindSending(null);
-      setRemindModalVisible(false);
+      setRemindSendStatus('idle');
     }
   }, [selectedEventId]);
 
@@ -926,13 +951,16 @@ export default function BudgetDashboardScreen() {
                   </XStack>
                 ) : (
                   /* Deposit paid, remainder still due */
+                  (() => {
+                    const { deposit: fmtDeposit, due: fmtDue } = formatDepositAndDue(budgetStats.collected, budgetStats.totalBudget);
+                    return (
                   <XStack justifyContent="space-between" alignItems="flex-start" marginBottom="$3">
                     <YStack gap={4}>
                       <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.5}>
                         Deposit (25%)
                       </Text>
                       <Text fontSize={24} fontWeight="700" color="#10B981" letterSpacing={-0.5}>
-                        {formatCurrencyRounded(budgetStats.collected)}
+                        {fmtDeposit}
                       </Text>
                     </YStack>
                     <YStack gap={4} alignItems="flex-end">
@@ -940,7 +968,7 @@ export default function BudgetDashboardScreen() {
                         Due (75%)
                       </Text>
                       <Text fontSize={24} fontWeight="700" color={DARK_THEME.textPrimary} letterSpacing={-0.5}>
-                        {formatCurrencyRounded(budgetStats.pending)}
+                        {fmtDue}
                       </Text>
                       {daysUntilEvent !== null && daysUntilEvent > 0 && (
                         <Text
@@ -954,6 +982,8 @@ export default function BudgetDashboardScreen() {
                       )}
                     </YStack>
                   </XStack>
+                    );
+                  })()
                 )}
 
                 {/* Progress Bar: blue = paid portion, bordeaux background = remaining */}
@@ -1713,105 +1743,178 @@ export default function BudgetDashboardScreen() {
         </View>
       )}
 
-      {/* ─── Remind All Channel Picker ─────────────── */}
-      <Modal
-        visible={remindModalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setRemindModalVisible(false)}
-      >
-        <Pressable style={remindStyles.backdrop} onPress={() => setRemindModalVisible(false)}>
-          <View style={remindStyles.sheet}>
-            <Text style={remindStyles.sheetTitle}>Send Payment Reminder</Text>
-            <Text style={remindStyles.sheetSubtitle}>Choose how to reach your group</Text>
+      {/* ─── Remind All Channel Picker (matches Manage Invitations UX) ── */}
+      {remindModalVisible && (() => {
+        const guestList = Object.values(cachedGuests);
+        const emailCount = guestList.filter(g => g.email).length;
+        const phoneCount = guestList.filter(g => g.phone).length;
+        const hasEmails = emailCount > 0;
+        const hasPhones = phoneCount > 0;
+        return (
+          <Modal
+            visible={remindModalVisible}
+            transparent
+            animationType="slide"
+            onRequestClose={() => setRemindModalVisible(false)}
+          >
+            <View style={remindStyles.inviteOverlay}>
+              <Pressable style={{ flex: 1 }} onPress={() => setRemindModalVisible(false)} />
+              <View style={remindStyles.inviteSheet}>
+                {/* Handle */}
+                <View style={remindStyles.inviteHandle} />
 
-            {([
-              { channel: 'whatsapp' as const, icon: 'logo-whatsapp', label: 'WhatsApp', color: '#25D366' },
-              { channel: 'sms' as const, icon: 'chatbubble-outline' as const, label: 'SMS', color: '#3B82F6' },
-              { channel: 'email' as const, icon: 'mail-outline' as const, label: 'Email', color: '#8B5CF6' },
-            ]).map(({ channel, icon, label, color }) => (
-              <Pressable
-                key={channel}
-                style={({ pressed }) => [remindStyles.channelRow, pressed && { opacity: 0.7 }]}
-                onPress={() => handleRemindViaChannel(channel)}
-                disabled={!!remindSending}
-              >
-                <View style={[remindStyles.channelIcon, { backgroundColor: `${color}22` }]}>
-                  <Ionicons name={icon as any} size={22} color={color} />
-                </View>
-                <Text style={remindStyles.channelLabel}>{label}</Text>
-                {remindSending === channel ? (
-                  <Ionicons name="refresh-outline" size={18} color={DARK_THEME.textTertiary} />
-                ) : (
-                  <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+                {/* Header */}
+                <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
+                  <Text style={remindStyles.inviteTitle}>
+                    {remindSendStatus === 'done'
+                      ? `${remindActiveChannel === 'email' ? 'Email' : remindActiveChannel === 'sms' ? 'SMS' : 'WhatsApp'} sent`
+                      : 'Remind All Guests'}
+                  </Text>
+                  {remindSendStatus !== 'sending' && (
+                    <Pressable onPress={() => setRemindModalVisible(false)} hitSlop={10}>
+                      <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                    </Pressable>
+                  )}
+                </XStack>
+
+                {/* idle: horizontal 3 channel buttons */}
+                {remindSendStatus === 'idle' && (
+                  <>
+                    <Text style={remindStyles.inviteSectionLabel}>SEND PAYMENT REMINDER VIA</Text>
+                    <XStack gap={10} marginBottom={20}>
+                      <Pressable
+                        style={[remindStyles.inviteChannelBtn, !hasEmails && remindStyles.inviteChannelBtnDisabled]}
+                        onPress={() => hasEmails && handleRemindViaChannel('email')}
+                      >
+                        <Ionicons name="mail-outline" size={22} color={hasEmails ? '#3B82F6' : DARK_THEME.textTertiary} />
+                        <Text style={[remindStyles.inviteChannelLabel, { color: hasEmails ? '#3B82F6' : DARK_THEME.textTertiary }]}>Email</Text>
+                        <Text style={remindStyles.inviteChannelCount}>{emailCount} guest{emailCount !== 1 ? 's' : ''}</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[remindStyles.inviteChannelBtn, !hasPhones && remindStyles.inviteChannelBtnDisabled]}
+                        onPress={() => hasPhones && handleRemindViaChannel('sms')}
+                      >
+                        <Ionicons name="chatbubble-outline" size={22} color={hasPhones ? '#10B981' : DARK_THEME.textTertiary} />
+                        <Text style={[remindStyles.inviteChannelLabel, { color: hasPhones ? '#10B981' : DARK_THEME.textTertiary }]}>SMS</Text>
+                        <Text style={remindStyles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[remindStyles.inviteChannelBtn, !hasPhones && remindStyles.inviteChannelBtnDisabled]}
+                        onPress={() => hasPhones && handleRemindViaChannel('whatsapp')}
+                      >
+                        <Ionicons name="logo-whatsapp" size={22} color={hasPhones ? '#25D366' : DARK_THEME.textTertiary} />
+                        <Text style={[remindStyles.inviteChannelLabel, { color: hasPhones ? '#25D366' : DARK_THEME.textTertiary }]}>WhatsApp</Text>
+                        <Text style={remindStyles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
+                      </Pressable>
+                    </XStack>
+                  </>
                 )}
-              </Pressable>
-            ))}
 
-            <Pressable style={remindStyles.cancelBtn} onPress={() => setRemindModalVisible(false)}>
-              <Text style={remindStyles.cancelText}>Cancel</Text>
-            </Pressable>
-          </View>
-        </Pressable>
-      </Modal>
+                {/* sending: spinner */}
+                {remindSendStatus === 'sending' && (
+                  <View style={{ alignItems: 'center', paddingVertical: 32, gap: 16 }}>
+                    <ActivityIndicator size="large" color="#5A7EB0" />
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: DARK_THEME.textPrimary }}>
+                      Sending {remindActiveChannel === 'email' ? 'email' : remindActiveChannel === 'sms' ? 'SMS' : 'WhatsApp'} reminders…
+                    </Text>
+                  </View>
+                )}
+
+                {/* done: results */}
+                {remindSendStatus === 'done' && (
+                  <>
+                    <View style={{ backgroundColor: DARK_THEME.deepNavy, borderRadius: 12, padding: 12, marginBottom: 16 }}>
+                      <Text style={{ fontSize: 13, color: DARK_THEME.textSecondary, marginBottom: 8 }}>
+                        {remindResults.filter(r => r.status === 'sent').length} sent ·{' '}
+                        {remindResults.filter(r => r.status === 'failed').length} failed
+                      </Text>
+                      {remindResults.map((r, i) => (
+                        <XStack key={i} alignItems="center" gap={10} paddingVertical={6}
+                          style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
+                          <Ionicons
+                            name={r.status === 'sent' ? 'checkmark-circle' : 'close-circle'}
+                            size={18}
+                            color={r.status === 'sent' ? '#10B981' : '#EF4444'}
+                          />
+                          <Text style={{ flex: 1, fontSize: 13, color: DARK_THEME.textSecondary }}>
+                            {r.recipient}{r.error ? ` — ${r.error}` : ''}
+                          </Text>
+                        </XStack>
+                      ))}
+                    </View>
+                    <Pressable
+                      style={[remindStyles.inviteChannelBtn, { flex: 0, paddingHorizontal: 20 }]}
+                      onPress={() => { setRemindSendStatus('idle'); setRemindResults([]); setRemindActiveChannel(null); }}
+                    >
+                      <Text style={[remindStyles.inviteChannelLabel, { color: '#5A7EB0' }]}>Send via another channel</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
+            </View>
+          </Modal>
+        );
+      })()}
     </View>
   );
 }
 
 const remindStyles = StyleSheet.create({
-  backdrop: {
+  inviteOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
   },
-  sheet: {
-    backgroundColor: DARK_THEME.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    paddingBottom: 40,
-    gap: 4,
+  inviteSheet: {
+    backgroundColor: '#1E2329',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 32,
+    borderTopWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
-  sheetTitle: {
+  inviteHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignSelf: 'center',
+    marginBottom: 16,
+  },
+  inviteTitle: {
     fontSize: 17,
     fontWeight: '700',
     color: DARK_THEME.textPrimary,
-    marginBottom: 4,
   },
-  sheetSubtitle: {
-    fontSize: 13,
-    color: DARK_THEME.textSecondary,
-    marginBottom: 16,
+  inviteSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: DARK_THEME.textTertiary,
+    letterSpacing: 0.8,
+    marginBottom: 10,
   },
-  channelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
-  },
-  channelIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  channelLabel: {
+  inviteChannelBtn: {
     flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: DARK_THEME.textPrimary,
-  },
-  cancelBtn: {
-    marginTop: 16,
     alignItems: 'center',
-    paddingVertical: 12,
+    backgroundColor: DARK_THEME.surfaceCard,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+    paddingVertical: 14,
+    gap: 4,
   },
-  cancelText: {
-    fontSize: 15,
-    color: DARK_THEME.textSecondary,
+  inviteChannelBtnDisabled: {
+    opacity: 0.35,
+  },
+  inviteChannelLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  inviteChannelCount: {
+    fontSize: 11,
+    color: DARK_THEME.textTertiary,
   },
 });
 

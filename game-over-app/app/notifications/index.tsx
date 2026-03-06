@@ -19,6 +19,7 @@ import {
 } from '@/hooks/queries/useNotifications';
 import { NotificationItem } from '@/components/notifications';
 import { useTranslation } from '@/i18n';
+import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import type { Database } from '@/lib/supabase/types';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
@@ -34,10 +35,21 @@ const DARK_THEME = {
   textTertiary: '#9CA3AF',
 };
 
+function daysUntil(startDate?: string | null): number | null {
+  if (!startDate) return null;
+  const start = new Date(startDate);
+  const now = new Date();
+  const startMid = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+  const nowMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.round((startMid.getTime() - nowMid.getTime()) / (1000 * 60 * 60 * 24));
+  return diff >= 0 ? diff : null;
+}
+
 export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const { urgentEvent } = useUrgentPayment();
 
   // Fetch notifications
   const {
@@ -148,7 +160,33 @@ export default function NotificationsScreen() {
     );
   }
 
+  const urgentDaysLeft = daysUntil(urgentEvent?.start_date);
   const hasNotifications = groupedNotifications.length > 0;
+
+  const renderUrgencyBanner = () => {
+    if (!urgentEvent) return null;
+    const eventTitle = urgentEvent.title || `${urgentEvent.honoree_name}'s Party`;
+    const dayText = urgentDaysLeft === 0 ? 'today' : urgentDaysLeft === 1 ? '1 day left' : `${urgentDaysLeft} days left`;
+    return (
+      <Pressable
+        style={styles.urgencyBanner}
+        onPress={() => router.push(`/event/${urgentEvent.id}/budget` as any)}
+      >
+        <View style={styles.urgencyIconCircle}>
+          <Ionicons name="warning" size={18} color="#F97316" />
+        </View>
+        <YStack flex={1} gap={2}>
+          <Text fontSize={13} fontWeight="700" color="#F97316">
+            Payment Outstanding
+          </Text>
+          <Text fontSize={12} color={DARK_THEME.textSecondary} numberOfLines={1}>
+            {eventTitle}{urgentDaysLeft !== null ? ` · ${dayText}` : ''}
+          </Text>
+        </YStack>
+        <Ionicons name="chevron-forward" size={16} color="#F97316" />
+      </Pressable>
+    );
+  };
 
   return (
     <YStack flex={1} backgroundColor={DARK_THEME.backgroundDark} testID="notifications-screen">
@@ -204,6 +242,7 @@ export default function NotificationsScreen() {
           renderSectionHeader={renderSectionHeader}
           stickySectionHeadersEnabled={false}
           contentContainerStyle={styles.listContent}
+          ListHeaderComponent={renderUrgencyBanner()}
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
@@ -225,6 +264,7 @@ export default function NotificationsScreen() {
         />
       ) : (
         <YStack flex={1} justifyContent="center" alignItems="center" padding="$8">
+          {renderUrgencyBanner()}
           <YStack
             width={80}
             height={80}
@@ -266,5 +306,26 @@ const styles = StyleSheet.create({
   listContent: {
     paddingTop: 8,
     paddingBottom: 100,
+  },
+  urgencyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'rgba(249, 115, 22, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.35)',
+    borderRadius: 12,
+    padding: 14,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  urgencyIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(249, 115, 22, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

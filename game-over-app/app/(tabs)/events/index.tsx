@@ -57,22 +57,26 @@ const getBookedStepCount = (
   invitedCount = 0,
 ): number => {
   const checklist = event.planning_checklist || {};
-  // Mirror calculatePlanningSteps: threshold based on participant_count (not expected/budget count)
+  // Mirror calculatePlanningSteps: threshold based on participant_count
   const threshold = Math.ceil((event.participant_count || 1) * 0.5);
   const effective = Math.max(invitedCount, event.participant_count || 0);
   const step1 = effective >= threshold ? 1 : 0;
-  // Step 2 (group_confirmed): approximate — confirmed count not available on list card
-  const step2 = step1;
-  // Steps 3-8 manual — enforce sequential (stop at first incomplete, same as calculatePlanningSteps)
+
+  // Steps 3-8 manual — sequential (stop at first incomplete)
   const manualKeys = ['budget_collected', 'outstanding_payment', 'accommodations', 'travel', 'surprise_plan', 'final_briefing'];
   let manualCount = 0;
-  if (step2 === 1) {
-    for (const k of manualKeys) {
-      if (checklist[k]) manualCount++;
-      else break;
-    }
+  for (const k of manualKeys) {
+    if (checklist[k]) manualCount++;
+    else break;
   }
-  return step1 + step2 + manualCount;
+
+  // Step 2 (group_confirmed): we can't check confirmed count on the list card.
+  // If any manual step is present, sequential enforcement guarantees step2 was already done.
+  // Otherwise we cannot confirm it — keep step2=0 so the card correctly shows "Next Step 2".
+  const step2 = manualCount > 0 ? 1 : 0;
+  const effectiveStep1 = manualCount > 0 ? 1 : step1;
+
+  return effectiveStep1 + step2 + manualCount;
 };
 
 // Step label key → step number mapping for "Step X:" prefix
