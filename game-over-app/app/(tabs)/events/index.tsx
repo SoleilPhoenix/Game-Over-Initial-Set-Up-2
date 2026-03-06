@@ -57,9 +57,11 @@ const getBookedStepCount = (
   invitedCount = 0,
 ): number => {
   const checklist = event.planning_checklist || {};
-  // Mirror calculatePlanningSteps: threshold based on participant_count
+  // Mirror calculatePlanningSteps: threshold based on participant_count (expected total)
   const threshold = Math.ceil((event.participant_count || 1) * 0.5);
-  const effective = Math.max(invitedCount, event.participant_count || 0);
+  // Use only the cached invited count — participant_count is the EXPECTED total, not invited count.
+  // Using participant_count here would make step1 auto-pass even with 0 invitations sent.
+  const effective = invitedCount;
   const step1 = effective >= threshold ? 1 : 0;
 
   // Steps 3-8 manual — sequential (stop at first incomplete)

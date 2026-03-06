@@ -161,32 +161,9 @@ export default function NotificationsScreen() {
   }
 
   const urgentDaysLeft = daysUntil(urgentEvent?.start_date);
+  const { hasUnseenUrgency } = useUrgentPayment();
   const hasNotifications = groupedNotifications.length > 0;
-
-  const renderUrgencyBanner = () => {
-    if (!urgentEvent) return null;
-    const eventTitle = urgentEvent.title || `${urgentEvent.honoree_name}'s Party`;
-    const dayText = urgentDaysLeft === 0 ? 'today' : urgentDaysLeft === 1 ? '1 day left' : `${urgentDaysLeft} days left`;
-    return (
-      <Pressable
-        style={styles.urgencyBanner}
-        onPress={() => router.push(`/event/${urgentEvent.id}/budget` as any)}
-      >
-        <View style={styles.urgencyIconCircle}>
-          <Ionicons name="warning" size={18} color="#F97316" />
-        </View>
-        <YStack flex={1} gap={2}>
-          <Text fontSize={13} fontWeight="700" color="#F97316">
-            Payment Outstanding
-          </Text>
-          <Text fontSize={12} color={DARK_THEME.textSecondary} numberOfLines={1}>
-            {eventTitle}{urgentDaysLeft !== null ? ` · ${dayText}` : ''}
-          </Text>
-        </YStack>
-        <Ionicons name="chevron-forward" size={16} color="#F97316" />
-      </Pressable>
-    );
-  };
+  const hasAnyContent = hasNotifications || !!urgentEvent;
 
   return (
     <YStack flex={1} backgroundColor={DARK_THEME.backgroundDark} testID="notifications-screen">
@@ -198,7 +175,6 @@ export default function NotificationsScreen() {
         alignItems="center"
         backgroundColor={DARK_THEME.surfaceDark}
       >
-        {/* Back button */}
         <Pressable
           style={styles.backButton}
           onPress={() => router.back()}
@@ -206,8 +182,6 @@ export default function NotificationsScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
         </Pressable>
-
-        {/* Title */}
         <Text
           flex={1}
           textAlign="center"
@@ -218,8 +192,6 @@ export default function NotificationsScreen() {
         >
           {t.notifications.title}
         </Text>
-
-        {/* Mark all as read */}
         <Pressable
           style={styles.markAllButton}
           onPress={handleMarkAllAsRead}
@@ -233,8 +205,7 @@ export default function NotificationsScreen() {
         </Pressable>
       </XStack>
 
-      {/* Notifications List */}
-      {hasNotifications ? (
+      {hasAnyContent ? (
         <SectionList
           sections={groupedNotifications}
           keyExtractor={(item) => item.id}
@@ -242,7 +213,43 @@ export default function NotificationsScreen() {
           renderSectionHeader={renderSectionHeader}
           stickySectionHeadersEnabled={false}
           contentContainerStyle={styles.listContent}
-          ListHeaderComponent={renderUrgencyBanner()}
+          ListHeaderComponent={
+            urgentEvent ? (
+              <>
+                {/* TODAY label above urgency when no other DB notifications have their own TODAY section */}
+                <YStack paddingHorizontal="$4" paddingTop="$3" paddingBottom="$1" marginLeft="$1">
+                  <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} style={{ textTransform: 'uppercase', letterSpacing: 1 }}>
+                    {t.notifications.today}
+                  </Text>
+                </YStack>
+                <Pressable
+                  style={styles.urgencyRow}
+                  onPress={() => router.push(`/event/${urgentEvent.id}/budget` as any)}
+                >
+                  <View style={styles.urgencyIconCircle}>
+                    <Ionicons name="warning" size={18} color="#F97316" />
+                  </View>
+                  <YStack flex={1} gap={2}>
+                    <Text fontSize={14} fontWeight="700" color="#F97316">
+                      Payment Outstanding
+                    </Text>
+                    <Text fontSize={12} color={DARK_THEME.textSecondary} numberOfLines={1}>
+                      {urgentEvent.title || `${urgentEvent.honoree_name}'s Party`}
+                      {urgentDaysLeft !== null
+                        ? ` · ${urgentDaysLeft === 0 ? 'today' : urgentDaysLeft === 1 ? '1 day left' : `${urgentDaysLeft} days left`}`
+                        : ''}
+                    </Text>
+                  </YStack>
+                  {/* Checkmark when already seen, chevron when unseen */}
+                  {hasUnseenUrgency
+                    ? <View style={styles.unseenDot} />
+                    : <Ionicons name="checkmark" size={18} color={DARK_THEME.textTertiary} />
+                  }
+                </Pressable>
+                <View style={styles.rowDivider} />
+              </>
+            ) : null
+          }
           refreshControl={
             <RefreshControl
               refreshing={isRefetching}
@@ -263,8 +270,8 @@ export default function NotificationsScreen() {
           }
         />
       ) : (
+        /* Only show "All Caught Up" when there is truly nothing — no urgency, no DB notifications */
         <YStack flex={1} justifyContent="center" alignItems="center" padding="$8">
-          {renderUrgencyBanner()}
           <YStack
             width={80}
             height={80}
@@ -307,25 +314,31 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 100,
   },
-  urgencyBanner: {
+  urgencyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: 'rgba(249, 115, 22, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(249, 115, 22, 0.35)',
-    borderRadius: 12,
-    padding: 14,
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 4,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(249, 115, 22, 0.07)',
   },
   urgencyIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(249, 115, 22, 0.15)',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(249, 115, 22, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  unseenDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#F97316',
+  },
+  rowDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    marginLeft: 68,
   },
 });
