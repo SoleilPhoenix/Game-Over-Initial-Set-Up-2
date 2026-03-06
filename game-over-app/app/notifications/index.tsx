@@ -49,7 +49,7 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { urgentEvent } = useUrgentPayment();
+  const { urgentEvent, hasUnseenUrgency } = useUrgentPayment();
 
   // Fetch notifications
   const {
@@ -161,7 +161,6 @@ export default function NotificationsScreen() {
   }
 
   const urgentDaysLeft = daysUntil(urgentEvent?.start_date);
-  const { hasUnseenUrgency } = useUrgentPayment();
   const hasNotifications = groupedNotifications.length > 0;
   const hasAnyContent = hasNotifications || !!urgentEvent;
 

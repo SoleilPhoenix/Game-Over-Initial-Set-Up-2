@@ -296,7 +296,7 @@ export default function BookingSummaryScreen() {
           >
             <XStack alignItems="flex-start" gap={12}>
               <YStack
-                width={20} height={20} borderRadius={10} marginTop={2}
+                width={20} height={20} borderRadius={10} marginTop={3}
                 borderWidth={2}
                 borderColor={paymentOption === 'deposit' ? '#47B881' : DARK_THEME.border}
                 backgroundColor={paymentOption === 'deposit' ? '#47B881' : 'transparent'}
@@ -306,14 +306,19 @@ export default function BookingSummaryScreen() {
                   <YStack width={8} height={8} borderRadius={4} backgroundColor="white" />
                 )}
               </YStack>
-              <YStack flex={1}>
-                <Text fontSize={14} fontWeight="600" color={paymentOption === 'deposit' ? '#47B881' : DARK_THEME.textPrimary}>
-                  {(t.booking as any).payOptionDeposit}
-                </Text>
-                <Text fontSize={12} color={DARK_THEME.textTertiary} marginTop={2}>
-                  {(t.booking as any).payOptionDepositDesc
-                    .replace('{{deposit}}', formatPrice(depositCents))
-                    .replace('{{remaining}}', formatPrice(remainingCents))}
+              <YStack flex={1} gap={4}>
+                {/* Title row: label left, amount right */}
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'deposit' ? '#47B881' : DARK_THEME.textPrimary}>
+                    {(t.booking as any).payOptionDeposit}
+                  </Text>
+                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'deposit' ? '#47B881' : DARK_THEME.textPrimary}>
+                    {formatPrice(depositCents)}
+                  </Text>
+                </XStack>
+                {/* Secondary: remaining due date */}
+                <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                  {formatPrice(remainingCents)} due 14 days before event
                 </Text>
               </YStack>
             </XStack>
@@ -326,7 +331,7 @@ export default function BookingSummaryScreen() {
           >
             <XStack alignItems="flex-start" gap={12}>
               <YStack
-                width={20} height={20} borderRadius={10} marginTop={2}
+                width={20} height={20} borderRadius={10} marginTop={3}
                 borderWidth={2}
                 borderColor={paymentOption === 'full' ? DARK_THEME.primary : DARK_THEME.border}
                 backgroundColor={paymentOption === 'full' ? DARK_THEME.primary : 'transparent'}
@@ -336,23 +341,29 @@ export default function BookingSummaryScreen() {
                   <YStack width={8} height={8} borderRadius={4} backgroundColor="white" />
                 )}
               </YStack>
-              <YStack flex={1}>
-                <XStack alignItems="center" gap={8}>
-                  <Text fontSize={14} fontWeight="600" color={paymentOption === 'full' ? DARK_THEME.primary : DARK_THEME.textPrimary}>
-                    {(t.booking as any).payOptionFull}
-                  </Text>
-                  <YStack
-                    paddingHorizontal={8} paddingVertical={2} borderRadius={6}
-                    backgroundColor="rgba(90, 126, 176, 0.15)"
-                  >
-                    <Text fontSize={10} fontWeight="700" color={DARK_THEME.primary}>
-                      {(t.booking as any).payOptionFullBadge}
+              <YStack flex={1} gap={4}>
+                {/* Title row: label + badge left, amount right */}
+                <XStack justifyContent="space-between" alignItems="center">
+                  <XStack alignItems="center" gap={8}>
+                    <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? DARK_THEME.primary : DARK_THEME.textPrimary}>
+                      {(t.booking as any).payOptionFull}
                     </Text>
-                  </YStack>
+                    <YStack
+                      paddingHorizontal={8} paddingVertical={3} borderRadius={6}
+                      backgroundColor="rgba(90, 126, 176, 0.18)"
+                    >
+                      <Text fontSize={10} fontWeight="700" color={DARK_THEME.primary}>
+                        {(t.booking as any).payOptionFullBadge}
+                      </Text>
+                    </YStack>
+                  </XStack>
+                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? DARK_THEME.primary : DARK_THEME.textPrimary}>
+                    {formatPrice(pricing.totalCents)}
+                  </Text>
                 </XStack>
-                <Text fontSize={12} color={DARK_THEME.textTertiary} marginTop={2}>
-                  {(t.booking as any).payOptionFullDesc
-                    .replace('{{total}}', formatPrice(pricing.totalCents))}
+                {/* Secondary: no further payments */}
+                <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                  No further payments
                 </Text>
               </YStack>
             </XStack>
