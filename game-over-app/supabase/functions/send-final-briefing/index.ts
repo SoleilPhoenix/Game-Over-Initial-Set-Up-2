@@ -26,7 +26,7 @@ const corsHeaders = {
 
 // ─── WhatsApp sender (mirrors send-guest-invitations) ─────────
 
-async function sendWhatsApp(to: string, body: string): Promise<{ success: boolean; error?: string }> {
+async function sendWhatsApp(to: string, body: string): Promise<{ success: boolean; error?: string; twilioCode?: number }> {
   const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
   const token = Deno.env.get('TWILIO_AUTH_TOKEN');
   const from = Deno.env.get('TWILIO_WHATSAPP_FROM');
@@ -35,6 +35,29 @@ async function sendWhatsApp(to: string, body: string): Promise<{ success: boolea
   const toFormatted = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
   const params = new URLSearchParams({ To: toFormatted, From: from, Body: body });
 
+  const res = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    }
+  );
+  if (res.ok) return { success: true };
+  const err = await res.json();
+  return { success: false, error: err.message ?? `HTTP ${res.status}`, twilioCode: err.code };
+}
+
+async function sendSMS(to: string, body: string): Promise<{ success: boolean; error?: string }> {
+  const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
+  const token = Deno.env.get('TWILIO_AUTH_TOKEN');
+  const from = Deno.env.get('TWILIO_SMS_FROM') ?? 'GameOver';
+  if (!sid || !token) return { success: false, error: 'Twilio not configured' };
+
+  const params = new URLSearchParams({ To: to, From: from, Body: body });
   const res = await fetch(
     `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
     {
@@ -172,12 +195,18 @@ serve(async (req) => {
         bookingReference: bookingRef,
       });
 
-      const result = await sendWhatsApp(phone, message);
+      let result = await sendWhatsApp(phone, message);
+      // 63016 = outside 24h session window, 63007 = number not registered on WhatsApp
+      // Both are permanent WhatsApp failures — fall back to SMS automatically
+      if (!result.success && (result.twilioCode === 63016 || result.twilioCode === 63007)) {
+        console.log(`WhatsApp code=${result.twilioCode} for ${phone} — falling back to SMS`);
+        result = await sendSMS(phone, message);
+      }
       if (result.success) {
         sent++;
       } else {
         failed++;
-        console.error(`WhatsApp failed for ${phone}: ${result.error}`);
+        console.error(`Send failed for ${phone}: ${result.error}`);
       }
     }
 

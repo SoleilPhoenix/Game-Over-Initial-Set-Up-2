@@ -156,7 +156,7 @@ async function sendSMS(to: string, body: string): Promise<{ success: boolean; er
   return { success: false, error: err.message ?? `Twilio error ${res.status}` };
 }
 
-async function sendWhatsApp(to: string, body: string): Promise<{ success: boolean; error?: string }> {
+async function sendWhatsApp(to: string, body: string): Promise<{ success: boolean; error?: string; twilioCode?: number }> {
   const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
   const token = Deno.env.get('TWILIO_AUTH_TOKEN');
   const from = Deno.env.get('TWILIO_WHATSAPP_FROM');
@@ -184,7 +184,8 @@ async function sendWhatsApp(to: string, body: string): Promise<{ success: boolea
 
   if (res.ok) return { success: true };
   const err = await res.json();
-  return { success: false, error: err.message ?? `Twilio WhatsApp error ${res.status}` };
+  // Return Twilio error code so callers can handle specific cases (e.g. 63016 = outside 24h window)
+  return { success: false, error: err.message ?? `Twilio WhatsApp error ${res.status}`, twilioCode: err.code };
 }
 
 // ─── Main handler ─────────────────────────────────────────────
@@ -348,7 +349,8 @@ serve(async (req: Request) => {
         `Reply STOP to opt out.`;
 
       // 4. Send
-      let sendResult: { success: boolean; error?: string };
+      let sendResult: { success: boolean; error?: string; twilioCode?: number };
+      let actualChannel: Channel = channel;
 
       if (channel === 'email') {
         const html = getGuestInviteEmailHtml({
@@ -364,7 +366,17 @@ serve(async (req: Request) => {
         sendResult = await sendSMS(contact, smsBody);
 
       } else {
+        // WhatsApp
         sendResult = await sendWhatsApp(contact, smsBody);
+
+        // Error 63016 = outside 24-hour session window (recipient hasn't messaged us recently).
+        // Error 63007 = WhatsApp number not registered (common in sandbox testing).
+        // Both are permanent WhatsApp failures — fall back to SMS automatically.
+        if (!sendResult.success && (sendResult.twilioCode === 63016 || sendResult.twilioCode === 63007)) {
+          console.log(`[whatsapp] code=${sendResult.twilioCode} — falling back to SMS for slot=${guest.slotIndex}`);
+          sendResult = await sendSMS(contact, smsBody);
+          actualChannel = 'sms';
+        }
       }
 
       // 5. Record result
@@ -382,7 +394,7 @@ serve(async (req: Request) => {
       supabase.from('guest_invitations').insert({
         event_id: eventId,
         slot_index: guest.slotIndex,
-        channel,
+        channel: actualChannel,
         recipient: contact,
         status,
         error: sendResult.error ?? null,
@@ -391,7 +403,7 @@ serve(async (req: Request) => {
         if (error) console.warn('[guest_invitations] insert failed (sent):', error.message);
       });
 
-      console.log(`[${channel}] slot=${guest.slotIndex} status=${status}`);
+      console.log(`[${actualChannel}] slot=${guest.slotIndex} status=${status}`);
     }
 
     return new Response(
