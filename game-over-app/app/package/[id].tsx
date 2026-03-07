@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/Button';
 import { DARK_THEME } from '@/constants/theme';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { useTranslation } from '@/i18n';
+import { assemblePackages } from '@/utils/packageAssembly';
 import type { Json } from '@/lib/supabase/types';
 
 const TIER_PRICE_PER_PERSON: Record<string, number> = {
@@ -37,6 +38,16 @@ const FALLBACK_PACKAGE_MAP: Record<string, any> = {
   'hannover-essential': { id: 'hannover-essential', name: 'Hannover Essential', tier: 'essential', base_price_cents: 99_00, price_per_person_cents: 99_00, rating: 4.3, review_count: 51, features: ['City adventure tour', 'Welcome drinks', 'Group coordination'], description: 'A great time in Hannover without breaking the bank.', hero_image_url: getPackageImage('hannover', 'essential') },
   'hannover-grand': { id: 'hannover-grand', name: 'Hannover Grand', tier: 'grand', base_price_cents: 199_00, price_per_person_cents: 199_00, rating: 4.8, review_count: 28, features: ['Herrenhausen Gardens gala', 'Private chef dinner', 'Spa & wellness day', 'VIP nightlife access', 'Luxury hotel suite'], description: 'Exclusive Hannover experience with private gala and luxury wellness.', hero_image_url: getPackageImage('hannover', 'grand') },
 };
+
+const CITY_SLUGS = ['berlin', 'hamburg', 'hannover'];
+const TIER_SLUGS = ['essential', 'classic', 'grand'];
+function isAssembledPackageId(id: string): boolean {
+  const parts = id.split('-');
+  if (parts.length < 2) return false;
+  const city = parts[0];
+  const tier = parts[parts.length - 1];
+  return CITY_SLUGS.includes(city) && TIER_SLUGS.includes(tier);
+}
 
 const toStringArray = (value: Json | null | undefined): string[] => {
   if (Array.isArray(value)) {
@@ -204,8 +215,32 @@ export default function PackageDetailsScreen() {
   const { t } = useTranslation();
   const { data: dbPkg, isLoading } = usePackage(id);
 
-  // Use DB package if available, otherwise check fallback data
-  const pkg = dbPkg || FALLBACK_PACKAGE_MAP[id];
+  // Read wizard answers to assemble dynamic package when needed
+  const wizardState = useWizardStore();
+  const {
+    cityId,
+    energyLevel, spotlightComfort, competitionStyle, enjoymentType, indoorOutdoor, eveningStyle,
+    averageAge, groupCohesion, fitnessLevel, drinkingCulture, groupDynamic, groupVibe,
+  } = wizardState;
+
+  // If DB returned nothing and the ID matches a city-tier pattern, assemble dynamically from wizard answers
+  let assembledPkg: ReturnType<typeof assemblePackages>[number] | undefined;
+  if (!dbPkg && id && isAssembledPackageId(id)) {
+    const parts = id.split('-');
+    const citySlug = parts[0];
+    const tierSlug = parts[parts.length - 1];
+    const resolvedCitySlug = citySlug || (cityId ? cityId : 'berlin');
+    const assembled = assemblePackages({
+      h1: energyLevel, h2: spotlightComfort, h3: competitionStyle,
+      h4: enjoymentType, h5: indoorOutdoor, h6: eveningStyle,
+      g1: averageAge, g2: groupCohesion, g3: fitnessLevel,
+      g4: drinkingCulture, g5: groupDynamic, g6: groupVibe,
+    }, resolvedCitySlug);
+    assembledPkg = assembled.find(p => p.tier === tierSlug);
+  }
+
+  // Use DB package if available, then dynamically assembled package, then static fallback
+  const pkg = dbPkg || assembledPkg || FALLBACK_PACKAGE_MAP[id];
 
   if (isLoading && !pkg) {
     return (

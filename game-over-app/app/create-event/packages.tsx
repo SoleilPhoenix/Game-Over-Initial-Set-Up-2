@@ -3,7 +3,7 @@
  * Full-height cards with pricing toggle, best match highlight
  */
 
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react';
 import { ScrollView, Alert, Image, View, StyleSheet } from 'react-native';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useRouter } from 'expo-router';
@@ -17,15 +17,8 @@ import { WizardFooter } from '@/components/ui/WizardFooter';
 import { DARK_THEME } from '@/constants/theme';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '@/lib/supabase/client';
 import { setDesiredParticipants } from '@/lib/participantCountCache';
-
-// Standard per-person pricing: S=€99, M=€149, L=€199
-const TIER_PRICE_PER_PERSON: Record<string, number> = {
-  essential: 99_00,
-  classic: 149_00,
-  grand: 199_00,
-};
+import { assemblePackages } from '@/utils/packageAssembly';
 
 // Feature counts by tier: S=3, M=4, L=5
 // Fallback packages when DB returns empty (for Berlin, Hamburg, Hannover)
@@ -35,123 +28,27 @@ const CITY_UUID_TO_SLUG: Record<string, string> = {
   '550e8400-e29b-41d4-a716-446655440102': 'hamburg',
   '550e8400-e29b-41d4-a716-446655440103': 'hannover',
 };
-const FALLBACK_PACKAGES: Record<string, any[]> = {
-  berlin: [
-    {
-      id: 'berlin-classic',
-      name: 'Berlin Classic',
-      tier: 'classic',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.classic,
-      hero_image_url: getPackageImage('berlin', 'classic'),
-      rating: 4.8,
-      review_count: 127,
-      features: ['VIP nightlife access', 'Private party bus', 'Professional photographer', 'Welcome drinks package'],
-      description: 'The ideal balance of nightlife, culture, and unforgettable moments in Berlin.',
-      bestMatch: true,
-    },
-    {
-      id: 'berlin-essential',
-      name: 'Berlin Essential',
-      tier: 'essential',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.essential,
-      hero_image_url: getPackageImage('berlin', 'essential'),
-      rating: 4.5,
-      review_count: 89,
-      features: ['Bar hopping tour', 'Welcome drinks', 'Group coordination'],
-      description: 'A solid party plan with all the essentials covered.',
-    },
-    {
-      id: 'berlin-grand',
-      name: 'Berlin Grand',
-      tier: 'grand',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.grand,
-      hero_image_url: getPackageImage('berlin', 'grand'),
-      rating: 4.9,
-      review_count: 42,
-      features: ['Luxury suite', 'Private chef dinner', 'Spa & wellness package', 'VIP club access', 'Private chauffeur'],
-      description: 'The ultimate premium experience with luxury at every turn.',
-    },
-  ],
-  hamburg: [
-    {
-      id: 'hamburg-classic',
-      name: 'Hamburg Classic',
-      tier: 'classic',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.classic,
-      hero_image_url: getPackageImage('hamburg', 'classic'),
-      rating: 4.7,
-      review_count: 98,
-      features: ['Reeperbahn nightlife tour', 'Harbor cruise', 'Professional photographer', 'Reserved bar area'],
-      description: 'Experience Hamburg\'s legendary nightlife and harbor in style.',
-      bestMatch: true,
-    },
-    {
-      id: 'hamburg-essential',
-      name: 'Hamburg Essential',
-      tier: 'essential',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.essential,
-      hero_image_url: getPackageImage('hamburg', 'essential'),
-      rating: 4.4,
-      review_count: 64,
-      features: ['Guided bar tour', 'Welcome cocktails', 'Group planning'],
-      description: 'A fun, well-organized Hamburg party experience.',
-    },
-    {
-      id: 'hamburg-grand',
-      name: 'Hamburg Grand',
-      tier: 'grand',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.grand,
-      hero_image_url: getPackageImage('hamburg', 'grand'),
-      rating: 4.9,
-      review_count: 31,
-      features: ['Elbphilharmonie VIP event', 'Private yacht dinner', 'Luxury hotel suite', 'Spa & wellness day', 'Premium bottle service'],
-      description: 'Premium Hamburg experience with exclusive venues and luxury service.',
-    },
-  ],
-  hannover: [
-    {
-      id: 'hannover-classic',
-      name: 'Hannover Classic',
-      tier: 'classic',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.classic,
-      hero_image_url: getPackageImage('hannover', 'classic'),
-      rating: 4.6,
-      review_count: 73,
-      features: ['Craft beer experience', 'Go-kart racing', 'Professional photographer', 'Welcome dinner'],
-      description: 'An action-packed celebration in the heart of Hannover.',
-      bestMatch: true,
-    },
-    {
-      id: 'hannover-essential',
-      name: 'Hannover Essential',
-      tier: 'essential',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.essential,
-      hero_image_url: getPackageImage('hannover', 'essential'),
-      rating: 4.3,
-      review_count: 51,
-      features: ['City adventure tour', 'Welcome drinks', 'Group coordination'],
-      description: 'A great time in Hannover without breaking the bank.',
-    },
-    {
-      id: 'hannover-grand',
-      name: 'Hannover Grand',
-      tier: 'grand',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.grand,
-      hero_image_url: getPackageImage('hannover', 'grand'),
-      rating: 4.8,
-      review_count: 28,
-      features: ['Herrenhausen Gardens gala', 'Private chef dinner', 'Spa & wellness day', 'VIP nightlife access', 'Luxury hotel suite'],
-      description: 'Exclusive Hannover experience with private gala and luxury wellness.',
-    },
-  ],
-};
 
 function formatPrice(cents: number): string {
   return '\u20AC' + (cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+/** Minimal shape required by PackageSelectionCard — covers both AssembledPackage and DB rows */
+interface DisplayPackage {
+  id: string;
+  name: string;
+  tier: string;
+  price_per_person_cents?: number;
+  base_price_cents?: number;
+  hero_image_url?: unknown;
+  rating?: number;
+  review_count?: number;
+  features?: unknown[];
+  bestMatch?: boolean;
+}
+
 interface PackageSelectionCardProps {
-  pkg: any;
+  pkg: DisplayPackage;
   index: number;
   isBestMatch: boolean;
   isSelected: boolean;
@@ -185,7 +82,7 @@ function PackageSelectionCard({
   const tierName = tierNames[pkg.tier] || pkg.name;
   const displayName = `${tierName} (${tierLabel})`;
 
-  const perPersonCents = pkg.price_per_person_cents || pkg.base_price_cents;
+  const perPersonCents = pkg.price_per_person_cents || pkg.base_price_cents || 0;
   const totalGroupCents = perPersonCents * participantCount;
   const displayPrice = pricingMode === 'per_person'
     ? formatPrice(perPersonCents)
@@ -195,11 +92,127 @@ function PackageSelectionCard({
   // Feature count by tier: S=3, M=4, L=5
   const featureLimit = pkg.tier === 'grand' ? 5 : pkg.tier === 'classic' ? 4 : 3;
   const features = Array.isArray(pkg.features)
-    ? pkg.features.filter((f: any): f is string => typeof f === 'string').slice(0, featureLimit)
+    ? (pkg.features as unknown[]).filter((f): f is string => typeof f === 'string').slice(0, featureLimit)
     : [];
 
   const imageSource = resolveImageSource(pkg.hero_image_url || getPackageImage('berlin', 'essential'));
   const cardHeight = isBestMatch ? 480 : 420;
+
+  // Shared inner content — identical between selected (KenBurns) and unselected (static image) branches
+  const cardContent = (
+    <>
+      {/* Badges */}
+      {(isBestMatch || isSelected) && (
+        <YStack position="absolute" top={16} left={16} gap="$1.5">
+          {isBestMatch && (
+            <XStack
+              backgroundColor={DARK_THEME.primary}
+              paddingHorizontal={12}
+              paddingVertical={6}
+              borderRadius={20}
+              gap="$1.5"
+              alignItems="center"
+              alignSelf="flex-start"
+            >
+              <Ionicons name="sparkles" size={12} color="white" />
+              <Text color="white" fontSize={11} fontWeight="600">
+                Recommendation based on preferences
+              </Text>
+            </XStack>
+          )}
+          {isSelected && (
+            <XStack
+              backgroundColor="rgba(71, 184, 129, 0.9)"
+              paddingHorizontal={12}
+              paddingVertical={6}
+              borderRadius={20}
+              gap="$1.5"
+              alignItems="center"
+              alignSelf="flex-start"
+            >
+              <Ionicons name="checkmark-circle" size={12} color="white" />
+              <Text color="white" fontSize={11} fontWeight="600">
+                Selected
+              </Text>
+            </XStack>
+          )}
+        </YStack>
+      )}
+
+      {/* Card Content */}
+      <YStack gap="$3">
+        {/* Title + Price */}
+        <XStack justifyContent="space-between" alignItems="flex-start">
+          <YStack flex={1}>
+            <Text fontSize={22} fontWeight="800" color="white">
+              {displayName}
+            </Text>
+            <XStack alignItems="center" gap="$1" marginTop="$1">
+              <Ionicons name="star" size={14} color="#FFB800" />
+              <Text fontSize={13} fontWeight="600" color="white">
+                {(pkg.rating || 4.5).toFixed(1)}
+              </Text>
+              <Text fontSize={13} color="rgba(255,255,255,0.7)">
+                ({pkg.review_count || 0} reviews)
+              </Text>
+            </XStack>
+          </YStack>
+          <YStack alignItems="flex-end">
+            <Text fontSize={24} fontWeight="800" color="white">
+              {displayPrice}
+            </Text>
+            <Text fontSize={12} color="rgba(255,255,255,0.7)">
+              {priceLabel}
+            </Text>
+          </YStack>
+        </XStack>
+
+        {/* Features */}
+        <YStack gap="$2">
+          {features.map((feature: string, i: number) => (
+            <XStack key={i} alignItems="center" gap="$2">
+              <Ionicons name="checkmark-circle" size={16} color={DARK_THEME.primary} />
+              <Text fontSize={14} color="rgba(255,255,255,0.9)">{feature}</Text>
+            </XStack>
+          ))}
+        </YStack>
+
+        {/* Actions */}
+        <XStack gap="$2" alignItems="center">
+          <Button
+            flex={1}
+            onPress={() => onSelect(pkg.id)}
+            variant={isSelected ? 'primary' : isBestMatch ? 'primary' : 'outline'}
+            testID={`select-package-${index}`}
+          >
+            {isSelected && isBestMatch
+              ? 'Recommendation Selected'
+              : isSelected
+              ? 'Currently Selected'
+              : isBestMatch
+              ? 'Select Recommended'
+              : 'Select Package'}
+          </Button>
+          <XStack
+            width={44}
+            height={44}
+            borderRadius="$full"
+            backgroundColor="rgba(255,255,255,0.15)"
+            alignItems="center"
+            justifyContent="center"
+            pressStyle={{ opacity: 0.7, backgroundColor: 'rgba(255,255,255,0.25)' }}
+            onPress={() => onViewDetails(pkg.id)}
+            testID={`details-package-${index}`}
+          >
+            <Ionicons name="information-circle-outline" size={22} color="white" />
+          </XStack>
+        </XStack>
+      </YStack>
+    </>
+  );
+
+  const gradientColors = ['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.85)'] as const;
+  const gradientLocations = [0, 0.4, 1] as const;
 
   return (
     <YStack
@@ -215,246 +228,22 @@ function PackageSelectionCard({
       {isSelected ? (
         <KenBurnsImage source={imageSource} style={{ height: cardHeight, borderRadius: 16 }}>
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.85)']}
-            locations={[0, 0.4, 1]}
-            style={{
-              flex: 1,
-              borderRadius: 16,
-              justifyContent: 'flex-end',
-              padding: 20,
-            }}
+            colors={gradientColors}
+            locations={gradientLocations}
+            style={{ flex: 1, borderRadius: 16, justifyContent: 'flex-end', padding: 20 }}
           >
-            {/* Badges: show both Recommendation + Selected when applicable */}
-            {(isBestMatch || isSelected) && (
-              <YStack position="absolute" top={16} left={16} gap="$1.5">
-                {isBestMatch && (
-                  <XStack
-                    backgroundColor={DARK_THEME.primary}
-                    paddingHorizontal={12}
-                    paddingVertical={6}
-                    borderRadius={20}
-                    gap="$1.5"
-                    alignItems="center"
-                    alignSelf="flex-start"
-                  >
-                    <Ionicons name="sparkles" size={12} color="white" />
-                    <Text color="white" fontSize={11} fontWeight="600">
-                      Recommendation based on preferences
-                    </Text>
-                  </XStack>
-                )}
-                {isSelected && (
-                  <XStack
-                    backgroundColor="rgba(71, 184, 129, 0.9)"
-                    paddingHorizontal={12}
-                    paddingVertical={6}
-                    borderRadius={20}
-                    gap="$1.5"
-                    alignItems="center"
-                    alignSelf="flex-start"
-                  >
-                    <Ionicons name="checkmark-circle" size={12} color="white" />
-                    <Text color="white" fontSize={11} fontWeight="600">
-                      Selected
-                    </Text>
-                  </XStack>
-                )}
-              </YStack>
-            )}
-
-            {/* Card Content */}
-            <YStack gap="$3">
-              {/* Title + Price */}
-              <XStack justifyContent="space-between" alignItems="flex-start">
-                <YStack flex={1}>
-                  <Text fontSize={22} fontWeight="800" color="white">
-                    {displayName}
-                  </Text>
-                  <XStack alignItems="center" gap="$1" marginTop="$1">
-                    <Ionicons name="star" size={14} color="#FFB800" />
-                    <Text fontSize={13} fontWeight="600" color="white">
-                      {(pkg.rating || 4.5).toFixed(1)}
-                    </Text>
-                    <Text fontSize={13} color="rgba(255,255,255,0.7)">
-                      ({pkg.review_count || 0} reviews)
-                    </Text>
-                  </XStack>
-                </YStack>
-                <YStack alignItems="flex-end">
-                  <Text fontSize={24} fontWeight="800" color="white">
-                    {displayPrice}
-                  </Text>
-                  <Text fontSize={12} color="rgba(255,255,255,0.7)">
-                    {priceLabel}
-                  </Text>
-                </YStack>
-              </XStack>
-
-              {/* Features */}
-              <YStack gap="$2">
-                {features.map((feature: string, i: number) => (
-                  <XStack key={i} alignItems="center" gap="$2">
-                    <Ionicons name="checkmark-circle" size={16} color={DARK_THEME.primary} />
-                    <Text fontSize={14} color="rgba(255,255,255,0.9)">{feature}</Text>
-                  </XStack>
-                ))}
-              </YStack>
-
-              {/* Actions */}
-              <XStack gap="$2" alignItems="center">
-                <Button
-                  flex={1}
-                  onPress={() => onSelect(pkg.id)}
-                  variant={isSelected ? 'primary' : isBestMatch ? 'primary' : 'outline'}
-                  testID={`select-package-${index}`}
-                >
-                  {isSelected && isBestMatch
-                    ? 'Recommendation Selected'
-                    : isSelected
-                    ? 'Currently Selected'
-                    : isBestMatch
-                    ? 'Select Recommended'
-                    : 'Select Package'}
-                </Button>
-                <XStack
-                  width={44}
-                  height={44}
-                  borderRadius="$full"
-                  backgroundColor="rgba(255,255,255,0.15)"
-                  alignItems="center"
-                  justifyContent="center"
-                  pressStyle={{ opacity: 0.7, backgroundColor: 'rgba(255,255,255,0.25)' }}
-                  onPress={() => onViewDetails(pkg.id)}
-                  testID={`details-package-${index}`}
-                >
-                  <Ionicons name="information-circle-outline" size={22} color="white" />
-                </XStack>
-              </XStack>
-
-            </YStack>
+            {cardContent}
           </LinearGradient>
         </KenBurnsImage>
       ) : (
         <View style={{ height: cardHeight, borderRadius: 16, overflow: 'hidden' }}>
           <Image source={imageSource} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
           <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.85)']}
-            locations={[0, 0.4, 1]}
-            style={{
-              ...StyleSheet.absoluteFillObject,
-              borderRadius: 16,
-              justifyContent: 'flex-end',
-              padding: 20,
-            }}
+            colors={gradientColors}
+            locations={gradientLocations}
+            style={{ ...StyleSheet.absoluteFillObject, borderRadius: 16, justifyContent: 'flex-end', padding: 20 }}
           >
-            {/* Badges: show both Recommendation + Selected when applicable */}
-            {(isBestMatch || isSelected) && (
-              <YStack position="absolute" top={16} left={16} gap="$1.5">
-                {isBestMatch && (
-                  <XStack
-                    backgroundColor={DARK_THEME.primary}
-                    paddingHorizontal={12}
-                    paddingVertical={6}
-                    borderRadius={20}
-                    gap="$1.5"
-                    alignItems="center"
-                    alignSelf="flex-start"
-                  >
-                    <Ionicons name="sparkles" size={12} color="white" />
-                    <Text color="white" fontSize={11} fontWeight="600">
-                      Recommendation based on preferences
-                    </Text>
-                  </XStack>
-                )}
-                {isSelected && (
-                  <XStack
-                    backgroundColor="rgba(71, 184, 129, 0.9)"
-                    paddingHorizontal={12}
-                    paddingVertical={6}
-                    borderRadius={20}
-                    gap="$1.5"
-                    alignItems="center"
-                    alignSelf="flex-start"
-                  >
-                    <Ionicons name="checkmark-circle" size={12} color="white" />
-                    <Text color="white" fontSize={11} fontWeight="600">
-                      Selected
-                    </Text>
-                  </XStack>
-                )}
-              </YStack>
-            )}
-
-            {/* Card Content */}
-            <YStack gap="$3">
-              {/* Title + Price */}
-              <XStack justifyContent="space-between" alignItems="flex-start">
-                <YStack flex={1}>
-                  <Text fontSize={22} fontWeight="800" color="white">
-                    {displayName}
-                  </Text>
-                  <XStack alignItems="center" gap="$1" marginTop="$1">
-                    <Ionicons name="star" size={14} color="#FFB800" />
-                    <Text fontSize={13} fontWeight="600" color="white">
-                      {(pkg.rating || 4.5).toFixed(1)}
-                    </Text>
-                    <Text fontSize={13} color="rgba(255,255,255,0.7)">
-                      ({pkg.review_count || 0} reviews)
-                    </Text>
-                  </XStack>
-                </YStack>
-                <YStack alignItems="flex-end">
-                  <Text fontSize={24} fontWeight="800" color="white">
-                    {displayPrice}
-                  </Text>
-                  <Text fontSize={12} color="rgba(255,255,255,0.7)">
-                    {priceLabel}
-                  </Text>
-                </YStack>
-              </XStack>
-
-              {/* Features */}
-              <YStack gap="$2">
-                {features.map((feature: string, i: number) => (
-                  <XStack key={i} alignItems="center" gap="$2">
-                    <Ionicons name="checkmark-circle" size={16} color={DARK_THEME.primary} />
-                    <Text fontSize={14} color="rgba(255,255,255,0.9)">{feature}</Text>
-                  </XStack>
-                ))}
-              </YStack>
-
-              {/* Actions */}
-              <XStack gap="$2" alignItems="center">
-                <Button
-                  flex={1}
-                  onPress={() => onSelect(pkg.id)}
-                  variant={isSelected ? 'primary' : isBestMatch ? 'primary' : 'outline'}
-                  testID={`select-package-${index}`}
-                >
-                  {isSelected && isBestMatch
-                    ? 'Recommendation Selected'
-                    : isSelected
-                    ? 'Currently Selected'
-                    : isBestMatch
-                    ? 'Select Recommended'
-                    : 'Select Package'}
-                </Button>
-                <XStack
-                  width={44}
-                  height={44}
-                  borderRadius="$full"
-                  backgroundColor="rgba(255,255,255,0.15)"
-                  alignItems="center"
-                  justifyContent="center"
-                  pressStyle={{ opacity: 0.7, backgroundColor: 'rgba(255,255,255,0.25)' }}
-                  onPress={() => onViewDetails(pkg.id)}
-                  testID={`details-package-${index}`}
-                >
-                  <Ionicons name="information-circle-outline" size={22} color="white" />
-                </XStack>
-              </XStack>
-
-            </YStack>
+            {cardContent}
           </LinearGradient>
         </View>
       )}
@@ -469,8 +258,8 @@ export default function WizardStep4() {
   const wizardState = useWizardStore();
   const {
     cityId,
-    energyLevel,
-    groupVibe,
+    energyLevel, spotlightComfort, competitionStyle, enjoymentType, indoorOutdoor, eveningStyle,
+    averageAge, groupCohesion, fitnessLevel, drinkingCulture, groupDynamic, groupVibe,
     participantCount,
     selectedPackageId,
     setSelectedPackageId,
@@ -491,20 +280,32 @@ export default function WizardStep4() {
   // Resolve UUID to slug for fallback lookup
   // Sort order: S (essential) → M (classic/recommended) → L (grand)
   const TIER_ORDER: Record<string, number> = { essential: 0, classic: 1, grand: 2 };
-  const citySlug = cityId ? (CITY_UUID_TO_SLUG[cityId] || cityId) : null;
+  const citySlug = cityId ? (CITY_UUID_TO_SLUG[cityId] || 'berlin') : 'berlin';
+  const assembledPackages = useMemo(() => assemblePackages({
+    h1: energyLevel, h2: spotlightComfort, h3: competitionStyle,
+    h4: enjoymentType, h5: indoorOutdoor, h6: eveningStyle,
+    g1: averageAge, g2: groupCohesion, g3: fitnessLevel,
+    g4: drinkingCulture, g5: groupDynamic, g6: groupVibe,
+  }, citySlug), [
+    citySlug,
+    energyLevel, spotlightComfort, competitionStyle,
+    enjoymentType, indoorOutdoor, eveningStyle,
+    averageAge, groupCohesion, fitnessLevel,
+    drinkingCulture, groupDynamic, groupVibe,
+  ]);
   const rawPackages = (dbPackages && dbPackages.length > 0)
     ? dbPackages
-    : (citySlug ? FALLBACK_PACKAGES[citySlug] || [] : []);
+    : assembledPackages;
   const packages = [...rawPackages].sort(
-    (a: any, b: any) => (TIER_ORDER[a.tier] ?? 1) - (TIER_ORDER[b.tier] ?? 1)
+    (a, b) => (TIER_ORDER[a.tier] ?? 1) - (TIER_ORDER[b.tier] ?? 1)
   );
 
   // Auto-select best match (classic/M tier) when packages load and nothing is selected
   const didAutoSelect = useRef(false);
   useEffect(() => {
     if (didAutoSelect.current || selectedPackageId || packages.length === 0) return;
-    const bestMatch = packages.find((p: any) => p.bestMatch === true) ||
-                      packages.find((p: any) => p.tier === 'classic');
+    const bestMatch = packages.find((p) => (p as DisplayPackage).bestMatch === true) ||
+                      packages.find((p) => p.tier === 'classic');
     if (bestMatch) {
       setSelectedPackageId(bestMatch.id);
       didAutoSelect.current = true;
@@ -534,7 +335,7 @@ export default function WizardStep4() {
         return;
       }
       // Store hero image reference: remote URL string or local package slug (e.g. "hamburg-classic")
-      const selectedPkg = packages.find((p: any) => p.id === wizardState.selectedPackageId);
+      const selectedPkg = packages.find((p) => p.id === wizardState.selectedPackageId);
       const heroUrl = typeof selectedPkg?.hero_image_url === 'string'
         ? selectedPkg.hero_image_url
         : (typeof selectedPkg?.id === 'string' ? selectedPkg.id : null);
@@ -589,8 +390,8 @@ export default function WizardStep4() {
     router.push(`/package/${packageId}`);
   }, [router]);
 
-  // Skip loading spinner for fallback cities — we have local data immediately
-  const hasFallbackData = !!(citySlug && FALLBACK_PACKAGES[citySlug]);
+  // Skip loading spinner when city is in our known set (we have local fallback data immediately)
+  const hasFallbackData = !!(dbPackages && dbPackages.length > 0) || CITY_UUID_TO_SLUG[cityId ?? ''] !== undefined;
   if (isLoading && !hasFallbackData) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
@@ -662,12 +463,12 @@ export default function WizardStep4() {
 
         {/* Package Cards */}
         {packages && packages.length > 0 ? (
-          packages.map((pkg: any, index: number) => (
+          packages.map((pkg, index) => (
             <PackageSelectionCard
               key={pkg.id}
-              pkg={pkg}
+              pkg={pkg as DisplayPackage}
               index={index}
-              isBestMatch={pkg.bestMatch === true || (!rawPackages.some((p: any) => p.bestMatch) && pkg.tier === 'classic')}
+              isBestMatch={(pkg as DisplayPackage).bestMatch === true || (!rawPackages.some((p) => (p as DisplayPackage).bestMatch) && pkg.tier === 'classic')}
               isSelected={selectedPackageId === pkg.id}
               pricingMode={pricingMode}
               participantCount={participantCount}

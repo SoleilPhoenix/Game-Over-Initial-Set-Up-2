@@ -1,0 +1,7 @@
+{
+  "name": "game-over",
+  "private": true,
+  "scripts": {
+    "vercel-build": "cd game-over-app && npm install --legacy-peer-deps && npx expo export --platform web"
+  }
+}
