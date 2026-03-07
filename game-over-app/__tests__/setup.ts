@@ -124,3 +124,19 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
 });
+
+// Mock package images (avoids require() of .jpeg files in test env)
+vi.mock('@/constants/packageImages', () => ({
+  getPackageImage: vi.fn((citySlug: string, tier: string) => `mock-image-${citySlug}-${tier}`),
+  getCityImage: vi.fn((citySlug: string) => `mock-image-${citySlug}-essential`),
+  getEventImage: vi.fn((citySlug: string, packageSlug?: string) => `mock-image-${citySlug}`),
+  resolveImageSource: vi.fn((source: unknown) => source),
+  preloadPackageImages: vi.fn(() => Promise.resolve()),
+}));
+
+// Mock expo-asset
+vi.mock('expo-asset', () => ({
+  Asset: {
+    loadAsync: vi.fn(() => Promise.resolve()),
+  },
+}));
