@@ -35,21 +35,13 @@ const DARK_THEME = {
   textTertiary: '#9CA3AF',
 };
 
-function daysUntil(startDate?: string | null): number | null {
-  if (!startDate) return null;
-  const start = new Date(startDate);
-  const now = new Date();
-  const startMid = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-  const nowMid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const diff = Math.round((startMid.getTime() - nowMid.getTime()) / (1000 * 60 * 60 * 24));
-  return diff >= 0 ? diff : null;
-}
-
 export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { urgentEvent, hasUnseenUrgency } = useUrgentPayment();
+
+  // All hooks at the top — no conditional calls
+  const { urgentEvents } = useUrgentPayment();
 
   // Fetch notifications
   const {
@@ -71,11 +63,10 @@ export default function NotificationsScreen() {
 
   // Subscribe to real-time notifications
   useRealtimeNotifications((notification) => {
-    // Could show a toast here
     console.log('New notification:', notification);
   });
 
-  // Flatten and group notifications
+  // Flatten and group DB notifications by date
   const groupedNotifications = useMemo(() => {
     if (!data?.pages) return [];
 
@@ -92,45 +83,31 @@ export default function NotificationsScreen() {
     const earlierNotifs = notifications.filter((n) => n.created_at && new Date(n.created_at) < yesterday);
 
     const sections = [];
-    if (todayNotifs.length > 0) {
-      sections.push({ title: t.notifications.today, data: todayNotifs });
-    }
-    if (yesterdayNotifs.length > 0) {
-      sections.push({ title: t.notifications.yesterday, data: yesterdayNotifs });
-    }
-    if (earlierNotifs.length > 0) {
-      sections.push({ title: t.notifications.earlier, data: earlierNotifs });
-    }
+    if (todayNotifs.length > 0) sections.push({ title: t.notifications.today, data: todayNotifs });
+    if (yesterdayNotifs.length > 0) sections.push({ title: t.notifications.yesterday, data: yesterdayNotifs });
+    if (earlierNotifs.length > 0) sections.push({ title: t.notifications.earlier, data: earlierNotifs });
 
     return sections;
   }, [data]);
 
-  // Handle notification press
   const handleNotificationPress = useCallback((notification: Notification) => {
     if (!notification.is_read) {
       markAsReadMutation.mutate(notification.id);
     }
   }, [markAsReadMutation]);
 
-  // Handle mark all as read
   const handleMarkAllAsRead = useCallback(() => {
     markAllAsReadMutation.mutate();
   }, [markAllAsReadMutation]);
 
-  // Handle load more
   const handleLoadMore = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) {
       fetchNextPage();
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // Render section header
   const renderSectionHeader = ({ section }: { section: { title: string } }) => (
-    <YStack
-      paddingHorizontal="$4"
-      paddingVertical="$3"
-      marginLeft="$1"
-    >
+    <YStack paddingHorizontal="$4" paddingVertical="$3" marginLeft="$1">
       <Text
         fontSize={12}
         fontWeight="700"
@@ -143,7 +120,6 @@ export default function NotificationsScreen() {
     </YStack>
   );
 
-  // Render notification item
   const renderItem = ({ item }: { item: Notification }) => (
     <NotificationItem
       notification={item}
@@ -160,9 +136,8 @@ export default function NotificationsScreen() {
     );
   }
 
-  const urgentDaysLeft = daysUntil(urgentEvent?.start_date);
   const hasNotifications = groupedNotifications.length > 0;
-  const hasAnyContent = hasNotifications || !!urgentEvent;
+  const hasAnyContent = hasNotifications || urgentEvents.length > 0;
 
   return (
     <YStack flex={1} backgroundColor={DARK_THEME.backgroundDark} testID="notifications-screen">
@@ -213,39 +188,85 @@ export default function NotificationsScreen() {
           stickySectionHeadersEnabled={false}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
-            urgentEvent ? (
+            urgentEvents.length > 0 ? (
               <>
-                {/* TODAY label above urgency when no other DB notifications have their own TODAY section */}
+                {/* TODAY label above all urgency rows */}
                 <YStack paddingHorizontal="$4" paddingTop="$3" paddingBottom="$1" marginLeft="$1">
-                  <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} style={{ textTransform: 'uppercase', letterSpacing: 1 }}>
+                  <Text
+                    fontSize={12}
+                    fontWeight="700"
+                    color={DARK_THEME.textTertiary}
+                    style={{ textTransform: 'uppercase', letterSpacing: 1 }}
+                  >
                     {t.notifications.today}
                   </Text>
                 </YStack>
-                <Pressable
-                  style={styles.urgencyRow}
-                  onPress={() => router.push(`/event/${urgentEvent.id}/budget` as any)}
-                >
-                  <View style={styles.urgencyIconCircle}>
-                    <Ionicons name="warning" size={18} color="#F97316" />
-                  </View>
-                  <YStack flex={1} gap={2}>
-                    <Text fontSize={14} fontWeight="700" color="#F97316">
-                      Payment Outstanding
-                    </Text>
-                    <Text fontSize={12} color={DARK_THEME.textSecondary} numberOfLines={1}>
-                      {urgentEvent.title || `${urgentEvent.honoree_name}'s Party`}
-                      {urgentDaysLeft !== null
-                        ? ` · ${urgentDaysLeft === 0 ? 'today' : urgentDaysLeft === 1 ? '1 day left' : `${urgentDaysLeft} days left`}`
-                        : ''}
-                    </Text>
-                  </YStack>
-                  {/* Checkmark when already seen, chevron when unseen */}
-                  {hasUnseenUrgency
-                    ? <View style={styles.unseenDot} />
-                    : <Ionicons name="checkmark" size={18} color={DARK_THEME.textTertiary} />
-                  }
-                </Pressable>
-                <View style={styles.rowDivider} />
+
+                {/* One row per urgent event, sorted soonest first */}
+                {urgentEvents.map((info) => (
+                  <React.Fragment key={info.event.id}>
+                    <Pressable
+                      style={[styles.urgencyRow, info.isPaid && styles.urgencyRowPaid]}
+                      onPress={() => router.push(`/event/${info.event.id}/budget` as any)}
+                    >
+                      {/* Icon */}
+                      <View style={[styles.urgencyIconCircle, info.isPaid && styles.urgencyIconCirclePaid]}>
+                        <Ionicons
+                          name={info.isPaid ? 'checkmark-circle' : 'warning'}
+                          size={18}
+                          color={info.isPaid ? '#34D399' : '#F97316'}
+                        />
+                      </View>
+
+                      {/* Text — unpaid: status on top; paid: event name on top */}
+                      <YStack flex={1} gap={2}>
+                        {info.isPaid ? (
+                          // Paid: event name prominent on top, status label below
+                          <>
+                            <Text fontSize={14} fontWeight="700" color={DARK_THEME.textPrimary} numberOfLines={1}>
+                              {info.event.title || `${info.event.honoree_name}'s Party`}
+                              {` · ${
+                                info.daysLeft === 0
+                                  ? 'today'
+                                  : info.daysLeft === 1
+                                  ? '1 day left'
+                                  : `${info.daysLeft} days left`
+                              }`}
+                            </Text>
+                            <Text fontSize={12} color={DARK_THEME.textSecondary}>
+                              Payment Complete
+                            </Text>
+                          </>
+                        ) : (
+                          // Unpaid: status label prominent on top, event name below
+                          <>
+                            <Text fontSize={14} fontWeight="700" color="#F97316">
+                              Payment Outstanding
+                            </Text>
+                            <Text fontSize={12} color={DARK_THEME.textSecondary} numberOfLines={1}>
+                              {info.event.title || `${info.event.honoree_name}'s Party`}
+                              {` · ${
+                                info.daysLeft === 0
+                                  ? 'today'
+                                  : info.daysLeft === 1
+                                  ? '1 day left'
+                                  : `${info.daysLeft} days left`
+                              }`}
+                            </Text>
+                          </>
+                        )}
+                      </YStack>
+
+                      {/* Right indicator: green checkmark if paid, orange dot if unpaid */}
+                      {info.isPaid ? (
+                        <Ionicons name="checkmark-circle" size={20} color="#34D399" />
+                      ) : (
+                        <View style={styles.unseenDot} />
+                      )}
+                    </Pressable>
+                    <View style={styles.rowDivider} />
+                  </React.Fragment>
+                ))}
               </>
             ) : null
           }
@@ -269,7 +290,7 @@ export default function NotificationsScreen() {
           }
         />
       ) : (
-        /* Only show "All Caught Up" when there is truly nothing — no urgency, no DB notifications */
+        /* Only show "All Caught Up" when there is truly nothing */
         <YStack flex={1} justifyContent="center" alignItems="center" padding="$8">
           <YStack
             width={80}
@@ -313,6 +334,7 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 100,
   },
+  // Unpaid urgency row — orange tint
   urgencyRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -321,6 +343,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     backgroundColor: 'rgba(249, 115, 22, 0.07)',
   },
+  // Paid urgency row — no tint, slightly dimmed
+  urgencyRowPaid: {
+    backgroundColor: 'transparent',
+  },
   urgencyIconCircle: {
     width: 40,
     height: 40,
@@ -328,6 +354,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(249, 115, 22, 0.18)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  urgencyIconCirclePaid: {
+    backgroundColor: 'rgba(52, 211, 153, 0.15)',
   },
   unseenDot: {
     width: 8,

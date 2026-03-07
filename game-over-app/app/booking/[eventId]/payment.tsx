@@ -9,9 +9,11 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { useBookingFlow } from '@/hooks/useBookingFlow';
 import { usePaymentSheet } from '@/hooks/usePaymentSheet';
 import { useCreateBooking, useUpdatePaymentStatus } from '@/hooks/queries/useBookings';
+import { eventKeys } from '@/hooks/queries/useEvents';
 import { useWizardStore } from '@/stores/wizardStore';
 import { supabase } from '@/lib/supabase/client';
 import { Card } from '@/components/ui/Card';
@@ -53,6 +55,7 @@ export default function PaymentScreen() {
   const paramAmountCents = paramAmountCentsStr ? parseInt(paramAmountCentsStr, 10) : 0;
   const paramTotalCents = paramTotalCentsStr ? parseInt(paramTotalCentsStr, 10) : 0;
   const router = useRouter();
+  const queryClient = useQueryClient();
   const insets = useSafeAreaInsets();
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('ready');
   const isDraft = eventId === 'draft';
@@ -91,9 +94,10 @@ export default function PaymentScreen() {
     const perPersonPrice = draftPkg.price_per_person_cents;
     // Package Base is ALWAYS price × total participants (fixed amount)
     const packagePrice = perPersonPrice * totalParticipants;
-    const serviceFee = Math.max(Math.round(packagePrice * SERVICE_FEE_RATE), MIN_SERVICE_FEE_CENTS);
-    const total = packagePrice + serviceFee;
-    // Only per-person cost changes based on exclude honoree toggle
+    const serviceFee = Math.max(Math.ceil(packagePrice * SERVICE_FEE_RATE / 100) * 100, MIN_SERVICE_FEE_CENTS);
+    // Round total to whole euros — perPerson × payingCount must match displayed Total Group Cost
+    const totalEurosRounded = Math.round((packagePrice + serviceFee) / 100);
+    const total = totalEurosRounded * 100;
     const perPerson = Math.ceil(total / payingCount);
     return { packagePriceCents: packagePrice, serviceFeeCents: serviceFee, totalCents: total, perPersonCents: perPerson, payingParticipantCount: payingCount };
   }, [draftPkg, urlParticipantCount, wizardParticipantCount, honoreeExcluded]);
@@ -140,12 +144,17 @@ export default function PaymentScreen() {
   }
 
   const formatPrice = (cents: number) => {
-    return (cents / 100).toLocaleString('en-US', {
+    return Math.round(cents / 100).toLocaleString('en-US', {
       style: 'currency',
       currency: 'EUR',
       minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     });
   };
+
+  // Decimal format for per-person display — must match summary screen
+  const formatPriceDecimal = (cents: number) =>
+    '\u20AC' + (cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const getStepMessage = () => {
     switch (paymentStep) {
@@ -215,16 +224,24 @@ export default function PaymentScreen() {
             // Store total participants on first payment only (to prevent inflation on remaining payment)
             ...(paramAmountCents === 0 && totalParticipants > 1 ? { totalParticipants } : {}),
           }).catch(() => {});
+          // Invalidate events cache so bell dot clears immediately on navigation back
+          queryClient.invalidateQueries({ queryKey: eventKeys.all });
         }
 
         setPaymentStep('confirming');
         await new Promise(resolve => setTimeout(resolve, 600));
 
         // Navigate to confirmation with package info via URL params
+        // Resolve city for hero image — prefer URL param, fall back to event city name
+        const resolvedCityId = paramCityId || (event as any)?.city?.name?.toLowerCase();
         const confirmParams = new URLSearchParams();
         if (packageId) confirmParams.set('packageId', packageId);
-        if (paramCityId) confirmParams.set('cityId', paramCityId);
+        if (resolvedCityId) confirmParams.set('cityId', resolvedCityId);
         if (paramParticipants) confirmParams.set('participants', paramParticipants);
+        // When paying remaining balance, pass paidNow so confirmation shows the breakdown
+        if (paramAmountCents > 0) {
+          confirmParams.set('paidNow', String(paramAmountCents));
+        }
         // When paying remaining balance, show full cumulative total on confirmation screen
         const confirmTotal = paramAmountCents > 0
           ? (paramTotalCents || activePricing.totalCents)
@@ -388,15 +405,25 @@ export default function PaymentScreen() {
             <Card testID="payment-amount-card">
               <YStack alignItems="center" gap="$2">
                 <Text fontSize="$2" color="$textSecondary">
-                  {isFullPayment ? t.booking.totalAmount : t.booking.depositLabel}
+                  {paramAmountCents > 0 ? 'Remaining Balance' : isFullPayment ? t.booking.totalAmount : t.booking.depositLabel}
                 </Text>
                 <Text fontSize="$9" fontWeight="800" color="$primary">
                   {formatPrice(amountDue)}
                 </Text>
                 {activePricing.perPersonCents > 0 && (
-                  <Text fontSize="$2" color="$textSecondary">
-                    {t.booking.totalAmount}: {formatPrice(paramTotalCents || activePricing.totalCents)} {'\u2022'} {t.booking.perPersonGuests.replace('{{price}}', formatPrice(activePricing.perPersonCents)).replace('{{count}}', String(activePricing.payingParticipantCount))}
-                  </Text>
+                  <YStack alignItems="center" gap="$1">
+                    {/* Show total reference only when header doesn't already display it */}
+                    {!isFullPayment && paramAmountCents === 0 && (
+                      <Text fontSize="$2" color="$textSecondary">
+                        {t.booking.totalAmount}: {formatPrice(paramTotalCents || activePricing.totalCents)}
+                      </Text>
+                    )}
+                    <Text fontSize="$2" color="$textSecondary">
+                      {paramAmountCents > 0
+                        ? `(${formatPrice(paramTotalCents - paramAmountCents)} = 25% Deposit Already Paid)`
+                        : t.booking.perPersonGuests.replace('{{price}}', formatPriceDecimal(activePricing.perPersonCents)).replace('{{count}}', String(activePricing.payingParticipantCount))}
+                    </Text>
+                  </YStack>
                 )}
               </YStack>
             </Card>
@@ -565,9 +592,11 @@ export default function PaymentScreen() {
             onPress={handlePayment}
             testID="pay-now-button"
           >
-            {isFullPayment
-              ? (t.booking as any).payFullButtonLabel?.replace('{{amount}}', formatPrice(amountDue)) || t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(amountDue))
-              : t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(depositCents))}
+            {paramAmountCents > 0
+              ? t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(amountDue))
+              : isFullPayment
+                ? ((t.booking as any).payFullButtonLabel?.replace('{{amount}}', formatPrice(amountDue)) || t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(amountDue)))
+                : t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(depositCents))}
           </Button>
         </XStack>
       )}

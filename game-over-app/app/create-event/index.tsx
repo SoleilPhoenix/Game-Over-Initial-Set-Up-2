@@ -213,6 +213,9 @@ export default function WizardStep1() {
               <Text fontSize="$1" color="$textTertiary">1</Text>
               <Text fontSize="$1" color="$textTertiary">30</Text>
             </XStack>
+            <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" marginTop="$2">
+              {partyType === 'bachelorette' ? t.wizard.inclBachelorette : t.wizard.inclBachelor}
+            </Text>
           </GlassPanel>
 
           {/* Date */}

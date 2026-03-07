@@ -1,15 +1,24 @@
 /**
  * Shared hook for urgent payment detection across all tabs.
- * Returns the first event with ≤14 days remaining and an unpaid balance,
- * plus seen/unseen state for the notification dot.
+ * Returns all booked events within ≤14 days (paid or unpaid),
+ * sorted soonest-first, plus seen/unseen state for the bell dot.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEvents } from '@/hooks/queries/useEvents';
+import { getAllBudgetInfos } from '@/lib/participantCountCache';
 import type { EventWithDetails } from '@/repositories/events';
 
-const URGENT_SEEN_KEY = 'gameover:urgent_payment_seen';
+// New key — stores JSON array of event IDs the user has acknowledged
+const URGENT_SEEN_KEY = 'gameover:urgent_seen_events';
+
+export type UrgentEventInfo = {
+  event: EventWithDetails;
+  daysLeft: number;
+  isPaid: boolean;
+  isSeen: boolean;
+};
 
 function daysUntil(startDate?: string): number | null {
   if (!startDate) return null;
@@ -24,39 +33,64 @@ function daysUntil(startDate?: string): number | null {
 export function useUrgentPayment() {
   const { data: events } = useEvents();
   const [budgetInfos, setBudgetInfos] = useState<Record<string, any>>({});
-  const [seenKey, setSeenKey] = useState<string | null>(null);
+  const [seenEventIds, setSeenEventIds] = useState<Set<string>>(new Set());
 
+  // Re-read budget cache whenever events list changes (events refetch on tab focus).
+  // This ensures the bell dot clears after payment updates the AsyncStorage cache.
   useEffect(() => {
     AsyncStorage.getItem('budget_info')
       .then(raw => { if (raw) setBudgetInfos(JSON.parse(raw)); })
       .catch(() => {});
+  }, [events]);
+
+  useEffect(() => {
     AsyncStorage.getItem(URGENT_SEEN_KEY)
-      .then(val => setSeenKey(val))
+      .then(raw => {
+        if (raw) setSeenEventIds(new Set(JSON.parse(raw) as string[]));
+      })
       .catch(() => {});
   }, []);
 
-  // Find booked events with ≤14 days left and unpaid balance
-  const urgentEvent: EventWithDetails | null = (events ?? []).find(e => {
-    if (e.status !== 'booked') return false;
-    const days = daysUntil(e.start_date);
-    if (days === null || days > 14) return false;
-    const budget = budgetInfos[e.id];
-    if (!budget) return false;
-    return (budget.paidAmountCents || 0) < budget.totalCents;
-  }) ?? null;
+  // All booked events with ≤14 days, sorted soonest first (includes paid ones)
+  const urgentEvents: UrgentEventInfo[] = useMemo(() => {
+    return (events ?? [])
+      .filter(e => {
+        if (e.status !== 'booked') return false;
+        const days = daysUntil(e.start_date);
+        return days !== null && days <= 14;
+      })
+      .map(e => {
+        const days = daysUntil(e.start_date) ?? 0;
+        // Prefer in-memory cache (updated synchronously after payment) over AsyncStorage state
+        const budget = getAllBudgetInfos()[e.id] ?? budgetInfos[e.id];
+        // No budget info = event status 'booked' is authoritative → treat as fully paid
+        const isPaid = !budget ? true : (budget.paidAmountCents || 0) >= budget.totalCents;
+        const isSeen = seenEventIds.has(e.id);
+        return { event: e, daysLeft: days, isPaid, isSeen };
+      })
+      .sort((a, b) => a.daysLeft - b.daysLeft);
+  }, [events, budgetInfos, seenEventIds]);
 
-  // Urgency key changes when event ID or days-remaining changes
-  const currentUrgencyKey = urgentEvent
-    ? `${urgentEvent.id}:${daysUntil(urgentEvent.start_date)}`
-    : null;
+  // Most urgent UNPAID event — kept for backward compat with tab bell Alerts
+  const urgentEvent: EventWithDetails | null = useMemo(
+    () => urgentEvents.find(info => !info.isPaid)?.event ?? null,
+    [urgentEvents]
+  );
 
-  const hasUnseenUrgency = !!currentUrgencyKey && currentUrgencyKey !== seenKey;
+  // Bell dot = any unpaid urgent event — stays orange until payment is made, NOT cleared by viewing
+  const hasUnseenUrgency = useMemo(
+    () => urgentEvents.some(info => !info.isPaid),
+    [urgentEvents]
+  );
 
+  // Mark all currently-unpaid urgent events as "seen" (clears the bell dot)
   const markUrgencySeen = useCallback(() => {
-    if (!currentUrgencyKey) return;
-    AsyncStorage.setItem(URGENT_SEEN_KEY, currentUrgencyKey).catch(() => {});
-    setSeenKey(currentUrgencyKey);
-  }, [currentUrgencyKey]);
+    const newIds = new Set(seenEventIds);
+    urgentEvents.filter(info => !info.isPaid).forEach(info => newIds.add(info.event.id));
+    const arr = [...newIds];
+    AsyncStorage.setItem(URGENT_SEEN_KEY, JSON.stringify(arr)).catch(() => {});
+    setSeenEventIds(newIds);
+  }, [seenEventIds, urgentEvents]);
 
-  return { urgentEvent, hasUnseenUrgency, markUrgencySeen };
+  return { urgentEvent, urgentEvents, hasUnseenUrgency, markUrgencySeen };
 }

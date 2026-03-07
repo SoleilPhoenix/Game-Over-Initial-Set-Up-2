@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadDesiredParticipants } from '@/lib/participantCountCache';
 import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import { YStack, XStack, Text, Image } from 'tamagui';
+import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1146,9 +1147,11 @@ export default function CommunicationScreen() {
             ) : (
               <View style={styles.avatarContainer}>
                 {userAvatar ? (
-                  <Image
+                  <ExpoImage
                     source={{ uri: userAvatar }}
                     style={styles.avatar}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
                   />
                 ) : (
                   <View style={[styles.avatar, styles.avatarPlaceholder]}>

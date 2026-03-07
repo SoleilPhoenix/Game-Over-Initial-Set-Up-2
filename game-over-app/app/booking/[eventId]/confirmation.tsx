@@ -3,10 +3,10 @@
  * Success screen after payment with calendar and copy functionality
  */
 
-import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Alert, BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,14 +35,37 @@ const FALLBACK_PKG_NAMES: Record<string, string> = {
 };
 
 export default function BookingConfirmationScreen() {
-  const { eventId, packageId, cityId, participants, total, fullTotal } = useLocalSearchParams<{
-    eventId: string; packageId?: string; cityId?: string; participants?: string; total?: string; fullTotal?: string;
+  const { eventId, packageId, cityId, participants, total, fullTotal, paidNow } = useLocalSearchParams<{
+    eventId: string; packageId?: string; cityId?: string; participants?: string; total?: string; fullTotal?: string; paidNow?: string;
   }>();
   const router = useRouter();
+  const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+
+  // Disable ALL back navigation — once confirmed, the booking is final.
+  // Must traverse every parent navigator because the swipe gesture originates at the
+  // root Stack level (booking route), not just the inner [eventId] Stack.
+  useEffect(() => {
+    const nopts = { gestureEnabled: false };
+    navigation.setOptions(nopts);
+    const parent = navigation.getParent();
+    parent?.setOptions(nopts);
+    parent?.getParent()?.setOptions(nopts);
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => true);
+    return () => {
+      sub.remove();
+      const yopts = { gestureEnabled: true };
+      navigation.setOptions(yopts);
+      parent?.setOptions(yopts);
+      parent?.getParent()?.setOptions(yopts);
+    };
+  }, [navigation]);
   const [copied, setCopied] = useState(false);
   const isDraft = eventId === 'draft';
+  // fullTotal exists only when deposit (25%) was paid — total < fullTotal
+  const isDepositOnly = !!(fullTotal && parseInt(fullTotal, 10) > parseInt(total || '0', 10));
   const { t } = useTranslation();
   const wizardStartDate = useWizardStore((s) => s.startDate);
 
@@ -73,10 +96,11 @@ export default function BookingConfirmationScreen() {
     : (booking?.reference_number || 'GO-' + (booking?.id?.substring(0, 6).toUpperCase() || 'XXXXXX'));
 
   const formatPrice = (cents: number) => {
-    return (cents / 100).toLocaleString('en-US', {
+    return Math.round(cents / 100).toLocaleString('en-US', {
       style: 'currency',
       currency: 'EUR',
       minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
     });
   };
 
@@ -176,10 +200,10 @@ export default function BookingConfirmationScreen() {
             </YStack>
 
             <Text fontSize="$7" fontWeight="800" color="white" textAlign="center" marginBottom="$1">
-              {t.booking.confirmationTitle}
+              {isDepositOnly ? (t.booking as any).preBookingTitle : (t.booking as any).finalBookingTitle}
             </Text>
             <Text fontSize="$3" color="rgba(255,255,255,0.85)" textAlign="center">
-              {t.booking.confirmationSubtitle}
+              {isDepositOnly ? (t.booking as any).preBookingSubtitle : (t.booking as any).finalBookingSubtitle}
             </Text>
           </View>
         </View>
@@ -250,19 +274,44 @@ export default function BookingConfirmationScreen() {
               </Pressable>
             </XStack>
 
-            <XStack justifyContent="space-between" alignItems="center">
-              <Text color="$textSecondary">{t.booking.totalPaid}</Text>
-              <XStack alignItems="baseline" gap="$1">
-                <Text fontSize="$5" fontWeight="800" color="$primary">
-                  {total ? formatPrice(parseInt(total, 10)) : booking?.total_amount_cents ? formatPrice(booking.total_amount_cents) : '---'}
-                </Text>
-                {fullTotal && (
-                  <Text fontSize="$5" fontWeight="800" color="$textTertiary">
-                    {' '}of {formatPrice(parseInt(fullTotal, 10))}
+            {paidNow && parseInt(paidNow, 10) > 0 ? (
+              // Remaining balance paid — show full payment breakdown
+              <>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color="$textSecondary">Total Paid (75%)</Text>
+                  <Text fontSize="$5" fontWeight="800" color="$primary">
+                    {formatPrice(parseInt(paidNow, 10))}
                   </Text>
-                )}
+                </XStack>
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color="$textSecondary">Previously Paid (25%)</Text>
+                  <Text fontWeight="600" color="$textSecondary">
+                    {total ? formatPrice(parseInt(total, 10) - parseInt(paidNow, 10)) : '---'}
+                  </Text>
+                </XStack>
+                <YStack height={1} backgroundColor="$borderColor" />
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text color="$textSecondary">Total Group Cost</Text>
+                  <Text fontSize="$5" fontWeight="800" color="$primary">
+                    {total ? formatPrice(parseInt(total, 10)) : '---'}
+                  </Text>
+                </XStack>
+              </>
+            ) : (
+              <XStack justifyContent="space-between" alignItems="center">
+                <Text color="$textSecondary">{t.booking.totalPaid}</Text>
+                <XStack alignItems="baseline" gap="$1">
+                  <Text fontSize="$5" fontWeight="800" color="$primary">
+                    {total ? formatPrice(parseInt(total, 10)) : booking?.total_amount_cents ? formatPrice(booking.total_amount_cents) : '---'}
+                  </Text>
+                  {fullTotal && (
+                    <Text fontSize="$5" fontWeight="800" color="$textTertiary">
+                      {' '}of {formatPrice(parseInt(fullTotal, 10))}
+                    </Text>
+                  )}
+                </XStack>
               </XStack>
-            </XStack>
+            )}
           </YStack>
         </Card>
 

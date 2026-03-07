@@ -4,7 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Alert, ActivityIndicator, Image } from 'react-native';
+import { Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { View, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -163,12 +164,14 @@ export function AvatarUpload({
           {isUploading ? (
             <ActivityIndicator size="large" color={THEME.primary} />
           ) : localAvatarUrl ? (
-            <Image
+            <ExpoImage
               source={{ uri: localAvatarUrl }}
               style={[
                 styles.image,
                 { width: innerSize, height: innerSize, borderRadius: innerSize / 2 },
               ]}
+              contentFit="cover"
+              cachePolicy="memory-disk"
             />
           ) : (
             <Text fontSize={size * 0.25} fontWeight="700" color={THEME.textPrimary}>

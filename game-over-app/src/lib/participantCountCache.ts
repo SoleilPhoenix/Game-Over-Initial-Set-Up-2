@@ -122,6 +122,11 @@ export async function setBudgetInfo(eventId: string, info: BudgetInfo): Promise<
   } catch {}
 }
 
+/** Returns a snapshot of the in-memory budget cache (synchronous — no I/O). */
+export function getAllBudgetInfos(): Record<string, BudgetInfo> {
+  return { ...budgetCache };
+}
+
 export async function loadBudgetInfo(eventId: string): Promise<BudgetInfo | undefined> {
   if (budgetCache[eventId]) return budgetCache[eventId];
   try {

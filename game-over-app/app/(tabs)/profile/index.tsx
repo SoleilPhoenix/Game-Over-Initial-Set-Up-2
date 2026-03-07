@@ -3,8 +3,9 @@
  * User settings hub with dark glassmorphic theme
  */
 
-import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, ScrollView, Image, ActivityIndicator } from 'react-native';
+import React from 'react';
+import { Alert, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, View } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -113,7 +114,7 @@ export default function ProfileScreen() {
   const user = useUser();
   const signOut = useAuthStore((state) => state.signOut);
   const favorites = useFavoritesStore((s) => s.favorites);
-  const [imageLoading, setImageLoading] = useState(false);
+
   const { t, language } = useTranslation();
 
   const userName = user?.user_metadata?.full_name || 'User';
@@ -183,19 +184,12 @@ export default function ProfileScreen() {
               >
                 <View style={styles.avatarInner}>
                   {userAvatar ? (
-                    <>
-                      <Image
-                        source={{ uri: userAvatar, cache: 'force-cache' }}
-                        style={styles.avatarImage}
-                        onLoad={() => setImageLoading(false)}
-                        onError={() => setImageLoading(false)}
-                      />
-                      {imageLoading && (
-                        <View style={styles.avatarLoader}>
-                          <ActivityIndicator size="small" color={DARK_THEME.primary} />
-                        </View>
-                      )}
-                    </>
+                    <ExpoImage
+                      source={{ uri: userAvatar }}
+                      style={styles.avatarImage}
+                      contentFit="cover"
+                      cachePolicy="memory-disk"
+                    />
                   ) : (
                     <Text fontSize={24} fontWeight="700" color={DARK_THEME.textPrimary}>
                       {userInitials}
@@ -259,10 +253,10 @@ export default function ProfileScreen() {
                     >
                       <XStack alignItems="center" gap="$3" flex={1}>
                         <View style={styles.savedPackageThumb}>
-                          <Image
+                          <ExpoImage
                             source={getPackageImage(fav.cityName.toLowerCase(), fav.tier)}
                             style={styles.savedPackageThumbImage}
-                            resizeMode="cover"
+                            contentFit="cover"
                           />
                         </View>
                         <YStack flex={1}>

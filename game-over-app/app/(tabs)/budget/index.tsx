@@ -449,7 +449,7 @@ export default function BudgetDashboardScreen() {
       style: 'currency', currency: 'EUR',
       minimumFractionDigits: 0, maximumFractionDigits: 0,
     }).format(euros);
-    const depositEuros = Math.floor(collectedCents / 100);
+    const depositEuros = Math.round(collectedCents / 100);
     const totalEuros = Math.round(totalCents / 100);
     const dueEuros = totalEuros - depositEuros;
     return { deposit: fmt(depositEuros), due: fmt(dueEuros) };

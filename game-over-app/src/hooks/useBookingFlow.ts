@@ -75,11 +75,13 @@ export function useBookingFlow(eventId: string | undefined, packageIdOverride?: 
     // Package Base is ALWAYS price × total participants (fixed amount)
     const packagePrice = perPersonPrice * totalParticipants;
     const serviceFee = Math.max(
-      Math.round(packagePrice * SERVICE_FEE_RATE),
+      Math.ceil(packagePrice * SERVICE_FEE_RATE / 100) * 100,
       MIN_SERVICE_FEE_CENTS
     );
-    const total = packagePrice + serviceFee;
-    // Only per-person cost changes based on exclude honoree toggle
+    // Round total to whole euros so perPerson × payingCount matches displayed Total Group Cost
+    const totalEurosRounded = Math.round((packagePrice + serviceFee) / 100);
+    const total = totalEurosRounded * 100;
+    // Per-person derived from rounded total so the math adds up on screen
     const perPerson = Math.ceil(total / payingCount);
 
     return {

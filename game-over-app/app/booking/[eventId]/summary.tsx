@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { ScrollView, Image, Pressable, StyleSheet } from 'react-native';
+import { Alert, ScrollView, Image, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner, Switch } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,8 +40,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(71, 184, 129, 0.07)',
   },
   payOptionActiveFull: {
-    borderColor: 'rgba(90, 126, 176, 0.4)',
-    backgroundColor: 'rgba(90, 126, 176, 0.07)',
+    borderColor: 'rgba(71, 184, 129, 0.4)',
+    backgroundColor: 'rgba(71, 184, 129, 0.07)',
   },
 });
 
@@ -108,9 +108,11 @@ export default function BookingSummaryScreen() {
     const perPersonPrice = draftPkg.price_per_person_cents;
     // Package Base is ALWAYS price × total participants (fixed amount)
     const packagePrice = perPersonPrice * totalParticipants;
-    const serviceFee = Math.max(Math.round(packagePrice * SERVICE_FEE_RATE), MIN_SERVICE_FEE_CENTS);
-    const total = packagePrice + serviceFee;
-    // Only per-person cost changes based on exclude honoree toggle
+    const serviceFee = Math.max(Math.ceil(packagePrice * SERVICE_FEE_RATE / 100) * 100, MIN_SERVICE_FEE_CENTS);
+    // Round total to whole euros so perPerson × payingCount matches displayed Total Group Cost
+    const totalEurosRounded = Math.round((packagePrice + serviceFee) / 100);
+    const total = totalEurosRounded * 100;
+    // Per-person derived from rounded total so the math adds up on screen
     const perPerson = Math.ceil(total / payingCount);
     return {
       packagePriceCents: packagePrice,
@@ -141,6 +143,11 @@ export default function BookingSummaryScreen() {
       maximumFractionDigits: 2,
     });
   };
+
+  // Whole-euro format (no decimals) — same rounding logic as budget page:
+  // deposit = Math.round (standard), remaining = total - deposit so they always sum correctly
+  const formatPriceWhole = (euros: number) =>
+    '\u20AC' + euros.toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
   const handleProceedToPayment = () => {
     const params = new URLSearchParams();
@@ -176,9 +183,14 @@ export default function BookingSummaryScreen() {
 
   const honoreePaysCents = excludeHonoree ? 0 : pricing.perPersonCents;
 
-  // Deposit calculation (25% of total)
-  const depositCents = Math.ceil(pricing.totalCents * 0.25);
-  const remainingCents = pricing.totalCents - depositCents;
+  // Deposit calculation — whole euros, no decimals
+  // Standard rounding: < 0.5 rounds down, ≥ 0.5 rounds up (JS Math.round)
+  // Remaining is derived (total - deposit) so the two always sum exactly to the total
+  const totalEuros = Math.round(pricing.totalCents / 100);
+  const depositEuros = Math.round((pricing.totalCents * 0.25) / 100);
+  const remainingEuros = totalEuros - depositEuros;
+  // Keep cent values for payment flow (payment.tsx recalculates independently)
+  const depositCents = depositEuros * 100;
 
   return (
     <YStack flex={1} backgroundColor={DARK_THEME.background}>
@@ -257,17 +269,22 @@ export default function BookingSummaryScreen() {
           <XStack justifyContent="space-between" marginBottom="$3">
             <Text fontSize={14} color={DARK_THEME.textSecondary}>Package Base</Text>
             <Text fontSize={14} fontWeight="600" color="white">
-              {formatPrice(pricing.packagePriceCents)}
+              {formatPriceWhole(Math.round(pricing.packagePriceCents / 100))}
             </Text>
           </XStack>
 
           <XStack justifyContent="space-between" marginBottom="$3">
             <XStack gap="$1" alignItems="center">
               <Text fontSize={14} color={DARK_THEME.textSecondary}>{t.booking.serviceFee}</Text>
-              <Ionicons name="information-circle-outline" size={14} color={DARK_THEME.textTertiary} />
+              <Pressable
+                onPress={() => Alert.alert(t.booking.serviceFee, '10% of the package base price, minimum €50.')}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Ionicons name="information-circle-outline" size={14} color={DARK_THEME.textTertiary} />
+              </Pressable>
             </XStack>
             <Text fontSize={14} fontWeight="600" color="white">
-              {formatPrice(pricing.serviceFeeCents)}
+              {formatPriceWhole(Math.round(pricing.serviceFeeCents / 100))}
             </Text>
           </XStack>
 
@@ -276,11 +293,9 @@ export default function BookingSummaryScreen() {
           <XStack justifyContent="space-between">
             <Text fontSize={15} fontWeight="600" color={DARK_THEME.textSecondary}>{t.booking.totalGroupCost}</Text>
             <Text fontSize={16} fontWeight="800" color={DARK_THEME.primary}>
-              {formatPrice(pricing.totalCents)}
+              {formatPriceWhole(totalEuros)}
             </Text>
           </XStack>
-
-          <YStack height={1} backgroundColor={DARK_THEME.glassBorder} marginVertical="$2" />
 
           <YStack height={1} backgroundColor={DARK_THEME.glassBorder} marginVertical="$3" />
 
@@ -313,12 +328,12 @@ export default function BookingSummaryScreen() {
                     {(t.booking as any).payOptionDeposit}
                   </Text>
                   <Text fontSize={15} fontWeight="700" color={paymentOption === 'deposit' ? '#47B881' : DARK_THEME.textPrimary}>
-                    {formatPrice(depositCents)}
+                    {formatPriceWhole(depositEuros)}
                   </Text>
                 </XStack>
                 {/* Secondary: remaining due date */}
                 <Text fontSize={12} color={DARK_THEME.textTertiary}>
-                  {formatPrice(remainingCents)} due 14 days before event
+                  {formatPriceWhole(remainingEuros)} due 14 days before event
                 </Text>
               </YStack>
             </XStack>
@@ -333,8 +348,8 @@ export default function BookingSummaryScreen() {
               <YStack
                 width={20} height={20} borderRadius={10} marginTop={3}
                 borderWidth={2}
-                borderColor={paymentOption === 'full' ? DARK_THEME.primary : DARK_THEME.border}
-                backgroundColor={paymentOption === 'full' ? DARK_THEME.primary : 'transparent'}
+                borderColor={paymentOption === 'full' ? '#47B881' : DARK_THEME.border}
+                backgroundColor={paymentOption === 'full' ? '#47B881' : 'transparent'}
                 alignItems="center" justifyContent="center"
               >
                 {paymentOption === 'full' && (
@@ -342,28 +357,18 @@ export default function BookingSummaryScreen() {
                 )}
               </YStack>
               <YStack flex={1} gap={4}>
-                {/* Title row: label + badge left, amount right */}
+                {/* Title row: label left, amount right */}
                 <XStack justifyContent="space-between" alignItems="center">
-                  <XStack alignItems="center" gap={8}>
-                    <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? DARK_THEME.primary : DARK_THEME.textPrimary}>
-                      {(t.booking as any).payOptionFull}
-                    </Text>
-                    <YStack
-                      paddingHorizontal={8} paddingVertical={3} borderRadius={6}
-                      backgroundColor="rgba(90, 126, 176, 0.18)"
-                    >
-                      <Text fontSize={10} fontWeight="700" color={DARK_THEME.primary}>
-                        {(t.booking as any).payOptionFullBadge}
-                      </Text>
-                    </YStack>
-                  </XStack>
-                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? DARK_THEME.primary : DARK_THEME.textPrimary}>
-                    {formatPrice(pricing.totalCents)}
+                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? '#47B881' : DARK_THEME.textPrimary}>
+                    {(t.booking as any).payOptionFull}
+                  </Text>
+                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? '#47B881' : DARK_THEME.textPrimary}>
+                    {formatPriceWhole(totalEuros)}
                   </Text>
                 </XStack>
-                {/* Secondary: no further payments */}
+                {/* Secondary: one combined sentence */}
                 <Text fontSize={12} color={DARK_THEME.textTertiary}>
-                  No further payments
+                  No further payments and reminders
                 </Text>
               </YStack>
             </XStack>
@@ -449,7 +454,7 @@ export default function BookingSummaryScreen() {
 
         {/* Cancellation Policy */}
         <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" lineHeight={18} paddingHorizontal="$2">
-          {t.booking.cancellationSummary.replace('{{deposit}}', formatPrice(depositCents))}
+          {t.booking.cancellationSummary.replace('{{deposit}}', formatPriceWhole(depositEuros))}
         </Text>
       </ScrollView>
 
@@ -473,8 +478,8 @@ export default function BookingSummaryScreen() {
           <XStack alignItems="center" gap="$2">
             <Text fontSize={16} fontWeight="700" color="white">
               {paymentOption === 'full'
-                ? (t.booking as any).payFullButtonLabel.replace('{{amount}}', formatPrice(pricing.totalCents))
-                : t.booking.proceedToPaymentDeposit.replace('{{deposit}}', formatPrice(depositCents))}
+                ? (t.booking as any).payFullButtonLabel.replace('{{amount}}', formatPriceWhole(totalEuros))
+                : t.booking.proceedToPaymentDeposit.replace('{{deposit}}', formatPriceWhole(depositEuros))}
             </Text>
             <Ionicons name="arrow-forward" size={18} color="white" />
           </XStack>
