@@ -212,14 +212,62 @@ This document tracks all tasks that must be completed before launching the Game 
 
 ## Communication & Invitations
 
+> ⚠️ **Both channels below (WhatsApp + Email) are currently non-functional and greyed out in Managed Invitations.
+> These MUST be resolved before go-live.**
+
+---
+
+### WhatsApp Business — Meta Business Account Verification
+**Status:** 🔴 Blocked — WhatsApp sending is disabled. Meta Business verification required.
+
+**Why it's blocked:**
+WhatsApp via Twilio requires an approved **Meta (Facebook) Business Account** and a registered **WhatsApp Business Profile**. Until Meta approves the account, all WhatsApp messages fail silently and the send button remains greyed out in Managed Invitations.
+
+**Steps to unblock:**
+- [ ] **1. Create or verify a Meta Business Account**
+  - Go to [business.facebook.com](https://business.facebook.com) and log in with the Game Over Facebook account
+  - Navigate to **Business Settings** → verify the business is confirmed (green tick)
+  - If not confirmed: submit business verification documents (trade registration / Gewerbeanmeldung)
+  - Meta review takes 1–5 business days
+
+- [ ] **2. Register a WhatsApp Business Profile via Twilio**
+  - In [Twilio Console](https://console.twilio.com) → **Messaging → WhatsApp → Senders**
+  - Connect your Meta Business Account to the Twilio WhatsApp sender
+  - Choose or purchase a dedicated WhatsApp-enabled Twilio number (German +49 recommended)
+  - Submit the WhatsApp Business Profile for Meta approval (display name, category, description)
+
+- [ ] **3. Get a WhatsApp Message Template approved**
+  - The invitation message text must be pre-approved by Meta as a **Template Message**
+  - Templates cannot contain variable URLs unless explicitly approved
+  - Submit template via Twilio Console → **Content Template Builder**
+  - Approval takes 1–3 business days
+  - Current invitation template (name, date, invite link) needs to be submitted
+
+- [ ] **4. Test end-to-end WhatsApp sending in Managed Invitations**
+  - Send a test invitation to a real WhatsApp number
+  - Verify message is delivered and invite link works
+  - Confirm fallback to SMS triggers correctly if WhatsApp fails (already implemented)
+
+**Cost:** ~€0.05–€0.07 per WhatsApp message (Twilio + Meta fees)
+**Timeline:** Allow 1–2 weeks total (business verification + template approval)
+
+---
+
 ### SendGrid Email API — Upgrade to Paid Plan
-**Status:** ⏸️ Pending — Required before go-live. Email invitations are currently blocked.
+**Status:** 🔴 Blocked — Email invitations are disabled. Paid plan required before go-live.
+
+**Why it's blocked:**
+SendGrid free trial ended July 7, 2025. The `/v3/mail/send` API endpoint is blocked on the free plan. All email invitations in Managed Invitations fail silently until the plan is upgraded. **We are intentionally not paying for this yet** — activate when ready to go live.
 
 - [ ] **Upgrade SendGrid Email API plan to "Essentials"** (~$19.95/month for 50,000 emails)
-  - Free trial ended July 7, 2025 — email sending via `/v3/mail/send` is blocked
   - Go to [SendGrid Account Details](https://app.sendgrid.com/account/billing) → **Email API** section → **Change Plan** → select **Essentials**
   - **Do NOT upgrade Marketing Campaigns** — the app only uses the transactional Email API
   - Access is restored immediately after upgrade
+- [ ] **Verify sender domain (game-over.app) in SendGrid**
+  - Go to SendGrid → Settings → Sender Authentication → Authenticate Your Domain
+  - Add the required DNS records to the game-over.app domain registrar
+  - Domain authentication improves deliverability and prevents spam classification
+- [ ] **Test email invitation end-to-end** after upgrade (Managed Invitations → Email send → inbox delivery)
 
 ### Twilio SMS Sender ID
 **Status:** ⏸️ Pending — Update the display name shown to SMS recipients
