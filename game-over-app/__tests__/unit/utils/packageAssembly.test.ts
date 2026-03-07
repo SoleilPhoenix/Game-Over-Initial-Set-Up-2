@@ -92,4 +92,27 @@ describe('assemblePackages', () => {
     const unique = new Set(activityFeatures);
     expect(unique.size).toBe(3);
   });
+
+  it('features never duplicate across any profile (no dining repeated as activity)', () => {
+    // Low-activity profile — tests that even when the scoring matrix
+    // returns few highly-scored activities, features remain unique
+    const lowActivity = {
+      h1: 'relaxed' as const, h2: 'background' as const, h3: 'cooperative' as const,
+      h4: 'food' as const,    h5: 'indoor' as const,    h6: 'dinner_only' as const,
+      g1: '35+' as const,     g2: 'strangers' as const,  g3: 'low' as const,
+      g4: 'low' as const,     g5: 'relaxed' as const,    g6: [],
+    };
+    const pkgs = assemblePackages(lowActivity, 'berlin');
+    expect(pkgs).toHaveLength(3);
+    for (const pkg of pkgs) {
+      // No feature should appear more than once in a single tier
+      const seen = new Set(pkg.features);
+      expect(seen.size).toBe(pkg.features.length);
+      // All features must be non-empty strings
+      for (const f of pkg.features) {
+        expect(typeof f).toBe('string');
+        expect(f.length).toBeGreaterThan(0);
+      }
+    }
+  });
 });

@@ -33,7 +33,10 @@ function formatPrice(cents: number): string {
   return '\u20AC' + (cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+// pkg is either AssembledPackage (fallback) or a Supabase DB row — proper union typing
+// requires importing generated DB types and is deferred to a dedicated types refactor PR
 interface PackageSelectionCardProps {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   pkg: any;
   index: number;
   isBestMatch: boolean;
@@ -484,8 +487,8 @@ export default function WizardStep4() {
     router.push(`/package/${packageId}`);
   }, [router]);
 
-  // Skip loading spinner for fallback cities — we have local data immediately
-  const hasFallbackData = !!(dbPackages && dbPackages.length > 0) || !!citySlug;
+  // Skip loading spinner when city is in our known set (we have local fallback data immediately)
+  const hasFallbackData = !!(dbPackages && dbPackages.length > 0) || CITY_UUID_TO_SLUG[cityId ?? ''] !== undefined;
   if (isLoading && !hasFallbackData) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">

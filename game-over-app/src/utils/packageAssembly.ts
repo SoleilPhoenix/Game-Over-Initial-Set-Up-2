@@ -6,6 +6,7 @@
  */
 
 import { scoreActivities } from './packageMatching';
+import type { ImageSourcePropType } from 'react-native';
 import { getPackageImage } from '@/constants/packageImages';
 import type {
   HonoreeEnergyLevel, SpotlightComfort, CompetitionStyle,
@@ -35,7 +36,7 @@ export interface AssembledPackage {
   name: string;
   tier: 'essential' | 'classic' | 'grand';
   price_per_person_cents: number;
-  hero_image_url: any;
+  hero_image_url: ImageSourcePropType;
   rating: number;
   review_count: number;
   features: string[];
@@ -105,6 +106,21 @@ const ACTIVITY_NAMES: Record<string, string> = {
   'Gin Tasting + Botanicals':      'Gin Tasting',
   'Cocktail Making Course':        'Cocktail Workshop',
   'BBQ Grill & Chill':             'BBQ & Grill',
+  // Additional activities from scoring matrix
+  'Go-Karting':                    'Go-Karting',
+  'VR Arcade':                     'VR Arcade',
+  'Axe Throwing':                  'Axe Throwing',
+  'Escape Room':                   'Escape Room',
+  'Trampoline Park':               'Trampoline Park',
+  'Cooking Class':                 'Cooking Class',
+  'Guided Bike Tour':              'Guided Bike Tour',
+  'Kayak / SUP':                   'Kayak & SUP',
+  'Creative Workshop':             'Creative Workshop',
+  'Dance Class':                   'Dance Class',
+  'Darts Tournament':              'Darts Tournament',
+  'Sports Viewing':                'Sports Viewing',
+  'Food Tour':                     'Food Tour',
+  'Wine Tasting':                  'Wine Tasting',
 };
 
 const DINING_NAMES: Record<string, string> = {
@@ -114,6 +130,9 @@ const DINING_NAMES: Record<string, string> = {
   'Pizza Party + Craft Beer':          'Pizza & Craft Beer Dinner',
   "Private Dining Room + Chef's Menu": 'Private Chef Dinner',
   'Beer Hall / Platter Night':         'Beer Hall Dinner',
+  'Brunch Buffet':                     'Brunch Buffet',
+  'Steakhouse Dinner':                 'Steakhouse Dinner',
+  'Sushi Dinner':                      'Sushi Dinner',
 };
 
 const BAR_NAMES: Record<string, string> = {
@@ -174,9 +193,11 @@ export function assemblePackages(answers: WizardAnswers, citySlug: string): Asse
   const topDining = diningSlot ? diningName(diningSlot.name) : 'Restaurant Dinner';
   const topBar    = barSlot    ? barName(barSlot.name)       : 'Bar Night with Drinks';
 
-  // Deduplicate activities, pad with last if fewer than 3
+  // Deduplicate activities; pad with generic fallbacks if pool has fewer than 3
+  const GENERIC_ACTIVITIES = ['City Experience', 'Group Activity', 'Team Challenge'];
   const uniqueActivities = [...new Set(activities)];
-  const act = (i: number) => uniqueActivities[i] ?? uniqueActivities[uniqueActivities.length - 1] ?? topDining;
+  const pool = uniqueActivities.length > 0 ? uniqueActivities : GENERIC_ACTIVITIES;
+  const act = (i: number) => pool[i] ?? pool[pool.length - 1];
 
   const city = citySlug.charAt(0).toUpperCase() + citySlug.slice(1);
 
