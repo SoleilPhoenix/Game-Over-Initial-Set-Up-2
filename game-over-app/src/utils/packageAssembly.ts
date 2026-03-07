@@ -112,7 +112,7 @@ const DINING_NAMES: Record<string, string> = {
   'Tapas / Shared Plates':             'Tapas Dinner',
   'BBQ Ribs + Beer Tower':             'BBQ Dinner',
   'Pizza Party + Craft Beer':          'Pizza & Craft Beer Dinner',
-  "Private Dining Room + Chef's Menu": 'Private Dining Experience',
+  "Private Dining Room + Chef's Menu": 'Private Chef Dinner',
   'Beer Hall / Platter Night':         'Beer Hall Dinner',
 };
 

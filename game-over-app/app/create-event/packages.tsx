@@ -3,7 +3,7 @@
  * Full-height cards with pricing toggle, best match highlight
  */
 
-import React, { useCallback, useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react';
 import { ScrollView, Alert, Image, View, StyleSheet } from 'react-native';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useRouter } from 'expo-router';
@@ -17,16 +17,8 @@ import { WizardFooter } from '@/components/ui/WizardFooter';
 import { DARK_THEME } from '@/constants/theme';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { LinearGradient } from 'expo-linear-gradient';
-import { supabase } from '@/lib/supabase/client';
 import { setDesiredParticipants } from '@/lib/participantCountCache';
 import { assemblePackages } from '@/utils/packageAssembly';
-
-// Standard per-person pricing: S=€99, M=€149, L=€199
-const TIER_PRICE_PER_PERSON: Record<string, number> = {
-  essential: 99_00,
-  classic: 149_00,
-  grand: 199_00,
-};
 
 // Feature counts by tier: S=3, M=4, L=5
 // Fallback packages when DB returns empty (for Berlin, Hamburg, Hannover)
@@ -383,15 +375,21 @@ export default function WizardStep4() {
   // Sort order: S (essential) → M (classic/recommended) → L (grand)
   const TIER_ORDER: Record<string, number> = { essential: 0, classic: 1, grand: 2 };
   const citySlug = cityId ? (CITY_UUID_TO_SLUG[cityId] || 'berlin') : 'berlin';
-  const wizardAnswers = {
+  const assembledPackages = useMemo(() => assemblePackages({
     h1: energyLevel, h2: spotlightComfort, h3: competitionStyle,
     h4: enjoymentType, h5: indoorOutdoor, h6: eveningStyle,
     g1: averageAge, g2: groupCohesion, g3: fitnessLevel,
     g4: drinkingCulture, g5: groupDynamic, g6: groupVibe,
-  };
+  }, citySlug), [
+    citySlug,
+    energyLevel, spotlightComfort, competitionStyle,
+    enjoymentType, indoorOutdoor, eveningStyle,
+    averageAge, groupCohesion, fitnessLevel,
+    drinkingCulture, groupDynamic, groupVibe,
+  ]);
   const rawPackages = (dbPackages && dbPackages.length > 0)
     ? dbPackages
-    : assemblePackages(wizardAnswers, citySlug);
+    : assembledPackages;
   const packages = [...rawPackages].sort(
     (a: any, b: any) => (TIER_ORDER[a.tier] ?? 1) - (TIER_ORDER[b.tier] ?? 1)
   );
