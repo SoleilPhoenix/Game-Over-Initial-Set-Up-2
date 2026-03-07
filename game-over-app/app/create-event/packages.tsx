@@ -19,6 +19,7 @@ import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase/client';
 import { setDesiredParticipants } from '@/lib/participantCountCache';
+import { assemblePackages } from '@/utils/packageAssembly';
 
 // Standard per-person pricing: S=€99, M=€149, L=€199
 const TIER_PRICE_PER_PERSON: Record<string, number> = {
@@ -34,116 +35,6 @@ const CITY_UUID_TO_SLUG: Record<string, string> = {
   '550e8400-e29b-41d4-a716-446655440101': 'berlin',
   '550e8400-e29b-41d4-a716-446655440102': 'hamburg',
   '550e8400-e29b-41d4-a716-446655440103': 'hannover',
-};
-const FALLBACK_PACKAGES: Record<string, any[]> = {
-  berlin: [
-    {
-      id: 'berlin-classic',
-      name: 'Berlin Classic',
-      tier: 'classic',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.classic,
-      hero_image_url: getPackageImage('berlin', 'classic'),
-      rating: 4.8,
-      review_count: 127,
-      features: ['VIP nightlife access', 'Private party bus', 'Professional photographer', 'Welcome drinks package'],
-      description: 'The ideal balance of nightlife, culture, and unforgettable moments in Berlin.',
-      bestMatch: true,
-    },
-    {
-      id: 'berlin-essential',
-      name: 'Berlin Essential',
-      tier: 'essential',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.essential,
-      hero_image_url: getPackageImage('berlin', 'essential'),
-      rating: 4.5,
-      review_count: 89,
-      features: ['Bar hopping tour', 'Welcome drinks', 'Group coordination'],
-      description: 'A solid party plan with all the essentials covered.',
-    },
-    {
-      id: 'berlin-grand',
-      name: 'Berlin Grand',
-      tier: 'grand',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.grand,
-      hero_image_url: getPackageImage('berlin', 'grand'),
-      rating: 4.9,
-      review_count: 42,
-      features: ['Luxury suite', 'Private chef dinner', 'Spa & wellness package', 'VIP club access', 'Private chauffeur'],
-      description: 'The ultimate premium experience with luxury at every turn.',
-    },
-  ],
-  hamburg: [
-    {
-      id: 'hamburg-classic',
-      name: 'Hamburg Classic',
-      tier: 'classic',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.classic,
-      hero_image_url: getPackageImage('hamburg', 'classic'),
-      rating: 4.7,
-      review_count: 98,
-      features: ['Reeperbahn nightlife tour', 'Harbor cruise', 'Professional photographer', 'Reserved bar area'],
-      description: 'Experience Hamburg\'s legendary nightlife and harbor in style.',
-      bestMatch: true,
-    },
-    {
-      id: 'hamburg-essential',
-      name: 'Hamburg Essential',
-      tier: 'essential',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.essential,
-      hero_image_url: getPackageImage('hamburg', 'essential'),
-      rating: 4.4,
-      review_count: 64,
-      features: ['Guided bar tour', 'Welcome cocktails', 'Group planning'],
-      description: 'A fun, well-organized Hamburg party experience.',
-    },
-    {
-      id: 'hamburg-grand',
-      name: 'Hamburg Grand',
-      tier: 'grand',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.grand,
-      hero_image_url: getPackageImage('hamburg', 'grand'),
-      rating: 4.9,
-      review_count: 31,
-      features: ['Elbphilharmonie VIP event', 'Private yacht dinner', 'Luxury hotel suite', 'Spa & wellness day', 'Premium bottle service'],
-      description: 'Premium Hamburg experience with exclusive venues and luxury service.',
-    },
-  ],
-  hannover: [
-    {
-      id: 'hannover-classic',
-      name: 'Hannover Classic',
-      tier: 'classic',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.classic,
-      hero_image_url: getPackageImage('hannover', 'classic'),
-      rating: 4.6,
-      review_count: 73,
-      features: ['Craft beer experience', 'Go-kart racing', 'Professional photographer', 'Welcome dinner'],
-      description: 'An action-packed celebration in the heart of Hannover.',
-      bestMatch: true,
-    },
-    {
-      id: 'hannover-essential',
-      name: 'Hannover Essential',
-      tier: 'essential',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.essential,
-      hero_image_url: getPackageImage('hannover', 'essential'),
-      rating: 4.3,
-      review_count: 51,
-      features: ['City adventure tour', 'Welcome drinks', 'Group coordination'],
-      description: 'A great time in Hannover without breaking the bank.',
-    },
-    {
-      id: 'hannover-grand',
-      name: 'Hannover Grand',
-      tier: 'grand',
-      price_per_person_cents: TIER_PRICE_PER_PERSON.grand,
-      hero_image_url: getPackageImage('hannover', 'grand'),
-      rating: 4.8,
-      review_count: 28,
-      features: ['Herrenhausen Gardens gala', 'Private chef dinner', 'Spa & wellness day', 'VIP nightlife access', 'Luxury hotel suite'],
-      description: 'Exclusive Hannover experience with private gala and luxury wellness.',
-    },
-  ],
 };
 
 function formatPrice(cents: number): string {
@@ -469,8 +360,8 @@ export default function WizardStep4() {
   const wizardState = useWizardStore();
   const {
     cityId,
-    energyLevel,
-    groupVibe,
+    energyLevel, spotlightComfort, competitionStyle, enjoymentType, indoorOutdoor, eveningStyle,
+    averageAge, groupCohesion, fitnessLevel, drinkingCulture, groupDynamic, groupVibe,
     participantCount,
     selectedPackageId,
     setSelectedPackageId,
@@ -491,10 +382,16 @@ export default function WizardStep4() {
   // Resolve UUID to slug for fallback lookup
   // Sort order: S (essential) → M (classic/recommended) → L (grand)
   const TIER_ORDER: Record<string, number> = { essential: 0, classic: 1, grand: 2 };
-  const citySlug = cityId ? (CITY_UUID_TO_SLUG[cityId] || cityId) : null;
+  const citySlug = cityId ? (CITY_UUID_TO_SLUG[cityId] || 'berlin') : 'berlin';
+  const wizardAnswers = {
+    h1: energyLevel, h2: spotlightComfort, h3: competitionStyle,
+    h4: enjoymentType, h5: indoorOutdoor, h6: eveningStyle,
+    g1: averageAge, g2: groupCohesion, g3: fitnessLevel,
+    g4: drinkingCulture, g5: groupDynamic, g6: groupVibe,
+  };
   const rawPackages = (dbPackages && dbPackages.length > 0)
     ? dbPackages
-    : (citySlug ? FALLBACK_PACKAGES[citySlug] || [] : []);
+    : assemblePackages(wizardAnswers, citySlug);
   const packages = [...rawPackages].sort(
     (a: any, b: any) => (TIER_ORDER[a.tier] ?? 1) - (TIER_ORDER[b.tier] ?? 1)
   );
@@ -590,7 +487,7 @@ export default function WizardStep4() {
   }, [router]);
 
   // Skip loading spinner for fallback cities — we have local data immediately
-  const hasFallbackData = !!(citySlug && FALLBACK_PACKAGES[citySlug]);
+  const hasFallbackData = !!(dbPackages && dbPackages.length > 0) || !!citySlug;
   if (isLoading && !hasFallbackData) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
