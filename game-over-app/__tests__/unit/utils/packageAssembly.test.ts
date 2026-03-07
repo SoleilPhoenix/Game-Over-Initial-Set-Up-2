@@ -60,12 +60,15 @@ describe('assemblePackages', () => {
     expect(pkgs[2].features).toHaveLength(5);
   });
 
-  it('different profiles produce different top activities', () => {
+  it('different profiles produce different top activities (specific known winners)', () => {
+    // Relaxed + food-focused profile → Cocktail Making Course scores highest (22pts)
     const relaxed = { ...FULL_ANSWERS, h1: 'relaxed' as const, h4: 'food' as const, g5: 'relaxed' as const };
+    // Action + experience-focused + competitive → VR Arcade scores highest (23pts)
     const action  = { ...FULL_ANSWERS, h1: 'action' as const,  h4: 'experience' as const, g5: 'competitive' as const };
     const relaxedPkgs = assemblePackages(relaxed, 'hannover');
     const actionPkgs  = assemblePackages(action, 'hannover');
-    expect(relaxedPkgs[0].features[0]).not.toBe(actionPkgs[0].features[0]);
+    expect(relaxedPkgs[0].features[0]).toBe('Cocktail Workshop');
+    expect(actionPkgs[0].features[0]).toBe('VR Arcade');
   });
 
   it('prices match tier definitions', () => {
