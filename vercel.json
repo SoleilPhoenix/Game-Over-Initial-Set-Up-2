@@ -1,6 +1,4 @@
 {
-  "framework": null,
-  "buildCommand": "cd game-over-app && npm ci --legacy-peer-deps && npx expo export --platform web",
   "outputDirectory": "game-over-app/dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
