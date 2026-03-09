@@ -12,7 +12,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 
-// Detect if we're running in Expo Go
+// Detect if we're running in Expo Go (StoreClient = Expo Go app)
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 // Storage interface that matches what Supabase and Zustand expect
@@ -62,20 +62,45 @@ export function createStorage(namespace: string): AsyncStorageAdapter {
   }
 
   // Use MMKV for development/production builds
-  // Dynamic import to avoid loading MMKV in Expo Go
-  const { MMKV } = require('react-native-mmkv');
-  const storage = new MMKV({ id: namespace });
+  // Wrap initialization in try-catch: MMKV can fail to write manifest in Expo Go sandbox
+  let storage: any;
+  try {
+    const { MMKV } = require('react-native-mmkv');
+    storage = new MMKV({ id: namespace });
+    // Verify it works with a probe read — throws if manifest write failed
+    storage.getString('__probe__');
+  } catch {
+    // MMKV unavailable (Expo Go sandbox or filesystem restriction) — fall back to AsyncStorage
+    console.warn(`[Storage] MMKV init failed for "${namespace}", falling back to AsyncStorage`);
+    return {
+      getItem: async (key: string) => AsyncStorage.getItem(`${namespace}:${key}`).catch(() => null),
+      setItem: async (key: string, value: string) => { AsyncStorage.setItem(`${namespace}:${key}`, value).catch(() => {}); },
+      removeItem: async (key: string) => { AsyncStorage.removeItem(`${namespace}:${key}`).catch(() => {}); },
+    };
+  }
 
   return {
     getItem: async (key: string) => {
-      const value = storage.getString(key);
-      return value ?? null;
+      try {
+        const value = storage.getString(key);
+        return value ?? null;
+      } catch {
+        return null;
+      }
     },
     setItem: async (key: string, value: string) => {
-      storage.set(key, value);
+      try {
+        storage.set(key, value);
+      } catch (error) {
+        console.warn(`[Storage] MMKV write failed for ${key}:`, error);
+      }
     },
     removeItem: async (key: string) => {
-      storage.delete(key);
+      try {
+        storage.delete(key);
+      } catch (error) {
+        console.warn(`[Storage] MMKV delete failed for ${key}:`, error);
+      }
     },
   };
 }
@@ -102,19 +127,42 @@ export function createSyncStorage(namespace: string) {
   }
 
   // Use MMKV for development/production builds
-  const { MMKV } = require('react-native-mmkv');
-  const storage = new MMKV({ id: namespace });
+  let storage: any;
+  try {
+    const { MMKV } = require('react-native-mmkv');
+    storage = new MMKV({ id: namespace });
+    storage.getString('__probe__');
+  } catch {
+    console.warn(`[Storage] MMKV init failed for "${namespace}", falling back to AsyncStorage`);
+    return {
+      getItem: (key: string) => AsyncStorage.getItem(`${namespace}:${key}`).catch(() => null),
+      setItem: (key: string, value: string) => { AsyncStorage.setItem(`${namespace}:${key}`, value).catch(() => {}); },
+      removeItem: (key: string) => { AsyncStorage.removeItem(`${namespace}:${key}`).catch(() => {}); },
+    };
+  }
 
   return {
     getItem: (key: string): string | null => {
-      const value = storage.getString(key);
-      return value ?? null;
+      try {
+        const value = storage.getString(key);
+        return value ?? null;
+      } catch {
+        return null;
+      }
     },
     setItem: (key: string, value: string): void => {
-      storage.set(key, value);
+      try {
+        storage.set(key, value);
+      } catch (error) {
+        console.warn(`[Storage] MMKV write failed for ${key}:`, error);
+      }
     },
     removeItem: (key: string): void => {
-      storage.delete(key);
+      try {
+        storage.delete(key);
+      } catch (error) {
+        console.warn(`[Storage] MMKV delete failed for ${key}:`, error);
+      }
     },
   };
 }

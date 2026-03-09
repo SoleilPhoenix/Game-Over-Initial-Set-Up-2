@@ -25,6 +25,7 @@ import {
   type PlanningStep,
   type PlanningChecklist,
 } from '@/utils/planningProgress';
+import { assemblePackages } from '@/utils/packageAssembly';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { loadDesiredParticipants, loadChecklist, setChecklistItem, loadInvitedCount, loadBudgetInfo, type BudgetInfo } from '@/lib/participantCountCache';
@@ -107,50 +108,39 @@ export default function EventSummaryScreen() {
     return daysLeft >= 0 && daysLeft <= 14 && (cachedBudget.paidAmountCents || 0) < cachedBudget.totalCents;
   }, [event?.start_date, cachedBudget]);
 
-  // Derive package highlight from booking tier — the premium feature of the selected package
-  const TIER_HIGHLIGHTS: Record<string, string> = {
-    essential: 'Reserved Bar Area',
-    classic: 'Private Wine Tasting',
-    grand: 'Private Yacht Charter',
-  };
+  // Derive package highlight — the top activity from the assembled package
   const vibeText = useMemo(() => {
     if (!event) return '';
 
-    // Try to get highlight from booking package tier
-    const bookingPkg = booking as Record<string, any> | undefined;
-    const pkgTier = bookingPkg?.package?.tier || bookingPkg?.tier;
-    if (pkgTier && TIER_HIGHLIGHTS[pkgTier]) {
-      return TIER_HIGHLIGHTS[pkgTier];
-    }
+    // Best source: packageHighlight stored in cache when payment was made
+    if (cachedBudget?.packageHighlight) return cachedBudget.packageHighlight;
 
-    // Try to extract tier from selected_package_id slug (e.g., "hamburg-classic" → "classic")
-    const selectedPkgId = bookingPkg?.selected_package_id;
-    if (selectedPkgId && typeof selectedPkgId === 'string') {
-      const slugParts = selectedPkgId.split('-');
-      const possibleTier = slugParts[slugParts.length - 1];
-      if (possibleTier && TIER_HIGHLIGHTS[possibleTier]) {
-        return TIER_HIGHLIGHTS[possibleTier];
+    // Fallback: reconstruct from cached features array (also stored at payment time)
+    if (cachedBudget?.packageFeatures?.[0]) return cachedBudget.packageFeatures[0];
+
+    // For older events: derive from packageId slug by assembling with defaults
+    if (cachedBudget?.packageId) {
+      const parts = cachedBudget.packageId.split('-');
+      const citySlug = parts[0];
+      const tierSlug = parts[parts.length - 1];
+      if (citySlug && tierSlug) {
+        try {
+          const assembled = assemblePackages({ h1: null, h2: null, h3: null, h4: null, h5: null, h6: null, g1: null, g2: null, g3: null, g4: null, g5: null, g6: [] }, citySlug);
+          const match = assembled.find(p => p.tier === tierSlug);
+          if (match?.features?.[0]) return match.features[0];
+        } catch {}
       }
     }
 
-    // Fallback: first feature from the package if available
+    // Try features from the booking record (DB path)
+    const bookingPkg = booking as Record<string, any> | undefined;
     const features = bookingPkg?.package?.features || bookingPkg?.features;
-    if (Array.isArray(features) && features.length > 0) {
-      return features[0];
-    }
+    if (Array.isArray(features) && features.length > 0) return features[0];
 
-    // Final fallback: from event vibe or preferences
-    if (event.vibe) return event.vibe;
-
-    // For booked events, always show something meaningful
-    if (event.status === 'booked' || event.status === 'completed') {
-      return 'Classic Package';
-    }
-
-    // Show a meaningful fallback for events still in planning
+    // Final fallback for events still in planning
     if (event.status === 'planning') return t.events.planningPhase || 'Planning in progress';
     return '';
-  }, [event, booking]);
+  }, [event, booking, cachedBudget]);
 
   // Generate invite code for sharing
   const handleGenerateInvite = async (): Promise<string> => {
@@ -234,11 +224,11 @@ export default function EventSummaryScreen() {
         return {
           text: perPersonDisplay
             ? t.eventDetail.personEst.replace('{{amount}}', String(perPersonDisplay))
-            : (t.eventDetail as any).budgetSubtext || 'Track expenses',
+            : (t.eventDetail as any).budgetSubtext || 'Track Expenses and More',
           color: DARK_THEME.textTertiary,
         };
       case 'packages':
-        return { text: t.eventDetail.selectedPackage, color: DARK_THEME.textTertiary };
+        return { text: 'View Package Details', color: DARK_THEME.textTertiary };
       default:
         return { text: '', color: DARK_THEME.textTertiary };
     }
@@ -345,6 +335,14 @@ export default function EventSummaryScreen() {
                   pressed && styles.toolCardPressed,
                 ]}
                 onPress={() => {
+                  if (tool.key === 'packages') {
+                    // Navigate to the actual package detail screen with event context
+                    const pkgId = cachedBudget?.packageId || bookingPkgId;
+                    if (pkgId) {
+                      router.push(`/package/${pkgId}?eventId=${id}&viewOnly=1` as any);
+                    }
+                    return;
+                  }
                   const route = tool.isTab
                     ? ((tool as any).passEventId ? `${tool.route}?eventId=${id}` : tool.route)
                     : `/event/${id}/${tool.route}`;

@@ -305,7 +305,12 @@ export default function EventsScreen() {
         .map(e => e.honoree_name?.toLowerCase())
         .filter(Boolean)
     );
-    return rawDrafts.filter(d => !bookedNames.has(d.honoreeName?.toLowerCase()));
+    const filtered = rawDrafts.filter(d => !bookedNames.has(d.honoreeName?.toLowerCase()));
+    return [...filtered].sort((a, b) => {
+      const aTime = a.startDate ? new Date(a.startDate).getTime() : Infinity;
+      const bTime = b.startDate ? new Date(b.startDate).getTime() : Infinity;
+      return aTime - bTime;
+    });
   }, [rawDrafts, events]);
   const hasDrafts = allDrafts.length > 0;
 
@@ -779,17 +784,34 @@ export default function EventsScreen() {
     );
   };
 
-  const renderDraftCards = () => {
-    // Only show drafts on All and Organizing tabs — they don't belong in Attending
-    if (!hasDrafts || activeFilter === 'attending') return null;
-    return <>{allDrafts.map(renderSingleDraftCard)}</>;
+  // Drafts section rendered BELOW booked events with visual separator
+  const renderDraftSection = () => {
+    if (activeFilter === 'attending') return null;
+    const showDrafts = hasDrafts;
+    return (
+      <View>
+        {/* Separator between booked events and drafts */}
+        <View style={styles.draftSectionSeparator}>
+          <View style={styles.draftSectionLine} />
+          <Text style={styles.draftSectionLabel}>Drafts & Planning</Text>
+          <View style={styles.draftSectionLine} />
+        </View>
+
+        {/* Start New Plan button — visually highlighted */}
+        <View style={{ paddingHorizontal: 0, marginBottom: 12 }}>
+          {renderStartNewPlanButton()}
+        </View>
+
+        {/* Draft cards */}
+        {showDrafts && allDrafts.map(renderSingleDraftCard)}
+      </View>
+    );
   };
 
   const renderListFooter = () => {
-    if (!events || events.length === 0) return null;
     return (
-      <View style={{ paddingHorizontal: 16, paddingBottom: 20 }}>
-        {renderStartNewPlanButton()}
+      <View style={{ paddingBottom: 20 }}>
+        {renderDraftSection()}
       </View>
     );
   };
@@ -878,7 +900,6 @@ export default function EventsScreen() {
               />
             }
             showsVerticalScrollIndicator={false}
-            ListHeaderComponent={renderDraftCards}
             ListFooterComponent={renderListFooter}
             testID="events-list"
           />
@@ -901,10 +922,16 @@ export default function EventsScreen() {
             showsVerticalScrollIndicator={false}
             ListHeaderComponent={
               <>
-                {renderDraftCards()}
-                <View style={{ marginTop: 12 }}>
+                {/* Start New Plan at top when no booked events exist */}
+                <View style={{ marginBottom: 16 }}>
                   {renderStartNewPlanButton()}
                 </View>
+                <View style={styles.draftSectionSeparator}>
+                  <View style={styles.draftSectionLine} />
+                  <Text style={styles.draftSectionLabel}>Drafts</Text>
+                  <View style={styles.draftSectionLine} />
+                </View>
+                {allDrafts.map(renderSingleDraftCard)}
               </>
             }
           />
@@ -1115,19 +1142,39 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRadius: 3,
   },
+  // Separator between booked events and drafts section
+  draftSectionSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+    marginTop: 8,
+  },
+  draftSectionLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: DARK_THEME.glassBorder,
+  },
+  draftSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: DARK_THEME.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
   startNewPlanButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    paddingVertical: 24,
+    paddingVertical: 20,
     paddingHorizontal: 24,
     marginHorizontal: 0,
     borderRadius: 16,
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: DARK_THEME.glassBorder,
-    backgroundColor: 'transparent',
+    borderColor: DARK_THEME.primary,
+    backgroundColor: 'rgba(90, 126, 176, 0.08)',
   },
   startNewPlanButtonPressed: {
     opacity: 0.7,

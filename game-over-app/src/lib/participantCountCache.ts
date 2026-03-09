@@ -105,19 +105,36 @@ export interface BudgetInfo {
   paidAmountCents?: number;
   /** Package slug (e.g. "hamburg-classic") — used for navigation and image display. */
   packageId?: string;
+  /** Top activity name from the assembled package (features[0]). Used as Package Highlight on event summary. */
+  packageHighlight?: string;
+  /** Full features array of the assembled package. Used to display correct includes in package detail view. */
+  packageFeatures?: string[];
   /** Total participant count including honoree — authoritative source to prevent inflation bugs. */
   totalParticipants?: number;
+  /** Full wizard questionnaire answers — stored at event creation so viewOnly can re-assemble correct features. */
+  wizardAnswers?: Record<string, string | string[] | null>;
 }
 
 const BUDGET_KEY = 'budget_info';
 const budgetCache: Record<string, BudgetInfo> = {};
 
 export async function setBudgetInfo(eventId: string, info: BudgetInfo): Promise<void> {
-  budgetCache[eventId] = info;
+  // Merge: preserve existing optional fields when new info omits them (e.g. payment.tsx
+  // doesn't know wizard features, packages.tsx doesn't know paidAmountCents).
+  const existing = budgetCache[eventId];
+  const merged: BudgetInfo = existing
+    ? {
+        ...existing,
+        ...Object.fromEntries(
+          Object.entries(info).filter(([, v]) => v !== undefined)
+        ),
+      }
+    : info;
+  budgetCache[eventId] = merged;
   try {
     const raw = await AsyncStorage.getItem(BUDGET_KEY);
     const data = raw ? JSON.parse(raw) : {};
-    data[eventId] = info;
+    data[eventId] = merged;
     await AsyncStorage.setItem(BUDGET_KEY, JSON.stringify(data));
   } catch {}
 }

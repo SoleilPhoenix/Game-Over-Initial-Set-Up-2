@@ -17,7 +17,7 @@ import { WizardFooter } from '@/components/ui/WizardFooter';
 import { DARK_THEME } from '@/constants/theme';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { LinearGradient } from 'expo-linear-gradient';
-import { setDesiredParticipants } from '@/lib/participantCountCache';
+import { setDesiredParticipants, setBudgetInfo } from '@/lib/participantCountCache';
 import { assemblePackages } from '@/utils/packageAssembly';
 
 // Feature counts by tier: S=3, M=4, L=5
@@ -358,6 +358,28 @@ export default function WizardStep4() {
         useWizardStore.getState().setCreatedEventId(eventId);
         // Cache desired participant count for event summary / manage invitations screens
         setDesiredParticipants(eventId, wizParticipants).catch(() => {});
+        // Cache the selected package features NOW while wizard answers are still in store.
+        // This ensures Package Details (viewOnly) shows the correct per-event features
+        // even after the wizard is cleared post-confirmation.
+        const selPkg = packages.find(p => p.id === packageId);
+        if (selPkg && Array.isArray(selPkg.features) && selPkg.features.length > 0) {
+          const perPerson = (selPkg as any).price_per_person_cents || 149_00;
+          setBudgetInfo(eventId, {
+            totalCents: perPerson * wizParticipants,
+            perPersonCents: perPerson,
+            payingCount: wizParticipants,
+            totalParticipants: wizParticipants,
+            packageId: packageId || selPkg.id,
+            packageFeatures: selPkg.features as string[],
+            packageHighlight: (selPkg.features as string[])[0],
+            wizardAnswers: {
+              h1: energyLevel, h2: spotlightComfort, h3: competitionStyle,
+              h4: enjoymentType, h5: indoorOutdoor, h6: eveningStyle,
+              g1: averageAge, g2: groupCohesion, g3: fitnessLevel,
+              g4: drinkingCulture, g5: groupDynamic, g6: groupVibe,
+            },
+          }).catch(() => {});
+        }
       } catch (createError: any) {
         // RLS recursion or network error — skip event creation, proceed with draft booking
         const isRlsRecursion = createError?.code === '42P17' || createError?.message?.includes('infinite recursion');

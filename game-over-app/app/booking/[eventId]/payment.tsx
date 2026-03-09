@@ -221,6 +221,10 @@ export default function PaymentScreen() {
             paidAmountCents: newTotalPaid,
             // Store URL-param slug (e.g. "hamburg-classic"), not activePkg.id which may be a DB UUID
             packageId: packageId || activePkg.id,
+            // Top activity from assembled package — shown as Package Highlight on event summary
+            packageHighlight: (activePkg as any)?.features?.[0] || (draftPkg as any)?.features?.[0],
+            // Full features list — shown in package detail when opened from event summary
+            packageFeatures: (activePkg as any)?.features || (draftPkg as any)?.features,
             // Store total participants on first payment only (to prevent inflation on remaining payment)
             ...(paramAmountCents === 0 && totalParticipants > 1 ? { totalParticipants } : {}),
           }).catch(() => {});

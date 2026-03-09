@@ -3,7 +3,7 @@
  * Glass card overlay, premium highlights, reviews, fixed bottom bar
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { ScrollView, ImageBackground } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
@@ -18,6 +18,7 @@ import { DARK_THEME } from '@/constants/theme';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { useTranslation } from '@/i18n';
 import { assemblePackages } from '@/utils/packageAssembly';
+import { loadBudgetInfo, type BudgetInfo } from '@/lib/participantCountCache';
 import type { Json } from '@/lib/supabase/types';
 
 const TIER_PRICE_PER_PERSON: Record<string, number> = {
@@ -60,40 +61,62 @@ const formatPrice = (cents: number) => {
   return '\u20AC' + (cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 };
 
-// 1 premium highlight per tier
-const HIGHLIGHT_ICONS: Record<string, { icon: string; label: string; sub: string }[]> = {
-  essential: [
-    { icon: 'wine', label: 'Reserved Bar Area', sub: '' },
-  ],
-  classic: [
-    { icon: 'wine', label: 'Private Wine Tasting', sub: '' },
-  ],
-  grand: [
-    { icon: 'boat', label: 'Private Yacht Charter', sub: '' },
-  ],
+// Icon mapping for assembled package features
+const FEATURE_ICON: Record<string, string> = {
+  // Activities
+  'Poker Night': 'card', 'Darts Tournament': 'radio-button-on', 'Table Football': 'football',
+  'Go-Karting': 'car-sport', 'VR Arcade': 'game-controller', 'Axe Throwing': 'hammer',
+  'Escape Room': 'lock-closed', 'Trampoline Park': 'body', 'Cooking Class': 'restaurant',
+  'Dance Class': 'musical-notes', 'Creative Workshop': 'brush', 'Sports Viewing': 'tv',
+  'Laser Tag': 'flash', 'Bowling': 'disc', 'Indoor Climbing': 'trending-up',
+  'Mini Golf': 'golf', 'Bubble Football': 'football', 'Paintball': 'color-wand',
+  'Billiards': 'ellipse', 'Harbor Cruise': 'boat', 'Boat Rental': 'boat',
+  'Scavenger Hunt': 'map', 'Photo Challenge': 'camera', 'City Walking Tour': 'walk',
+  'Street Art Tour': 'brush', 'Beach Day': 'sunny', 'Theater Show': 'ticket',
+  'Comedy Show': 'happy', 'Spa Day': 'flower', 'Massage Session': 'hand-left',
+  'Beer Tasting': 'beer', 'Whisky Tasting': 'wine', 'Gin Tasting': 'wine',
+  'Cocktail Workshop': 'wine', 'BBQ & Grill': 'flame', 'Guided Bike Tour': 'bicycle',
+  'Kayak & SUP': 'boat', 'Food Tour': 'restaurant', 'Wine Tasting': 'wine',
+  // Dining
+  'Casual Dinner & Drinks': 'restaurant', 'Tapas Dinner': 'restaurant',
+  'BBQ Dinner': 'flame', 'Pizza & Craft Beer Dinner': 'pizza',
+  'Private Chef Dinner': 'restaurant', 'Beer Hall Dinner': 'beer',
+  'Brunch Buffet': 'cafe', 'Steakhouse Dinner': 'restaurant',
+  'Sushi Dinner': 'fish', 'Restaurant Dinner': 'restaurant',
+  // Bar / Nightlife
+  'Bar Crawl': 'wine', 'Club Night': 'musical-notes', 'Live Music Bar': 'musical-notes',
+  'Karaoke Night': 'mic', 'Pub Quiz Night': 'help-circle', 'Bar Night with Drinks': 'wine',
 };
 
-// Package includes: S=3, M=4, L=5
-const PACKAGE_INCLUDES: Record<string, { icon: string; title: string; sub: string }[]> = {
-  essential: [
-    { icon: 'beer', title: 'Bar Hopping Tour', sub: 'Curated selection of top local bars' },
-    { icon: 'people', title: 'Group Coordination', sub: 'Dedicated event planner support' },
-    { icon: 'headset', title: '24/7 Digital Concierge', sub: 'Instant AI support via app' },
-  ],
-  classic: [
-    { icon: 'shield-checkmark', title: 'VIP Club Access', sub: 'Skip the line + Reserved table' },
-    { icon: 'bus', title: 'Private Party Bus', sub: 'Luxury transport between venues' },
-    { icon: 'camera', title: 'Professional Photographer', sub: 'Capture every memorable moment' },
-    { icon: 'headset', title: '24/7 Digital Concierge', sub: 'AI itinerary adjustments on the fly' },
-  ],
-  grand: [
-    { icon: 'car-sport', title: 'Private Luxury Limo', sub: 'Chauffeur service all weekend' },
-    { icon: 'shield-checkmark', title: 'All-Access VIP Pass', sub: 'Instant entry to top 5 clubs' },
-    { icon: 'headset', title: '24/7 Digital Concierge', sub: 'Priority support & booking' },
-    { icon: 'wine', title: 'Premium Bottle Service', sub: 'Comped bottles at main event' },
-    { icon: 'fitness', title: 'Recovery Spa Session', sub: 'Post-party massage & sauna' },
-  ],
-};
+const DINING_FEATURES = new Set([
+  'Casual Dinner & Drinks', 'Tapas Dinner', 'BBQ Dinner', 'Pizza & Craft Beer Dinner',
+  'Private Chef Dinner', 'Beer Hall Dinner', 'Brunch Buffet', 'Steakhouse Dinner',
+  'Sushi Dinner', 'Restaurant Dinner',
+]);
+const BAR_FEATURES = new Set([
+  'Bar Crawl', 'Club Night', 'Live Music Bar', 'Karaoke Night',
+  'Pub Quiz Night', 'Bar Night with Drinks',
+]);
+
+function featureIcon(name: string): string {
+  return FEATURE_ICON[name] ?? 'checkmark-circle';
+}
+
+function featureSub(name: string): string {
+  if (DINING_FEATURES.has(name)) return 'Group dinner included';
+  if (BAR_FEATURES.has(name)) return 'Evening entertainment included';
+  return 'Group activity included';
+}
+
+function buildHighlights(features: string[]): { icon: string; label: string; sub: string }[] {
+  if (features.length === 0) return [];
+  const top = features[0];
+  return [{ icon: featureIcon(top), label: top, sub: '' }];
+}
+
+function buildIncludes(features: string[]): { icon: string; title: string; sub: string }[] {
+  return features.map(f => ({ icon: featureIcon(f), title: f, sub: featureSub(f) }));
+}
 
 // 2-3 reviews per tier
 const MOCK_REVIEWS: Record<string, { initials: string; color: string; name: string; rating: number; text: string }[]> = {
@@ -208,14 +231,23 @@ function ReviewCard({ initials, color, name, rating, text }: {
 }
 
 export default function PackageDetailsScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, eventId, viewOnly } = useLocalSearchParams<{ id: string; eventId?: string; viewOnly?: string }>();
+  const isViewOnly = viewOnly === '1';
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { toggleFavorite, isFavorite } = useFavoritesStore();
   const { t } = useTranslation();
   const { data: dbPkg, isLoading } = usePackage(id);
 
-  // Read wizard answers to assemble dynamic package when needed
+  // Load event budget cache when opened from Event Summary (viewOnly mode)
+  const [eventBudget, setEventBudget] = useState<BudgetInfo | null>(null);
+  useEffect(() => {
+    if (eventId) {
+      loadBudgetInfo(eventId).then(info => setEventBudget(info ?? null));
+    }
+  }, [eventId]);
+
+  // Read wizard answers to assemble dynamic package when needed (creation flow only)
   const wizardState = useWizardStore();
   const {
     cityId,
@@ -223,20 +255,61 @@ export default function PackageDetailsScreen() {
     averageAge, groupCohesion, fitnessLevel, drinkingCulture, groupDynamic, groupVibe,
   } = wizardState;
 
-  // If DB returned nothing and the ID matches a city-tier pattern, assemble dynamically from wizard answers
+  // If DB returned nothing and the ID matches a city-tier pattern, assemble dynamically
   let assembledPkg: ReturnType<typeof assemblePackages>[number] | undefined;
   if (!dbPkg && id && isAssembledPackageId(id)) {
     const parts = id.split('-');
     const citySlug = parts[0];
     const tierSlug = parts[parts.length - 1];
     const resolvedCitySlug = citySlug || (cityId ? cityId : 'berlin');
-    const assembled = assemblePackages({
-      h1: energyLevel, h2: spotlightComfort, h3: competitionStyle,
-      h4: enjoymentType, h5: indoorOutdoor, h6: eveningStyle,
-      g1: averageAge, g2: groupCohesion, g3: fitnessLevel,
-      g4: drinkingCulture, g5: groupDynamic, g6: groupVibe,
-    }, resolvedCitySlug);
-    assembledPkg = assembled.find(p => p.tier === tierSlug);
+
+    if (isViewOnly && eventBudget?.packageFeatures) {
+      // In viewOnly mode with cached features, build a synthetic assembled pkg shell
+      assembledPkg = {
+        id,
+        name: id,
+        tier: tierSlug as 'essential' | 'classic' | 'grand',
+        price_per_person_cents: TIER_PRICE_PER_PERSON[tierSlug] || 149_00,
+        hero_image_url: getPackageImage(citySlug, tierSlug),
+        rating: 4.8,
+        review_count: tierSlug === 'classic' ? 127 : tierSlug === 'grand' ? 42 : 89,
+        features: eventBudget.packageFeatures,
+        description: '',
+      };
+    } else if (isViewOnly && eventBudget?.wizardAnswers) {
+      // viewOnly with stored wizard answers but no features: re-assemble from saved answers.
+      // This handles events where features were not cached separately.
+      const wa = eventBudget.wizardAnswers;
+      const assembled = assemblePackages(
+        {
+          h1: (wa.h1 as any) || null, h2: (wa.h2 as any) || null,
+          h3: (wa.h3 as any) || null, h4: (wa.h4 as any) || null,
+          h5: (wa.h5 as any) || null, h6: (wa.h6 as any) || null,
+          g1: (wa.g1 as any) || null, g2: (wa.g2 as any) || null,
+          g3: (wa.g3 as any) || null, g4: (wa.g4 as any) || null,
+          g5: (wa.g5 as any) || null, g6: Array.isArray(wa.g6) ? wa.g6 as string[] : [],
+        },
+        resolvedCitySlug,
+      );
+      assembledPkg = assembled.find(p => p.tier === tierSlug);
+    } else if (isViewOnly) {
+      // viewOnly with no cached data at all: assemble with null answers (default features).
+      // This is expected for events created before the feature-caching fix.
+      const assembled = assemblePackages(
+        { h1: null, h2: null, h3: null, h4: null, h5: null, h6: null, g1: null, g2: null, g3: null, g4: null, g5: null, g6: [] },
+        resolvedCitySlug,
+      );
+      assembledPkg = assembled.find(p => p.tier === tierSlug);
+    } else {
+      // Creation flow: assemble from current wizard answers
+      const assembled = assemblePackages({
+        h1: energyLevel, h2: spotlightComfort, h3: competitionStyle,
+        h4: enjoymentType, h5: indoorOutdoor, h6: eveningStyle,
+        g1: averageAge, g2: groupCohesion, g3: fitnessLevel,
+        g4: drinkingCulture, g5: groupDynamic, g6: groupVibe,
+      }, resolvedCitySlug);
+      assembledPkg = assembled.find(p => p.tier === tierSlug);
+    }
   }
 
   // Use DB package if available, then dynamically assembled package, then static fallback
@@ -265,17 +338,30 @@ export default function PackageDetailsScreen() {
   }
 
   const tier = (pkg.tier as 'essential' | 'classic' | 'grand') || 'essential';
-  const isRecommended = tier === 'classic';
-  const highlights = HIGHLIGHT_ICONS[tier] || [];
-  const includes = PACKAGE_INCLUDES[tier] || [];
-  const reviews = MOCK_REVIEWS[tier] || [];
-  const features = toStringArray(pkg.features);
+  // In viewOnly mode (opened from Event Summary), never show the recommendation badge or select button
+  const isRecommended = !isViewOnly && tier === 'classic';
 
-  // Get participant count from wizard for total group price
-  const participantCount = useWizardStore((s) => s.participantCount);
+  // In viewOnly mode, use cached event features if available; otherwise use pkg features
+  const rawFeatures = (isViewOnly && eventBudget?.packageFeatures)
+    ? eventBudget.packageFeatures
+    : toStringArray(pkg.features);
+  const features = rawFeatures;
+  const highlights = buildHighlights(features);
+  const includes = buildIncludes(features);
+  const reviews = MOCK_REVIEWS[tier] || [];
+
+  // Participant count: viewOnly uses cached event total, creation flow uses wizard store
+  const wizardParticipantCount = useWizardStore((s) => s.participantCount);
   const setSelectedPackageId = useWizardStore((s) => s.setSelectedPackageId);
+  const participantCount = (isViewOnly && eventBudget?.totalParticipants)
+    ? eventBudget.totalParticipants
+    : wizardParticipantCount;
+
   const perPersonCents = pkg.price_per_person_cents || pkg.base_price_cents || TIER_PRICE_PER_PERSON[tier] || 149_00;
-  const totalGroupCents = perPersonCents * participantCount;
+  // In viewOnly mode, show the actual total paid (from cache) if available
+  const totalGroupCents = (isViewOnly && eventBudget?.totalCents)
+    ? eventBudget.totalCents
+    : perPersonCents * participantCount;
 
   // Display name without city prefix
   const tierNames: Record<string, string> = { essential: 'Essential', classic: 'Classic', grand: 'Grand' };
@@ -428,38 +514,87 @@ export default function PackageDetailsScreen() {
             </YStack>
           )}
 
-          {/* Total Price + Book Now */}
-          <YStack
-            borderTopWidth={1}
-            borderTopColor="rgba(255, 255, 255, 0.08)"
-            paddingTop="$4"
-            gap="$3"
-          >
-            <YStack>
-              <Text fontSize={12} color="$textTertiary" textTransform="uppercase">{t.packageDetail.totalPrice}</Text>
-              <XStack alignItems="baseline" gap="$2">
-                <Text fontSize={24} fontWeight="800" color="$textPrimary">
-                  {formatPrice(totalGroupCents)}
-                </Text>
-                <Text fontSize={13} color="$textTertiary">
-                  ({formatPrice(perPersonCents)}/person)
-                </Text>
-              </XStack>
-            </YStack>
-            <Button
-              fullWidth
-              size="lg"
-              onPress={() => {
-                // Select this package and go back to package selection
-                setSelectedPackageId(pkg.id);
-                router.back();
-              }}
-              testID="book-now-button"
+          {/* Total Price + Book Now — in creation flow only */}
+          {!isViewOnly && (
+            <YStack
+              borderTopWidth={1}
+              borderTopColor="rgba(255, 255, 255, 0.08)"
+              paddingTop="$4"
+              gap="$3"
             >
-              {t.packageDetail.selectThisPackage}
-            </Button>
-          </YStack>
+              <YStack>
+                <Text fontSize={12} color="$textTertiary" textTransform="uppercase">{t.packageDetail.totalPrice}</Text>
+                <XStack alignItems="baseline" gap="$2">
+                  <Text fontSize={24} fontWeight="800" color="$textPrimary">
+                    {formatPrice(totalGroupCents)}
+                  </Text>
+                  <Text fontSize={13} color="$textTertiary">
+                    ({formatPrice(perPersonCents)}/person)
+                  </Text>
+                </XStack>
+              </YStack>
+              <Button
+                fullWidth
+                size="lg"
+                onPress={() => {
+                  setSelectedPackageId(pkg.id);
+                  router.back();
+                }}
+                testID="book-now-button"
+              >
+                {t.packageDetail.selectThisPackage}
+              </Button>
+            </YStack>
+          )}
         </YStack>
+
+        {/* Total Price breakdown — viewOnly mode only, shown below glass card */}
+        {isViewOnly && (
+          <YStack
+            marginHorizontal="$4"
+            marginTop="$4"
+            backgroundColor="rgba(35, 39, 47, 0.95)"
+            borderRadius={16}
+            borderWidth={1}
+            borderColor="rgba(255, 255, 255, 0.1)"
+            padding="$4"
+          >
+            <Text fontSize={12} color="$textTertiary" textTransform="uppercase" letterSpacing={1} marginBottom="$3">
+              Price Breakdown
+            </Text>
+            {/* Price breakdown rows */}
+            <YStack gap="$2">
+              {/* Row: €199/person  ×  6 people  =  €1.194 */}
+              <XStack alignItems="center">
+                <Text fontSize={13} color="$textTertiary" flex={1}>{formatPrice(perPersonCents)}/person</Text>
+                <Text fontSize={13} color="$textTertiary" flex={1} textAlign="center">× {participantCount} people</Text>
+                <Text fontSize={13} color="$textTertiary" flex={1} textAlign="right">{formatPrice(perPersonCents * participantCount)}</Text>
+              </XStack>
+              {totalGroupCents > perPersonCents * participantCount && (
+                <XStack alignItems="center">
+                  <Text fontSize={12} color="rgba(249,115,22,0.9)" flex={1}>
+                    + {Math.round((totalGroupCents / (perPersonCents * participantCount) - 1) * 100)}% service fee
+                  </Text>
+                  <Text fontSize={12} color="rgba(249,115,22,0.9)" flex={1} textAlign="right">
+                    +{formatPrice(totalGroupCents - perPersonCents * participantCount)}
+                  </Text>
+                </XStack>
+              )}
+              {/* Separator + Total row */}
+              <YStack
+                borderTopWidth={1}
+                borderTopColor="rgba(255,255,255,0.12)"
+                paddingTop="$2"
+                marginTop="$1"
+              >
+                <XStack justifyContent="space-between" alignItems="center">
+                  <Text fontSize={14} fontWeight="700" color="$textPrimary">Total</Text>
+                  <Text fontSize={16} fontWeight="800" color={DARK_THEME.primary}>{formatPrice(totalGroupCents)}</Text>
+                </XStack>
+              </YStack>
+            </YStack>
+          </YStack>
+        )}
 
         {/* Package Includes */}
         {includes.length > 0 && (
