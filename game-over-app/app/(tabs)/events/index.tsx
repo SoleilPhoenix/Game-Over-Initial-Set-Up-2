@@ -175,7 +175,7 @@ export default function EventsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useUser();
-  const { hasUnseenUrgency, markUrgencySeen } = useUrgentPayment();
+  const { hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('organizing');
   const { t } = useTranslation();
@@ -372,7 +372,15 @@ export default function EventsScreen() {
 
   const handleNotifications = () => {
     markUrgencySeen();
-    router.push('/notifications');
+    if (isGuestContribution && guestUrgentEvent) {
+      Alert.alert(
+        'Contribution Due',
+        `Your share for ${guestUrgentEvent.title} is due in ${guestDaysLeft} days.\nPlease transfer your contribution to the organizer.`,
+        [{ text: 'OK' }]
+      );
+    } else {
+      router.push('/notifications');
+    }
   };
 
   const getUserRole = (event: EventWithDetails): 'organizer' | 'guest' => {

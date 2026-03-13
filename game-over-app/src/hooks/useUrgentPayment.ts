@@ -9,6 +9,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { getAllBudgetInfos } from '@/lib/participantCountCache';
 import type { EventWithDetails } from '@/repositories/events';
+import { useAuthStore } from '@/stores/authStore';
 
 // New key — stores JSON array of event IDs the user has acknowledged
 const URGENT_SEEN_KEY = 'gameover:urgent_seen_events';
@@ -92,5 +93,32 @@ export function useUrgentPayment() {
     setSeenEventIds(newIds);
   }, [seenEventIds, urgentEvents]);
 
-  return { urgentEvent, urgentEvents, hasUnseenUrgency, markUrgencySeen };
+  const currentUserId = useAuthStore(s => s.user?.id);
+
+  // Guest urgency: driven by event_participants.payment_status, not budget cache
+  const guestUrgentEvent = useMemo(() => {
+    if (!currentUserId) return null;
+    return (events ?? []).find(event => {
+      const participant = (event.event_participants as any[] | undefined)?.find(
+        (p: any) => p.user_id === currentUserId
+      );
+      if (participant?.role !== 'guest') return false;
+      if (participant?.payment_status === 'paid') return false;
+      const days = daysUntil(event.start_date);
+      return days !== null && days <= 14;
+    }) ?? null;
+  }, [events, currentUserId]);
+
+  const isGuestContribution = guestUrgentEvent !== null;
+  const guestDaysLeft = guestUrgentEvent ? (daysUntil(guestUrgentEvent.start_date) ?? 0) : 0;
+
+  return {
+    urgentEvent,
+    urgentEvents,
+    hasUnseenUrgency,
+    markUrgencySeen,
+    guestUrgentEvent,
+    isGuestContribution,
+    guestDaysLeft,
+  };
 }
