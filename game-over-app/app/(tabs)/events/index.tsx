@@ -41,13 +41,7 @@ import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import { getEventImage, resolveImageSource, getPackageImage, getTierFromSlug } from '@/constants/packageImages';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import type { EventWithDetails } from '@/repositories';
-
-// Map city UUIDs to slugs for image lookup
-const CITY_UUID_TO_SLUG: Record<string, string> = {
-  '550e8400-e29b-41d4-a716-446655440101': 'berlin',
-  '550e8400-e29b-41d4-a716-446655440102': 'hamburg',
-  '550e8400-e29b-41d4-a716-446655440103': 'hannover',
-};
+import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 
 type FilterTab = 'organizing' | 'attending';
 
