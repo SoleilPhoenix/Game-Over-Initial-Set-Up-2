@@ -447,7 +447,7 @@ type LocalChannelSection = {
 
 export default function CommunicationScreen() {
   const router = useRouter();
-  const { urgentEvent, hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
+  const { hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
   // eventIdParam is set when navigating from Event Summary — pre-selects that event
   const { eventId: eventIdParam } = useLocalSearchParams<{ eventId?: string }>();
   const insets = useSafeAreaInsets();

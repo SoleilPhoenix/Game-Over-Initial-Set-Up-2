@@ -10,6 +10,7 @@ import { useEvents } from '@/hooks/queries/useEvents';
 import { getAllBudgetInfos } from '@/lib/participantCountCache';
 import type { EventWithDetails } from '@/repositories/events';
 import { useAuthStore } from '@/stores/authStore';
+import { supabase } from '@/lib/supabase/client';
 
 // New key — stores JSON array of event IDs the user has acknowledged
 const URGENT_SEEN_KEY = 'gameover:urgent_seen_events';
@@ -95,19 +96,35 @@ export function useUrgentPayment() {
 
   const currentUserId = useAuthStore(s => s.user?.id);
 
+  // Fetch current user's guest participations separately (event_participants is never
+  // joined by getByUser() to avoid RLS 42P17 recursion — see repositories/events.ts)
+  const [userParticipations, setUserParticipations] = useState<
+    Array<{ event_id: string; role: string; payment_status: string | null }>
+  >([]);
+
+  useEffect(() => {
+    if (!currentUserId) return;
+    supabase
+      .from('event_participants')
+      .select('event_id, role, payment_status')
+      .eq('user_id', currentUserId)
+      .eq('role', 'guest')
+      .then(({ data }) => {
+        if (data) setUserParticipations(data);
+      });
+  }, [currentUserId]);
+
   // Guest urgency: driven by event_participants.payment_status, not budget cache
   const guestUrgentEvent = useMemo(() => {
-    if (!currentUserId) return null;
+    if (!currentUserId || userParticipations.length === 0) return null;
     return (events ?? []).find(event => {
-      const participant = (event.event_participants as any[] | undefined)?.find(
-        (p: any) => p.user_id === currentUserId
-      );
-      if (participant?.role !== 'guest') return false;
-      if (participant?.payment_status === 'paid') return false;
+      const participation = userParticipations.find(p => p.event_id === event.id);
+      if (!participation || participation.role !== 'guest') return false;
+      if (participation.payment_status === 'paid') return false;
       const days = daysUntil(event.start_date);
       return days !== null && days <= 14;
     }) ?? null;
-  }, [events, currentUserId]);
+  }, [events, currentUserId, userParticipations]);
 
   const isGuestContribution = guestUrgentEvent !== null;
   const guestDaysLeft = guestUrgentEvent ? (daysUntil(guestUrgentEvent.start_date) ?? 0) : 0;

@@ -123,7 +123,7 @@ function SwipeableRefundRow({
 
 export default function BudgetDashboardScreen() {
   const router = useRouter();
-  const { hasUnseenUrgency, markUrgencySeen } = useUrgentPayment();
+  const { hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
   // eventId = opened via /(tabs)/budget?eventId=xxx (old approach, kept for safety)
   // id     = opened via /event/[id]/budget (event-stack, router.back() works correctly)
   const { eventId: rawEventIdParam, id: pathId } = useLocalSearchParams<{ eventId?: string; id?: string }>();
@@ -319,7 +319,15 @@ export default function BudgetDashboardScreen() {
 
   const handleNotifications = () => {
     markUrgencySeen();
-    router.push('/notifications');
+    if (isGuestContribution && guestUrgentEvent) {
+      Alert.alert(
+        'Contribution Due',
+        `Your share for ${guestUrgentEvent.title} is due in ${guestDaysLeft} days.\nPlease transfer your contribution to the organizer.`,
+        [{ text: 'OK' }]
+      );
+    } else {
+      router.push('/notifications');
+    }
   };
 
   // Auto-select nearest booked event (skip if opened from Event Summary)
@@ -396,6 +404,7 @@ export default function BudgetDashboardScreen() {
         paidCount: 1, // organizer paid deposit
         pendingCount: Math.max(0, payingCount - 1),
         perPerson,
+        payingCount,
       };
     }
 
@@ -413,14 +422,17 @@ export default function BudgetDashboardScreen() {
       }
     });
 
+    const perPersonCents = booking!.per_person_cents || 0;
+    const dbPayingCount = perPersonCents > 0 ? Math.round(totalBudget / (perPersonCents * 1.1)) : (participants?.length || 0);
     return {
       totalBudget,
       collected,
       pending: totalBudget - collected,
       percentage: totalBudget > 0 ? Math.round((collected / totalBudget) * 100) : 0,
       paidCount,
-      perPerson: booking!.per_person_cents || 0,
+      perPerson: perPersonCents,
       pendingCount,
+      payingCount: dbPayingCount,
     };
   }, [booking, participants, cachedBudget, cachedParticipantCount, cachedGuests]);
 
@@ -996,10 +1008,58 @@ export default function BudgetDashboardScreen() {
                   />
                 </View>
 
-                {/* Total Package Price */}
-                <Text fontSize={15} fontWeight="500" color={DARK_THEME.textTertiary} style={{ marginTop: 4 }}>
-                  {`Total Package Price  ${formatCurrencyRounded(budgetStats.totalBudget)}`}
-                </Text>
+                {/* Price Breakdown — always shown */}
+                {budgetStats.payingCount > 0 && (() => {
+                  const pkgSlug = cachedBudget?.packageId || (booking as any)?.package_id || '';
+                  const pkgTier = pkgSlug.split('-').pop() as string;
+                  const tierPriceCents: Record<string, number> = { essential: 9900, classic: 14900, grand: 19900 };
+                  const tierNames: Record<string, string> = { essential: 'Bronze', classic: 'Silver', grand: 'Gold' };
+                  const basePerPkg = tierPriceCents[pkgTier] ?? budgetStats.perPerson;
+                  const pkgName = tierNames[pkgTier] || 'Package';
+                  const totalCount = cachedParticipantCount || (budgetStats.payingCount + 1);
+                  const honoreeExcluded = cachedParticipantCount != null && budgetStats.payingCount < cachedParticipantCount;
+                  const baseAmount = basePerPkg * totalCount;
+                  const serviceFee = Math.ceil(baseAmount * 0.1);
+                  const grandTotal = baseAmount + serviceFee;
+                  const perPayingPerson = honoreeExcluded ? Math.ceil(grandTotal / budgetStats.payingCount) : 0;
+                  return (
+                    <View style={{ marginTop: 8 }}>
+                      {/* Thin divider */}
+                      <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 8 }} />
+                      {/* Row 1: package price × total participants */}
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                          {formatCurrencyRounded(basePerPkg)} / {pkgName} Package × {totalCount}
+                        </Text>
+                        <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                          {formatCurrencyRounded(baseAmount)}
+                        </Text>
+                      </View>
+                      {/* Row 2: service fee */}
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <Text fontSize={12} color="rgba(249,115,22,0.9)">Service Fee (10%)</Text>
+                        <Text fontSize={12} color="rgba(249,115,22,0.9)">{formatCurrencyRounded(serviceFee)}</Text>
+                      </View>
+                      {/* Row 3: total — thin divider + total line */}
+                      <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 6 }} />
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: honoreeExcluded ? 8 : 0 }}>
+                        <Text fontSize={12} fontWeight="600" color={DARK_THEME.textSecondary}>Total Package Price</Text>
+                        <Text fontSize={12} fontWeight="600" color={DARK_THEME.textSecondary}>{formatCurrencyRounded(grandTotal)}</Text>
+                      </View>
+                      {/* Row 4: per paying person — only when honoree is covered by group */}
+                      {honoreeExcluded && (
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: 'rgba(255,255,255,0.12)' }}>
+                          <Text fontSize={11} color={DARK_THEME.textTertiary}>
+                            ↳ {budgetStats.payingCount} persons · Honoree covered by group
+                          </Text>
+                          <Text fontSize={11} fontWeight="600" color={DARK_THEME.textSecondary}>
+                            {formatCurrencyRounded(perPayingPerson)}/person
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })()}
 
                 {/* Pay Remaining Balance — inside card, below total price */}
                 {budgetStats.percentage < 100 && budgetStats.pending > 0 && (
