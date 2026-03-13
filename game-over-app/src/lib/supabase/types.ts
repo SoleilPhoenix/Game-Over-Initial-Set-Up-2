@@ -18,8 +18,11 @@ export type Database = {
         Row: {
           audit_log: Json | null
           created_at: string | null
+          deposit_amount_cents: number | null
+          deposit_paid_at: string | null
           event_id: string
           exclude_honoree: boolean | null
+          fully_paid_at: string | null
           id: string
           package_base_cents: number
           package_id: string
@@ -29,6 +32,7 @@ export type Database = {
             | null
           per_person_cents: number
           reference_number: string | null
+          remaining_amount_cents: number | null
           service_fee_cents: number
           stripe_payment_intent_id: string | null
           total_amount_cents: number
@@ -37,8 +41,11 @@ export type Database = {
         Insert: {
           audit_log?: Json | null
           created_at?: string | null
+          deposit_amount_cents?: number | null
+          deposit_paid_at?: string | null
           event_id: string
           exclude_honoree?: boolean | null
+          fully_paid_at?: string | null
           id?: string
           package_base_cents: number
           package_id: string
@@ -48,6 +55,7 @@ export type Database = {
             | null
           per_person_cents: number
           reference_number?: string | null
+          remaining_amount_cents?: number | null
           service_fee_cents: number
           stripe_payment_intent_id?: string | null
           total_amount_cents: number
@@ -56,8 +64,11 @@ export type Database = {
         Update: {
           audit_log?: Json | null
           created_at?: string | null
+          deposit_amount_cents?: number | null
+          deposit_paid_at?: string | null
           event_id?: string
           exclude_honoree?: boolean | null
+          fully_paid_at?: string | null
           id?: string
           package_base_cents?: number
           package_id?: string
@@ -67,6 +78,7 @@ export type Database = {
             | null
           per_person_cents?: number
           reference_number?: string | null
+          remaining_amount_cents?: number | null
           service_fee_cents?: number
           stripe_payment_intent_id?: string | null
           total_amount_cents?: number
@@ -161,6 +173,7 @@ export type Database = {
           event_id: string
           id: string
           invited_at: string | null
+          invited_via: string | null
           payment_status: Database["public"]["Enums"]["payment_status"] | null
           role: Database["public"]["Enums"]["participant_role"]
           user_id: string
@@ -171,6 +184,7 @@ export type Database = {
           event_id: string
           id?: string
           invited_at?: string | null
+          invited_via?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
           role: Database["public"]["Enums"]["participant_role"]
           user_id: string
@@ -181,6 +195,7 @@ export type Database = {
           event_id?: string
           id?: string
           invited_at?: string | null
+          invited_via?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
           role?: Database["public"]["Enums"]["participant_role"]
           user_id?: string
@@ -198,40 +213,78 @@ export type Database = {
       event_preferences: {
         Row: {
           average_age: Database["public"]["Enums"]["age_range"] | null
+          competition_style:
+            | Database["public"]["Enums"]["competition_style"]
+            | null
           created_at: string | null
-          energy_level: Database["public"]["Enums"]["energy_level"] | null
+          drinking_culture:
+            | Database["public"]["Enums"]["drinking_culture"]
+            | null
+          enjoyment_type: Database["public"]["Enums"]["enjoyment_type"] | null
+          evening_style: Database["public"]["Enums"]["evening_style"] | null
           event_id: string
-          gathering_size: Database["public"]["Enums"]["gathering_size"] | null
+          fitness_level: Database["public"]["Enums"]["fitness_level"] | null
           group_cohesion: Database["public"]["Enums"]["group_cohesion"] | null
+          group_dynamic:
+            | Database["public"]["Enums"]["group_dynamic_type"]
+            | null
+          honoree_energy: Database["public"]["Enums"]["honoree_energy"] | null
           id: string
-          social_approach: Database["public"]["Enums"]["social_approach"] | null
+          indoor_outdoor: Database["public"]["Enums"]["indoor_outdoor"] | null
+          spotlight_comfort:
+            | Database["public"]["Enums"]["spotlight_comfort"]
+            | null
           updated_at: string | null
           vibe_preferences: string[] | null
         }
         Insert: {
           average_age?: Database["public"]["Enums"]["age_range"] | null
+          competition_style?:
+            | Database["public"]["Enums"]["competition_style"]
+            | null
           created_at?: string | null
-          energy_level?: Database["public"]["Enums"]["energy_level"] | null
+          drinking_culture?:
+            | Database["public"]["Enums"]["drinking_culture"]
+            | null
+          enjoyment_type?: Database["public"]["Enums"]["enjoyment_type"] | null
+          evening_style?: Database["public"]["Enums"]["evening_style"] | null
           event_id: string
-          gathering_size?: Database["public"]["Enums"]["gathering_size"] | null
+          fitness_level?: Database["public"]["Enums"]["fitness_level"] | null
           group_cohesion?: Database["public"]["Enums"]["group_cohesion"] | null
+          group_dynamic?:
+            | Database["public"]["Enums"]["group_dynamic_type"]
+            | null
+          honoree_energy?: Database["public"]["Enums"]["honoree_energy"] | null
           id?: string
-          social_approach?:
-            | Database["public"]["Enums"]["social_approach"]
+          indoor_outdoor?: Database["public"]["Enums"]["indoor_outdoor"] | null
+          spotlight_comfort?:
+            | Database["public"]["Enums"]["spotlight_comfort"]
             | null
           updated_at?: string | null
           vibe_preferences?: string[] | null
         }
         Update: {
           average_age?: Database["public"]["Enums"]["age_range"] | null
+          competition_style?:
+            | Database["public"]["Enums"]["competition_style"]
+            | null
           created_at?: string | null
-          energy_level?: Database["public"]["Enums"]["energy_level"] | null
+          drinking_culture?:
+            | Database["public"]["Enums"]["drinking_culture"]
+            | null
+          enjoyment_type?: Database["public"]["Enums"]["enjoyment_type"] | null
+          evening_style?: Database["public"]["Enums"]["evening_style"] | null
           event_id?: string
-          gathering_size?: Database["public"]["Enums"]["gathering_size"] | null
+          fitness_level?: Database["public"]["Enums"]["fitness_level"] | null
           group_cohesion?: Database["public"]["Enums"]["group_cohesion"] | null
+          group_dynamic?:
+            | Database["public"]["Enums"]["group_dynamic_type"]
+            | null
+          honoree_energy?: Database["public"]["Enums"]["honoree_energy"] | null
           id?: string
-          social_approach?:
-            | Database["public"]["Enums"]["social_approach"]
+          indoor_outdoor?: Database["public"]["Enums"]["indoor_outdoor"] | null
+          spotlight_comfort?:
+            | Database["public"]["Enums"]["spotlight_comfort"]
             | null
           updated_at?: string | null
           vibe_preferences?: string[] | null
@@ -257,6 +310,7 @@ export type Database = {
           honoree_name: string
           id: string
           party_type: Database["public"]["Enums"]["party_type"]
+          planning_checklist: Json | null
           start_date: string
           status: Database["public"]["Enums"]["event_status"] | null
           title: string
@@ -273,6 +327,7 @@ export type Database = {
           honoree_name: string
           id?: string
           party_type: Database["public"]["Enums"]["party_type"]
+          planning_checklist?: Json | null
           start_date: string
           status?: Database["public"]["Enums"]["event_status"] | null
           title: string
@@ -289,6 +344,7 @@ export type Database = {
           honoree_name?: string
           id?: string
           party_type?: Database["public"]["Enums"]["party_type"]
+          planning_checklist?: Json | null
           start_date?: string
           status?: Database["public"]["Enums"]["event_status"] | null
           title?: string
@@ -301,6 +357,53 @@ export type Database = {
             columns: ["city_id"]
             isOneToOne: false
             referencedRelation: "cities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      guest_invitations: {
+        Row: {
+          channel: string
+          created_at: string | null
+          error: string | null
+          event_id: string
+          id: string
+          invite_code: string | null
+          recipient: string
+          sent_at: string | null
+          slot_index: number
+          status: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string | null
+          error?: string | null
+          event_id: string
+          id?: string
+          invite_code?: string | null
+          recipient: string
+          sent_at?: string | null
+          slot_index: number
+          status?: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string | null
+          error?: string | null
+          event_id?: string
+          id?: string
+          invite_code?: string | null
+          recipient?: string
+          sent_at?: string | null
+          slot_index?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guest_invitations_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
         ]
@@ -499,6 +602,70 @@ export type Database = {
           },
         ]
       }
+      payment_reminders: {
+        Row: {
+          booking_id: string
+          created_at: string | null
+          days_before_event: number
+          email_sent: boolean | null
+          event_id: string
+          id: string
+          notification_id: string | null
+          push_sent: boolean | null
+          reminder_type: string
+          sent_at: string | null
+          user_id: string
+        }
+        Insert: {
+          booking_id: string
+          created_at?: string | null
+          days_before_event: number
+          email_sent?: boolean | null
+          event_id: string
+          id?: string
+          notification_id?: string | null
+          push_sent?: boolean | null
+          reminder_type: string
+          sent_at?: string | null
+          user_id: string
+        }
+        Update: {
+          booking_id?: string
+          created_at?: string | null
+          days_before_event?: number
+          email_sent?: boolean | null
+          event_id?: string
+          id?: string
+          notification_id?: string | null
+          push_sent?: boolean | null
+          reminder_type?: string
+          sent_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_reminders_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_reminders_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_reminders_notification_id_fkey"
+            columns: ["notification_id"]
+            isOneToOne: false
+            referencedRelation: "notifications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       poll_options: {
         Row: {
           created_at: string | null
@@ -660,12 +827,41 @@ export type Database = {
         }
         Relationships: []
       }
+      user_push_tokens: {
+        Row: {
+          created_at: string | null
+          id: string
+          platform: string
+          push_token: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          platform: string
+          push_token: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          platform?: string
+          push_token?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
       generate_booking_reference: { Args: never; Returns: string }
+      is_event_creator: { Args: { p_event_id: string }; Returns: boolean }
+      is_event_participant: { Args: { p_event_id: string }; Returns: boolean }
     }
     Enums: {
       age_range: "21-25" | "26-30" | "31-35" | "35+"
@@ -676,17 +872,23 @@ export type Database = {
         | "failed"
         | "refunded"
       channel_category: "general" | "accommodation" | "activities" | "budget"
-      energy_level: "low_key" | "moderate" | "high_energy"
+      competition_style: "cooperative" | "competitive" | "spectator"
+      drinking_culture: "low" | "social" | "central"
+      enjoyment_type: "food" | "drinks" | "experience"
+      evening_style: "dinner_only" | "dinner_bar" | "full_night"
       event_status: "draft" | "planning" | "booked" | "completed" | "cancelled"
-      gathering_size: "intimate" | "small_group" | "party"
-      group_cohesion: "close_friends" | "mixed_group" | "strangers"
+      fitness_level: "low" | "medium" | "high"
+      group_cohesion: "close_friends" | "mixed" | "strangers"
+      group_dynamic_type: "team_players" | "competitive" | "relaxed"
+      honoree_energy: "relaxed" | "active" | "action" | "party"
+      indoor_outdoor: "indoor" | "outdoor" | "mix"
       package_tier: "essential" | "classic" | "grand"
       participant_role: "organizer" | "guest" | "honoree"
       party_type: "bachelor" | "bachelorette"
       payment_status: "pending" | "paid" | "refunded"
       poll_category: "accommodation" | "activities" | "budget" | "general"
       poll_status: "draft" | "active" | "closing_soon" | "closed"
-      social_approach: "wallflower" | "butterfly" | "observer" | "mingler"
+      spotlight_comfort: "background" | "group" | "center_stage"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -823,17 +1025,25 @@ export const Constants = {
         "refunded",
       ],
       channel_category: ["general", "accommodation", "activities", "budget"],
-      energy_level: ["low_key", "moderate", "high_energy"],
+      competition_style: ["cooperative", "competitive", "spectator"],
+      drinking_culture: ["low", "social", "central"],
+      enjoyment_type: ["food", "drinks", "experience"],
+      evening_style: ["dinner_only", "dinner_bar", "full_night"],
       event_status: ["draft", "planning", "booked", "completed", "cancelled"],
-      gathering_size: ["intimate", "small_group", "party"],
-      group_cohesion: ["close_friends", "mixed_group", "strangers"],
+      fitness_level: ["low", "medium", "high"],
+      group_cohesion: ["close_friends", "mixed", "strangers"],
+      group_dynamic_type: ["team_players", "competitive", "relaxed"],
+      honoree_energy: ["relaxed", "active", "action", "party"],
+      indoor_outdoor: ["indoor", "outdoor", "mix"],
       package_tier: ["essential", "classic", "grand"],
       participant_role: ["organizer", "guest", "honoree"],
       party_type: ["bachelor", "bachelorette"],
       payment_status: ["pending", "paid", "refunded"],
       poll_category: ["accommodation", "activities", "budget", "general"],
       poll_status: ["draft", "active", "closing_soon", "closed"],
-      social_approach: ["wallflower", "butterfly", "observer", "mingler"],
+      spotlight_comfort: ["background", "group", "center_stage"],
     },
   },
 } as const
+A new version of Supabase CLI is available: v2.75.0 (currently installed v2.40.7)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
