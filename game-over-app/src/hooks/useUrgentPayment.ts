@@ -79,12 +79,6 @@ export function useUrgentPayment() {
     [urgentEvents]
   );
 
-  // Bell dot = any unpaid urgent event — stays orange until payment is made, NOT cleared by viewing
-  const hasUnseenUrgency = useMemo(
-    () => urgentEvents.some(info => !info.isPaid),
-    [urgentEvents]
-  );
-
   // Mark all currently-unpaid urgent events as "seen" (clears the bell dot)
   const markUrgencySeen = useCallback(() => {
     const newIds = new Set(seenEventIds);
@@ -128,6 +122,12 @@ export function useUrgentPayment() {
 
   const isGuestContribution = guestUrgentEvent !== null;
   const guestDaysLeft = guestUrgentEvent ? (daysUntil(guestUrgentEvent.start_date) ?? 0) : 0;
+
+  // Bell dot = any unpaid urgent event OR guest contribution due — stays orange until payment is made
+  const hasUnseenUrgency = useMemo(
+    () => urgentEvents.some(info => !info.isPaid) || isGuestContribution,
+    [urgentEvents, isGuestContribution]
+  );
 
   return {
     urgentEvent,
