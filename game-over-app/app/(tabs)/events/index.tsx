@@ -461,6 +461,16 @@ export default function EventsScreen() {
         ]}
         testID={`event-card-${item.id}`}
       >
+        {activeFilter === 'attending' && (
+          <View style={{
+            position: 'absolute', top: 8, right: 8,
+            backgroundColor: 'rgba(90,126,176,0.85)',
+            borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
+            zIndex: 1,
+          }}>
+            <Text style={{ fontSize: 11, color: 'white', fontWeight: '600' }}>Guest</Text>
+          </View>
+        )}
         <XStack flex={1}>
           {/* Thumbnail */}
           <View style={styles.thumbnailContainer}>
