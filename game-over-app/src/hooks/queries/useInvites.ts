@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { invitesRepository, InviteCodeWithEvent } from '@/repositories/invites';
+import { invitesRepository, InviteCodeWithEvent, type InvitePreview } from '@/repositories/invites';
 import { useAuthStore } from '@/stores/authStore';
 import { participantKeys } from './useParticipants';
 import { eventKeys } from './useEvents';
@@ -38,6 +38,22 @@ export function useValidateInvite(code: string | undefined) {
     queryFn: () => invitesRepository.validate(code!),
     enabled: !!code,
     staleTime: 30 * 1000, // 30 seconds
+    retry: false,
+  });
+}
+
+export type { InvitePreview };
+
+/**
+ * Fetch public invite preview — works WITHOUT authentication.
+ * Uses anonymous SELECT policy on invite_codes.
+ */
+export function usePublicInvitePreview(code: string | undefined) {
+  return useQuery({
+    queryKey: [...inviteKeys.all, 'preview', code ?? ''],
+    queryFn: () => invitesRepository.getPreview(code!),
+    enabled: !!code,
+    staleTime: 30 * 1000,
     retry: false,
   });
 }

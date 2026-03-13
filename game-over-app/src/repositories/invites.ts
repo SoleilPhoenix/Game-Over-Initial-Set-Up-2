@@ -22,6 +22,19 @@ export interface InviteCodeWithEvent extends InviteCode {
   } | null;
 }
 
+export interface InvitePreview {
+  eventId: string;
+  eventName: string;
+  honoreeName: string;
+  cityName: string;
+  cityId: string;
+  startDate: string;
+  organizerName: string;
+  acceptedCount: number;
+  /** Pre-fill email field in signup step if invite was sent to email */
+  guestEmail: string | null;
+}
+
 /**
  * Generate a cryptographically secure random invite code
  * Uses expo-crypto for secure random number generation
@@ -97,6 +110,60 @@ export const invitesRepository = {
     }
 
     return { valid: true, invite };
+  },
+
+  /**
+   * Fetch public invite preview — works WITHOUT authentication.
+   * Uses the anonymous SELECT policy on invite_codes.
+   */
+  async getPreview(code: string): Promise<InvitePreview | null> {
+    const { data, error } = await supabase
+      .from('invite_codes')
+      .select(`
+        event:events (
+          id,
+          title,
+          honoree_name,
+          start_date,
+          city_id,
+          city:cities ( name ),
+          created_by_profile:profiles!events_created_by_fkey ( full_name )
+        )
+      `)
+      .eq('code', code)
+      .eq('is_active', true)
+      .single();
+
+    if (error || !data?.event) return null;
+
+    const ev = data.event as any;
+
+    // Count accepted guests
+    const { count: acceptedCount } = await supabase
+      .from('event_participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', ev.id)
+      .eq('role', 'guest')
+      .not('confirmed_at', 'is', null);
+
+    // Check if invite was sent to an email address (for pre-fill)
+    const { data: inviteRecord } = await supabase
+      .from('guest_invitations')
+      .select('email')
+      .eq('invite_code', code)
+      .maybeSingle();
+
+    return {
+      eventId: ev.id,
+      eventName: ev.title || `${ev.honoree_name}'s Party`,
+      honoreeName: ev.honoree_name,
+      cityName: ev.city?.name ?? '',
+      cityId: ev.city_id,
+      startDate: ev.start_date,
+      organizerName: ev.created_by_profile?.full_name ?? 'The organizer',
+      acceptedCount: acceptedCount ?? 0,
+      guestEmail: inviteRecord?.email ?? null,
+    };
   },
 
   /**
