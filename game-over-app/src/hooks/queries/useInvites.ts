@@ -15,6 +15,7 @@ export const inviteKeys = {
   byCode: (code: string) => [...inviteKeys.all, 'code', code] as const,
   byEvent: (eventId: string) => [...inviteKeys.all, 'event', eventId] as const,
   validation: (code: string) => [...inviteKeys.all, 'validation', code] as const,
+  preview: (code: string) => [...inviteKeys.all, 'preview', code] as const,
 };
 
 /**
@@ -50,7 +51,7 @@ export type { InvitePreview };
  */
 export function usePublicInvitePreview(code: string | undefined) {
   return useQuery({
-    queryKey: [...inviteKeys.all, 'preview', code ?? ''],
+    queryKey: inviteKeys.preview(code ?? ''),
     queryFn: () => invitesRepository.getPreview(code!),
     enabled: !!code,
     staleTime: 30 * 1000,

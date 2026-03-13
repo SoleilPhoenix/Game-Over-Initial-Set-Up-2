@@ -130,7 +130,7 @@ export const invitesRepository = {
           created_by_profile:profiles!events_created_by_fkey ( full_name )
         )
       `)
-      .eq('code', code)
+      .eq('code', code.toUpperCase())
       .eq('is_active', true)
       .single();
 
@@ -139,12 +139,14 @@ export const invitesRepository = {
     const ev = data.event as any;
 
     // Count accepted guests
-    const { count: acceptedCount } = await supabase
+    const { count: acceptedCount, error: countError } = await supabase
       .from('event_participants')
       .select('id', { count: 'exact', head: true })
       .eq('event_id', ev.id)
       .eq('role', 'guest')
       .not('confirmed_at', 'is', null);
+
+    if (countError) return null;
 
     // Check if invite was sent to an email address (for pre-fill)
     const { data: inviteRecord } = await supabase
