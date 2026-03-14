@@ -10,7 +10,7 @@ import { useEvents } from '@/hooks/queries/useEvents';
 import { getAllBudgetInfos } from '@/lib/participantCountCache';
 import type { EventWithDetails } from '@/repositories/events';
 import { useAuthStore } from '@/stores/authStore';
-import { supabase } from '@/lib/supabase/client';
+import { participantsRepository } from '@/repositories/participants';
 
 // New key — stores JSON array of event IDs the user has acknowledged
 const URGENT_SEEN_KEY = 'gameover:urgent_seen_events';
@@ -98,14 +98,7 @@ export function useUrgentPayment() {
 
   useEffect(() => {
     if (!currentUserId) return;
-    supabase
-      .from('event_participants')
-      .select('event_id, role, payment_status')
-      .eq('user_id', currentUserId)
-      .eq('role', 'guest')
-      .then(({ data }) => {
-        if (data) setUserParticipations(data);
-      });
+    participantsRepository.getGuestParticipations(currentUserId).then(setUserParticipations);
   }, [currentUserId]);
 
   // Guest urgency: driven by event_participants.payment_status, not budget cache
