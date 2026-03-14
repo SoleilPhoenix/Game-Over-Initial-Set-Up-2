@@ -87,10 +87,10 @@ export default function ManageInvitationsScreen() {
   const user = useUser();
 
   const { data: event, isLoading: eventLoading } = useEvent(id);
-  const { data: participants, isLoading: participantsLoading } = useParticipants(id);
+  const { data: participants, isLoading: isLoadingParticipants } = useParticipants(id);
   const { data: booking, isLoading: bookingLoading } = useBooking(id);
   const currentParticipant = participants?.find(p => p.user_id === user?.id);
-  const isGuest = currentParticipant?.role === 'guest';
+  const isGuest = isLoadingParticipants ? true : currentParticipant?.role === 'guest';
 
   // Redirect guests away from the participants management screen
   useEffect(() => {
