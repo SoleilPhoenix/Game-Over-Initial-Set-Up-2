@@ -469,7 +469,7 @@ export default function EventsScreen() {
         ]}
         testID={`event-card-${item.id}`}
       >
-        {activeFilter === 'attending' && (
+        {getUserRole(item) === 'guest' && (
           <View style={{
             position: 'absolute', top: 8, right: 8,
             backgroundColor: 'rgba(90,126,176,0.85)',
