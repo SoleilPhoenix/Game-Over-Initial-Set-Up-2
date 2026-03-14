@@ -5,7 +5,7 @@
  * Step 3: Profile Completion (phone + optional photo)
  * → navigates to event on completion
  */
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View, ScrollView, KeyboardAvoidingView, Platform,
   Pressable, Alert, StyleSheet, Image,
@@ -89,6 +89,15 @@ export default function InviteWizardScreen() {
     },
   });
 
+  useEffect(() => {
+    if (preview?.guestEmail) {
+      signupForm.reset({
+        ...signupForm.getValues(),
+        email: preview.guestEmail,
+      });
+    }
+  }, [preview?.guestEmail]);
+
   const handleSignup = async (data: SignupForm) => {
     setIsSubmitting(true);
     try {
@@ -128,7 +137,7 @@ export default function InviteWizardScreen() {
 
   const handlePickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'] as ImagePicker.MediaType[],
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
@@ -138,10 +147,39 @@ export default function InviteWizardScreen() {
     }
   };
 
+  const doAcceptInvite = useCallback(async (phone?: string, avatarUrl?: string) => {
+    // Get fresh session from Supabase directly (auth store may lag after signUp)
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) {
+      Alert.alert('Error', 'Authentication failed. Please try again.');
+      return;
+    }
+
+    // If profile data provided, save it first
+    if (phone || avatarUrl) {
+      await supabase
+        .from('profiles')
+        .update({ ...(phone ? { phone } : {}), ...(avatarUrl ? { avatar_url: avatarUrl } : {}) })
+        .eq('id', currentUser.id);
+    }
+
+    try {
+      const result = await acceptInvite.mutateAsync(code!);
+      if (!result.eventId) {
+        Alert.alert('Error', result.error || 'Could not join event.');
+        return;
+      }
+      router.replace(`/event/${result.eventId}?firstVisit=1`);
+    } catch {
+      Alert.alert('Error', 'Failed to join event. Please try again.');
+    }
+  }, [acceptInvite, code, router]);
+
   const handleProfileComplete = async (data: ProfileForm) => {
     setIsSubmitting(true);
     try {
-      const currentUser = useAuthStore.getState().user;
+      // Get fresh session from Supabase directly (auth store may lag after signUp)
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) throw new Error('Not authenticated');
 
       // Upload avatar if selected
@@ -160,30 +198,11 @@ export default function InviteWizardScreen() {
         }
       }
 
-      // Save profile fields
-      await supabase
-        .from('profiles')
-        .update({ phone: data.phone, ...(avatarUrl ? { avatar_url: avatarUrl } : {}) })
-        .eq('id', currentUser.id);
-
-      await doAcceptInvite();
+      await doAcceptInvite(data.phone, avatarUrl ?? undefined);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Failed to complete profile.');
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const doAcceptInvite = async () => {
-    try {
-      const result = await acceptInvite.mutateAsync(code!);
-      if (!result.eventId) {
-        Alert.alert('Error', result.error || 'Could not join event.');
-        return;
-      }
-      router.replace(`/event/${result.eventId}?firstVisit=1`);
-    } catch {
-      Alert.alert('Error', 'Failed to join event. Please try again.');
     }
   };
 
