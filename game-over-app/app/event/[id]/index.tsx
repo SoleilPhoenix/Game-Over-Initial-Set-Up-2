@@ -4,7 +4,8 @@
  */
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { ScrollView, Pressable, StyleSheet, View } from 'react-native';
+import { ScrollView, Pressable, StyleSheet, View, Modal } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { YStack, XStack, Text } from 'tamagui';
@@ -12,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvent, useUpdateEvent } from '@/hooks/queries/useEvents';
 import { useParticipants } from '@/hooks/queries/useParticipants';
+import { useAuthStore } from '@/stores/authStore';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { useCreateInvite } from '@/hooks/queries/useInvites';
 import { ShareEventBanner } from '@/components/events';
@@ -39,14 +41,18 @@ const TOOL_CONFIGS = [
 ] as const;
 
 export default function EventSummaryScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, firstVisit } = useLocalSearchParams<{ id: string; firstVisit?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
 
   const { data: event, isLoading: eventLoading } = useEvent(id);
-  const { data: participants } = useParticipants(id);
+  const { data: participants, isLoading: isLoadingParticipants } = useParticipants(id);
   const { data: booking } = useBooking(id);
+  const currentUserId = useAuthStore(s => s.user?.id);
+  const currentParticipant = participants?.find(p => p.user_id === currentUserId);
+  // Hide edit button until we know the user's role (prevents flash for guests)
+  const isGuest = isLoadingParticipants ? true : currentParticipant?.role === 'guest';
   const updateEvent = useUpdateEvent();
   const createInvite = useCreateInvite();
 
@@ -74,6 +80,39 @@ export default function EventSummaryScreen() {
       loadChecklist(id).then(setLocalChecklist);
     }, [id])
   );
+
+  // ─── First-time contribution card (guests only) ──
+  const [showContributionCard, setShowContributionCard] = useState(false);
+  const [contributionCents, setContributionCents] = useState(0);
+
+  useEffect(() => {
+    if (!isGuest || !firstVisit || !currentUserId || !id) return;
+    const key = `gameover:contribution_seen:${id}:${currentUserId}`;
+
+    Promise.all([
+      AsyncStorage.getItem(key),
+      loadBudgetInfo(id),
+    ]).then(([seen, info]) => {
+      if (seen) return; // already dismissed
+
+      // Calculate amount before showing
+      let cents = 0;
+      if (info?.totalCents && info?.payingCount) {
+        cents = Math.ceil(info.totalCents / info.payingCount);
+      } else if (booking?.total_amount_cents && participants?.length) {
+        cents = Math.ceil(booking.total_amount_cents / participants.length);
+      }
+
+      setContributionCents(cents);
+      if (cents > 0) setShowContributionCard(true);  // only show if we have an amount
+    });
+  }, [isGuest, firstVisit, currentUserId, id, booking, participants]);
+
+  const handleDismissContributionCard = async () => {
+    const key = `gameover:contribution_seen:${id}:${currentUserId}`;
+    await AsyncStorage.setItem(key, '1');
+    setShowContributionCard(false);
+  };
 
   // Planning steps (only for booked events)
   // Use DB planning_checklist if available, fallback to local cache
@@ -243,13 +282,13 @@ export default function EventSummaryScreen() {
             <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
           </Pressable>
           <Text style={styles.headerTitle}>{t.eventDetail.title}</Text>
-          <Pressable
-            onPress={() => router.push(`/event/${id}/edit`)}
-            hitSlop={8}
-            testID="edit-button"
-          >
-            <Ionicons name="create-outline" size={22} color="#FFFFFF" />
-          </Pressable>
+          {!isGuest ? (
+            <Pressable onPress={() => router.push(`/event/${id}/edit`)} hitSlop={8} testID="edit-button">
+              <Ionicons name="create-outline" size={22} color="#FFFFFF" />
+            </Pressable>
+          ) : (
+            <View style={{ width: 22 }} />
+          )}
         </XStack>
       </View>
 
@@ -317,7 +356,7 @@ export default function EventSummaryScreen() {
         {/* ─── Planning Tools 2×2 Grid ───────────── */}
         <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>{t.eventDetail.planningTools}</Text>
         <View style={styles.toolsGrid}>
-          {TOOL_CONFIGS.map((tool) => {
+          {TOOL_CONFIGS.filter(tool => !isGuest || tool.key !== 'invitations').map((tool) => {
             const sub = getToolSubtext(tool.key);
             const toolLabel = t.eventDetail[
               tool.key === 'invitations' ? 'manageInvitations'
@@ -453,6 +492,54 @@ export default function EventSummaryScreen() {
           </Pressable>
         </View>
       )}
+
+      {/* ─── First-time Contribution Card (guests only) ── */}
+      <Modal
+        visible={showContributionCard}
+        transparent
+        animationType="fade"
+        onRequestClose={handleDismissContributionCard}
+      >
+        <View style={{
+          flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
+          justifyContent: 'center', alignItems: 'center', padding: 24,
+        }}>
+          <View style={{
+            backgroundColor: DARK_THEME.surfaceCard, borderRadius: 20,
+            padding: 24, width: '100%',
+            borderWidth: 1, borderColor: 'rgba(249,115,22,0.3)',
+          }}>
+            <Text style={{ fontSize: 20 }}>💰</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: 'white', marginTop: 8 }}>
+              Your Contribution
+            </Text>
+            {/* TODO: use Intl.NumberFormat with booking currency when multi-currency support is added */}
+            {contributionCents > 0 && (
+              <Text style={{ fontSize: 32, fontWeight: '900', color: DARK_THEME.primary, marginTop: 4 }}>
+                €{Math.round(contributionCents / 100)}
+              </Text>
+            )}
+            <Text style={{ fontSize: 13, color: DARK_THEME.textTertiary, marginTop: 8, lineHeight: 20 }}>
+              Please transfer this amount to{' '}
+              <Text style={{ color: 'white', fontWeight: '600' }}>
+                {participants?.find(p => p.role === 'organizer')?.profile?.full_name
+                  ?? 'the organizer'}
+              </Text>
+              . Your share is due 14 days before the event.
+            </Text>
+            <Pressable
+              onPress={handleDismissContributionCard}
+              style={{
+                marginTop: 20, backgroundColor: DARK_THEME.primary,
+                borderRadius: 12, paddingVertical: 14, alignItems: 'center',
+              }}
+              testID="contribution-card-dismiss"
+            >
+              <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>Got it</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

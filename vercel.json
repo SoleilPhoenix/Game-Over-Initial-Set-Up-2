@@ -1,4 +1,6 @@
 {
+  "framework": null,
+  "buildCommand": "npm run vercel-build",
   "outputDirectory": "game-over-app/dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }

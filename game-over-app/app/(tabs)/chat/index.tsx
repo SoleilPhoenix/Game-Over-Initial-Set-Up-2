@@ -447,7 +447,7 @@ type LocalChannelSection = {
 
 export default function CommunicationScreen() {
   const router = useRouter();
-  const { urgentEvent, hasUnseenUrgency, markUrgencySeen } = useUrgentPayment();
+  const { hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
   // eventIdParam is set when navigating from Event Summary — pre-selects that event
   const { eventId: eventIdParam } = useLocalSearchParams<{ eventId?: string }>();
   const insets = useSafeAreaInsets();
@@ -667,7 +667,15 @@ export default function CommunicationScreen() {
 
   const handleNotifications = () => {
     markUrgencySeen();
-    router.push('/notifications');
+    if (isGuestContribution && guestUrgentEvent) {
+      Alert.alert(
+        'Contribution Due',
+        `Your share for ${guestUrgentEvent.title} is due in ${guestDaysLeft} days.\nPlease transfer your contribution to the organizer.`,
+        [{ text: 'OK' }]
+      );
+    } else {
+      router.push('/notifications');
+    }
   };
 
   const handleInvite = () => {

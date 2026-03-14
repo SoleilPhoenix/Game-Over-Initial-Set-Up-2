@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { invitesRepository, InviteCodeWithEvent } from '@/repositories/invites';
+import { invitesRepository, InviteCodeWithEvent, type InvitePreview } from '@/repositories/invites';
 import { useAuthStore } from '@/stores/authStore';
 import { participantKeys } from './useParticipants';
 import { eventKeys } from './useEvents';
@@ -15,6 +15,7 @@ export const inviteKeys = {
   byCode: (code: string) => [...inviteKeys.all, 'code', code] as const,
   byEvent: (eventId: string) => [...inviteKeys.all, 'event', eventId] as const,
   validation: (code: string) => [...inviteKeys.all, 'validation', code] as const,
+  preview: (code: string) => [...inviteKeys.all, 'preview', code] as const,
 };
 
 /**
@@ -38,6 +39,22 @@ export function useValidateInvite(code: string | undefined) {
     queryFn: () => invitesRepository.validate(code!),
     enabled: !!code,
     staleTime: 30 * 1000, // 30 seconds
+    retry: false,
+  });
+}
+
+export type { InvitePreview };
+
+/**
+ * Fetch public invite preview — works WITHOUT authentication.
+ * Uses anonymous SELECT policy on invite_codes.
+ */
+export function usePublicInvitePreview(code: string | undefined) {
+  return useQuery({
+    queryKey: inviteKeys.preview(code ?? ''),
+    queryFn: () => invitesRepository.getPreview(code!),
+    enabled: !!code,
+    staleTime: 30 * 1000,
     retry: false,
   });
 }
@@ -85,13 +102,10 @@ export function useCreateInvite() {
  */
 export function useAcceptInvite() {
   const queryClient = useQueryClient();
-  const user = useAuthStore((state) => state.user);
 
   return useMutation({
-    mutationFn: async (inviteCode: string) => {
-      if (!user?.id) throw new Error('User not authenticated');
-      return invitesRepository.accept(inviteCode, user.id);
-    },
+    mutationFn: ({ code, userId }: { code: string; userId: string }) =>
+      invitesRepository.accept(code, userId),
     onSuccess: (result) => {
       if (result.success && result.eventId) {
         // Invalidate relevant queries

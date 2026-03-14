@@ -12,7 +12,7 @@ type EventUpdate = Database['public']['Tables']['events']['Update'];
 type EventPreferences = Database['public']['Tables']['event_preferences']['Row'];
 type EventPreferencesInsert = Database['public']['Tables']['event_preferences']['Insert'];
 
-export interface EventWithDetails extends Event {
+export interface EventWithDetails extends Omit<Event, 'planning_checklist'> {
   city: { id: string; name: string; country: string } | null;
   preferences: EventPreferences | null;
   participant_count: number;

@@ -123,17 +123,18 @@ function calculateMatchScore(
   let factors = 0;
 
   // Gathering size match
-  if (preferences.gathering_size && pkg.ideal_gathering_size?.length) {
+  const prefsAny = preferences as any;
+  if (prefsAny.gathering_size && pkg.ideal_gathering_size?.length) {
     factors++;
-    if (pkg.ideal_gathering_size.includes(preferences.gathering_size)) {
+    if (pkg.ideal_gathering_size.includes(prefsAny.gathering_size)) {
       score += 15;
     }
   }
 
   // Energy level match
-  if (preferences.energy_level && pkg.ideal_energy_level?.length) {
+  if (prefsAny.energy_level && pkg.ideal_energy_level?.length) {
     factors++;
-    if (pkg.ideal_energy_level.includes(preferences.energy_level)) {
+    if (pkg.ideal_energy_level.includes(prefsAny.energy_level)) {
       score += 15;
     }
   }

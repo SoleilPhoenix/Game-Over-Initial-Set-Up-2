@@ -41,13 +41,7 @@ import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import { getEventImage, resolveImageSource, getPackageImage, getTierFromSlug } from '@/constants/packageImages';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import type { EventWithDetails } from '@/repositories';
-
-// Map city UUIDs to slugs for image lookup
-const CITY_UUID_TO_SLUG: Record<string, string> = {
-  '550e8400-e29b-41d4-a716-446655440101': 'berlin',
-  '550e8400-e29b-41d4-a716-446655440102': 'hamburg',
-  '550e8400-e29b-41d4-a716-446655440103': 'hannover',
-};
+import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 
 type FilterTab = 'organizing' | 'attending';
 
@@ -181,7 +175,7 @@ export default function EventsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useUser();
-  const { hasUnseenUrgency, markUrgencySeen } = useUrgentPayment();
+  const { hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('organizing');
   const { t } = useTranslation();
@@ -378,9 +372,21 @@ export default function EventsScreen() {
 
   const handleNotifications = () => {
     markUrgencySeen();
-    router.push('/notifications');
+    if (isGuestContribution && guestUrgentEvent) {
+      Alert.alert(
+        'Contribution Due',
+        `Your share for ${guestUrgentEvent.title} is due in ${guestDaysLeft} days.\nPlease transfer your contribution to the organizer.`,
+        [{ text: 'OK' }]
+      );
+    } else {
+      router.push('/notifications');
+    }
   };
 
+  // Note: this heuristic uses created_by to determine role.
+  // It may incorrectly show "Guest" for co-organizers (participants with role='organizer'
+  // who did not create the event). The accurate role is in event_participants.role,
+  // but that data is not loaded at the event list level to avoid N+1 queries.
   const getUserRole = (event: EventWithDetails): 'organizer' | 'guest' => {
     return event.created_by === user?.id ? 'organizer' : 'guest';
   };
@@ -467,6 +473,16 @@ export default function EventsScreen() {
         ]}
         testID={`event-card-${item.id}`}
       >
+        {getUserRole(item) === 'guest' && (
+          <View style={{
+            position: 'absolute', top: 8, right: 8,
+            backgroundColor: 'rgba(90,126,176,0.85)',
+            borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
+            zIndex: 1,
+          }}>
+            <Text style={{ fontSize: 11, color: 'white', fontWeight: '600' }}>Guest</Text>
+          </View>
+        )}
         <XStack flex={1}>
           {/* Thumbnail */}
           <View style={styles.thumbnailContainer}>

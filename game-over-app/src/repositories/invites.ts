@@ -22,6 +22,19 @@ export interface InviteCodeWithEvent extends InviteCode {
   } | null;
 }
 
+export interface InvitePreview {
+  eventId: string;
+  eventName: string;
+  honoreeName: string;
+  cityName: string;
+  cityId: string;
+  startDate: string;
+  organizerName: string;
+  acceptedCount: number;
+  /** Pre-fill email field in signup step if invite was sent to email. Always undefined — email is not fetched for privacy. */
+  guestEmail: string | undefined;
+}
+
 /**
  * Generate a cryptographically secure random invite code
  * Uses expo-crypto for secure random number generation
@@ -34,6 +47,23 @@ function generateCode(): string {
     code += chars.charAt(randomBytes[i] % chars.length);
   }
   return code;
+}
+
+interface InvitePreviewRow {
+  id: string;
+  code: string;
+  expires_at: string | null;
+  max_uses: number | null;
+  use_count: number;
+  event: {
+    id: string;
+    title: string;
+    honoree_name: string;
+    start_date: string;
+    city_id: string;
+    city: { name: string } | null;
+    created_by_profile: { full_name: string } | null;
+  };
 }
 
 export const invitesRepository = {
@@ -100,6 +130,68 @@ export const invitesRepository = {
   },
 
   /**
+   * Fetch public invite preview — works WITHOUT authentication.
+   * Uses the anonymous SELECT policy on invite_codes.
+   */
+  async getPreview(code: string): Promise<InvitePreview | null> {
+    const upperCode = code.toUpperCase();
+
+    // First: fetch invite + event (needed for subsequent queries)
+    const { data, error } = await supabase
+      .from('invite_codes')
+      .select(`
+        expires_at,
+        max_uses,
+        use_count,
+        event:events (
+          id,
+          title,
+          honoree_name,
+          start_date,
+          city_id,
+          city:cities ( name ),
+          created_by_profile:profiles!events_created_by_fkey ( full_name )
+        )
+      `)
+      .eq('code', upperCode)
+      .eq('is_active', true)
+      .single();
+
+    if (error || !data?.event) return null;
+
+    // Validate expiry
+    if (data.expires_at && new Date(data.expires_at) < new Date()) return null;
+
+    // Validate max uses
+    if (data.max_uses !== null && (data.use_count ?? 0) >= data.max_uses) return null;
+
+    const typedData = data as unknown as InvitePreviewRow;
+    const ev = typedData.event;
+
+    // Fetch accepted participant count
+    const countResult = await supabase
+      .from('event_participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', ev.id)
+      .eq('role', 'guest')
+      .not('confirmed_at', 'is', null);
+
+    const acceptedCount = countResult.error ? 0 : (countResult.count ?? 0);
+
+    return {
+      eventId: ev.id,
+      eventName: ev.title || `${ev.honoree_name}'s Party`,
+      honoreeName: ev.honoree_name,
+      cityName: ev.city?.name ?? '',
+      cityId: ev.city_id,
+      startDate: ev.start_date,
+      organizerName: ev.created_by_profile?.full_name ?? 'The organizer',
+      acceptedCount,
+      guestEmail: undefined,
+    };
+  },
+
+  /**
    * Create a new invite code for an event
    */
   async create(
@@ -146,7 +238,7 @@ export const invitesRepository = {
    */
   async incrementUseCount(inviteId: string): Promise<void> {
     // Note: increment_invite_use_count RPC function may need to be created in Supabase
-    const { error } = await (supabase.rpc as any)('increment_invite_use_count', {
+    const { error } = await supabase.rpc('increment_invite_use_count', {
       invite_id: inviteId,
     });
 
@@ -195,7 +287,7 @@ export const invitesRepository = {
       .select('id')
       .eq('event_id', eventId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     if (existingParticipant) {
       return {
@@ -205,7 +297,7 @@ export const invitesRepository = {
       };
     }
 
-    // Add user as participant
+    // Insert participant first (critical path)
     const { error: participantError } = await supabase
       .from('event_participants')
       .insert({
@@ -213,6 +305,7 @@ export const invitesRepository = {
         user_id: userId,
         role: 'guest',
         invited_via: 'link',
+        confirmed_at: new Date().toISOString(),
       });
 
     if (participantError) {
@@ -220,8 +313,16 @@ export const invitesRepository = {
       return { success: false, error: 'Failed to join the event. Please try again.' };
     }
 
-    // Increment use count
-    await this.incrementUseCount(invite.id);
+    // NOTE: incrementUseCount is not atomic with the insert above.
+    // If this fails, the participant is already added but use_count won't increment.
+    // The user can retry and the existingParticipant check will route them correctly.
+    // This is acceptable for an MVP where max_uses is enforced at the DB level too.
+    try {
+      await this.incrementUseCount(invite.id);
+    } catch (e) {
+      console.warn('incrementUseCount failed after participant insert:', e);
+      // Non-critical: continue — participant is already added
+    }
 
     return { success: true, eventId };
   },

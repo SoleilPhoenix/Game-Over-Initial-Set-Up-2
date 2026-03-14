@@ -5,10 +5,13 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { getAllBudgetInfos } from '@/lib/participantCountCache';
 import type { EventWithDetails } from '@/repositories/events';
+import { useAuthStore } from '@/stores/authStore';
+import { participantsRepository } from '@/repositories/participants';
 
 // New key — stores JSON array of event IDs the user has acknowledged
 const URGENT_SEEN_KEY = 'gameover:urgent_seen_events';
@@ -77,12 +80,6 @@ export function useUrgentPayment() {
     [urgentEvents]
   );
 
-  // Bell dot = any unpaid urgent event — stays orange until payment is made, NOT cleared by viewing
-  const hasUnseenUrgency = useMemo(
-    () => urgentEvents.some(info => !info.isPaid),
-    [urgentEvents]
-  );
-
   // Mark all currently-unpaid urgent events as "seen" (clears the bell dot)
   const markUrgencySeen = useCallback(() => {
     const newIds = new Set(seenEventIds);
@@ -92,5 +89,49 @@ export function useUrgentPayment() {
     setSeenEventIds(newIds);
   }, [seenEventIds, urgentEvents]);
 
-  return { urgentEvent, urgentEvents, hasUnseenUrgency, markUrgencySeen };
+  const currentUserId = useAuthStore(s => s.user?.id);
+
+  // Fetch current user's guest participations separately (event_participants is never
+  // joined by getByUser() to avoid RLS 42P17 recursion — see repositories/events.ts).
+  // Using useQuery so data is refreshed on app focus via the existing cache lifecycle.
+  const { data: userParticipations = [] } = useQuery({
+    queryKey: ['guestParticipations', currentUserId],
+    queryFn: () => participantsRepository.getGuestParticipations(currentUserId!),
+    enabled: !!currentUserId,
+    staleTime: 30 * 1000,
+  });
+
+  // Guest urgency: driven by event_participants.payment_status, not budget cache
+  const guestUrgentEvent = useMemo(() => {
+    if (!currentUserId || userParticipations.length === 0) return null;
+    return (events ?? []).find(event => {
+      const participation = userParticipations.find(p => p.event_id === event.id);
+      if (!participation || participation.role !== 'guest') return false;
+      if (participation.payment_status === 'paid') return false;
+      const days = daysUntil(event.start_date);
+      return days !== null && days <= 14;
+    }) ?? null;
+  }, [events, currentUserId, userParticipations]);
+
+  const isGuestContribution = guestUrgentEvent !== null;
+  const guestDaysLeft = guestUrgentEvent ? (daysUntil(guestUrgentEvent.start_date) ?? 0) : 0;
+
+  // NOTE: For guests, isGuestContribution stays true until payment_status = 'paid' in the DB.
+  // Unlike the organizer path (which uses seenEventIds for temporary dismissal),
+  // the guest bell dot is a persistent reminder until the organizer marks them as paid.
+  // This is intentional — guests have no in-app payment flow.
+  const hasUnseenUrgency = useMemo(
+    () => urgentEvents.some(info => !info.isPaid) || isGuestContribution,
+    [urgentEvents, isGuestContribution]
+  );
+
+  return {
+    urgentEvent,
+    urgentEvents,
+    hasUnseenUrgency,
+    markUrgencySeen,
+    guestUrgentEvent,
+    isGuestContribution,
+    guestDaysLeft,
+  };
 }

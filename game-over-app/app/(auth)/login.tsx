@@ -14,7 +14,7 @@ import {
   ScrollView,
   Pressable,
 } from 'react-native';
-import { Link, router } from 'expo-router';
+import { Link, router, useLocalSearchParams } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -41,6 +41,7 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const { setError, error, clearError } = useAuthStore();
   const { t } = useTranslation();
+  const { redirect } = useLocalSearchParams<{ redirect?: string }>();
 
   const {
     control,
@@ -65,6 +66,12 @@ export default function LoginScreen() {
       });
 
       if (error) throw error;
+
+      if (redirect) {
+        router.replace(redirect as any);
+      } else {
+        router.replace('/(tabs)/events');
+      }
     } catch (error: any) {
       setError(error.message || 'Failed to sign in');
     } finally {

@@ -12,7 +12,7 @@ import { TamaguiProvider, Theme, Spinner, YStack } from 'tamagui';
 import { ToastProvider, ToastViewport } from '@tamagui/toast';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StripeProvider } from '@stripe/stripe-react-native';
+import { StripeProviderWrapper } from '@/components/StripeProviderWrapper';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
@@ -154,7 +154,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StripeProvider
+      <StripeProviderWrapper
         publishableKey={STRIPE_PUBLISHABLE_KEY}
         merchantIdentifier="merchant.com.gameover.app"
         urlScheme="gameover"
@@ -168,7 +168,7 @@ export default function RootLayout() {
             </ToastProvider>
           </Theme>
         </TamaguiProvider>
-      </StripeProvider>
+      </StripeProviderWrapper>
     </GestureHandlerRootView>
   );
 }

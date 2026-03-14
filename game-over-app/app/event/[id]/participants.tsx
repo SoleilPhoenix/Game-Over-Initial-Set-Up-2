@@ -87,8 +87,17 @@ export default function ManageInvitationsScreen() {
   const user = useUser();
 
   const { data: event, isLoading: eventLoading } = useEvent(id);
-  const { data: participants, isLoading: participantsLoading } = useParticipants(id);
+  const { data: participants, isLoading: isLoadingParticipants } = useParticipants(id);
   const { data: booking, isLoading: bookingLoading } = useBooking(id);
+  const currentParticipant = participants?.find(p => p.user_id === user?.id);
+  const isGuest = isLoadingParticipants ? true : currentParticipant?.role === 'guest';
+
+  // Redirect guests away from the participants management screen
+  useEffect(() => {
+    if (isGuest && participants !== undefined) {
+      router.replace(`/event/${id}`);
+    }
+  }, [isGuest, participants, id, router]);
 
   // Local state for guest details entered by organizer
   const [guestDetails, setGuestDetails] = useState<Record<number, GuestDetails>>({});
@@ -641,18 +650,20 @@ export default function ManageInvitationsScreen() {
         {slots.map((slot) => renderSlotCard(slot))}
       </ScrollView>
 
-      {/* Invite All Footer */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-        <Button
-          flex={1}
-          onPress={handleInviteAll}
-          loading={inviteLoading}
-          icon={<Ionicons name="paper-plane-outline" size={20} color="white" />}
-          testID="invite-all-button"
-        >
-          {t.manageInvitations.inviteAll}
-        </Button>
-      </View>
+      {/* Invite All Footer — organizers only */}
+      {!isGuest && (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+          <Button
+            flex={1}
+            onPress={handleInviteAll}
+            loading={inviteLoading}
+            icon={<Ionicons name="paper-plane-outline" size={20} color="white" />}
+            testID="invite-all-button"
+          >
+            {t.manageInvitations.inviteAll}
+          </Button>
+        </View>
+      )}
 
       {/* Honoree Info Popup */}
       {showHonoreeInfo && (
@@ -687,8 +698,8 @@ export default function ManageInvitationsScreen() {
       )}
     </KeyboardAvoidingView>
 
-      {/* ─── Invite Channel Modal ─── */}
-      <Modal
+      {/* ─── Invite Channel Modal — organizers only ─── */}
+      {!isGuest && <Modal
         visible={inviteModalVisible}
         transparent
         animationType="slide"
@@ -794,7 +805,7 @@ export default function ManageInvitationsScreen() {
             )}
           </View>
         </View>
-      </Modal>
+      </Modal>}
     </>
   );
 }
