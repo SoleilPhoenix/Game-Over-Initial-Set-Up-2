@@ -49,7 +49,7 @@ const signupSchema = z.object({
 });
 
 const profileSchema = z.object({
-  phone: z.string().min(7, 'Please enter a valid phone number'),
+  phone: z.string().min(7, 'Please enter a valid phone number').optional().or(z.literal('')),
 });
 
 type SignupForm = z.infer<typeof signupSchema>;
@@ -68,6 +68,35 @@ export default function InviteWizardScreen() {
 
   const { data: preview, isLoading: previewLoading } = usePublicInvitePreview(code);
   const acceptInvite = useAcceptInvite();
+
+  // ── Core accept handler (defined first — used by steps 1 and 3) ──
+  const doAcceptInvite = useCallback(async (phone?: string, avatarUrl?: string) => {
+    // Get fresh session from Supabase directly (auth store may lag after signUp)
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) {
+      Alert.alert('Error', 'Authentication failed. Please try again.');
+      return;
+    }
+
+    // If profile data provided, save it first
+    if (phone || avatarUrl) {
+      await supabase
+        .from('profiles')
+        .update({ ...(phone ? { phone } : {}), ...(avatarUrl ? { avatar_url: avatarUrl } : {}) })
+        .eq('id', currentUser.id);
+    }
+
+    try {
+      const result = await acceptInvite.mutateAsync(code!);
+      if (!result.eventId) {
+        Alert.alert('Error', result.error || 'Could not join event.');
+        return;
+      }
+      router.replace(`/event/${result.eventId}?firstVisit=1`);
+    } catch {
+      Alert.alert('Error', 'Failed to join event. Please try again.');
+    }
+  }, [acceptInvite, code, router]);
 
   // ── Step 1 handlers ─────────────────────────────────────────
   const handleAcceptPressed = async () => {
@@ -96,7 +125,7 @@ export default function InviteWizardScreen() {
         email: preview.guestEmail,
       });
     }
-  }, [preview?.guestEmail]);
+  }, [preview?.guestEmail, signupForm]);
 
   const handleSignup = async (data: SignupForm) => {
     setIsSubmitting(true);
@@ -146,34 +175,6 @@ export default function InviteWizardScreen() {
       setAvatarUri(result.assets[0].uri);
     }
   };
-
-  const doAcceptInvite = useCallback(async (phone?: string, avatarUrl?: string) => {
-    // Get fresh session from Supabase directly (auth store may lag after signUp)
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    if (!currentUser) {
-      Alert.alert('Error', 'Authentication failed. Please try again.');
-      return;
-    }
-
-    // If profile data provided, save it first
-    if (phone || avatarUrl) {
-      await supabase
-        .from('profiles')
-        .update({ ...(phone ? { phone } : {}), ...(avatarUrl ? { avatar_url: avatarUrl } : {}) })
-        .eq('id', currentUser.id);
-    }
-
-    try {
-      const result = await acceptInvite.mutateAsync(code!);
-      if (!result.eventId) {
-        Alert.alert('Error', result.error || 'Could not join event.');
-        return;
-      }
-      router.replace(`/event/${result.eventId}?firstVisit=1`);
-    } catch {
-      Alert.alert('Error', 'Failed to join event. Please try again.');
-    }
-  }, [acceptInvite, code, router]);
 
   const handleProfileComplete = async (data: ProfileForm) => {
     setIsSubmitting(true);
@@ -237,7 +238,7 @@ export default function InviteWizardScreen() {
     const citySlug = CITY_UUID_TO_SLUG[preview.cityId] ?? preview.cityName.toLowerCase();
     return (
       <YStack flex={1} backgroundColor="$background">
-        <View style={{ height: 280 }}>
+        <View style={{ height: 280 + insets.top }}>
           <KenBurnsImage
             source={resolveImageSource(getPackageImage(citySlug, 'classic'))}
             style={StyleSheet.absoluteFillObject}
@@ -468,7 +469,7 @@ export default function InviteWizardScreen() {
             style={{ alignItems: 'center', paddingVertical: 8 }}
             testID="skip-photo-button"
           >
-            <Text fontSize={13} color="$textTertiary">Skip photo →</Text>
+            <Text fontSize={13} color="$textTertiary">Skip this step →</Text>
           </Pressable>
         </ScrollView>
       </YStack>
