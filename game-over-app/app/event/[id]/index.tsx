@@ -47,11 +47,12 @@ export default function EventSummaryScreen() {
   const { t } = useTranslation();
 
   const { data: event, isLoading: eventLoading } = useEvent(id);
-  const { data: participants } = useParticipants(id);
+  const { data: participants, isLoading: isLoadingParticipants } = useParticipants(id);
   const { data: booking } = useBooking(id);
   const currentUserId = useAuthStore(s => s.user?.id);
   const currentParticipant = participants?.find(p => p.user_id === currentUserId);
-  const isGuest = currentParticipant?.role === 'guest';
+  // Hide edit button until we know the user's role (prevents flash for guests)
+  const isGuest = isLoadingParticipants ? true : currentParticipant?.role === 'guest';
   const updateEvent = useUpdateEvent();
   const createInvite = useCreateInvite();
 
@@ -103,7 +104,7 @@ export default function EventSummaryScreen() {
       }
 
       setContributionCents(cents);
-      setShowContributionCard(true);
+      if (cents > 0) setShowContributionCard(true);  // only show if we have an amount
     });
   }, [isGuest, firstVisit, currentUserId, id, booking, participants]);
 
