@@ -65,43 +65,56 @@ export default function InviteWizardScreen() {
   const [step, setStep] = useState<WizardStep>('preview');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [signupCompleted, setSignupCompleted] = useState(false);
+  const [isAccepting, setIsAccepting] = useState(false);
 
   const { data: preview, isLoading: previewLoading } = usePublicInvitePreview(code);
   const acceptInvite = useAcceptInvite();
 
   // ── Core accept handler (defined first — used by steps 1 and 3) ──
   const doAcceptInvite = useCallback(async (phone?: string, avatarUrl?: string) => {
-    // Get fresh session from Supabase directly (auth store may lag after signUp)
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    if (!currentUser) {
-      Alert.alert('Error', 'Authentication failed. Please try again.');
-      return;
-    }
-
-    // If profile data provided, save it first
-    if (phone || avatarUrl) {
-      await supabase
-        .from('profiles')
-        .update({ ...(phone ? { phone } : {}), ...(avatarUrl ? { avatar_url: avatarUrl } : {}) })
-        .eq('id', currentUser.id);
-    }
-
+    if (isAccepting) return;
+    setIsAccepting(true);
     try {
-      const result = await acceptInvite.mutateAsync({ code: code!, userId: currentUser.id });
-      if (!result.eventId) {
-        Alert.alert('Error', result.error || 'Could not join event.');
+      // Get fresh session from Supabase directly (auth store may lag after signUp)
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser) {
+        Alert.alert('Error', 'Authentication failed. Please try again.');
         return;
       }
-      router.replace(`/event/${result.eventId}?firstVisit=1`);
-    } catch {
-      Alert.alert('Error', 'Failed to join event. Please try again.');
+
+      // If profile data provided, save it first
+      if (phone || avatarUrl) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ ...(phone ? { phone } : {}), ...(avatarUrl ? { avatar_url: avatarUrl } : {}) })
+          .eq('id', currentUser.id);
+
+        if (profileError) {
+          console.warn('Profile update failed:', profileError.message);
+          // Don't block — continue with invite acceptance
+        }
+      }
+
+      try {
+        const result = await acceptInvite.mutateAsync({ code: code!, userId: currentUser.id });
+        if (!result.eventId) {
+          Alert.alert('Error', result.error || 'Could not join event.');
+          return;
+        }
+        router.replace(`/event/${result.eventId}?firstVisit=1`);
+      } catch {
+        Alert.alert('Error', 'Failed to join event. Please try again.');
+      }
+    } finally {
+      setIsAccepting(false);
     }
-  }, [acceptInvite, code, router]);
+  }, [acceptInvite, code, isAccepting, router]);
 
   // ── Step 1 handlers ─────────────────────────────────────────
   const handleAcceptPressed = async () => {
     if (user) {
-      // Already authenticated — accept directly
+      // Already authenticated — accept directly (isAccepting guard is inside doAcceptInvite)
       await doAcceptInvite();
     } else {
       setStep('signup');
@@ -146,6 +159,7 @@ export default function InviteWizardScreen() {
         }
         throw error;
       }
+      setSignupCompleted(true);
       setStep('profile');
     } catch (e: any) {
       Alert.alert('Signup failed', e.message || 'Please try again.');
@@ -274,7 +288,7 @@ export default function InviteWizardScreen() {
               </XStack>
             </YStack>
 
-            <Button onPress={handleAcceptPressed} testID="accept-invite-button">
+            <Button onPress={handleAcceptPressed} loading={isAccepting} testID="accept-invite-button">
               Accept Invitation →
             </Button>
 
@@ -411,9 +425,12 @@ export default function InviteWizardScreen() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <YStack flex={1} backgroundColor="$background" paddingTop={insets.top}>
         <XStack paddingHorizontal="$5" paddingVertical="$3" alignItems="center" gap="$3">
-          <Pressable onPress={() => setStep('signup')}>
-            <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
-          </Pressable>
+          {!signupCompleted && (
+            <Pressable onPress={() => setStep('signup')}>
+              <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+            </Pressable>
+          )}
+          {signupCompleted && <View style={{ width: 24 }} />}
           <YStack flex={1}>
             <Text fontSize={11} color="$textTertiary">Almost there</Text>
             <Text fontSize={16} fontWeight="700" color="$textPrimary">Complete your profile</Text>
