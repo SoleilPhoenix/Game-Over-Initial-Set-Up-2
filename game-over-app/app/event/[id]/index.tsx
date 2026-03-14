@@ -513,6 +513,7 @@ export default function EventSummaryScreen() {
             <Text style={{ fontSize: 18, fontWeight: '700', color: 'white', marginTop: 8 }}>
               Your Contribution
             </Text>
+            {/* TODO: use Intl.NumberFormat with booking currency when multi-currency support is added */}
             {contributionCents > 0 && (
               <Text style={{ fontSize: 32, fontWeight: '900', color: DARK_THEME.primary, marginTop: 4 }}>
                 €{Math.round(contributionCents / 100)}

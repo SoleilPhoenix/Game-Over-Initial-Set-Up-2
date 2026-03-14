@@ -148,21 +148,32 @@ export default function InviteWizardScreen() {
     setIsSubmitting(true);
     try {
       const fullName = `${data.firstName} ${data.lastName}`.trim();
-      const { error } = await supabase.auth.signUp({
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: { data: { full_name: fullName } },
       });
-      if (error) {
-        if (error.message.toLowerCase().includes('already registered') ||
-            error.message.toLowerCase().includes('user_already_exists')) {
+      if (signUpError) {
+        if (signUpError.message.toLowerCase().includes('already registered') ||
+            signUpError.message.toLowerCase().includes('user_already_exists')) {
           signupForm.setError('email', {
             message: 'An account with this email already exists — tap "Log in instead" below',
           });
           return;
         }
-        throw error;
+        throw signUpError;
       }
+
+      // Guard: email confirmation required (production Supabase config)
+      if (!signUpData?.session) {
+        Alert.alert(
+          'Check your email',
+          'Please confirm your email address, then return to accept the invite.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
       setSignupCompleted(true);
       setStep('profile');
     } catch (e: any) {

@@ -147,7 +147,11 @@ export const participantsRepository = {
       .eq('user_id', userId)
       .eq('role', 'guest');
 
-    if (error || !data) return [];
+    if (error) {
+      console.warn('getGuestParticipations failed:', error.message);
+      return [];
+    }
+    if (!data) return [];
     return data;
   },
 
