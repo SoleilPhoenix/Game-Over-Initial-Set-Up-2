@@ -423,6 +423,8 @@ export default function BudgetDashboardScreen() {
     });
 
     const perPersonCents = booking!.per_person_cents || 0;
+    // Reverse-engineer paying count from total: assumes total = perPerson × count × 1.1 (10% service fee)
+    // This is display-only — not used for payment calculations
     const dbPayingCount = perPersonCents > 0 ? Math.round(totalBudget / (perPersonCents * 1.1)) : (participants?.length || 0);
     return {
       totalBudget,
