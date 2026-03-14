@@ -97,7 +97,7 @@ export default function EventSummaryScreen() {
         setContributionCents(Math.ceil(booking.total_amount_cents / participants.length));
       }
     });
-  }, [isGuest, firstVisit, currentUserId, id]);
+  }, [isGuest, firstVisit, currentUserId, id, booking, participants]);
 
   const handleDismissContributionCard = async () => {
     const key = `gameover:contribution_seen:${id}:${currentUserId}`;
