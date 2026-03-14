@@ -39,7 +39,7 @@ describe('usePublicInvitePreview', () => {
       startDate: '2026-03-30T10:00:00Z',
       organizerName: 'Max M.',
       acceptedCount: 8,
-      guestEmail: null,
+      guestEmail: undefined,
     };
     (invitesRepository.getPreview as any).mockResolvedValue(preview);
 

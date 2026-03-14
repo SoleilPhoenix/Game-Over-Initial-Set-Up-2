@@ -116,7 +116,10 @@ export function useUrgentPayment() {
   const isGuestContribution = guestUrgentEvent !== null;
   const guestDaysLeft = guestUrgentEvent ? (daysUntil(guestUrgentEvent.start_date) ?? 0) : 0;
 
-  // Bell dot = any unpaid urgent event OR guest contribution due — stays orange until payment is made
+  // NOTE: For guests, isGuestContribution stays true until payment_status = 'paid' in the DB.
+  // Unlike the organizer path (which uses seenEventIds for temporary dismissal),
+  // the guest bell dot is a persistent reminder until the organizer marks them as paid.
+  // This is intentional — guests have no in-app payment flow.
   const hasUnseenUrgency = useMemo(
     () => urgentEvents.some(info => !info.isPaid) || isGuestContribution,
     [urgentEvents, isGuestContribution]
