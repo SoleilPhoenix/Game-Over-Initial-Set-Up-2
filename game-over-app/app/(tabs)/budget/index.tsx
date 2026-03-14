@@ -26,6 +26,7 @@ import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import type { Database } from '@/lib/supabase/types';
+import type { EventWithDetails } from '@/repositories/events';
 
 type Event = Database['public']['Tables']['events']['Row'] & {
   city?: { name: string } | null;
@@ -301,7 +302,7 @@ export default function BudgetDashboardScreen() {
 
   // Filter booked events
   const bookedEvents = useMemo(() => {
-    return (events || []).filter((e: Event) => e.status === 'booked' || e.status === 'completed');
+    return (events || []).filter((e: EventWithDetails) => e.status === 'booked' || e.status === 'completed');
   }, [events]);
 
   // Check if we have booked events FIRST (before any other queries)
@@ -357,7 +358,7 @@ export default function BudgetDashboardScreen() {
     hasBookedEvents ? (selectedEventId || undefined) : undefined
   );
 
-  const selectedEvent = bookedEvents.find((e: Event) => e.id === selectedEventId);
+  const selectedEvent = bookedEvents.find((e: EventWithDetails) => e.id === selectedEventId);
 
   // Load all persisted data when event changes
   useEffect(() => {
