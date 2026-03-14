@@ -87,15 +87,23 @@ export default function EventSummaryScreen() {
   useEffect(() => {
     if (!isGuest || !firstVisit || !currentUserId || !id) return;
     const key = `gameover:contribution_seen:${id}:${currentUserId}`;
-    AsyncStorage.getItem(key).then(seen => {
-      if (!seen) setShowContributionCard(true);
-    });
-    loadBudgetInfo(id).then(info => {
+
+    Promise.all([
+      AsyncStorage.getItem(key),
+      loadBudgetInfo(id),
+    ]).then(([seen, info]) => {
+      if (seen) return; // already dismissed
+
+      // Calculate amount before showing
+      let cents = 0;
       if (info?.totalCents && info?.payingCount) {
-        setContributionCents(Math.ceil(info.totalCents / info.payingCount));
+        cents = Math.ceil(info.totalCents / info.payingCount);
       } else if (booking?.total_amount_cents && participants?.length) {
-        setContributionCents(Math.ceil(booking.total_amount_cents / participants.length));
+        cents = Math.ceil(booking.total_amount_cents / participants.length);
       }
+
+      setContributionCents(cents);
+      setShowContributionCard(true);
     });
   }, [isGuest, firstVisit, currentUserId, id, booking, participants]);
 
@@ -512,7 +520,8 @@ export default function EventSummaryScreen() {
             <Text style={{ fontSize: 13, color: DARK_THEME.textTertiary, marginTop: 8, lineHeight: 20 }}>
               Please transfer this amount to{' '}
               <Text style={{ color: 'white', fontWeight: '600' }}>
-                the organizer
+                {participants?.find(p => p.role === 'organizer')?.profile?.full_name
+                  ?? 'the organizer'}
               </Text>
               . Your share is due 14 days before the event.
             </Text>
