@@ -176,7 +176,7 @@ export const invitesRepository = {
       .eq('role', 'guest')
       .not('confirmed_at', 'is', null);
 
-    if (countResult.error) return null;
+    const acceptedCount = countResult.error ? 0 : (countResult.count ?? 0);
 
     return {
       eventId: ev.id,
@@ -186,7 +186,7 @@ export const invitesRepository = {
       cityId: ev.city_id,
       startDate: ev.start_date,
       organizerName: ev.created_by_profile?.full_name ?? 'The organizer',
-      acceptedCount: countResult.count ?? 0,
+      acceptedCount,
       guestEmail: undefined,
     };
   },
@@ -237,9 +237,8 @@ export const invitesRepository = {
    * $$ LANGUAGE plpgsql SECURITY DEFINER;
    */
   async incrementUseCount(inviteId: string): Promise<void> {
-    // TODO: add increment_invite_use_count to Supabase types
     // Note: increment_invite_use_count RPC function may need to be created in Supabase
-    const { error } = await supabase.rpc('increment_invite_use_count' as any, {
+    const { error } = await supabase.rpc('increment_invite_use_count', {
       invite_id: inviteId,
     });
 
@@ -298,7 +297,7 @@ export const invitesRepository = {
       };
     }
 
-    // Add user as participant
+    // Insert participant first (critical path)
     const { error: participantError } = await supabase
       .from('event_participants')
       .insert({
@@ -314,8 +313,16 @@ export const invitesRepository = {
       return { success: false, error: 'Failed to join the event. Please try again.' };
     }
 
-    // Increment use count
-    await this.incrementUseCount(invite.id);
+    // NOTE: incrementUseCount is not atomic with the insert above.
+    // If this fails, the participant is already added but use_count won't increment.
+    // The user can retry and the existingParticipant check will route them correctly.
+    // This is acceptable for an MVP where max_uses is enforced at the DB level too.
+    try {
+      await this.incrementUseCount(invite.id);
+    } catch (e) {
+      console.warn('incrementUseCount failed after participant insert:', e);
+      // Non-critical: continue — participant is already added
+    }
 
     return { success: true, eventId };
   },

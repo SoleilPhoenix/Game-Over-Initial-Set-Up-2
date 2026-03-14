@@ -860,6 +860,10 @@ export type Database = {
     }
     Functions: {
       generate_booking_reference: { Args: never; Returns: string }
+      increment_invite_use_count: {
+        Args: { invite_id: string }
+        Returns: undefined
+      }
       is_event_creator: { Args: { p_event_id: string }; Returns: boolean }
       is_event_participant: { Args: { p_event_id: string }; Returns: boolean }
     }
