@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { getAllBudgetInfos } from '@/lib/participantCountCache';
@@ -91,15 +92,14 @@ export function useUrgentPayment() {
   const currentUserId = useAuthStore(s => s.user?.id);
 
   // Fetch current user's guest participations separately (event_participants is never
-  // joined by getByUser() to avoid RLS 42P17 recursion — see repositories/events.ts)
-  const [userParticipations, setUserParticipations] = useState<
-    Array<{ event_id: string; role: string; payment_status: string | null }>
-  >([]);
-
-  useEffect(() => {
-    if (!currentUserId) return;
-    participantsRepository.getGuestParticipations(currentUserId).then(setUserParticipations);
-  }, [currentUserId]);
+  // joined by getByUser() to avoid RLS 42P17 recursion — see repositories/events.ts).
+  // Using useQuery so data is refreshed on app focus via the existing cache lifecycle.
+  const { data: userParticipations = [] } = useQuery({
+    queryKey: ['guestParticipations', currentUserId],
+    queryFn: () => participantsRepository.getGuestParticipations(currentUserId!),
+    enabled: !!currentUserId,
+    staleTime: 30 * 1000,
+  });
 
   // Guest urgency: driven by event_participants.payment_status, not budget cache
   const guestUrgentEvent = useMemo(() => {
