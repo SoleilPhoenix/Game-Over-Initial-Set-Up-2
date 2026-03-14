@@ -383,6 +383,10 @@ export default function EventsScreen() {
     }
   };
 
+  // Note: this heuristic uses created_by to determine role.
+  // It may incorrectly show "Guest" for co-organizers (participants with role='organizer'
+  // who did not create the event). The accurate role is in event_participants.role,
+  // but that data is not loaded at the event list level to avoid N+1 queries.
   const getUserRole = (event: EventWithDetails): 'organizer' | 'guest' => {
     return event.created_by === user?.id ? 'organizer' : 'guest';
   };
