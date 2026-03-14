@@ -102,13 +102,10 @@ export function useCreateInvite() {
  */
 export function useAcceptInvite() {
   const queryClient = useQueryClient();
-  const user = useAuthStore((state) => state.user);
 
   return useMutation({
-    mutationFn: async (inviteCode: string) => {
-      if (!user?.id) throw new Error('User not authenticated');
-      return invitesRepository.accept(inviteCode, user.id);
-    },
+    mutationFn: ({ code, userId }: { code: string; userId: string }) =>
+      invitesRepository.accept(code, userId),
     onSuccess: (result) => {
       if (result.success && result.eventId) {
         // Invalidate relevant queries

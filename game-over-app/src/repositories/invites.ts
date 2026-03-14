@@ -31,8 +31,8 @@ export interface InvitePreview {
   startDate: string;
   organizerName: string;
   acceptedCount: number;
-  /** Pre-fill email field in signup step if invite was sent to email */
-  guestEmail: string | null;
+  /** Pre-fill email field in signup step if invite was sent to email. Always undefined — email is not fetched for privacy. */
+  guestEmail: string | undefined;
 }
 
 /**
@@ -47,6 +47,23 @@ function generateCode(): string {
     code += chars.charAt(randomBytes[i] % chars.length);
   }
   return code;
+}
+
+interface InvitePreviewRow {
+  id: string;
+  code: string;
+  expires_at: string | null;
+  max_uses: number | null;
+  use_count: number;
+  event: {
+    id: string;
+    title: string;
+    honoree_name: string;
+    start_date: string;
+    city_id: string;
+    city: { name: string } | null;
+    created_by_profile: { full_name: string } | null;
+  };
 }
 
 export const invitesRepository = {
@@ -148,22 +165,16 @@ export const invitesRepository = {
     // Validate max uses
     if (data.max_uses !== null && (data.use_count ?? 0) >= data.max_uses) return null;
 
-    const ev = data.event as any;
+    const typedData = data as unknown as InvitePreviewRow;
+    const ev = typedData.event;
 
-    // Then: parallelize count + email lookup (independent of each other)
-    const [countResult, emailResult] = await Promise.all([
-      supabase
-        .from('event_participants')
-        .select('id', { count: 'exact', head: true })
-        .eq('event_id', ev.id)
-        .eq('role', 'guest')
-        .not('confirmed_at', 'is', null),
-      supabase
-        .from('guest_invitations')
-        .select('email')
-        .eq('invite_code', upperCode)
-        .maybeSingle(),
-    ]);
+    // Fetch accepted participant count
+    const countResult = await supabase
+      .from('event_participants')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', ev.id)
+      .eq('role', 'guest')
+      .not('confirmed_at', 'is', null);
 
     if (countResult.error) return null;
 
@@ -176,7 +187,7 @@ export const invitesRepository = {
       startDate: ev.start_date,
       organizerName: ev.created_by_profile?.full_name ?? 'The organizer',
       acceptedCount: countResult.count ?? 0,
-      guestEmail: emailResult.data?.email ?? null,
+      guestEmail: undefined,
     };
   },
 
@@ -226,8 +237,9 @@ export const invitesRepository = {
    * $$ LANGUAGE plpgsql SECURITY DEFINER;
    */
   async incrementUseCount(inviteId: string): Promise<void> {
+    // TODO: add increment_invite_use_count to Supabase types
     // Note: increment_invite_use_count RPC function may need to be created in Supabase
-    const { error } = await (supabase.rpc as any)('increment_invite_use_count', {
+    const { error } = await supabase.rpc('increment_invite_use_count' as any, {
       invite_id: inviteId,
     });
 
@@ -276,7 +288,7 @@ export const invitesRepository = {
       .select('id')
       .eq('event_id', eventId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     if (existingParticipant) {
       return {
@@ -294,6 +306,7 @@ export const invitesRepository = {
         user_id: userId,
         role: 'guest',
         invited_via: 'link',
+        confirmed_at: new Date().toISOString(),
       });
 
     if (participantError) {

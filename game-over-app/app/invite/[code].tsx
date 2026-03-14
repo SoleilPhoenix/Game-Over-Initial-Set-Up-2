@@ -87,7 +87,7 @@ export default function InviteWizardScreen() {
     }
 
     try {
-      const result = await acceptInvite.mutateAsync(code!);
+      const result = await acceptInvite.mutateAsync({ code: code!, userId: currentUser.id });
       if (!result.eventId) {
         Alert.alert('Error', result.error || 'Could not join event.');
         return;
