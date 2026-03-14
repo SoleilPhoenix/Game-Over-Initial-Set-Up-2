@@ -117,6 +117,9 @@ export const invitesRepository = {
    * Uses the anonymous SELECT policy on invite_codes.
    */
   async getPreview(code: string): Promise<InvitePreview | null> {
+    const upperCode = code.toUpperCase();
+
+    // First: fetch invite + event (needed for subsequent queries)
     const { data, error } = await supabase
       .from('invite_codes')
       .select(`
@@ -130,7 +133,7 @@ export const invitesRepository = {
           created_by_profile:profiles!events_created_by_fkey ( full_name )
         )
       `)
-      .eq('code', code.toUpperCase())
+      .eq('code', upperCode)
       .eq('is_active', true)
       .single();
 
@@ -138,22 +141,22 @@ export const invitesRepository = {
 
     const ev = data.event as any;
 
-    // Count accepted guests
-    const { count: acceptedCount, error: countError } = await supabase
-      .from('event_participants')
-      .select('id', { count: 'exact', head: true })
-      .eq('event_id', ev.id)
-      .eq('role', 'guest')
-      .not('confirmed_at', 'is', null);
+    // Then: parallelize count + email lookup (independent of each other)
+    const [countResult, emailResult] = await Promise.all([
+      supabase
+        .from('event_participants')
+        .select('id', { count: 'exact', head: true })
+        .eq('event_id', ev.id)
+        .eq('role', 'guest')
+        .not('confirmed_at', 'is', null),
+      supabase
+        .from('guest_invitations')
+        .select('email')
+        .eq('invite_code', upperCode)
+        .maybeSingle(),
+    ]);
 
-    if (countError) return null;
-
-    // Check if invite was sent to an email address (for pre-fill)
-    const { data: inviteRecord } = await supabase
-      .from('guest_invitations')
-      .select('email')
-      .eq('invite_code', code)
-      .maybeSingle();
+    if (countResult.error) return null;
 
     return {
       eventId: ev.id,
@@ -163,8 +166,8 @@ export const invitesRepository = {
       cityId: ev.city_id,
       startDate: ev.start_date,
       organizerName: ev.created_by_profile?.full_name ?? 'The organizer',
-      acceptedCount: acceptedCount ?? 0,
-      guestEmail: inviteRecord?.email ?? null,
+      acceptedCount: countResult.count ?? 0,
+      guestEmail: emailResult.data?.email ?? null,
     };
   },
 
