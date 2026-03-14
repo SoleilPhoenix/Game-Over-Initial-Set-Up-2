@@ -5,7 +5,7 @@
  * Step 3: Profile Completion (phone + optional photo)
  * → navigates to event on completion
  */
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, ScrollView, KeyboardAvoidingView, Platform,
   Pressable, Alert, StyleSheet, Image,
@@ -72,8 +72,11 @@ export default function InviteWizardScreen() {
   const acceptInvite = useAcceptInvite();
 
   // ── Core accept handler (defined first — used by steps 1 and 3) ──
+  const isAcceptingRef = useRef(false);
+
   const doAcceptInvite = useCallback(async (phone?: string, avatarUrl?: string) => {
-    if (isAccepting) return;
+    if (isAcceptingRef.current) return;
+    isAcceptingRef.current = true;
     setIsAccepting(true);
     try {
       // Get fresh session from Supabase directly (auth store may lag after signUp)
@@ -107,9 +110,10 @@ export default function InviteWizardScreen() {
         Alert.alert('Error', 'Failed to join event. Please try again.');
       }
     } finally {
+      isAcceptingRef.current = false;
       setIsAccepting(false);
     }
-  }, [acceptInvite, code, isAccepting, router]);
+  }, [acceptInvite, code, router]);
 
   // ── Step 1 handlers ─────────────────────────────────────────
   const handleAcceptPressed = async () => {
@@ -189,6 +193,22 @@ export default function InviteWizardScreen() {
       setAvatarUri(result.assets[0].uri);
     }
   };
+
+  const handleSkipStep = useCallback(async () => {
+    const phoneValue = profileForm.getValues('phone');
+    if (phoneValue && phoneValue.length > 0) {
+      Alert.alert(
+        'Skip profile?',
+        "Your phone number won't be saved. You can add it later in profile settings.",
+        [
+          { text: 'Stay', style: 'cancel' },
+          { text: 'Skip', onPress: () => doAcceptInvite() },
+        ]
+      );
+    } else {
+      await doAcceptInvite();
+    }
+  }, [doAcceptInvite, profileForm]);
 
   const handleProfileComplete = async (data: ProfileForm) => {
     setIsSubmitting(true);
@@ -482,7 +502,7 @@ export default function InviteWizardScreen() {
           </Button>
 
           <Pressable
-            onPress={() => doAcceptInvite()}
+            onPress={handleSkipStep}
             style={{ alignItems: 'center', paddingVertical: 8 }}
             testID="skip-photo-button"
           >
