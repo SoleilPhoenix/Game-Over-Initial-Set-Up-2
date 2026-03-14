@@ -123,6 +123,9 @@ export const invitesRepository = {
     const { data, error } = await supabase
       .from('invite_codes')
       .select(`
+        expires_at,
+        max_uses,
+        use_count,
         event:events (
           id,
           title,
@@ -138,6 +141,12 @@ export const invitesRepository = {
       .single();
 
     if (error || !data?.event) return null;
+
+    // Validate expiry
+    if (data.expires_at && new Date(data.expires_at) < new Date()) return null;
+
+    // Validate max uses
+    if (data.max_uses !== null && (data.use_count ?? 0) >= data.max_uses) return null;
 
     const ev = data.event as any;
 
