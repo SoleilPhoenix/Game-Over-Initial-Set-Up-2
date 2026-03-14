@@ -92,6 +92,13 @@ export default function ManageInvitationsScreen() {
   const currentParticipant = participants?.find(p => p.user_id === user?.id);
   const isGuest = currentParticipant?.role === 'guest';
 
+  // Redirect guests away from the participants management screen
+  useEffect(() => {
+    if (isGuest && participants !== undefined) {
+      router.replace(`/event/${id}`);
+    }
+  }, [isGuest, participants, id, router]);
+
   // Local state for guest details entered by organizer
   const [guestDetails, setGuestDetails] = useState<Record<number, GuestDetails>>({});
   const [expandedSlot, setExpandedSlot] = useState<number | null>(null);
