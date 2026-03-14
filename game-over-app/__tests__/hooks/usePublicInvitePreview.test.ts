@@ -1,12 +1,17 @@
 /**
- * Tests for usePublicInvitePreview
+ * Tests for the public invite preview data layer.
  *
- * NOTE: This project's vitest setup cannot load @testing-library/react-native
- * because the package transitively requires react-native, which ships Flow
- * type syntax (import typeof …) that Node cannot parse natively.
+ * NOTE: These tests use QueryClient.fetchQuery() directly rather than renderHook()
+ * because @testing-library/react-native cannot load in this test environment
+ * due to Flow syntax in react-native (see vitest.config.ts).
  *
- * We test the hook's contract directly via the QueryClient rather than via
- * renderHook, keeping the test portable within the existing test infra.
+ * This means the tests validate:
+ *   - invitesRepository.getPreview() behavior (via mock)
+ *   - The React Query queryKey format (inviteKeys.preview)
+ *   - Data fetching and null-return edge cases
+ *
+ * They do NOT test the actual usePublicInvitePreview hook behavior
+ * (staleTime, retry: false, enabled guard).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
