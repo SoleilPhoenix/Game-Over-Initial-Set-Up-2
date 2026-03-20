@@ -8,6 +8,23 @@ import { useEvent } from '@/hooks/queries/useEvents';
 import { useParticipants } from '@/hooks/queries/useParticipants';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { usePackage } from '@/hooks/queries/usePackages';
+import { calculateBookingPricing } from '@/utils/pricing';
+import type { EventWithDetails } from '@/repositories/events';
+import type { ParticipantWithProfile } from '@/repositories/participants';
+import type { BookingWithDetails } from '@/repositories/bookings';
+import type { Database } from '@/lib/supabase/types';
+
+type Package = Database['public']['Tables']['packages']['Row'];
+
+export interface FallbackPackage {
+  id: string;
+  name: string;
+  tier: string;
+  price_per_person_cents: number;
+  base_price_cents: 0;
+  slug?: string;
+  [key: string]: unknown;
+}
 
 export interface BookingPricing {
   packagePriceCents: number;
@@ -18,19 +35,16 @@ export interface BookingPricing {
 }
 
 export interface UseBookingFlowResult {
-  event: any;
-  participants: any[];
-  booking: any;
-  package: any;
+  event: EventWithDetails | null | undefined;
+  participants: ParticipantWithProfile[];
+  booking: BookingWithDetails | null | undefined;
+  package: Package | FallbackPackage | null | undefined;
   excludeHonoree: boolean;
   setExcludeHonoree: (value: boolean) => void;
   pricing: BookingPricing | null;
   isLoading: boolean;
   error: Error | null;
 }
-
-const MIN_SERVICE_FEE_CENTS = 5000; // €50 minimum
-const SERVICE_FEE_RATE = 0.10; // 10%
 
 // Fallback packages for local IDs that don't exist in DB
 const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; price_per_person_cents: number }> = {
@@ -67,31 +81,23 @@ export function useBookingFlow(eventId: string | undefined, packageIdOverride?: 
 
     // Use override (from URL params) > participant list > event count > fallback to 1
     const totalParticipants = participantCountOverride ||
-      ((participants && participants.length > 0) ? participants.length : (event?.participant_count || 1));
-    const honoreeCount = excludeHonoree ? 1 : 0;
-    const payingCount = Math.max(1, totalParticipants - honoreeCount);
+      ((participants && participants.length > 0) ? participants.length : 1);
 
-    const perPersonPrice = pkg.price_per_person_cents || (pkg as any).base_price_cents || 0;
-    // Package Base is ALWAYS price × total participants (fixed amount)
-    const packagePrice = perPersonPrice * totalParticipants;
-    const serviceFee = Math.max(
-      Math.ceil(packagePrice * SERVICE_FEE_RATE / 100) * 100,
-      MIN_SERVICE_FEE_CENTS
-    );
-    // Round total to whole euros so perPerson × payingCount matches displayed Total Group Cost
-    const totalEurosRounded = Math.round((packagePrice + serviceFee) / 100);
-    const total = totalEurosRounded * 100;
-    // Per-person derived from rounded total so the math adds up on screen
-    const perPerson = Math.ceil(total / payingCount);
+    const result = calculateBookingPricing({
+      pricePerPersonCents: pkg.price_per_person_cents,
+      baseFeeCents: (pkg as FallbackPackage).base_price_cents ?? 0,
+      totalParticipants,
+      excludeHonoree,
+    });
 
     return {
-      packagePriceCents: packagePrice,
-      serviceFeeCents: serviceFee,
-      totalCents: total,
-      perPersonCents: perPerson,
-      payingParticipantCount: payingCount,
+      packagePriceCents: result.packageBaseCents,
+      serviceFeeCents: result.serviceFeeCents,
+      totalCents: result.totalCents,
+      perPersonCents: result.perPersonCents,
+      payingParticipantCount: result.payingCount,
     };
-  }, [pkg, participants, excludeHonoree, event, participantCountOverride]);
+  }, [pkg, participants, excludeHonoree, participantCountOverride]);
 
   const isLoading = eventLoading || participantsLoading || bookingLoading || (packageLoading && !pkg);
 

@@ -5,6 +5,7 @@
 
 import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/types';
+import { calculateBookingPricing } from '@/utils/pricing';
 
 type Booking = Database['public']['Tables']['bookings']['Row'];
 type BookingInsert = Database['public']['Tables']['bookings']['Insert'];
@@ -19,9 +20,6 @@ export interface BookingWithDetails extends Booking {
     honoree_name: string;
   } | null;
 }
-
-const SERVICE_FEE_PERCENTAGE = 0.10; // 10%
-const MIN_SERVICE_FEE_CENTS = 5000; // €50
 
 export const bookingsRepository = {
   /**
@@ -98,7 +96,7 @@ export const bookingsRepository = {
   },
 
   /**
-   * Calculate booking costs
+   * Calculate booking costs — delegates to canonical pricing utility.
    */
   calculateCosts(
     pkg: Package,
@@ -111,25 +109,18 @@ export const bookingsRepository = {
     payingParticipants: number;
     perPersonCents: number;
   } {
-    const payingParticipants = excludeHonoree
-      ? Math.max(1, participantCount - 1)
-      : participantCount;
-
-    const packageBaseCents =
-      pkg.base_price_cents + pkg.price_per_person_cents * participantCount;
-
-    const calculatedFee = Math.round(packageBaseCents * SERVICE_FEE_PERCENTAGE);
-    const servicFeeCents = Math.max(calculatedFee, MIN_SERVICE_FEE_CENTS);
-
-    const totalAmountCents = packageBaseCents + servicFeeCents;
-    const perPersonCents = Math.ceil(totalAmountCents / payingParticipants);
-
+    const result = calculateBookingPricing({
+      pricePerPersonCents: pkg.price_per_person_cents,
+      baseFeeCents: pkg.base_price_cents,
+      totalParticipants: participantCount,
+      excludeHonoree,
+    });
     return {
-      packageBaseCents,
-      servicFeeCents,
-      totalAmountCents,
-      payingParticipants,
-      perPersonCents,
+      packageBaseCents: result.packageBaseCents,
+      servicFeeCents: result.serviceFeeCents,
+      totalAmountCents: result.totalCents,
+      payingParticipants: result.payingCount,
+      perPersonCents: result.perPersonCents,
     };
   },
 

@@ -13,6 +13,7 @@ import { ToastProvider, ToastViewport } from '@tamagui/toast';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StripeProviderWrapper } from '@/components/StripeProviderWrapper';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
@@ -59,12 +60,16 @@ function RootLayoutNav() {
   const router = useRouter();
 
   useEffect(() => {
-    initialize();
+    let cleanup: (() => void) | undefined;
+    initialize().then((fn: unknown) => {
+      if (typeof fn === 'function') cleanup = fn as () => void;
+    });
     // Preload package images during splash screen to eliminate loading delays
     preloadPackageImages().catch(() => {});
     preloadSportLogos().catch(() => {});
     preloadShareImages().catch(() => {});
-  }, [initialize]);
+    return () => { cleanup?.(); };
+  }, []); // initialize is a stable Zustand action
 
   // Sync user info with Crisp when session changes (with identity verification)
   useEffect(() => {
@@ -153,6 +158,7 @@ export default function RootLayout() {
   const colorScheme = 'dark';
 
   return (
+    <ErrorBoundary>
     <GestureHandlerRootView style={{ flex: 1 }}>
       <StripeProviderWrapper
         publishableKey={STRIPE_PUBLISHABLE_KEY}
@@ -170,5 +176,6 @@ export default function RootLayout() {
         </TamaguiProvider>
       </StripeProviderWrapper>
     </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
