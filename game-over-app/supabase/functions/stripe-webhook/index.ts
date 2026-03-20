@@ -161,6 +161,18 @@ async function handlePaymentSuccess(
   }
 
   const auditLog = Array.isArray(booking?.audit_log) ? booking.audit_log : [];
+
+  // --- IDEMPOTENCY GUARD ---
+  // Stripe retries webhooks on network errors. Skip if already processed.
+  const alreadyProcessed = auditLog.some(
+    (entry: { action: string; payment_intent_id?: string }) =>
+      entry.action === 'payment_succeeded' && entry.payment_intent_id === paymentIntent.id
+  );
+  if (alreadyProcessed) {
+    console.log(`[stripe-webhook] Duplicate event for PI ${paymentIntent.id} — skipping.`);
+    return;
+  }
+
   auditLog.push({
     action: 'payment_succeeded',
     payment_intent_id: paymentIntent.id,
@@ -265,6 +277,17 @@ async function handlePaymentFailure(
   }
 
   const auditLog = Array.isArray(booking?.audit_log) ? booking.audit_log : [];
+
+  // --- IDEMPOTENCY GUARD ---
+  const alreadyProcessed = auditLog.some(
+    (entry: { action: string; payment_intent_id?: string }) =>
+      entry.action === 'payment_failed' && entry.payment_intent_id === paymentIntent.id
+  );
+  if (alreadyProcessed) {
+    console.log(`[stripe-webhook] Duplicate failure event for PI ${paymentIntent.id} — skipping.`);
+    return;
+  }
+
   const lastError = paymentIntent.last_payment_error;
 
   auditLog.push({

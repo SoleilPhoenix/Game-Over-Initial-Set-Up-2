@@ -19,7 +19,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     supportsTablet: true,
     bundleIdentifier: 'app.gameover.ios',
     usesAppleSignIn: true,
-    associatedDomains: ['applinks:gameover.app'],
+    associatedDomains: ['applinks:game-over.app'],
     splash: {
       image: './assets/splash.png',
       resizeMode: 'contain',
@@ -54,12 +54,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         data: [
           {
             scheme: 'https',
-            host: 'gameover.app',
+            host: 'game-over.app',
             pathPrefix: '/invite',
           },
           {
             scheme: 'https',
-            host: 'gameover.app',
+            host: 'game-over.app',
             pathPrefix: '/event',
           },
         ],
