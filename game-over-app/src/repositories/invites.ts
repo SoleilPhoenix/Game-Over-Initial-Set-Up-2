@@ -203,7 +203,7 @@ export const invitesRepository = {
     }
   ): Promise<InviteCode> {
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + (options?.expiresInDays || 7));
+    expiresAt.setDate(expiresAt.getDate() + (options?.expiresInDays ?? 7));
 
     const { data, error } = await supabase
       .from('invite_codes')
@@ -351,5 +351,26 @@ export const invitesRepository = {
       .eq('id', inviteId);
 
     if (error) throw error;
+  },
+
+  /**
+   * Get guest details from invite codes for an event
+   */
+  async getGuestsByEventId(eventId: string): Promise<Array<{
+    id: string;
+    guest_first_name: string | null;
+    guest_last_name: string | null;
+    guest_email: string | null;
+  }>> {
+    const { data, error } = await supabase
+      .from('invite_codes')
+      .select('id, guest_first_name, guest_last_name, guest_email')
+      .eq('event_id', eventId);
+
+    if (error) {
+      console.warn('[invitesRepository.getGuestsByEventId]', error.message);
+      return [];
+    }
+    return data ?? [];
   },
 };

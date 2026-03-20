@@ -16,6 +16,7 @@ export const inviteKeys = {
   byEvent: (eventId: string) => [...inviteKeys.all, 'event', eventId] as const,
   validation: (code: string) => [...inviteKeys.all, 'validation', code] as const,
   preview: (code: string) => [...inviteKeys.all, 'preview', code] as const,
+  guests: (eventId: string) => [...inviteKeys.all, 'guests', eventId] as const,
 };
 
 /**
@@ -68,6 +69,18 @@ export function useInvitesByEvent(eventId: string | undefined) {
     queryFn: () => invitesRepository.getByEventId(eventId!),
     enabled: !!eventId,
     staleTime: 2 * 60 * 1000,
+  });
+}
+
+/**
+ * Fetch guest details from invite codes for an event
+ */
+export function useInviteGuests(eventId: string | null) {
+  return useQuery({
+    queryKey: inviteKeys.guests(eventId ?? ''),
+    queryFn: () => invitesRepository.getGuestsByEventId(eventId!),
+    enabled: !!eventId,
+    staleTime: 60 * 1000,
   });
 }
 
