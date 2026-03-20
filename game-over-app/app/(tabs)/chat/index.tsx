@@ -1204,8 +1204,8 @@ export default function CommunicationScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Share Event Card */}
-        {renderShareEventCard()}
+        {/* Share Event Card — organizers only */}
+        {selectedEvent?.created_by === user?.id && renderShareEventCard()}
 
         {selectedTab === 'topics' ? (
           /* Topics tab */

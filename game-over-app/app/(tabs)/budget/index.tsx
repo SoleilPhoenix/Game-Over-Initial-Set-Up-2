@@ -11,9 +11,11 @@ import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
-import { useParticipants } from '@/hooks/queries/useParticipants';
+import { useParticipants, participantKeys } from '@/hooks/queries/useParticipants';
+import { useInviteGuests } from '@/hooks/queries/useInvites';
 import { useUser } from '@/stores/authStore';
 import { DARK_THEME } from '@/constants/theme';
 import { useTabBarStore } from '@/stores/tabBarStore';
@@ -124,6 +126,7 @@ function SwipeableRefundRow({
 
 export default function BudgetDashboardScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
   // eventId = opened via /(tabs)/budget?eventId=xxx (old approach, kept for safety)
   // id     = opened via /event/[id]/budget (event-stack, router.back() works correctly)
@@ -132,6 +135,9 @@ export default function BudgetDashboardScreen() {
   const insets = useSafeAreaInsets();
   const user = useUser();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(eventIdParam || null);
+  const [markingPaidUserId, setMarkingPaidUserId] = useState<string | null>(null);
+  // Derived: is the current user the organizer of the selected event?
+  // Used to hide organizer-only actions (Pay Remaining Balance, Invite Guests, Remind All).
   const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<BudgetCategory>('package');
   const [cachedBudget, setCachedBudget] = useState<BudgetInfo | null>(null);
@@ -173,7 +179,7 @@ export default function BudgetDashboardScreen() {
   const [addedRefunds, setAddedRefunds] = useState<Array<{ description: string; amount: string; status: 'processing' | 'received'; icon?: string; color?: string; bg?: string; }>>([]);
 
   // Ref always holds latest contributors — avoids declaration-order TDZ issue with useCallback
-  const allContributorsRef = useRef<Array<{ id: string; name: string }>>([]);
+  const allContributorsRef = useRef<Array<{ id: string; name: string; userId?: string | null; role?: string }>>([]);
 
   // Track which expense index is being edited (null = creating new)
   const [editingExpenseIndex, setEditingExpenseIndex] = useState<number | null>(null);
@@ -281,12 +287,16 @@ export default function BudgetDashboardScreen() {
     setRefundModalVisible(false);
   }, [refundDescription, refundAmount, refundTemplateKey, selectedEventId]);
 
-  // Hide tab bar when opened from Event Summary (eventIdParam present)
+  // Hide tab bar when opened from Event Summary (eventIdParam present).
+  // Also refetch participants on focus so payment status reflects "I've Paid" from Notifications screen.
   useFocusEffect(
     useCallback(() => {
       if (eventIdParam) setTabBarHidden(true);
+      if (selectedEventId) {
+        queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(selectedEventId) });
+      }
       return () => setTabBarHidden(false);
-    }, [eventIdParam])
+    }, [eventIdParam, selectedEventId, queryClient])
   );
 
   const BUDGET_TABS = ['package', 'otherExpenses'] as const;
@@ -321,11 +331,7 @@ export default function BudgetDashboardScreen() {
   const handleNotifications = () => {
     markUrgencySeen();
     if (isGuestContribution && guestUrgentEvent) {
-      Alert.alert(
-        'Contribution Due',
-        `Your share for ${guestUrgentEvent.title} is due in ${guestDaysLeft} days.\nPlease transfer your contribution to the organizer.`,
-        [{ text: 'OK' }]
-      );
+      router.push(`/event/${guestUrgentEvent.id}/budget` as any);
     } else {
       router.push('/notifications');
     }
@@ -359,6 +365,21 @@ export default function BudgetDashboardScreen() {
   );
 
   const selectedEvent = bookedEvents.find((e: EventWithDetails) => e.id === selectedEventId);
+  const isOrganizer = selectedEvent?.created_by === user?.id;
+
+  // Fetch invite codes to include non-registered invited guests in contributors list
+  const { data: rawInviteGuests = [] } = useInviteGuests(selectedEventId ?? null);
+  const inviteCodeGuests = useMemo(
+    () => rawInviteGuests
+      .filter(ic => ic.guest_email || ic.guest_first_name)
+      .map(ic => ({
+        id: ic.id,
+        name: [ic.guest_first_name, ic.guest_last_name].filter(Boolean).join(' ')
+          || ic.guest_email?.split('@')[0] || 'Guest',
+        email: ic.guest_email?.toLowerCase() || '',
+      })),
+    [rawInviteGuests]
+  );
 
   // Load all persisted data when event changes
   useEffect(() => {
@@ -544,9 +565,10 @@ export default function BudgetDashboardScreen() {
     })
   ).current;
 
-  // Build demo participant list when no DB booking record exists
+  // Build demo participant list only when neither DB booking nor DB participants exist
   const demoParticipants = useMemo(() => {
-    if (booking) return null; // real data — use DB participants
+    if (booking) return null; // real booking record — use DB participants
+    if (participants && participants.length > 0) return null; // DB participants loaded — use them directly
     const guestCount = Object.keys(cachedGuests).length;
     const totalPaying = (cachedBudget?.payingCount
       || (cachedParticipantCount ? cachedParticipantCount - 1 : 0)
@@ -581,24 +603,109 @@ export default function BudgetDashboardScreen() {
       list.push({ id: 'honoree', name: honoreeName, status: 'pending', amount: budgetStats.perPerson });
     }
     return list;
-  }, [booking, cachedBudget, cachedParticipantCount, cachedGuests, userName, budgetStats, selectedEvent]);
+  }, [booking, participants, cachedBudget, cachedParticipantCount, cachedGuests, userName, budgetStats, selectedEvent]);
+
+  // Sort DB participants so organizer is always first in contribution list
+  const sortedParticipants = useMemo(() => {
+    if (!participants) return null;
+    return [...(participants as any[])].sort((a, b) => {
+      if (a.role === 'organizer') return -1;
+      if (b.role === 'organizer') return 1;
+      return 0;
+    });
+  }, [participants]);
 
   // Normalised contributor list for expense modal (works with both demo + DB participants)
-  const allContributors = useMemo<Array<{ id: string; name: string }>>(() => {
-    if (demoParticipants) return demoParticipants.map(p => ({ id: p.id, name: p.name }));
-    if (participants) return (participants as any[]).map(p => ({
-      id: p.id as string,
-      name: p.profile?.full_name || p.profile?.email?.split('@')[0] || 'Guest',
+  // Includes userId + role for filtering (exclude self, exclude honoree)
+  const allContributors = useMemo<Array<{ id: string; name: string; userId?: string | null; role?: string }>>(() => {
+    if (demoParticipants) return demoParticipants.map(p => ({
+      id: p.id,
+      name: p.name,
+      userId: p.id === 'organizer' ? (selectedEvent?.created_by ?? null) : null,
+      role: p.id === 'organizer' ? 'organizer' : p.id === 'honoree' ? 'honoree' : 'guest',
     }));
+    if (sortedParticipants) {
+      const base: Array<{ id: string; name: string; userId?: string | null; role?: string }> =
+        sortedParticipants.map(p => ({
+          id: p.id as string,
+          name: p.profile?.full_name || p.profile?.email?.split('@')[0] || 'Guest',
+          userId: (p as any).user_id ?? null,
+          role: (p as any).role,
+        }));
+      // Add non-registered invited guests from invite_codes (e.g. Hans Zimmer), deduplicated
+      const registeredEmails = new Set(
+        sortedParticipants
+          .map(p => p.profile?.email?.toLowerCase())
+          .filter(Boolean)
+      );
+      const seenInvites = new Set<string>();
+      for (const ic of inviteCodeGuests) {
+        if (ic.email && registeredEmails.has(ic.email)) continue; // already registered
+        const dedupeKey = ic.email || ic.name.toLowerCase();
+        if (seenInvites.has(dedupeKey)) continue;
+        seenInvites.add(dedupeKey);
+        base.push({ id: `invite-${ic.id}`, name: ic.name, userId: null, role: 'guest' });
+      }
+      // Also include locally-cached guests (entered in Manage Invitations but not yet sent)
+      for (const guest of Object.values(cachedGuests)) {
+        const name = [guest.firstName, guest.lastName].filter(Boolean).join(' ');
+        const email = guest.email?.toLowerCase() || '';
+        if (!name && !email) continue;
+        if (email && registeredEmails.has(email)) continue;
+        const dedupeKey = email || name.toLowerCase();
+        if (seenInvites.has(dedupeKey)) continue;
+        seenInvites.add(dedupeKey);
+        base.push({ id: `cached-${dedupeKey}`, name: name || email.split('@')[0] || 'Guest', userId: null, role: 'guest' });
+      }
+      return base;
+    }
     return [];
-  }, [demoParticipants, participants]);
+  }, [demoParticipants, sortedParticipants, inviteCodeGuests, cachedGuests, selectedEvent?.created_by]);
   // Keep ref in sync so openExpenseModal always has the latest list
   allContributorsRef.current = allContributors;
 
-  // For "Someone else paid" — only guests (no organizer, no honoree)
+  // Registered participant emails (for deduplication with invite guests)
+  const registeredEmailSet = useMemo(() => new Set(
+    (sortedParticipants || []).map(p => p.profile?.email?.toLowerCase()).filter(Boolean) as string[]
+  ), [sortedParticipants]);
+
+  // Non-registered invited guests to show in Group Contributions
+  // Includes both invite_codes (sent invitations) AND locally-cached guests (entered but not yet sent)
+  // Deduplicated so the same person never appears twice
+  const nonRegisteredInviteGuests = useMemo(() => {
+    if (demoParticipants) return [];
+    const seen = new Set<string>();
+    const result: Array<{ id: string; name: string; email: string }> = [];
+    // 1. Sent invitations (invite_codes DB rows)
+    for (const ic of inviteCodeGuests) {
+      if (ic.email && registeredEmailSet.has(ic.email)) continue;
+      const dedupeKey = ic.email || ic.name.toLowerCase();
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      result.push(ic);
+    }
+    // 2. Locally-cached guests (entered in Manage Invitations but not yet formally invited)
+    for (const guest of Object.values(cachedGuests)) {
+      const name = [guest.firstName, guest.lastName].filter(Boolean).join(' ');
+      const email = guest.email?.toLowerCase() || '';
+      if (!name && !email) continue;
+      if (email && registeredEmailSet.has(email)) continue;
+      const dedupeKey = email || name.toLowerCase();
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      result.push({ id: `cached-${dedupeKey}`, name: name || email.split('@')[0] || 'Guest', email });
+    }
+    return result;
+  }, [demoParticipants, inviteCodeGuests, registeredEmailSet, cachedGuests]);
+
+  // For "Someone else paid" — exclude current user AND honoree (can't pay yourself or honoree)
   const payerOptions = useMemo(
-    () => allContributors.filter(c => c.id !== 'organizer' && c.id !== 'honoree'),
-    [allContributors]
+    () => allContributors.filter(c =>
+      c.role !== 'honoree' &&
+      c.id !== 'honoree' &&
+      c.userId !== user?.id
+    ),
+    [allContributors, user?.id]
   );
 
   // Days until event (calendar-date comparison — no time-of-day skew)
@@ -1064,36 +1171,43 @@ export default function BudgetDashboardScreen() {
                   );
                 })()}
 
-                {/* Pay Remaining Balance — inside card, below total price */}
+                {/* Pay Remaining Balance — organizers only */}
                 {budgetStats.percentage < 100 && budgetStats.pending > 0 && (
-                  <Pressable
-                    style={styles.payRemainingButton}
-                    onPress={() => {
-                      if (!selectedEventId) return;
-                      // Prefer cached slug over DB package_id (which is a UUID, not a slug)
-                      const packageIdForPayment = cachedBudget?.packageId || (booking as any)?.package_id;
-                      const participantsForPayment = cachedBudget?.payingCount;
-                      const params = new URLSearchParams({ payFull: '1' });
-                      if (packageIdForPayment) params.set('packageId', packageIdForPayment);
-                      if (participantsForPayment) params.set('participants', String(participantsForPayment + 1));
-                      if (selectedEvent?.city_id) params.set('cityId', selectedEvent.city_id);
-                      // Pass remaining amount + full total so payment screen works without package lookup
-                      params.set('amountCents', String(budgetStats.pending));
-                      params.set('totalCents', String(budgetStats.totalBudget));
-                      router.push(`/booking/${selectedEventId}/payment?${params.toString()}` as any);
-                    }}
-                  >
-                    <View style={styles.payRemainingIcon}>
-                      <Ionicons name="card-outline" size={20} color="#F97316" />
-                    </View>
-                    <YStack flex={1}>
-                      <Text style={styles.payRemainingTitle}>{(t.budget as any).payRemainingBtn}</Text>
-                      <Text style={styles.payRemainingSubtitleText}>
-                        {formatCurrencyRounded(budgetStats.pending)} · {(t.budget as any).payRemainingSubtitle}
+                  isOrganizer ? (
+                    <Pressable
+                      style={styles.payRemainingButton}
+                      onPress={() => {
+                        if (!selectedEventId) return;
+                        const packageIdForPayment = cachedBudget?.packageId || (booking as any)?.package_id;
+                        const participantsForPayment = cachedBudget?.payingCount;
+                        const params = new URLSearchParams({ payFull: '1' });
+                        if (packageIdForPayment) params.set('packageId', packageIdForPayment);
+                        if (participantsForPayment) params.set('participants', String(participantsForPayment + 1));
+                        if (selectedEvent?.city_id) params.set('cityId', selectedEvent.city_id);
+                        params.set('amountCents', String(budgetStats.pending));
+                        params.set('totalCents', String(budgetStats.totalBudget));
+                        router.push(`/booking/${selectedEventId}/payment?${params.toString()}` as any);
+                      }}
+                    >
+                      <View style={styles.payRemainingIcon}>
+                        <Ionicons name="card-outline" size={20} color="#F97316" />
+                      </View>
+                      <YStack flex={1}>
+                        <Text style={styles.payRemainingTitle}>{(t.budget as any).payRemainingBtn}</Text>
+                        <Text style={styles.payRemainingSubtitleText}>
+                          {formatCurrencyRounded(budgetStats.pending)} · {(t.budget as any).payRemainingSubtitle}
+                        </Text>
+                      </YStack>
+                      <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+                    </Pressable>
+                  ) : (
+                    <View style={styles.guestRemainingInfo}>
+                      <Ionicons name="information-circle-outline" size={18} color={DARK_THEME.textSecondary} />
+                      <Text style={styles.guestRemainingText}>
+                        The remaining {formatCurrencyRounded(budgetStats.pending)} will be paid by the organizer 14 days before the event.
                       </Text>
-                    </YStack>
-                    <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
-                  </Pressable>
+                    </View>
+                  )
                 )}
               </YStack>
             </View>
@@ -1104,7 +1218,7 @@ export default function BudgetDashboardScreen() {
                 <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
                   {t.budget.groupContributions}
                 </Text>
-                {budgetStats.pendingCount > 0 && (
+                {isOrganizer && budgetStats.pendingCount > 0 && (
                   <Pressable onPress={handleRemindAll}>
                     <Text fontSize={12} fontWeight="500" color={DARK_THEME.primary}>
                       {t.budget.remindAll}
@@ -1115,90 +1229,179 @@ export default function BudgetDashboardScreen() {
 
               <View style={[styles.glassCard, { paddingHorizontal: 8, paddingTop: 8, paddingBottom: 8 }]}>
                 {/* Use demo participants when no DB booking, otherwise DB participants */}
-                {(demoParticipants || participants)?.map((participantRaw, index) => {
+                {(demoParticipants || sortedParticipants)?.map((participantRaw, index) => {
                   type DemoP = { id: string; name: string; status: 'paid' | 'pending'; amount: number };
                   const isDemo = !!demoParticipants;
                   // Normalise to common shape
                   const name = isDemo
                     ? (participantRaw as DemoP).name
                     : (((participantRaw as any).profile?.full_name) || (participantRaw as any).profile?.email?.split('@')[0] || '—');
+                  const isOrganizerRow = isDemo
+                    ? (participantRaw as DemoP).id === 'organizer'
+                    : (participantRaw as any).role === 'organizer';
                   const isPaid = isDemo
                     ? (participantRaw as DemoP).status === 'paid'
-                    : (participantRaw as any).payment_status === 'paid';
+                    // Organizer is always considered paid — they covered the deposit for the whole group
+                    : (participantRaw as any).payment_status === 'paid' || isOrganizerRow;
                   const isPending = !isPaid;
+                  const perPersonAmount = booking?.per_person_cents || budgetStats.perPerson || 0;
                   const amountForRow = isDemo
                     ? (participantRaw as DemoP).amount
-                    : (booking?.per_person_cents || budgetStats.perPerson || 0);
-                  const isCurrentUser = index === 0;
+                    // Organizer: show deposit paid (not full per-person) when balance still outstanding
+                    : isOrganizerRow && budgetStats.percentage < 100
+                      ? budgetStats.collected
+                      : perPersonAmount;
+                  // isCurrentUser: true when this row represents the currently logged-in user.
+                  // Demo mode: index 0 is always the organizer — mark as (You) only if they ARE the organizer.
+                  // DB mode: compare user_id directly.
+                  const isCurrentUser = isDemo
+                    ? (participantRaw as DemoP).id === 'organizer'
+                      ? selectedEvent?.created_by === user?.id
+                      : false
+                    : (participantRaw as any).user_id === user?.id;
                   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
                   const initials = (name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2)) || '?';
                   const key = (participantRaw as any).id as string;
 
                   return (
+                    <React.Fragment key={key}>
+                      <View
+                        style={[
+                          styles.contributionRow,
+                          (index !== ((demoParticipants || sortedParticipants)?.length || 0) - 1 || nonRegisteredInviteGuests.length > 0) && styles.contributionRowBorder,
+                        ]}
+                      >
+                        {/* Avatar */}
+                        <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
+                          <Text style={styles.participantInitialsText}>{initials}</Text>
+                        </View>
+
+                        {/* Name + amount — flex: 1 with right margin to keep space for badge */}
+                        <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
+                          <Text
+                            style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}
+                            numberOfLines={1}
+                          >
+                            {name}{isCurrentUser ? ` ${t.budget.you}` : ''}
+                          </Text>
+                          <Text
+                            style={{ fontSize: 12, color: DARK_THEME.textTertiary }}
+                            numberOfLines={1}
+                          >
+                            {isPending
+                              ? t.budget.pendingOwes.replace('{{amount}}', formatCurrency(amountForRow))
+                              : t.budget.contribution.replace('{{amount}}', formatCurrency(amountForRow))
+                            }
+                          </Text>
+                        </View>
+
+                        {/* Status Badge — compact, top-aligned */}
+                        <View style={[
+                          styles.paymentBadge,
+                          { flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 },
+                          isPaid ? styles.paidBadge : styles.pendingBadge,
+                        ]}>
+                          <Ionicons
+                            name={isPaid ? 'checkmark' : 'time-outline'}
+                            size={10}
+                            color={isPaid ? DARK_THEME.success : DARK_THEME.warning}
+                          />
+                          <Text style={[
+                            styles.paymentBadgeText,
+                            { color: isPaid ? DARK_THEME.success : DARK_THEME.warning }
+                          ]}>
+                            {isPaid ? t.budget.paid : t.budget.pending}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* "I've Paid" button — guest's own pending row only */}
+                      {isCurrentUser && isPending && !isOrganizer && !isDemo && (
+                        <Pressable
+                          style={[styles.markPaidButton, markingPaidUserId === user?.id && { opacity: 0.6 }]}
+                          disabled={markingPaidUserId === user?.id}
+                          onPress={() => {
+                            Alert.alert(
+                              'Confirm Payment',
+                              'Have you transferred your share to the organizer?',
+                              [
+                                { text: 'Not yet', style: 'cancel' },
+                                {
+                                  text: "Yes, I've Paid",
+                                  onPress: async () => {
+                                    if (!selectedEventId || !user?.id) return;
+                                    setMarkingPaidUserId(user.id);
+                                    try {
+                                      await supabase
+                                        .from('event_participants')
+                                        .update({ payment_status: 'paid' })
+                                        .eq('event_id', selectedEventId)
+                                        .eq('user_id', user.id);
+                                      queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(selectedEventId) });
+                                      queryClient.invalidateQueries({ queryKey: ['guestParticipations', user.id] });
+                                      Alert.alert('Thank you!', 'Your payment has been confirmed. The organizer will be notified.');
+                                    } catch {
+                                      Alert.alert('Error', 'Could not update status. Please try again.');
+                                    } finally {
+                                      setMarkingPaidUserId(null);
+                                    }
+                                  },
+                                },
+                              ]
+                            );
+                          }}
+                        >
+                          <Ionicons name="checkmark-circle-outline" size={14} color={DARK_THEME.primary} />
+                          <Text style={styles.markPaidButtonText}>I've Paid</Text>
+                        </Pressable>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+
+                {/* Non-registered invited guests (invited but not yet signed up) */}
+                {nonRegisteredInviteGuests.map((ic, idx) => {
+                  const perPerson = booking?.per_person_cents || budgetStats.perPerson || 0;
+                  const avatarColor = AVATAR_COLORS[((demoParticipants || sortedParticipants)?.length || 0 + idx) % AVATAR_COLORS.length];
+                  const initials = ic.name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2) || '?';
+                  const isLast = idx === nonRegisteredInviteGuests.length - 1;
+                  return (
                     <View
-                      key={key}
-                      style={[
-                        styles.contributionRow,
-                        index !== ((demoParticipants || participants)?.length || 0) - 1 && styles.contributionRowBorder,
-                      ]}
+                      key={`invite-${ic.id}`}
+                      style={[styles.contributionRow, !isLast && styles.contributionRowBorder]}
                     >
-                      {/* Avatar */}
                       <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
                         <Text style={styles.participantInitialsText}>{initials}</Text>
                       </View>
-
-                      {/* Name + amount — flex: 1 with right margin to keep space for badge */}
                       <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
-                        <Text
-                          style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}
-                          numberOfLines={1}
-                        >
-                          {name}{isCurrentUser ? ` ${t.budget.you}` : ''}
+                        <Text style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }} numberOfLines={1}>
+                          {ic.name}
                         </Text>
-                        <Text
-                          style={{ fontSize: 12, color: DARK_THEME.textTertiary }}
-                          numberOfLines={1}
-                        >
-                          {isPending
-                            ? t.budget.pendingOwes.replace('{{amount}}', formatCurrency(amountForRow))
-                            : t.budget.contribution.replace('{{amount}}', formatCurrency(amountForRow))
-                          }
+                        <Text style={{ fontSize: 12, color: DARK_THEME.textTertiary }} numberOfLines={1}>
+                          {t.budget.pendingOwes.replace('{{amount}}', formatCurrency(perPerson))}
                         </Text>
                       </View>
-
-                      {/* Status Badge — compact, top-aligned */}
-                      <View style={[
-                        styles.paymentBadge,
-                        { flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 },
-                        isPaid ? styles.paidBadge : styles.pendingBadge,
-                      ]}>
-                        <Ionicons
-                          name={isPaid ? 'checkmark' : 'time-outline'}
-                          size={10}
-                          color={isPaid ? DARK_THEME.success : DARK_THEME.warning}
-                        />
-                        <Text style={[
-                          styles.paymentBadgeText,
-                          { color: isPaid ? DARK_THEME.success : DARK_THEME.warning }
-                        ]}>
-                          {isPaid ? t.budget.paid : t.budget.pending}
-                        </Text>
+                      <View style={[styles.paymentBadge, { flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 }, styles.pendingBadge]}>
+                        <Ionicons name="time-outline" size={10} color={DARK_THEME.warning} />
+                        <Text style={[styles.paymentBadgeText, { color: DARK_THEME.warning }]}>{t.budget.pending}</Text>
                       </View>
                     </View>
                   );
                 })}
               </View>
 
-              {/* Invite button — send invitations via share sheet */}
-              <Pressable style={styles.inviteButton} onPress={handleInvite}>
-                <View style={styles.inviteButtonIcon}>
-                  <Ionicons name="share-social-outline" size={18} color="#5A7EB0" />
-                </View>
-                <Text style={styles.inviteButtonText} numberOfLines={1}>
-                  Invite Guests — Email, SMS, WhatsApp
-                </Text>
-                <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
-              </Pressable>
+              {/* Invite button — organizers only */}
+              {isOrganizer && (
+                <Pressable style={styles.inviteButton} onPress={handleInvite}>
+                  <View style={styles.inviteButtonIcon}>
+                    <Ionicons name="share-social-outline" size={18} color="#5A7EB0" />
+                  </View>
+                  <Text style={styles.inviteButtonText} numberOfLines={1}>
+                    Invite Guests — Email, SMS, WhatsApp
+                  </Text>
+                  <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+                </Pressable>
+              )}
 
             </YStack>
             </>
@@ -1599,8 +1802,9 @@ export default function BudgetDashboardScreen() {
                         )}
                         {/* Contributors — payer is always excluded to avoid duplication */}
                         {(() => {
+                          // When "You" pays, exclude the current user's entry (not index 0 which is always the organizer)
                           const payerExcludedId = expensePaidBy === 'you'
-                            ? (allContributors[0]?.id || null)
+                            ? (allContributors.find(c => c.userId === user?.id)?.id ?? allContributors[0]?.id ?? null)
                             : expensePaidByPerson;
                           const contributorOptions = allContributors.filter(c => c.id !== payerExcludedId);
                           if (contributorOptions.length === 0) return null;
@@ -2243,6 +2447,25 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
   },
+  markPaidButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginHorizontal: 8,
+    marginBottom: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(90, 126, 176, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(90, 126, 176, 0.25)',
+  },
+  markPaidButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: DARK_THEME.primary,
+  },
   inviteButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2267,6 +2490,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: DARK_THEME.textSecondary,
+  },
+  guestRemainingInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: 'rgba(90, 126, 176, 0.1)',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(90, 126, 176, 0.25)',
+  },
+  guestRemainingText: {
+    flex: 1,
+    fontSize: 13,
+    color: DARK_THEME.textSecondary,
+    lineHeight: 18,
   },
   payRemainingButton: {
     flexDirection: 'row',

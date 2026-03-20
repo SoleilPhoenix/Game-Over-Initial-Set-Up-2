@@ -3,10 +3,11 @@
  * User settings hub with dark glassmorphic theme
  */
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Alert, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import { YStack, XStack, Text, View } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,6 +17,7 @@ import { useFavoritesStore } from '@/stores/favoritesStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
 import { getPackageImage } from '@/constants/packageImages';
+import { supabase } from '@/lib/supabase/client';
 
 interface MenuItemProps {
   icon: string;
@@ -116,10 +118,36 @@ export default function ProfileScreen() {
   const favorites = useFavoritesStore((s) => s.favorites);
 
   const { t, language } = useTranslation();
+  const [isResendingVerification, setIsResendingVerification] = useState(false);
+  // Fallback: fetch own profile row to surface avatar/name set via invite flow.
+  // Refresh on every focus so photo uploads in invite wizard appear immediately.
+  const [profileData, setProfileData] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
+  const fetchProfile = useCallback(() => {
+    if (!user?.id) return;
+    void supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).single()
+      .then(({ data }) => { if (data) setProfileData(data); });
+  }, [user?.id]);
+  useEffect(fetchProfile, [fetchProfile]);
+  useFocusEffect(fetchProfile);
 
-  const userName = user?.user_metadata?.full_name || 'User';
+  const isEmailVerified = Boolean(user?.email_confirmed_at);
+  const userName = user?.user_metadata?.full_name || profileData?.full_name || 'User';
   const userEmail = user?.email || '';
-  const userAvatar = user?.user_metadata?.avatar_url;
+
+  const handleResendVerification = async () => {
+    if (!userEmail || isResendingVerification) return;
+    setIsResendingVerification(true);
+    try {
+      const { error } = await supabase.auth.resend({ type: 'signup', email: userEmail });
+      if (error) throw error;
+      Alert.alert('Email sent', `Verification email sent to ${userEmail}`);
+    } catch {
+      Alert.alert('Error', 'Could not send verification email. Please try again.');
+    } finally {
+      setIsResendingVerification(false);
+    }
+  };
+  const userAvatar = user?.user_metadata?.avatar_url || profileData?.avatar_url;
   const userInitials = userName
     .split(' ')
     .map((n: string) => n[0])
@@ -216,6 +244,26 @@ export default function ProfileScreen() {
         </YStack>
 
         <YStack paddingHorizontal="$4">
+          {/* Email Verification Banner */}
+          {!isEmailVerified && (
+            <Pressable
+              onPress={handleResendVerification}
+              style={styles.verificationBanner}
+              disabled={isResendingVerification}
+            >
+              <XStack alignItems="center" gap="$3">
+                <Ionicons name="mail-outline" size={20} color="#F59E0B" />
+                <YStack flex={1}>
+                  <Text fontSize={13} fontWeight="600" color="#F59E0B">Verify your email</Text>
+                  <Text fontSize={12} color={DARK_THEME.textSecondary}>
+                    {isResendingVerification ? 'Sending…' : 'Tap to resend confirmation email'}
+                  </Text>
+                </YStack>
+                <Ionicons name="chevron-forward" size={16} color="#F59E0B" />
+              </XStack>
+            </Pressable>
+          )}
+
           {/* Notifications Section */}
           <MenuSection title={t.profile.notifications}>
             <MenuItem
@@ -365,6 +413,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: DARK_THEME.border,
     overflow: 'hidden',
+  },
+  verificationBanner: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    padding: 14,
+    marginBottom: 20,
   },
   menuItem: {
     flexDirection: 'row',

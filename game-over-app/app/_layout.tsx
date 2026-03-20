@@ -96,8 +96,9 @@ function RootLayoutNav() {
     if (!isInitialized) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inInviteGroup = segments[0] === 'invite';
 
-    if (!session && !inAuthGroup) {
+    if (!session && !inAuthGroup && !inInviteGroup) {
       // Redirect to welcome screen if not authenticated
       router.replace('/(auth)/welcome');
     } else if (session && inAuthGroup) {

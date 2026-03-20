@@ -4,7 +4,7 @@
  */
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { ScrollView, Pressable, StyleSheet, View, Modal } from 'react-native';
+import { Alert, ScrollView, Pressable, StyleSheet, View, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -41,7 +41,7 @@ const TOOL_CONFIGS = [
 ] as const;
 
 export default function EventSummaryScreen() {
-  const { id, firstVisit } = useLocalSearchParams<{ id: string; firstVisit?: string }>();
+  const { id, firstVisit, role: roleParam } = useLocalSearchParams<{ id: string; firstVisit?: string; role?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
@@ -51,8 +51,9 @@ export default function EventSummaryScreen() {
   const { data: booking } = useBooking(id);
   const currentUserId = useAuthStore(s => s.user?.id);
   const currentParticipant = participants?.find(p => p.user_id === currentUserId);
-  // Hide edit button until we know the user's role (prevents flash for guests)
-  const isGuest = isLoadingParticipants ? true : currentParticipant?.role === 'guest';
+  // Use role from URL param (set by Events tab — known immediately) as the source of truth.
+  // Falls back to participants query once loaded (covers direct navigation / deep links).
+  const isGuest = roleParam === 'guest' || (!roleParam && currentParticipant?.role === 'guest');
   const updateEvent = useUpdateEvent();
   const createInvite = useCreateInvite();
 
@@ -122,6 +123,18 @@ export default function EventSummaryScreen() {
     return { ...dbChecklist, ...localChecklist };
   }, [event, localChecklist]);
 
+  // Compute desired total early (before early return) so planningSteps can use it.
+  // cachedParticipants and booking are loaded above; rawDesiredTotal below the early return
+  // re-uses the same logic but needs it here too for the memoised planning step.
+  const bookingDesiredTotalEarly = booking
+    ? (booking as any).paying_participants + ((booking as any).exclude_honoree ? 1 : 0)
+    : 0;
+  // No hardcoded fallback: if neither cache nor booking available (e.g. guest device),
+  // pass undefined so calculatePlanningSteps uses the actual loaded participants.length.
+  const rawDesiredTotalEarly = cachedParticipants || bookingDesiredTotalEarly || 0;
+  // Non-honoree desired count = total − 1 honoree slot (used as Group Confirmation threshold)
+  const nonHonoreeDesiredEarly = rawDesiredTotalEarly > 1 ? rawDesiredTotalEarly - 1 : undefined;
+
   const planningSteps = useMemo(() => {
     if (!event) return [];
     return calculatePlanningSteps(
@@ -129,8 +142,9 @@ export default function EventSummaryScreen() {
       participants ?? undefined,
       effectiveChecklist,
       cachedInvitedCount,
+      nonHonoreeDesiredEarly,
     );
-  }, [event, participants, effectiveChecklist, cachedInvitedCount]);
+  }, [event, participants, effectiveChecklist, cachedInvitedCount, nonHonoreeDesiredEarly]);
 
   const completedCount = getCompletedCount(planningSteps);
   const progressPct = getProgressPercentage(planningSteps);
@@ -187,9 +201,30 @@ export default function EventSummaryScreen() {
     return invite.code;
   };
 
+  // Write step 2 completion state to AsyncStorage so the events list card can read it.
+  // IMPORTANT: also clear the key when step2 is not complete — otherwise the stale
+  // 'true' value persists after the desired participant count increases.
+  useEffect(() => {
+    if (!id || !planningSteps.length) return;
+    const step2 = planningSteps[1]; // index 1 = group_confirmed
+    if (step2?.completed) {
+      AsyncStorage.setItem(`gameover:step2_confirmed:${id}`, '1').catch(() => {});
+    } else {
+      AsyncStorage.removeItem(`gameover:step2_confirmed:${id}`).catch(() => {});
+    }
+  }, [id, planningSteps]);
+
   // Toggle a manual checklist item — try DB update, always persist locally
   const handleToggleChecklist = (key: string, currentValue: boolean) => {
     if (!event || !id) return;
+    if (isGuest) {
+      Alert.alert(
+        'Organizer Only',
+        'Only the event organizer can manage planning steps.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     const newValue = !currentValue;
 
     // Optimistic local update
@@ -228,8 +263,10 @@ export default function EventSummaryScreen() {
     ? new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : 'TBD';
 
-  // Confirmed participant count for tool subtext (exclude honoree from display total)
-  const confirmedCount = participants?.filter(p => p.confirmed_at != null).length ?? 0;
+  // Confirmed participant count for tool subtext (exclude honoree; count registered users as confirmed)
+  const confirmedCount = participants?.filter(p =>
+    p.role !== 'honoree' && (p.role === 'organizer' || p.confirmed_at != null || p.user_id != null)
+  ).length ?? 0;
   // Derive desired total: cache > booking > fallback
   const bookingDesiredTotal = booking
     ? (booking.paying_participants ?? 0) + (booking.exclude_honoree ? 1 : 0)
@@ -343,20 +380,22 @@ export default function EventSummaryScreen() {
           </View>
         </View>
 
-        {/* ─── Share / Invite Banner ─────────────── */}
-        <View style={{ marginBottom: 20 }}>
-          <ShareEventBanner
-            eventId={id!}
-            eventTitle={eventTitle}
-            participantCount={participants?.length || 0}
-            onGenerateInvite={handleGenerateInvite}
-          />
-        </View>
+        {/* ─── Share / Invite Banner (organizer only) ── */}
+        {!isGuest && (
+          <View style={{ marginBottom: 20 }}>
+            <ShareEventBanner
+              eventId={id!}
+              eventTitle={eventTitle}
+              participantCount={participants?.length || 0}
+              onGenerateInvite={handleGenerateInvite}
+            />
+          </View>
+        )}
 
         {/* ─── Planning Tools 2×2 Grid ───────────── */}
         <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>{t.eventDetail.planningTools}</Text>
         <View style={styles.toolsGrid}>
-          {TOOL_CONFIGS.filter(tool => !isGuest || tool.key !== 'invitations').map((tool) => {
+          {TOOL_CONFIGS.map((tool) => {
             const sub = getToolSubtext(tool.key);
             const toolLabel = t.eventDetail[
               tool.key === 'invitations' ? 'manageInvitations'
@@ -382,9 +421,10 @@ export default function EventSummaryScreen() {
                     }
                     return;
                   }
+                  const roleQuery = roleParam ? `?role=${roleParam}` : '';
                   const route = tool.isTab
                     ? ((tool as any).passEventId ? `${tool.route}?eventId=${id}` : tool.route)
-                    : `/event/${id}/${tool.route}`;
+                    : `/event/${id}/${tool.route}${roleQuery}`;
                   router.push(route as any);
                 }}
                 testID={`planning-tool-${tool.key}`}

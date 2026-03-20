@@ -15,6 +15,8 @@ import { DARK_THEME } from '@/constants/theme';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useTranslation, getTranslation } from '@/i18n';
+import { useUser } from '@/stores/authStore';
+import { useEvents } from '@/hooks/queries/useEvents';
 
 type IconName = 'calendar' | 'calendar-outline' | 'chatbubbles' | 'chatbubbles-outline' |
   'card' | 'card-outline' | 'person-circle' | 'person-circle-outline' | 'add';
@@ -60,10 +62,27 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
 
 function FABButton() {
   const router = useRouter();
+  const user = useUser();
+  const { data: events } = useEvents();
+  const rawDrafts = useWizardStore((s) => s.getAllDrafts());
+
+  // User-scoped draft filtering (same logic as events/index.tsx)
+  const userDrafts = rawDrafts.filter(d => {
+    if (!d.createdBy || d.createdBy !== user?.id) return false;
+    if (!events) return true;
+    const existingNames = new Set(
+      events.filter(e => e.created_by === user?.id).map(e => e.honoree_name?.toLowerCase()).filter(Boolean)
+    );
+    const existingIds = new Set(events.map(e => e.id));
+    if (d.createdEventId && existingIds.has(d.createdEventId)) return false;
+    if (d.honoreeName && existingNames.has(d.honoreeName.toLowerCase())) return false;
+    return true;
+  });
+  const hasUserDrafts = userDrafts.length > 0;
 
   const handlePress = () => {
     const store = useWizardStore.getState();
-    if (store.hasDraft()) {
+    if (hasUserDrafts) {
       const tr = getTranslation();
       Alert.alert(
         tr.wizard.existingDraftTitle,
@@ -73,11 +92,10 @@ function FABButton() {
           {
             text: tr.wizard.continueDraft,
             onPress: () => {
-              const drafts = store.getAllDrafts();
-              if (drafts.length > 0) {
-                store.loadDraft(drafts[0].id);
+              if (userDrafts.length > 0) {
+                store.loadDraft(userDrafts[0].id);
                 const stepPaths = ['/create-event', '/create-event/preferences', '/create-event/participants', '/create-event/packages'];
-                const targetPath = stepPaths[Math.min(drafts[0].currentStep - 1, 3)];
+                const targetPath = stepPaths[Math.min(userDrafts[0].currentStep - 1, 3)];
                 router.push(targetPath as any);
               }
             },
@@ -86,7 +104,7 @@ function FABButton() {
             text: tr.wizard.startFresh,
             style: 'destructive',
             onPress: () => {
-              store.startNewDraft();
+              store.startNewDraft(user?.id);
               router.push('/create-event');
             },
           },
@@ -94,7 +112,7 @@ function FABButton() {
       );
       return;
     }
-    store.startNewDraft();
+    store.startNewDraft(user?.id);
     router.push('/create-event');
   };
 

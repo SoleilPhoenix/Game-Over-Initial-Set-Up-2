@@ -151,6 +151,18 @@ export function useUrgentPayment() {
     }) ?? null;
   }, [events, currentUserId, userParticipations]);
 
+  // Guest PAID event: show a confirmation card in notifications after marking payment
+  const guestPaidRecentEvent = useMemo(() => {
+    if (!currentUserId || userParticipations.length === 0) return null;
+    return (events ?? []).find(event => {
+      const participation = userParticipations.find(p => p.event_id === event.id);
+      if (!participation || participation.role !== 'guest') return false;
+      if (participation.payment_status !== 'paid') return false;
+      const days = daysUntil(event.start_date);
+      return days !== null && days <= 14;
+    }) ?? null;
+  }, [events, currentUserId, userParticipations]);
+
   const isGuestContribution = guestUrgentEvent !== null;
   const guestDaysLeft = guestUrgentEvent ? (daysUntil(guestUrgentEvent.start_date) ?? 0) : 0;
 
@@ -169,6 +181,7 @@ export function useUrgentPayment() {
     hasUnseenUrgency,
     markUrgencySeen,
     guestUrgentEvent,
+    guestPaidRecentEvent,
     isGuestContribution,
     guestDaysLeft,
   };

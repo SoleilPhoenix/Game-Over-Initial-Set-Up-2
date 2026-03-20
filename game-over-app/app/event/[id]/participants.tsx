@@ -4,7 +4,7 @@
  * Organizer can fill in guest contact details and send invitations.
  */
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { ScrollView, Share, ActivityIndicator, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Modal, Alert } from 'react-native';
 
 // ─── Phone Formatting ──────────────────────────
@@ -48,11 +48,15 @@ function getEmailSuggestions(email: string): string[] {
   return COMMON_DOMAINS.filter(d => d.startsWith(afterAt));
 }
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
+import { participantKeys } from '@/hooks/queries/useParticipants';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useParticipants } from '@/hooks/queries/useParticipants';
+import { useInviteGuests } from '@/hooks/queries/useInvites';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { useUser } from '@/stores/authStore';
 import { useTranslation } from '@/i18n';
@@ -80,24 +84,21 @@ interface Slot {
 }
 
 export default function ManageInvitationsScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, role: roleParam } = useLocalSearchParams<{ id: string; role?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const user = useUser();
 
+  const queryClient = useQueryClient();
   const { data: event, isLoading: eventLoading } = useEvent(id);
   const { data: participants, isLoading: isLoadingParticipants } = useParticipants(id);
   const { data: booking, isLoading: bookingLoading } = useBooking(id);
   const currentParticipant = participants?.find(p => p.user_id === user?.id);
-  const isGuest = isLoadingParticipants ? true : currentParticipant?.role === 'guest';
+  // Use role param from navigation (known immediately) — fallback to participants query
+  const isGuest = roleParam === 'guest' || (!roleParam && currentParticipant?.role === 'guest');
 
-  // Redirect guests away from the participants management screen
-  useEffect(() => {
-    if (isGuest && participants !== undefined) {
-      router.replace(`/event/${id}`);
-    }
-  }, [isGuest, participants, id, router]);
+  // Guests see a read-only view — no redirect needed
 
   // Local state for guest details entered by organizer
   const [guestDetails, setGuestDetails] = useState<Record<number, GuestDetails>>({});
@@ -128,6 +129,51 @@ export default function ManageInvitationsScreen() {
     });
   }, [id]);
 
+  // Fetch invite_codes to resolve names for registered guests
+  // (organizer-entered data is the source of truth)
+  const { data: rawInviteGuests = [] } = useInviteGuests(id ?? null);
+  const invitesByEmail = useMemo(() => {
+    const map: Record<string, { phone: string; firstName: string; lastName: string }> = {};
+    for (const ic of rawInviteGuests) {
+      if (ic.guest_email) {
+        map[ic.guest_email.toLowerCase()] = {
+          phone: '',
+          firstName: ic.guest_first_name || '',
+          lastName: ic.guest_last_name || '',
+        };
+      }
+    }
+    return map;
+  }, [rawInviteGuests]);
+
+  // Fetch own profile from DB so organizer name is shown even if user_metadata.full_name is unset.
+  // Also ensures guests see their updated name after editing in profile settings.
+  const [ownProfile, setOwnProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
+  const fetchOwnProfile = useCallback(() => {
+    if (!user?.id) return;
+    void supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).single()
+      .then(({ data }) => { if (data) setOwnProfile(data); });
+  }, [user?.id]);
+  useEffect(fetchOwnProfile, [fetchOwnProfile]);
+
+  // Cleanup emailBlurTimer on unmount to prevent state updates after unmount
+  useEffect(() => {
+    return () => {
+      if (emailBlurTimerRef.current) {
+        clearTimeout(emailBlurTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Refetch participants on focus so guest profile changes (name, phone) appear immediately
+  useFocusEffect(
+    useCallback(() => {
+      if (id) {
+        queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(id) });
+      }
+    }, [id, queryClient])
+  );
+
   // Only show full-screen spinner if we have NO event data at all
   // Participants and booking load in background — slots use cache as fallback
   const isLoading = eventLoading && !event;
@@ -145,23 +191,29 @@ export default function ManageInvitationsScreen() {
     const totalSlots = cachedBudgetTotal || cachedParticipants || bookingTotal || 10;
     const result: Slot[] = [];
 
-    // Organizer info
-    const organizerName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You';
-    const organizerEmail = user?.email || '';
-
     // Map DB participants by role
     const dbParticipants = participants || [];
     const organizerParticipant = dbParticipants.find(p => p.role === 'organizer');
     const honoreeParticipant = dbParticipants.find(p => p.role === 'honoree');
     const guestParticipants = dbParticipants.filter(p => p.role === 'guest');
 
+    // Organizer info — prefer profile data; when isGuest never fall back to current user's data
+    const organizerEmail = organizerParticipant?.profile?.email
+      || (organizerParticipant as any)?.email
+      || (isGuest ? '' : (user?.email || ''));
+    const organizerName = organizerParticipant?.profile?.full_name
+      || organizerParticipant?.profile?.email?.split('@')[0]
+      || (isGuest ? 'Organizer' : (
+        user?.user_metadata?.full_name || ownProfile?.full_name || user?.email?.split('@')[0] || 'You'
+      ));
+
     // Slot 1: Organizer (pre-filled but phone is editable)
-    const orgPhone = guestDetails[-1]?.phone || (organizerParticipant?.profile as any)?.phone || '';
+    const orgPhone = guestDetails[-1]?.phone || organizerParticipant?.profile?.phone || '';
     result.push({
       index: 0,
       role: 'organizer',
-      name: organizerParticipant?.profile?.full_name || organizerName,
-      email: organizerParticipant?.profile?.email || (organizerParticipant as any)?.email || organizerEmail,
+      name: organizerName,
+      email: organizerEmail,
       phone: orgPhone,
       status: 'confirmed', // organizer is always confirmed
       isEditable: true, // allow editing phone
@@ -177,13 +229,28 @@ export default function ManageInvitationsScreen() {
       const localDetails = guestDetails[slotIdx];
 
       if (dbGuest) {
+        // When the current user IS this guest, prefer their own (potentially updated) profile data
+        const isCurrentUserGuest = dbGuest.user_id === user?.id;
+        const guestEmail = dbGuest.profile?.email || (dbGuest as any)?.email || '';
+        // Name: prefer organizer-entered data from invite_codes (source of truth)
+        // so the name shown matches what the organizer entered, not what the guest typed
+        const inviteData = invitesByEmail[guestEmail.toLowerCase()];
+        const inviteName = inviteData
+          ? [inviteData.firstName, inviteData.lastName].filter(Boolean).join(' ')
+          : '';
+        const guestName = inviteName
+          || (isCurrentUserGuest
+            ? (ownProfile?.full_name || dbGuest.profile?.full_name || user?.user_metadata?.full_name || 'Guest')
+            : (dbGuest.profile?.full_name || 'Guest'));
+        // Phone: prefer invite_codes data (organizer-entered) over profile.phone
+        const guestPhone = inviteData?.phone || (dbGuest.profile as any)?.phone || '';
         result.push({
           index: i + 1,
           role: 'guest',
-          name: dbGuest.profile?.full_name || 'Guest',
-          email: dbGuest.profile?.email || (dbGuest as any)?.email || '',
-          phone: (dbGuest.profile as any)?.phone || '',
-          status: dbGuest.confirmed_at ? 'confirmed' : 'pending',
+          name: guestName,
+          email: guestEmail,
+          phone: guestPhone,
+          status: dbGuest.confirmed_at ? 'confirmed' : (dbGuest.user_id ? 'pending' : 'not_invited'),
           isEditable: false,
           isExpanded: false,
           participant: dbGuest,
@@ -219,7 +286,7 @@ export default function ManageInvitationsScreen() {
     });
 
     return result;
-  }, [event, participants, user, guestDetails, expandedSlot, booking, cachedParticipants, cachedBudgetTotal]);
+  }, [event, participants, user, guestDetails, expandedSlot, booking, cachedParticipants, cachedBudgetTotal, isGuest, invitesByEmail, ownProfile]);
 
   // Stats — "filled" = has email (contact info provided, not just a name)
   const filledCount = slots.filter(s => !!s.email).length;
@@ -271,9 +338,9 @@ export default function ManageInvitationsScreen() {
     setEmailSuggestions([]);
   };
 
-  // Guests (non-organizer) with contact data — used to build the payload
+  // Guests only (excludes organizer AND honoree) — honoree is notified separately 1h before event
   const invitableGuests = useMemo(
-    () => slots.filter(s => s.role !== 'organizer' && (s.email || s.phone)),
+    () => slots.filter(s => s.role === 'guest' && (s.email || s.phone)),
     [slots]
   );
   const hasEmails = invitableGuests.some(s => s.email);
@@ -286,12 +353,19 @@ export default function ManageInvitationsScreen() {
     setInviteSendStatus('sending');
 
     // Ensure the session token is fresh — an expired JWT causes a 401 at the
-    // Supabase edge function runtime before our code even runs
+    // Supabase edge function runtime before our code even runs.
+    // If refresh fails, getSession() still returns the current (possibly valid) session.
     await supabase.auth.refreshSession().catch(() => {});
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      Alert.alert('Session expired', 'Please log out and log in again.');
+      setInviteSendStatus('idle');
+      return;
+    }
 
-    // Build guest payload from current slot/guestDetails state
+    // Build guest payload — honoree excluded (notified separately 1h before event)
     const guests = slots
-      .filter(s => s.role !== 'organizer')
+      .filter(s => s.role === 'guest')
       .map(s => ({
         slotIndex: s.index,
         firstName: guestDetails[s.index]?.firstName || s.name.split(' ')[0] || undefined,
@@ -305,15 +379,27 @@ export default function ManageInvitationsScreen() {
     });
 
     if (error) {
-      // Decode actual error body from the function response (Supabase client wraps
-      // non-2xx responses in a generic FunctionsHttpError — real detail is in context)
+      // Decode actual error body from the function response
       let detail = error.message ?? 'Unknown error';
+      let statusCode = '';
       try {
-        const body = await (error as any).context?.json?.();
-        if (body?.error) detail = body.error;
-        else if (body?.detail) detail = body.detail;
+        const ctx = (error as any).context;
+        if (ctx) {
+          statusCode = ctx.status ? ` [HTTP ${ctx.status}]` : '';
+          const text = await ctx.text?.();
+          if (text) {
+            try {
+              const body = JSON.parse(text);
+              if (body?.error) detail = body.error;
+              else if (body?.detail) detail = body.detail;
+              else detail = text;
+            } catch {
+              detail = text;
+            }
+          }
+        }
       } catch {}
-      Alert.alert('Send failed', detail);
+      Alert.alert('Send failed', detail + statusCode);
       setInviteSendStatus('idle');
       return;
     }
@@ -376,7 +462,7 @@ export default function ManageInvitationsScreen() {
       <Pressable
         key={`${slot.role}-${slot.index}`}
         style={[styles.slotCard, isEmpty && styles.slotCardEmpty]}
-        onPress={slot.isEditable ? () => setExpandedSlot(slot.isExpanded ? null : slot.index) : undefined}
+        onPress={!isGuest && slot.isEditable ? () => setExpandedSlot(slot.isExpanded ? null : slot.index) : undefined}
       >
         <XStack alignItems="center" gap={12}>
           {/* Avatar / Number */}
@@ -702,7 +788,7 @@ export default function ManageInvitationsScreen() {
       {!isGuest && <Modal
         visible={inviteModalVisible}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setInviteModalVisible(false)}
       >
         <View style={styles.inviteOverlay}>

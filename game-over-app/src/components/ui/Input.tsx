@@ -44,7 +44,7 @@ const StyledInput = styled(TamaguiInput, {
   backgroundColor: 'transparent',
   borderWidth: 0,
   fontSize: '$3',
-  color: '$textPrimary',
+  color: '#FFFFFF',
   paddingVertical: 0,
   height: '100%',
 

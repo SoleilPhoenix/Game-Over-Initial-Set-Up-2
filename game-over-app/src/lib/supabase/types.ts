@@ -812,6 +812,7 @@ export type Database = {
           full_name: string | null
           id: string
           language: string | null
+          phone: string | null
           push_notifications_enabled: boolean | null
           updated_at: string | null
         }
@@ -823,6 +824,7 @@ export type Database = {
           full_name?: string | null
           id: string
           language?: string | null
+          phone?: string | null
           push_notifications_enabled?: boolean | null
           updated_at?: string | null
         }
@@ -834,6 +836,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           language?: string | null
+          phone?: string | null
           push_notifications_enabled?: boolean | null
           updated_at?: string | null
         }
@@ -878,6 +881,26 @@ export type Database = {
       }
       is_event_creator: { Args: { p_event_id: string }; Returns: boolean }
       is_event_participant: { Args: { p_event_id: string }; Returns: boolean }
+      get_invite_preview: {
+        Args: { p_code: string }
+        Returns: Array<{
+          event_id: string
+          event_title: string
+          honoree_name: string
+          city_name: string | null
+          city_id: string
+          start_date: string
+          organizer_name: string
+          accepted_count: number
+          expires_at: string | null
+          max_uses: number | null
+          use_count: number | null
+          guest_first_name: string | null
+          guest_last_name: string | null
+          guest_email: string | null
+          guest_phone: string | null
+        }>
+      }
     }
     Enums: {
       age_range: "21-25" | "26-30" | "31-35" | "35+"

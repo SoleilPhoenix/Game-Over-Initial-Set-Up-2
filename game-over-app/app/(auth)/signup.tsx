@@ -3,10 +3,11 @@
  * Dark glassmorphic design matching UI specifications
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   StatusBar,
   KeyboardAvoidingView,
@@ -22,7 +23,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Input } from '@/components/ui/Input';
 import { DARK_THEME } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
 import { useAuthStore } from '@/stores/authStore';
@@ -30,7 +30,9 @@ import { supabase } from '@/lib/supabase/client';
 
 const signupSchema = z
   .object({
-    fullName: z.string().min(2, 'Name must be at least 2 characters'),
+    firstName: z.string().min(1, 'First name is required'),
+    lastName: z.string().min(1, 'Last name is required'),
+    phone: z.string().min(6, 'Please enter a valid phone number'),
     email: z.string().email('Please enter a valid email'),
     password: z
       .string()
@@ -49,6 +51,8 @@ type SignupFormData = z.infer<typeof signupSchema>;
 
 export default function SignupScreen() {
   const [isLoading, setIsLoading] = React.useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const insets = useSafeAreaInsets();
   const { setError, error, clearError } = useAuthStore();
   const { t } = useTranslation();
@@ -60,7 +64,9 @@ export default function SignupScreen() {
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      fullName: '',
+      firstName: '',
+      lastName: '',
+      phone: '',
       email: '',
       password: '',
       confirmPassword: '',
@@ -72,17 +78,25 @@ export default function SignupScreen() {
       setIsLoading(true);
       clearError();
 
-      const { error } = await supabase.auth.signUp({
+      const fullName = `${data.firstName.trim()} ${data.lastName.trim()}`.trim();
+      const { error, data: signUpData } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
           data: {
-            full_name: data.fullName,
+            full_name: fullName,
           },
         },
       });
 
       if (error) throw error;
+
+      // Save phone to profiles table (not stored in auth user_metadata)
+      if (signUpData.user) {
+        void supabase.from('profiles')
+          .update({ full_name: fullName, phone: data.phone.trim() })
+          .eq('id', signUpData.user.id); // non-blocking, fire-and-forget
+      }
     } catch (error: any) {
       // Provide user-friendly error messages for common Supabase errors
       let errorMessage = error.message || 'Failed to create account';
@@ -158,33 +172,87 @@ export default function SignupScreen() {
 
               {/* Form */}
               <View style={styles.form}>
-                <View style={styles.inputWrapper}>
-                  <Text style={styles.inputLabel}>{t.auth.fullName}</Text>
-                  <Controller
-                    control={control}
-                    name="fullName"
-                    render={({ field: { onChange, onBlur, value } }) => (
-                      <View style={[styles.inputContainer, errors.fullName && styles.inputError]}>
-                        <Ionicons name="person-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
+                {/* First Name + Last Name side by side */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={[styles.inputWrapper, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>First Name</Text>
+                    <Controller
+                      control={control}
+                      name="firstName"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <View style={[styles.inputContainer, errors.firstName && styles.inputError]}>
+                          <TextInput
+                            style={[styles.darkInput, { flex: 1 }]}
                             value={value}
                             onChangeText={onChange}
                             onBlur={onBlur}
-                            placeholder={t.auth.enterFullName}
+                            placeholder="First name"
                             placeholderTextColor={DARK_THEME.textTertiary}
                             autoCapitalize="words"
-                            autoComplete="name"
-                            textContentType="name"
-                            testID="input-full-name"
-                            style={styles.darkInput}
+                            autoComplete="given-name"
+                            textContentType="givenName"
+                            testID="input-first-name"
                           />
                         </View>
+                      )}
+                    />
+                    {errors.firstName && (
+                      <Text style={styles.fieldError}>{errors.firstName.message}</Text>
+                    )}
+                  </View>
+                  <View style={[styles.inputWrapper, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>Last Name</Text>
+                    <Controller
+                      control={control}
+                      name="lastName"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <View style={[styles.inputContainer, errors.lastName && styles.inputError]}>
+                          <TextInput
+                            style={[styles.darkInput, { flex: 1 }]}
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            placeholder="Last name"
+                            placeholderTextColor={DARK_THEME.textTertiary}
+                            autoCapitalize="words"
+                            autoComplete="family-name"
+                            textContentType="familyName"
+                            testID="input-last-name"
+                          />
+                        </View>
+                      )}
+                    />
+                    {errors.lastName && (
+                      <Text style={styles.fieldError}>{errors.lastName.message}</Text>
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>Phone / WhatsApp</Text>
+                  <Controller
+                    control={control}
+                    name="phone"
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <View style={[styles.inputContainer, errors.phone && styles.inputError]}>
+                        <Ionicons name="call-outline" size={20} color={DARK_THEME.textTertiary} />
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder="+49 152 12345678"
+                          placeholderTextColor={DARK_THEME.textTertiary}
+                          keyboardType="phone-pad"
+                          autoComplete="tel"
+                          textContentType="telephoneNumber"
+                          testID="input-phone"
+                        />
                       </View>
                     )}
                   />
-                  {errors.fullName && (
-                    <Text style={styles.fieldError}>{errors.fullName.message}</Text>
+                  {errors.phone && (
+                    <Text style={styles.fieldError}>{errors.phone.message}</Text>
                   )}
                 </View>
 
@@ -196,21 +264,19 @@ export default function SignupScreen() {
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.email && styles.inputError]}>
                         <Ionicons name="mail-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.enterEmail}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoComplete="email"
-                            textContentType="emailAddress"
-                            testID="input-email"
-                            style={styles.darkInput}
-                          />
-                        </View>
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder={t.auth.enterEmail}
+                          placeholderTextColor={DARK_THEME.textTertiary}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          autoComplete="email"
+                          textContentType="emailAddress"
+                          testID="input-email"
+                        />
                       </View>
                     )}
                   />
@@ -227,20 +293,21 @@ export default function SignupScreen() {
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.password && styles.inputError]}>
                         <Ionicons name="lock-closed-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.createPassword}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            secureTextEntry
-                            autoComplete="password-new"
-                            textContentType="newPassword"
-                            testID="input-password"
-                            style={styles.darkInput}
-                          />
-                        </View>
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder={t.auth.createPassword}
+                          placeholderTextColor={DARK_THEME.textTertiary}
+                          secureTextEntry={!showPassword}
+                          autoComplete="password-new"
+                          textContentType="newPassword"
+                          testID="input-password"
+                        />
+                        <Pressable onPress={() => setShowPassword(!showPassword)}>
+                          <Text style={styles.showHideText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                        </Pressable>
                       </View>
                     )}
                   />
@@ -261,20 +328,21 @@ export default function SignupScreen() {
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.confirmPassword && styles.inputError]}>
                         <Ionicons name="shield-checkmark-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.confirmYourPassword}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            secureTextEntry
-                            autoComplete="password-new"
-                            textContentType="newPassword"
-                            testID="input-confirm-password"
-                            style={styles.darkInput}
-                          />
-                        </View>
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder={t.auth.confirmYourPassword}
+                          placeholderTextColor={DARK_THEME.textTertiary}
+                          secureTextEntry={!showConfirmPassword}
+                          autoComplete="password-new"
+                          textContentType="newPassword"
+                          testID="input-confirm-password"
+                        />
+                        <Pressable onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                          <Text style={styles.showHideText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
+                        </Pressable>
                       </View>
                     )}
                   />
@@ -446,7 +514,7 @@ const styles = StyleSheet.create({
   darkInput: {
     backgroundColor: 'transparent',
     borderWidth: 0,
-    color: '#1A202C', // Dark text for visibility on light input backgrounds
+    color: '#FFFFFF',
     fontSize: 16,
     paddingVertical: 0,
     paddingHorizontal: 0,
@@ -456,6 +524,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: DARK_THEME.error,
     marginTop: 4,
+  },
+  showHideText: {
+    color: DARK_THEME.primary,
+    fontSize: 14,
+    fontWeight: '600' as const,
+    paddingLeft: 8,
   },
   fieldHint: {
     fontSize: 12,

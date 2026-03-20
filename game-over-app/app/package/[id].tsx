@@ -548,53 +548,6 @@ export default function PackageDetailsScreen() {
           )}
         </YStack>
 
-        {/* Total Price breakdown — viewOnly mode only, shown below glass card */}
-        {isViewOnly && (
-          <YStack
-            marginHorizontal="$4"
-            marginTop="$4"
-            backgroundColor="rgba(35, 39, 47, 0.95)"
-            borderRadius={16}
-            borderWidth={1}
-            borderColor="rgba(255, 255, 255, 0.1)"
-            padding="$4"
-          >
-            <Text fontSize={12} color="$textTertiary" textTransform="uppercase" letterSpacing={1} marginBottom="$3">
-              Price Breakdown
-            </Text>
-            {/* Price breakdown rows */}
-            <YStack gap="$2">
-              {/* Row: €199/person  ×  6 people  =  €1.194 */}
-              <XStack alignItems="center">
-                <Text fontSize={13} color="$textTertiary" flex={1}>{formatPrice(perPersonCents)}/person</Text>
-                <Text fontSize={13} color="$textTertiary" flex={1} textAlign="center">× {participantCount} people</Text>
-                <Text fontSize={13} color="$textTertiary" flex={1} textAlign="right">{formatPrice(perPersonCents * participantCount)}</Text>
-              </XStack>
-              {totalGroupCents > perPersonCents * participantCount && (
-                <XStack alignItems="center">
-                  <Text fontSize={12} color="rgba(249,115,22,0.9)" flex={1}>
-                    + {Math.round((totalGroupCents / (perPersonCents * participantCount) - 1) * 100)}% service fee
-                  </Text>
-                  <Text fontSize={12} color="rgba(249,115,22,0.9)" flex={1} textAlign="right">
-                    +{formatPrice(totalGroupCents - perPersonCents * participantCount)}
-                  </Text>
-                </XStack>
-              )}
-              {/* Separator + Total row */}
-              <YStack
-                borderTopWidth={1}
-                borderTopColor="rgba(255,255,255,0.12)"
-                paddingTop="$2"
-                marginTop="$1"
-              >
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={14} fontWeight="700" color="$textPrimary">Total</Text>
-                  <Text fontSize={16} fontWeight="800" color={DARK_THEME.primary}>{formatPrice(totalGroupCents)}</Text>
-                </XStack>
-              </YStack>
-            </YStack>
-          </YStack>
-        )}
 
         {/* Package Includes */}
         {includes.length > 0 && (

@@ -151,6 +151,52 @@ This document tracks all tasks that must be completed before launching the Game 
 
 ---
 
+### 🚀 Invite Link — Web Redirect Setup (Phase 2, vor Go-Live)
+
+**Ziel:** Wenn ein Gast den Invite-Link öffnet (`https://game-over.app/invite/CODE`), soll er:
+1. Die Game Over Landing Page sehen
+2. Automatisch in den App Store (iOS) / Play Store (Android) weitergeleitet werden
+3. Nach App-Installation: App öffnet direkt den Invite-Wizard
+
+**Schritt 1 — Vercel Deploy (Web App):**
+```bash
+cd game-over-app
+npx vercel login        # Browser-Login mit Vercel-Account
+npx vercel --prod       # Deploy → gibt URL wie https://game-over-app.vercel.app
+```
+- Die Expo Web App enthält bereits die `/invite/[code]` Seite (app/invite/[code].tsx)
+- Vercel URL direkt testbar ohne DNS-Änderung
+
+**Schritt 2 — Strato DNS auf Vercel zeigen:**
+```
+Strato Domain-Verwaltung → game-over.app → DNS-Einstellungen:
+  A-Record:     @        → 76.76.21.21   (Vercel IPv4)
+  CNAME-Record: www      → cname.vercel-dns.com
+```
+→ Vercel erkennt die Domain automatisch (im Vercel Dashboard unter "Domains" hinzufügen)
+
+**Schritt 3 — Invite URL in Edge Function zurückschalten:**
+```typescript
+// supabase/functions/send-guest-invitations/index.ts — Zeile 340:
+// TODO: Zurückschalten von gameover:// auf https:// nach Domain-Setup
+const inviteUrl = `https://game-over.app/invite/${code}`;  // ← so wiederherstellen
+```
+
+**Schritt 4 — Apple App Site Association & Android Asset Links:**
+- Dateien liegen bereits in `public/.well-known/` (automatisch via Expo/Vercel)
+- Universal Links (iOS): `applinks:game-over.app` → App öffnet direkt ohne Browser
+- Fallback (Browser): `/invite/[code]` zeigt "Download Game Over" Button mit App Store Link
+
+**Schritt 5 — App Store Links eintragen** (sobald Apps veröffentlicht):
+```
+iOS App Store:   https://apps.apple.com/app/game-over/id[APP_ID]
+Google Play:     https://play.google.com/store/apps/details?id=app.gameover.android
+```
+
+**Status:** ⏸️ Pending — Deploy mit `npx vercel --prod` nach Vercel-Login
+
+---
+
 ## Environment Variables
 
 ### Production Environment Setup

@@ -8,7 +8,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, ScrollView, KeyboardAvoidingView, Platform,
-  Pressable, Alert, StyleSheet, Image,
+  Pressable, Alert, StyleSheet, Image, Linking,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
@@ -86,17 +86,24 @@ export default function InviteWizardScreen() {
         return;
       }
 
-      // If profile data provided, save it first
-      if (phone || avatarUrl) {
-        const { error: profileError } = await supabase
+      // Save profile data — phone and avatar_url in separate calls so one cannot block the other
+      if (phone) {
+        const { error } = await supabase
           .from('profiles')
-          .update({ ...(phone ? { phone } : {}), ...(avatarUrl ? { avatar_url: avatarUrl } : {}) })
+          .update({ phone })
           .eq('id', currentUser.id);
+        if (error) console.warn('Phone update failed:', error.message);
+      }
 
-        if (profileError) {
-          console.warn('Profile update failed:', profileError.message);
-          // Don't block — continue with invite acceptance
-        }
+      if (avatarUrl) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ avatar_url: avatarUrl })
+          .eq('id', currentUser.id);
+        if (error) console.warn('Avatar update failed:', error.message);
+
+        // Sync into user_metadata so auth store picks it up immediately via USER_UPDATED event
+        await supabase.auth.updateUser({ data: { avatar_url: avatarUrl } }).catch(() => {});
       }
 
       try {
@@ -130,19 +137,22 @@ export default function InviteWizardScreen() {
     resolver: zodResolver(signupSchema),
     defaultValues: {
       firstName: '', lastName: '',
-      email: preview?.guestEmail ?? '',
+      email: '',
       password: '', confirmPassword: '',
     },
   });
 
+  // Pre-fill registration form with guest's data from the invite code
   useEffect(() => {
-    if (preview?.guestEmail) {
-      signupForm.reset({
-        ...signupForm.getValues(),
-        email: preview.guestEmail,
-      });
-    }
-  }, [preview?.guestEmail, signupForm]);
+    if (!preview) return;
+    signupForm.reset({
+      ...signupForm.getValues(),
+      firstName: preview.guestFirstName ?? signupForm.getValues('firstName'),
+      lastName: preview.guestLastName ?? signupForm.getValues('lastName'),
+      email: preview.guestEmail ?? signupForm.getValues('email'),
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preview?.guestEmail, preview?.guestFirstName, preview?.guestLastName]);
 
   const handleSignup = async (data: SignupForm) => {
     setIsSubmitting(true);
@@ -164,14 +174,21 @@ export default function InviteWizardScreen() {
         throw signUpError;
       }
 
-      // Guard: email confirmation required (production Supabase config)
+      // If email confirmation is required (no session returned), auto sign-in with password
       if (!signUpData?.session) {
-        Alert.alert(
-          'Check your email',
-          'Please confirm your email address, then return to accept the invite.',
-          [{ text: 'OK' }]
-        );
-        return;
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: data.email,
+          password: data.password,
+        });
+        if (signInError) {
+          // Truly needs email confirmation — show friendly message
+          Alert.alert(
+            'Almost there!',
+            'Check your inbox for a confirmation email, then tap "Log in instead" below.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
       }
 
       setSignupCompleted(true);
@@ -190,8 +207,16 @@ export default function InviteWizardScreen() {
   // ── Step 3 handlers ─────────────────────────────────────────
   const profileForm = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
-    defaultValues: { phone: '' },
+    defaultValues: { phone: preview?.guestPhone ?? '' },
   });
+
+  // Pre-fill phone when preview loads (guest invited by phone)
+  useEffect(() => {
+    if (preview?.guestPhone) {
+      profileForm.reset({ phone: preview.guestPhone });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preview?.guestPhone]);
 
   const handlePickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -270,6 +295,20 @@ export default function InviteWizardScreen() {
     }
   };
 
+  // ── Web: "Open in App" banner — shown only in browser, not in native app ──
+  const WebAppBanner = Platform.OS === 'web' ? (
+    <Pressable
+      onPress={() => Linking.openURL(`gameover://invite/${code}`)}
+      style={styles.webBanner}
+    >
+      <View style={styles.webBannerInner}>
+        <Ionicons name="phone-portrait-outline" size={18} color="#FFFFFF" />
+        <Text style={styles.webBannerText}>Already have the app? </Text>
+        <Text style={styles.webBannerLink}>Open in Game Over →</Text>
+      </View>
+    </Pressable>
+  ) : null;
+
   // ── Loading ──────────────────────────────────────────────────
   if (previewLoading) {
     return (
@@ -301,6 +340,7 @@ export default function InviteWizardScreen() {
     const citySlug = CITY_UUID_TO_SLUG[preview.cityId] ?? preview.cityName.toLowerCase();
     return (
       <YStack flex={1} backgroundColor="$background">
+        {WebAppBanner}
         <View style={{ height: 280 + insets.top }}>
           <KenBurnsImage
             source={resolveImageSource(getPackageImage(citySlug, 'classic'))}
@@ -327,12 +367,6 @@ export default function InviteWizardScreen() {
                 <Ionicons name="person-circle-outline" size={18} color={DARK_THEME.textTertiary} />
                 <Text fontSize={14} color="$textTertiary">
                   Invited by <Text fontWeight="700" color="$textPrimary">{preview.organizerName}</Text>
-                </Text>
-              </XStack>
-              <XStack gap="$2" alignItems="center">
-                <Ionicons name="people-outline" size={18} color={DARK_THEME.textTertiary} />
-                <Text fontSize={14} color="$textTertiary">
-                  <Text fontWeight="700" color="$textPrimary">{preview.acceptedCount}</Text> guests already in
                 </Text>
               </XStack>
             </YStack>
@@ -365,7 +399,10 @@ export default function InviteWizardScreen() {
             </YStack>
           </XStack>
 
-          <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
+          <ScrollView
+            contentContainerStyle={{ padding: 24, gap: 16, paddingBottom: 120 }}
+            keyboardShouldPersistTaps="handled"
+          >
             <XStack gap="$3">
               <View style={{ flex: 1 }}>
                 <Controller
@@ -542,3 +579,26 @@ export default function InviteWizardScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  webBanner: {
+    backgroundColor: '#5A7EB0',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+  },
+  webBannerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  webBannerText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 14,
+  },
+  webBannerLink: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+});
