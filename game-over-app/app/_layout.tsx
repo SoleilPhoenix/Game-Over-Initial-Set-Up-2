@@ -61,9 +61,11 @@ function RootLayoutNav() {
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;
-    initialize().then((fn: unknown) => {
-      if (typeof fn === 'function') cleanup = fn as () => void;
-    });
+    initialize()
+      .then((fn: unknown) => {
+        if (typeof fn === 'function') cleanup = fn as () => void;
+      })
+      .catch(() => {}); // initialize handles its own errors internally
     // Preload package images during splash screen to eliminate loading delays
     preloadPackageImages().catch(() => {});
     preloadSportLogos().catch(() => {});

@@ -101,7 +101,7 @@ serve(async (req: Request) => {
   if (!authHeader || authHeader !== `Bearer ${serviceRoleKey}`) {
     return new Response(JSON.stringify({ error: 'Unauthorized — internal function' }), {
       status: 401,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 
