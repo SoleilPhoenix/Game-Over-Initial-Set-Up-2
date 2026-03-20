@@ -62,7 +62,7 @@ serve(async (req: Request) => {
     }
 
     // Parse request body
-    const { booking_id, amount_cents, currency = 'eur' }: CreatePaymentIntentRequest = await req.json();
+    const { booking_id, amount_cents, currency }: CreatePaymentIntentRequest = await req.json();
 
     // Validate required fields
     if (!booking_id) {
@@ -77,6 +77,19 @@ serve(async (req: Request) => {
     const MAX_AMOUNT_CENTS = 10000000;
     if (amount_cents > MAX_AMOUNT_CENTS) {
       throw new Error(`Amount exceeds maximum allowed: ${MAX_AMOUNT_CENTS} cents`);
+    }
+
+    // Currency allowlist
+    const ALLOWED_CURRENCIES = ['eur', 'usd', 'gbp', 'chf'];
+    const normalizedCurrency = (currency ?? 'eur').toLowerCase();
+    if (!ALLOWED_CURRENCIES.includes(normalizedCurrency)) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: `Unsupported currency. Allowed: ${ALLOWED_CURRENCIES.join(', ')}`,
+      }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // Fetch booking to verify it exists and belongs to user's event
@@ -141,7 +154,7 @@ serve(async (req: Request) => {
     // Create Stripe PaymentIntent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amount_cents,
-      currency: currency.toLowerCase(),
+      currency: normalizedCurrency,
       automatic_payment_methods: {
         enabled: true,
       },
@@ -169,7 +182,7 @@ serve(async (req: Request) => {
             action: 'payment_intent_created',
             payment_intent_id: paymentIntent.id,
             amount_cents: amount_cents,
-            currency: currency,
+            currency: normalizedCurrency,
             timestamp: new Date().toISOString(),
           },
         ],
