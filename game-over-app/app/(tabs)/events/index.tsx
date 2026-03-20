@@ -485,7 +485,9 @@ export default function EventsScreen() {
     </View>
   );
 
-  const renderEventCard = ({ item }: { item: EventWithDetails }) => {
+  const keyExtractor = useCallback((item: EventWithDetails) => item.id, []);
+
+  const renderEventCard = useCallback(({ item }: { item: EventWithDetails }) => {
     const role = getUserRole(item);
     const progress = getProgressConfig(
       item, t,
@@ -508,7 +510,7 @@ export default function EventsScreen() {
         ]}
         testID={`event-card-${item.id}`}
       >
-        {getUserRole(item) === 'guest' && (
+        {role === 'guest' && (
           <View style={{
             position: 'absolute', top: 8, right: 8,
             backgroundColor: 'rgba(90,126,176,0.85)',
@@ -622,7 +624,8 @@ export default function EventsScreen() {
         </View>
       </Pressable>
     );
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t, invitedCounts, step2ConfirmedMap, budgetInfos, isEventUrgent, handleEventPress]);
 
   const renderStartNewPlanButton = () => (
     <Pressable
@@ -941,7 +944,7 @@ export default function EventsScreen() {
           <FlatList
             data={filteredEvents}
             renderItem={renderEventCard}
-            keyExtractor={(item) => item.id}
+            keyExtractor={keyExtractor}
             contentContainerStyle={{
               padding: 16,
               paddingBottom: insets.bottom + 180
@@ -956,6 +959,9 @@ export default function EventsScreen() {
             }
             showsVerticalScrollIndicator={false}
             ListFooterComponent={renderListFooter}
+            removeClippedSubviews
+            maxToRenderPerBatch={5}
+            windowSize={10}
             testID="events-list"
           />
         ) : hasDrafts && activeFilter !== 'attending' && (events || []).some(e => e.created_by === user?.id) ? (
