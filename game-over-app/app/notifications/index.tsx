@@ -20,20 +20,10 @@ import {
 import { NotificationItem } from '@/components/notifications';
 import { useTranslation } from '@/i18n';
 import { useUrgentPayment } from '@/hooks/useUrgentPayment';
+import { DARK_THEME } from '@/constants/theme';
 import type { Database } from '@/lib/supabase/types';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
-
-// Dark theme colors
-const DARK_THEME = {
-  backgroundDark: '#2D3748',
-  surfaceDark: 'rgba(45, 55, 72, 0.95)',
-  primary: '#4A6FA5',
-  border: 'rgba(255, 255, 255, 0.05)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#D1D5DB',
-  textTertiary: '#9CA3AF',
-};
 
 export default function NotificationsScreen() {
   const router = useRouter();
@@ -130,7 +120,7 @@ export default function NotificationsScreen() {
 
   if (isLoading) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={DARK_THEME.backgroundDark}>
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={DARK_THEME.background}>
         <Spinner size="large" color={DARK_THEME.primary} />
       </YStack>
     );
@@ -140,14 +130,14 @@ export default function NotificationsScreen() {
   const hasAnyContent = hasNotifications || urgentEvents.length > 0;
 
   return (
-    <YStack flex={1} backgroundColor={DARK_THEME.backgroundDark} testID="notifications-screen">
+    <YStack flex={1} backgroundColor={DARK_THEME.background} testID="notifications-screen">
       {/* Header */}
       <XStack
         paddingTop={insets.top + 16}
         paddingHorizontal="$4"
         paddingBottom="$2"
         alignItems="center"
-        backgroundColor={DARK_THEME.surfaceDark}
+        backgroundColor={DARK_THEME.glass}
       >
         <Pressable
           style={styles.backButton}

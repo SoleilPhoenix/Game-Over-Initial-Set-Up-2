@@ -172,9 +172,8 @@ export default function EventSummaryScreen() {
     }
 
     // Try features from the booking record (DB path)
-    const bookingPkg = booking as Record<string, any> | undefined;
-    const features = bookingPkg?.package?.features || bookingPkg?.features;
-    if (Array.isArray(features) && features.length > 0) return features[0];
+    const bookingFeatures = (booking?.package as Record<string, unknown> | null)?.features;
+    if (Array.isArray(bookingFeatures) && bookingFeatures.length > 0) return bookingFeatures[0] as string;
 
     // Final fallback for events still in planning
     if (event.status === 'planning') return t.events.planningPhase || 'Planning in progress';
@@ -183,7 +182,8 @@ export default function EventSummaryScreen() {
 
   // Generate invite code for sharing
   const handleGenerateInvite = async (): Promise<string> => {
-    const invite = await createInvite.mutateAsync({ eventId: id! });
+    const invite = await createInvite.mutateAsync({ eventId: id! })
+      .catch(error => { console.error('[handleGenerateInvite]', error); throw error; });
     return invite.code;
   };
 
@@ -232,7 +232,7 @@ export default function EventSummaryScreen() {
   const confirmedCount = participants?.filter(p => p.confirmed_at != null).length ?? 0;
   // Derive desired total: cache > booking > fallback
   const bookingDesiredTotal = booking
-    ? (booking as any).paying_participants + ((booking as any).exclude_honoree ? 1 : 0)
+    ? (booking.paying_participants ?? 0) + (booking.exclude_honoree ? 1 : 0)
     : 0;
   const rawDesiredTotal = cachedParticipants || bookingDesiredTotal || 10;
   // Display total excludes the honoree (already counted separately)

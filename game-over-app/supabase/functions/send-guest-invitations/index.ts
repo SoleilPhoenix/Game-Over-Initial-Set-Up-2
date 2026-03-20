@@ -195,6 +195,29 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // Auth verification
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  const userToken = authHeader.replace('Bearer ', '');
+  const { createClient: createUserClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.3');
+  const userSupabase = createUserClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY')!,
+    { global: { headers: { Authorization: `Bearer ${userToken}` } } }
+  );
+  const { data: { user }, error: authError } = await userSupabase.auth.getUser();
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -218,6 +241,34 @@ serve(async (req: Request) => {
         JSON.stringify({ error: 'channel must be email, sms, or whatsapp' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
+    }
+
+    // ── Ownership check ──
+    const { data: eventCheck, error: eventCheckError } = await supabase
+      .from('events')
+      .select('id, created_by')
+      .eq('id', eventId)
+      .single();
+    if (eventCheckError || !eventCheck) {
+      return new Response(JSON.stringify({ error: 'Event not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (eventCheck.created_by !== user.id) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ── Batch size guard ──
+    const MAX_GUESTS_PER_CALL = 50;
+    if ((guestsRaw ?? []).length > MAX_GUESTS_PER_CALL) {
+      return new Response(JSON.stringify({ error: `Too many guests. Maximum ${MAX_GUESTS_PER_CALL} per call.` }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // ── Fetch event details ──
@@ -331,7 +382,8 @@ serve(async (req: Request) => {
       }).then(({ error }) => {
         if (error) console.warn('[invite_codes] insert failed:', error.message);
       });
-      const inviteUrl = `https://game-over.app/invite/${code}`;
+      const appBaseUrl = Deno.env.get('APP_BASE_URL') ?? 'https://game-over.app';
+      const inviteUrl = `${appBaseUrl}/invite/${code}`;
 
       // 3. Build message body
       const guestName = guest.firstName ?? '';

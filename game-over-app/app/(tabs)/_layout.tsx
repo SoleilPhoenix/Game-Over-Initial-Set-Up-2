@@ -5,6 +5,7 @@
  */
 
 import { Tabs, useRouter } from 'expo-router';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Alert, View, StyleSheet, Pressable, Platform, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -213,6 +214,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 
 export default function TabsLayout() {
   return (
+    <ErrorBoundary fallbackTitle="Tab Error">
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
@@ -251,6 +253,7 @@ export default function TabsLayout() {
         }}
       />
     </Tabs>
+    </ErrorBoundary>
   );
 }
 

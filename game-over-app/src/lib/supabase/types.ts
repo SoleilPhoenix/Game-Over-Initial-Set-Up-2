@@ -415,6 +415,10 @@ export type Database = {
           created_by: string
           event_id: string
           expires_at: string
+          guest_email: string | null
+          guest_first_name: string | null
+          guest_last_name: string | null
+          guest_phone: string | null
           id: string
           is_active: boolean | null
           max_uses: number | null
@@ -427,6 +431,10 @@ export type Database = {
           created_by: string
           event_id: string
           expires_at?: string
+          guest_email?: string | null
+          guest_first_name?: string | null
+          guest_last_name?: string | null
+          guest_phone?: string | null
           id?: string
           is_active?: boolean | null
           max_uses?: number | null
@@ -439,6 +447,10 @@ export type Database = {
           created_by?: string
           event_id?: string
           expires_at?: string
+          guest_email?: string | null
+          guest_first_name?: string | null
+          guest_last_name?: string | null
+          guest_phone?: string | null
           id?: string
           is_active?: boolean | null
           max_uses?: number | null

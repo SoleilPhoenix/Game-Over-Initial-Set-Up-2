@@ -231,10 +231,28 @@ export default function InviteWizardScreen() {
       // Upload avatar if selected
       let avatarUrl: string | null = null;
       if (avatarUri) {
-        const ext = avatarUri.split('.').pop() ?? 'jpg';
-        const path = `avatars/${currentUser.id}.${ext}`;
         const response = await fetch(avatarUri);
         const blob = await response.blob();
+
+        const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+        const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+        if (!ALLOWED_MIME_TYPES.includes(blob.type)) {
+          Alert.alert('Invalid file', 'Please select a JPEG, PNG, or WebP image.');
+          return;
+        }
+        if (blob.size > MAX_FILE_SIZE_BYTES) {
+          Alert.alert('File too large', 'Please select an image under 5 MB.');
+          return;
+        }
+
+        const mimeToExt: Record<string, string> = {
+          'image/jpeg': 'jpg',
+          'image/png': 'png',
+          'image/webp': 'webp',
+        };
+        const ext = mimeToExt[blob.type] ?? 'jpg';
+        const path = `avatars/${currentUser.id}.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from('avatars')
           .upload(path, blob, { upsert: true });

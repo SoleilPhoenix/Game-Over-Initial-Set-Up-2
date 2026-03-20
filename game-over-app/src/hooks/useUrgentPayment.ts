@@ -13,6 +13,24 @@ import type { EventWithDetails } from '@/repositories/events';
 import { useAuthStore } from '@/stores/authStore';
 import { participantsRepository } from '@/repositories/participants';
 
+interface BudgetInfo {
+  paidAmountCents: number;
+  totalCents: number;
+  perPersonCents?: number;
+  payingCount?: number;
+}
+
+function isValidBudgetInfo(val: unknown): val is BudgetInfo {
+  if (!val || typeof val !== 'object') return false;
+  const obj = val as Record<string, unknown>;
+  return typeof obj.paidAmountCents === 'number' && typeof obj.totalCents === 'number';
+}
+
+function isValidBudgetInfoMap(val: unknown): val is Record<string, BudgetInfo> {
+  if (!val || typeof val !== 'object') return false;
+  return Object.values(val as object).every(isValidBudgetInfo);
+}
+
 // New key — stores JSON array of event IDs the user has acknowledged
 const URGENT_SEEN_KEY = 'gameover:urgent_seen_events';
 
@@ -35,21 +53,41 @@ function daysUntil(startDate?: string): number | null {
 
 export function useUrgentPayment() {
   const { data: events } = useEvents();
-  const [budgetInfos, setBudgetInfos] = useState<Record<string, any>>({});
+  const [budgetInfos, setBudgetInfos] = useState<Record<string, BudgetInfo>>({});
   const [seenEventIds, setSeenEventIds] = useState<Set<string>>(new Set());
 
   // Re-read budget cache whenever events list changes (events refetch on tab focus).
   // This ensures the bell dot clears after payment updates the AsyncStorage cache.
   useEffect(() => {
     AsyncStorage.getItem('budget_info')
-      .then(raw => { if (raw) setBudgetInfos(JSON.parse(raw)); })
+      .then(raw => {
+        if (!raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          if (isValidBudgetInfoMap(parsed)) {
+            setBudgetInfos(parsed);
+          } else {
+            console.warn('[useUrgentPayment] budget_info cache invalid schema, skipping');
+          }
+        } catch {
+          console.warn('[useUrgentPayment] budget_info cache parse error');
+        }
+      })
       .catch(() => {});
   }, [events]);
 
   useEffect(() => {
     AsyncStorage.getItem(URGENT_SEEN_KEY)
       .then(raw => {
-        if (raw) setSeenEventIds(new Set(JSON.parse(raw) as string[]));
+        if (!raw) return;
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.every(id => typeof id === 'string')) {
+            setSeenEventIds(new Set(parsed));
+          }
+        } catch {
+          console.warn('[useUrgentPayment] urgent seen key parse error');
+        }
       })
       .catch(() => {});
   }, []);
