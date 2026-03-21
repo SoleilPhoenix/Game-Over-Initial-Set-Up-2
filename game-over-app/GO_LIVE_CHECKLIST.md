@@ -91,9 +91,9 @@ This document tracks all tasks that must be completed before launching the Game 
 
 **Current Status:**
 - ✅ Domain purchased: `Game-Over.app`
-- ✅ Deep linking configured in app for `gameover.app`
-- ✅ Universal Links (iOS) configured for `applinks:gameover.app`
-- ✅ App Links (Android) configured for `gameover.app`
+- ✅ Deep linking configured in app for `game-over.app`
+- ✅ Universal Links (iOS) configured for `applinks:game-over.app`
+- ✅ App Links (Android) configured for `game-over.app`
 - ❌ DNS records not yet configured
 - ❌ Supabase custom domain not set up
 
@@ -211,6 +211,31 @@ Google Play:     https://play.google.com/store/apps/details?id=app.gameover.andr
 ---
 
 ## App Store Preparation
+
+### EAS Project ID — Push Notifications
+**Status:** ⏸️ Pending — Required before production builds
+
+**Why it matters:** Without an EAS `projectId` in `app.config.ts`, Expo cannot bind push notification tokens to the correct project endpoint. Push notifications are completely non-functional in production builds until this is configured. (The `eas` block in `app.config.ts` is currently commented out.)
+
+**Steps:**
+- [ ] Create a free account at [expo.dev](https://expo.dev) (if not already done)
+- [ ] Run in the project root:
+  ```bash
+  npx expo login
+  npx eas init
+  ```
+  This automatically writes the `projectId` into `app.config.ts`.
+- [ ] Verify `app.config.ts` now contains:
+  ```typescript
+  eas: {
+    projectId: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+  },
+  ```
+- [ ] Test push notification delivery on a physical device via EAS build
+
+**Note:** `npx eas init` is non-destructive — it only adds the project ID. No other configuration changes.
+
+---
 
 ### iOS App Store
 **Status:** ⏸️ Pending
@@ -356,6 +381,24 @@ SendGrid free trial ended July 7, 2025. The `/v3/mail/send` API endpoint is bloc
 - [ ] Set up monitoring and alerts
 - [ ] Review Edge Function rate limits
 - [ ] Configure CORS policies for production domain
+
+### Post-Launch DB Optimization (nach stabilem Go-Live)
+
+> ⏳ **Bewusst zurückgestellt** — Die unten stehenden RPC-Konsolidierungen sind Architekturverbesserungen, keine kritischen Bugs. Sie werden nach dem Go-Live umgesetzt, wenn das Schema eingefroren ist und in einer Staging-Umgebung getestet werden kann. Der Hintergrund: Das Projekt hatte eine RLS-Rekursionskrise (42P17) — PostgreSQL-Funktionen innerhalb des RLS-Kontexts sind risikobehaftet bis die Policies vollständig stabil sind.
+
+**Item 9 — `get_user_events` RPC konsolidieren**
+- [ ] Aktuell macht `eventsRepository.getByUser()` 2 separate DB-Queries (eigene Events + Events wo User Teilnehmer ist) und fügt sie clientseitig zusammen
+- [ ] Ziel: Eine `get_user_events(user_id uuid)` PostgreSQL-Funktion als SECURITY DEFINER, die beide Queries in einem DB-Call erledigt
+- [ ] Vorteil: Eliminiert N+1-Pattern auf dem Events-Tab, reduziert Ladezeit beim App-Start
+- [ ] Vorgehen: Migration schreiben → in Staging testen → RLS-Verhalten gegen `is_event_participant()` prüfen → deployen
+
+**Item 10 — `accept_invite` atomare Transaktion**
+- [ ] Aktuell: Einladen annehmen = 2 sequentielle Operationen: (1) `invite_codes` updaten, (2) `event_participants` insert — ohne DB-Transaktion
+- [ ] Risiko: Wenn Operation 2 schlägt fehl (z.B. RLS-Fehler), ist der invite_code bereits als benutzt markiert aber der User wurde nicht als Teilnehmer eingetragen → inkonsistenter Zustand
+- [ ] Ziel: Eine `accept_invite(invite_code text, user_id uuid)` PostgreSQL-Funktion als SECURITY DEFINER, die beide Operationen atomar ausführt
+- [ ] Vorgehen: Migration mit DO $$-Block testen → Rollback-Verhalten verifizieren → use_count-Idempotenz prüfen
+
+---
 
 ### Stripe Configuration
 **Status:** ⏸️ Pending
