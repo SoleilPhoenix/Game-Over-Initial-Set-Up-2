@@ -73,11 +73,12 @@ export default function NotificationsScreen() {
             if (!guestUrgentEvent?.id || !user?.id) return;
             setGuestPayConfirming(true);
             try {
-              await supabase
+              const { error: updateError } = await supabase
                 .from('event_participants')
                 .update({ payment_status: 'paid' })
                 .eq('event_id', guestUrgentEvent.id)
                 .eq('user_id', user.id);
+              if (updateError) throw updateError;
               void supabase.from('notifications').insert({
                 event_id: guestUrgentEvent.id,
                 title: 'Payment Confirmed',
