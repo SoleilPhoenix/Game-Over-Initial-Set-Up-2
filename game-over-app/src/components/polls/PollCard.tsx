@@ -15,7 +15,7 @@ const DARK_THEME = {
   backgroundDark: '#15181D',
   surfaceDark: '#1E2329',
   surfaceCard: '#23272F',
-  primary: '#4A6FA5',
+  primary: '#5A7EB0',
   border: 'rgba(255, 255, 255, 0.05)',
   textPrimary: '#FFFFFF',
   textSecondary: '#9CA3AF',

@@ -4,8 +4,10 @@
  * Matches the dark theme design from UI specifications
  */
 
-import React, { useCallback, useMemo } from 'react';
-import { RefreshControl, Pressable, StyleSheet, SectionList, View } from 'react-native';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import { Alert, RefreshControl, Pressable, StyleSheet, SectionList, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +23,9 @@ import { NotificationItem } from '@/components/notifications';
 import { useTranslation } from '@/i18n';
 import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import { DARK_THEME } from '@/constants/theme';
+import { useParticipants, participantKeys } from '@/hooks/queries/useParticipants';
+import { useUser } from '@/stores/authStore';
+import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/types';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
@@ -29,9 +34,71 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const user = useUser();
+  const queryClient = useQueryClient();
+  const [guestPayConfirming, setGuestPayConfirming] = useState(false);
+  const [guestPayConfirmed, setGuestPayConfirmed] = useState(false);
 
   // All hooks at the top — no conditional calls
-  const { urgentEvents } = useUrgentPayment();
+  const { urgentEvents, guestUrgentEvent, guestPaidRecentEvent, isGuestContribution } = useUrgentPayment();
+
+  // isOrganizer: true only if user created the guest-relevant event.
+  // Check guestUrgentEvent first; fall back to guestPaidRecentEvent (shown after payment).
+  // Never default to true — that would hide the "Contribution Confirmed" card.
+  const relevantGuestEvent = guestUrgentEvent ?? guestPaidRecentEvent;
+  const isOrganizer = relevantGuestEvent ? relevantGuestEvent.created_by === user?.id : false;
+
+  // Persist "payment confirmed" in AsyncStorage so the card survives navigation.
+  const GUEST_PAID_KEY = user?.id ? `gameover:guest_paid_confirmed:${user.id}` : null;
+  useEffect(() => {
+    if (!GUEST_PAID_KEY) return;
+    AsyncStorage.getItem(GUEST_PAID_KEY).then(val => {
+      if (val === '1') setGuestPayConfirmed(true);
+    }).catch(() => {});
+  }, [GUEST_PAID_KEY]);
+
+  // Load participants for the guest's urgent event (to show organizer name)
+  const { data: guestEventParticipants } = useParticipants(guestUrgentEvent?.id);
+  const organizerName = guestEventParticipants?.find(p => p.role === 'organizer')?.profile?.full_name ?? 'the organizer';
+
+  const handleGuestMarkAsPaid = () => {
+    Alert.alert(
+      t.notifications.confirmPayment,
+      t.notifications.confirmPaymentMsg.replace('{{name}}', organizerName),
+      [
+        { text: t.notifications.notYet, style: 'cancel' },
+        {
+          text: t.notifications.yesPaid,
+          onPress: async () => {
+            if (!guestUrgentEvent?.id || !user?.id) return;
+            setGuestPayConfirming(true);
+            try {
+              await supabase
+                .from('event_participants')
+                .update({ payment_status: 'paid' })
+                .eq('event_id', guestUrgentEvent.id)
+                .eq('user_id', user.id);
+              void supabase.from('notifications').insert({
+                event_id: guestUrgentEvent.id,
+                title: 'Payment Confirmed',
+                body: `A guest has confirmed their payment for ${guestUrgentEvent.title || `${guestUrgentEvent.honoree_name}'s event`}.`,
+                type: 'payment_confirmed',
+                user_id: user.id,
+              });
+              queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(guestUrgentEvent.id) });
+              queryClient.invalidateQueries({ queryKey: ['guestParticipations', user?.id] });
+              setGuestPayConfirmed(true);
+              if (GUEST_PAID_KEY) AsyncStorage.setItem(GUEST_PAID_KEY, '1').catch(() => {});
+            } catch (e: any) {
+              Alert.alert(t.common.error, e.message || t.notifications.errorConfirmPayment);
+            } finally {
+              setGuestPayConfirming(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Fetch notifications
   const {
@@ -127,7 +194,8 @@ export default function NotificationsScreen() {
   }
 
   const hasNotifications = groupedNotifications.length > 0;
-  const hasAnyContent = hasNotifications || urgentEvents.length > 0;
+  const organizerUrgentEvents = urgentEvents.filter(info => info.event.created_by === user?.id);
+  const hasAnyContent = hasNotifications || organizerUrgentEvents.length > 0 || isGuestContribution || !!guestPaidRecentEvent || guestPayConfirmed;
 
   return (
     <YStack flex={1} backgroundColor={DARK_THEME.background} testID="notifications-screen">
@@ -178,7 +246,7 @@ export default function NotificationsScreen() {
           stickySectionHeadersEnabled={false}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
-            urgentEvents.length > 0 ? (
+            (organizerUrgentEvents.length > 0 || (isGuestContribution && !isOrganizer) || ((!!guestPaidRecentEvent || guestPayConfirmed) && !isOrganizer)) ? (
               <>
                 {/* TODAY label above all urgency rows */}
                 <YStack paddingHorizontal="$4" paddingTop="$3" paddingBottom="$1" marginLeft="$1">
@@ -192,8 +260,77 @@ export default function NotificationsScreen() {
                   </Text>
                 </YStack>
 
-                {/* One row per urgent event, sorted soonest first */}
-                {urgentEvents.map((info) => (
+                {/* Guest: payment confirmed card (shown after marking as paid — persists via AsyncStorage) */}
+                {!isGuestContribution && !isOrganizer && (guestPaidRecentEvent || guestPayConfirmed) && (
+                  <View style={[styles.guestPayCard, { borderColor: 'rgba(52, 211, 153, 0.25)', backgroundColor: 'rgba(52, 211, 153, 0.07)' }]}>
+                    <XStack alignItems="center" gap={12}>
+                      <View style={[styles.urgencyIconCircle, { backgroundColor: 'rgba(52, 211, 153, 0.18)' }]}>
+                        <Ionicons name="checkmark-circle" size={18} color="#34D399" />
+                      </View>
+                      <YStack flex={1}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#34D399' }}>
+                          Contribution Confirmed
+                        </Text>
+                        <Text style={{ fontSize: 12, color: DARK_THEME.textSecondary }} numberOfLines={1}>
+                          {guestPaidRecentEvent?.title || (guestPaidRecentEvent?.honoree_name ? `${guestPaidRecentEvent.honoree_name}'s Event` : 'Your Event')}
+                        </Text>
+                      </YStack>
+                      <Ionicons name="checkmark-circle" size={20} color="#34D399" />
+                    </XStack>
+                    <Text style={{ fontSize: 13, color: DARK_THEME.textSecondary, lineHeight: 20, marginTop: 10 }}>
+                      Your payment has been confirmed. The organizer has been notified.
+                    </Text>
+                  </View>
+                )}
+
+                {/* Guest: contribution due + "I've Paid" button */}
+                {isGuestContribution && !isOrganizer && guestUrgentEvent && (
+                  <View style={styles.guestPayCard}>
+                    <XStack alignItems="center" gap={12} marginBottom={10}>
+                      <View style={[styles.urgencyIconCircle, { backgroundColor: 'rgba(249, 115, 22, 0.18)' }]}>
+                        <Ionicons name="wallet-outline" size={18} color="#F97316" />
+                      </View>
+                      <YStack flex={1}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#F97316' }}>
+                          Contribution Due
+                        </Text>
+                        <Text style={{ fontSize: 12, color: DARK_THEME.textSecondary }} numberOfLines={1}>
+                          {guestUrgentEvent.title || `${guestUrgentEvent.honoree_name}'s Event`}
+                        </Text>
+                      </YStack>
+                      <View style={styles.urgencyBadge}>
+                        <Text style={styles.urgencyBadgeText}>URGENT</Text>
+                      </View>
+                    </XStack>
+                    <Text style={{ fontSize: 13, color: DARK_THEME.textSecondary, lineHeight: 20, marginBottom: 12 }}>
+                      Please transfer your share to{' '}
+                      <Text style={{ color: DARK_THEME.textPrimary, fontWeight: '600' }}>{organizerName}</Text>.
+                      {' '}Payment is due 14 days before the event.
+                    </Text>
+                    {guestPayConfirmed ? (
+                      <XStack alignItems="center" gap={8} justifyContent="center">
+                        <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#10B981' }}>
+                          Payment confirmed — organizer notified
+                        </Text>
+                      </XStack>
+                    ) : (
+                      <Pressable
+                        style={[styles.guestPayButton, guestPayConfirming && { opacity: 0.6 }]}
+                        onPress={handleGuestMarkAsPaid}
+                        disabled={guestPayConfirming}
+                      >
+                        <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>
+                          {guestPayConfirming ? 'Confirming…' : "I've Paid — Confirm"}
+                        </Text>
+                      </Pressable>
+                    )}
+                  </View>
+                )}
+
+                {/* One row per urgent event (organizer-owned only), sorted soonest first */}
+                {organizerUrgentEvents.map((info) => (
                   <React.Fragment key={info.event.id}>
                     <Pressable
                       style={[styles.urgencyRow, info.isPaid && styles.urgencyRowPaid]}
@@ -358,5 +495,36 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     marginLeft: 68,
+  },
+  guestPayCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    backgroundColor: 'rgba(249, 115, 22, 0.07)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.25)',
+    padding: 16,
+  },
+  guestPayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: DARK_THEME.primary,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  urgencyBadge: {
+    backgroundColor: 'rgba(249, 115, 22, 0.15)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  urgencyBadgeText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: '#F97316',
+    letterSpacing: 0.5,
   },
 });
