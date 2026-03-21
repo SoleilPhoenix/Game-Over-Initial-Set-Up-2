@@ -38,3 +38,6 @@ export type { SkeletonProps } from './Skeleton';
 
 // Re-export SocialButton if it exists
 export { SocialButton } from './SocialButton';
+
+// IconCircle
+export { IconCircle } from './IconCircle';
