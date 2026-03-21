@@ -127,7 +127,7 @@ export default function EventSummaryScreen() {
   // cachedParticipants and booking are loaded above; rawDesiredTotal below the early return
   // re-uses the same logic but needs it here too for the memoised planning step.
   const bookingDesiredTotalEarly = booking
-    ? (booking as any).paying_participants + ((booking as any).exclude_honoree ? 1 : 0)
+    ? (booking.paying_participants ?? 0) + (booking.exclude_honoree ? 1 : 0)
     : 0;
   // No hardcoded fallback: if neither cache nor booking available (e.g. guest device),
   // pass undefined so calculatePlanningSteps uses the actual loaded participants.length.
@@ -283,8 +283,8 @@ export default function EventSummaryScreen() {
 
   // City image for destination guide — tier-aware from booking data
   const citySlug = event.city?.name?.toLowerCase() || 'berlin';
-  const bookingPkgId = (booking as any)?.selected_package_id;
-  const cityImage = getEventImage(citySlug, bookingPkgId || event.hero_image_url);
+  // booking.package_id is the correct field (selected_package_id does not exist on this table)
+  const cityImage = getEventImage(citySlug, booking?.package_id || event.hero_image_url);
 
   // Tool subtext
   const getToolSubtext = (key: string): { text: string; color: string } => {

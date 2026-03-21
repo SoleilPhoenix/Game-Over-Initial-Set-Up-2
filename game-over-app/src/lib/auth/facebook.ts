@@ -51,7 +51,11 @@ export function useFacebookAuth(): UseFacebookAuthReturn {
             );
           }
 
-          // Exchange Facebook token with Supabase
+          // Exchange Facebook token with Supabase.
+          // Despite the method name, Supabase's signInWithIdToken() for Facebook accepts
+          // a Facebook OAuth access_token (not an OIDC id_token). Supabase validates it
+          // server-side against Facebook's debug_token endpoint. This is the documented
+          // approach: https://supabase.com/docs/guides/auth/social-login/auth-facebook
           const { data, error: supabaseError } = await supabase.auth.signInWithIdToken({
             provider: 'facebook',
             token: access_token,

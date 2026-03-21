@@ -56,7 +56,8 @@ export function calculateBookingPricing(input: PackagePricingInput): BookingPric
   const payingCount = excludeHonoree ? Math.max(totalParticipants - 1, 1) : totalParticipants;
   const perPersonCents = Math.ceil(totalCents / payingCount);
 
-  const depositCents = Math.round(totalCents * 0.3);
+  // 25% deposit — must match Math.ceil(bookingTotalCents * 0.25) in create-payment-intent
+  const depositCents = Math.ceil(totalCents * 0.25);
   const remainingCents = totalCents - depositCents;
 
   return {

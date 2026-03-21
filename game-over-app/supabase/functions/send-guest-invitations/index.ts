@@ -22,6 +22,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { sendEmail } from '../_shared/email.ts';
 import { getGuestInviteEmailHtml } from '../_shared/email-templates.ts';
+import { sendSMS, sendWhatsApp } from '../_shared/twilio.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -132,68 +133,6 @@ async function validatePhone(phone: string): Promise<{ valid: boolean; reason?: 
   } catch {
     return { valid: true }; // fail open
   }
-}
-
-// ─── Sending ──────────────────────────────────────────────────
-
-/** Shared Twilio Messages API call with one retry on transient 5xx errors. */
-async function callTwilio(
-  sid: string,
-  token: string,
-  params: URLSearchParams,
-): Promise<{ ok: boolean; status: number; body: { message?: string; code?: number } }> {
-  const url = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
-  const init: RequestInit = {
-    method: 'POST',
-    headers: {
-      'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: params.toString(),
-  };
-
-  let res = await fetch(url, init);
-  // Single retry on transient 5xx (network blip, Twilio overload)
-  if (res.status >= 500) {
-    await new Promise(r => setTimeout(r, 1000));
-    res = await fetch(url, init);
-  }
-
-  const responseBody = res.ok ? {} : await res.json().catch(() => ({}));
-  return { ok: res.ok, status: res.status, body: responseBody };
-}
-
-async function sendSMS(to: string, body: string): Promise<{ success: boolean; error?: string }> {
-  const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
-  const token = Deno.env.get('TWILIO_AUTH_TOKEN');
-  const from = Deno.env.get('TWILIO_SMS_FROM') ?? 'GameOver';
-
-  if (!sid || !token) return { success: false, error: 'Twilio not configured' };
-
-  const params = new URLSearchParams({ To: to, From: from, Body: body });
-  const result = await callTwilio(sid, token, params);
-
-  if (result.ok) return { success: true };
-  return { success: false, error: result.body.message ?? `Twilio error ${result.status}` };
-}
-
-async function sendWhatsApp(to: string, body: string): Promise<{ success: boolean; error?: string; twilioCode?: number }> {
-  const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
-  const token = Deno.env.get('TWILIO_AUTH_TOKEN');
-  const from = Deno.env.get('TWILIO_WHATSAPP_FROM');
-
-  if (!sid || !token || !from) {
-    return { success: false, error: 'WhatsApp not configured — TWILIO_WHATSAPP_FROM missing' };
-  }
-
-  // Normalise recipient to whatsapp: prefix
-  const toFormatted = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
-  const params = new URLSearchParams({ To: toFormatted, From: from, Body: body });
-  const result = await callTwilio(sid, token, params);
-
-  if (result.ok) return { success: true };
-  // Return Twilio error code so callers can handle specific cases (e.g. 63016 = outside 24h window)
-  return { success: false, error: result.body.message ?? `Twilio WhatsApp error ${result.status}`, twilioCode: result.body.code };
 }
 
 // ─── Main handler ─────────────────────────────────────────────
