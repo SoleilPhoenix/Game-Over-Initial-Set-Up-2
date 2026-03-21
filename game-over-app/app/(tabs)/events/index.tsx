@@ -192,17 +192,25 @@ export default function EventsScreen() {
   const [invitedCounts, setInvitedCounts] = useState<Record<string, number>>({});
   // Cache of step 2 (group_confirmed) completion — written by event detail screen
   const [step2ConfirmedMap, setStep2ConfirmedMap] = useState<Record<string, boolean>>({});
-  useEffect(() => {
-    AsyncStorage.getItem('desired_participant_counts')
-      .then(raw => { if (raw) setParticipantCounts(JSON.parse(raw)); })
-      .catch(() => {});
-    AsyncStorage.getItem('budget_info')
-      .then(raw => { if (raw) setBudgetInfos(JSON.parse(raw)); })
-      .catch(() => {});
-    AsyncStorage.getItem('invited_guest_counts')
-      .then(raw => { if (raw) setInvitedCounts(JSON.parse(raw)); })
+
+  /** Load all event caches in a single multiGet (3 keys → 1 I/O round-trip). */
+  const loadEventCaches = useCallback(() => {
+    AsyncStorage.multiGet(['desired_participant_counts', 'budget_info', 'invited_guest_counts'])
+      .then(pairs => {
+        for (const [key, raw] of pairs) {
+          if (!raw) continue;
+          try {
+            const data = JSON.parse(raw);
+            if (key === 'desired_participant_counts') setParticipantCounts(data);
+            else if (key === 'budget_info') setBudgetInfos(data);
+            else if (key === 'invited_guest_counts') setInvitedCounts(data);
+          } catch {}
+        }
+      })
       .catch(() => {});
   }, []);
+
+  useEffect(() => { loadEventCaches(); }, [loadEventCaches]);
 
   const queryClient = useQueryClient();
   const { data: events, isLoading, error: eventsError, refetch } = useEvents();
@@ -245,13 +253,9 @@ export default function EventsScreen() {
   useFocusEffect(
     useCallback(() => {
       refetch();
-      AsyncStorage.getItem('invited_guest_counts')
-        .then(raw => { if (raw) setInvitedCounts(JSON.parse(raw)); })
-        .catch(() => {});
-      AsyncStorage.getItem('budget_info')
-        .then(raw => { if (raw) setBudgetInfos(JSON.parse(raw)); })
-        .catch(() => {});
-      // Reload step2 flags (organizer may have visited the event detail since last focus)
+      // Single multiGet for all event caches (3 keys → 1 I/O round-trip)
+      loadEventCaches();
+      // Reload step2 flags in parallel (one read per event, already concurrent)
       if (events?.length) {
         Promise.all(
           events.map(e =>
@@ -263,7 +267,7 @@ export default function EventsScreen() {
           setStep2ConfirmedMap(Object.fromEntries(entries));
         }).catch(() => {});
       }
-    }, [refetch, events])
+    }, [refetch, events, loadEventCaches])
   );
 
   // Hide events still in wizard booking flow (created at Step 4 but not yet paid)

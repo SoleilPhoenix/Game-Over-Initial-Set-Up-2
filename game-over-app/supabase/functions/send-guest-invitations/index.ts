@@ -60,11 +60,17 @@ function maskPhone(phone: string): string {
   return `${phone.slice(0, 5)}***`;
 }
 
-/** Normalise to E.164: keep leading + and digits only, strip spaces/dashes/parens */
+/** Normalise to E.164: keep leading + and digits only, strip spaces/dashes/parens.
+ *  Numbers starting with 0 are treated as German (+49) local format: 0177... → +49177...
+ *  Numbers already starting with + are kept as-is.
+ */
 function normalisePhone(phone: string): string {
   const stripped = phone.replace(/[^\d+]/g, '');
-  // Ensure only one leading + (in case input had none, assume international)
-  return stripped.startsWith('+') ? stripped : `+${stripped}`;
+  if (stripped.startsWith('+')) return stripped;
+  // German local format: leading 0 → replace with +49
+  if (stripped.startsWith('0')) return `+49${stripped.slice(1)}`;
+  // Assume already international without + prefix
+  return `+${stripped}`;
 }
 
 function generateCode(): string {
@@ -130,6 +136,33 @@ async function validatePhone(phone: string): Promise<{ valid: boolean; reason?: 
 
 // ─── Sending ──────────────────────────────────────────────────
 
+/** Shared Twilio Messages API call with one retry on transient 5xx errors. */
+async function callTwilio(
+  sid: string,
+  token: string,
+  params: URLSearchParams,
+): Promise<{ ok: boolean; status: number; body: { message?: string; code?: number } }> {
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
+  const init: RequestInit = {
+    method: 'POST',
+    headers: {
+      'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: params.toString(),
+  };
+
+  let res = await fetch(url, init);
+  // Single retry on transient 5xx (network blip, Twilio overload)
+  if (res.status >= 500) {
+    await new Promise(r => setTimeout(r, 1000));
+    res = await fetch(url, init);
+  }
+
+  const responseBody = res.ok ? {} : await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, body: responseBody };
+}
+
 async function sendSMS(to: string, body: string): Promise<{ success: boolean; error?: string }> {
   const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
   const token = Deno.env.get('TWILIO_AUTH_TOKEN');
@@ -138,22 +171,10 @@ async function sendSMS(to: string, body: string): Promise<{ success: boolean; er
   if (!sid || !token) return { success: false, error: 'Twilio not configured' };
 
   const params = new URLSearchParams({ To: to, From: from, Body: body });
+  const result = await callTwilio(sid, token, params);
 
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    }
-  );
-
-  if (res.ok) return { success: true };
-  const err = await res.json();
-  return { success: false, error: err.message ?? `Twilio error ${res.status}` };
+  if (result.ok) return { success: true };
+  return { success: false, error: result.body.message ?? `Twilio error ${result.status}` };
 }
 
 async function sendWhatsApp(to: string, body: string): Promise<{ success: boolean; error?: string; twilioCode?: number }> {
@@ -167,25 +188,12 @@ async function sendWhatsApp(to: string, body: string): Promise<{ success: boolea
 
   // Normalise recipient to whatsapp: prefix
   const toFormatted = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
-
   const params = new URLSearchParams({ To: toFormatted, From: from, Body: body });
+  const result = await callTwilio(sid, token, params);
 
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    }
-  );
-
-  if (res.ok) return { success: true };
-  const err = await res.json();
+  if (result.ok) return { success: true };
   // Return Twilio error code so callers can handle specific cases (e.g. 63016 = outside 24h window)
-  return { success: false, error: err.message ?? `Twilio WhatsApp error ${res.status}`, twilioCode: err.code };
+  return { success: false, error: result.body.message ?? `Twilio WhatsApp error ${result.status}`, twilioCode: result.body.code };
 }
 
 // ─── Main handler ─────────────────────────────────────────────
@@ -371,17 +379,24 @@ serve(async (req: Request) => {
         continue;
       }
 
-      // 2. Generate unique invite code and store it (non-blocking)
+      // 2. Generate unique invite code and store it with guest contact details
       const code = generateCode();
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      supabase.from('invite_codes').insert({
+      const { error: codeInsertError } = await supabase.from('invite_codes').insert({
         event_id: eventId,
         code,
+        created_by: event.created_by,  // organizer's user id — required NOT NULL field
         max_uses: 1,
         expires_at: expiresAt,
-      }).then(({ error }) => {
-        if (error) console.warn('[invite_codes] insert failed:', error.message);
+        guest_first_name: guest.firstName ?? null,
+        guest_last_name: guest.lastName ?? null,
+        guest_email: channel === 'email' ? contact : (guest.email ?? null),
+        guest_phone: channel !== 'email' ? contact : (guest.phone ?? null),
       });
+      if (codeInsertError) {
+        console.error('[invite_codes] insert failed:', codeInsertError.message, 'code=', code);
+        // Non-critical for sending the message, but log clearly
+      }
       const appBaseUrl = Deno.env.get('APP_BASE_URL') ?? 'https://game-over.app';
       const inviteUrl = `${appBaseUrl}/invite/${code}`;
 
@@ -390,14 +405,21 @@ serve(async (req: Request) => {
       const greeting = guestName ? `${guestName}, you're` : `You're`;
       const smsBody =
         `🎉 ${greeting} invited to ${honoreeName}'s ${partyTypeLabel}!\n\n` +
-        `${organizerName} is organizing the ultimate celebration on "Game-Over.app" 🥂\n\n` +
+        `${organizerName} is planning the ultimate celebration on Game-Over.app 🥂\n\n` +
         `Why join instead of endless back-and-forth coordination?\n` +
         `✅ Eliminates planning stress — simple, guided & stress-free\n` +
         `💰 Full budget transparency — zero hidden costs or awkward money talk\n` +
         `🤖 AI-curated experiences matched to what YOUR group actually wants\n` +
         `⚡ Everything in one place — plans, chat & payments, ready in minutes\n` +
         `🤝 Preserves your friendships — no coordination chaos after the event\n\n` +
-        `Join & RSVP here:\n${inviteUrl}\n\n` +
+        `━━━━━━━━━━━━━━━━━\n` +
+        `YOUR INVITE CODE:\n` +
+        `👉 ${code}\n` +
+        `━━━━━━━━━━━━━━━━━\n\n` +
+        `How to join:\n` +
+        `1. Download the app: https://game-over.app\n` +
+        `2. Tap "Got an invite code?"\n` +
+        `3. Enter code: ${code}\n\n` +
         `Reply STOP to opt out.`;
 
       // 4. Send
@@ -410,6 +432,7 @@ serve(async (req: Request) => {
           honoreeName,
           inviteUrl,
           guestFirstName: guest.firstName,
+          inviteCode: code,
         });
         const subject = `You're invited to ${honoreeName}'s ${partyTypeLabel}! 🎉`;
         sendResult = await sendEmail({ to: contact, subject, html });
