@@ -356,6 +356,17 @@ async function handlePaymentCanceled(
   }
 
   const auditLog = Array.isArray(booking?.audit_log) ? booking.audit_log : [];
+
+  // --- IDEMPOTENCY GUARD ---
+  const alreadyProcessed = auditLog.some(
+    (entry: { action: string; payment_intent_id?: string }) =>
+      entry.action === 'payment_canceled' && entry.payment_intent_id === paymentIntent.id
+  );
+  if (alreadyProcessed) {
+    console.log(`[stripe-webhook] Duplicate canceled event for PI ${paymentIntent.id} — skipping.`);
+    return;
+  }
+
   auditLog.push({
     action: 'payment_canceled',
     payment_intent_id: paymentIntent.id,
@@ -406,6 +417,17 @@ async function handleRefund(
   }
 
   const auditLog = Array.isArray(booking.audit_log) ? booking.audit_log : [];
+
+  // --- IDEMPOTENCY GUARD ---
+  const alreadyProcessed = auditLog.some(
+    (entry: { action: string; charge_id?: string }) =>
+      entry.action === 'refund_processed' && entry.charge_id === charge.id
+  );
+  if (alreadyProcessed) {
+    console.log(`[stripe-webhook] Duplicate refund event for charge ${charge.id} — skipping.`);
+    return;
+  }
+
   auditLog.push({
     action: 'refund_processed',
     charge_id: charge.id,

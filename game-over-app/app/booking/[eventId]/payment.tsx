@@ -278,7 +278,7 @@ export default function PaymentScreen() {
       setPaymentStep('processing_payment');
       const { success, error } = await processPayment({
         bookingId: booking.id,
-        amountCents: activePricing.totalCents,
+        paymentType: 'full',
         currency: 'eur',
       });
 

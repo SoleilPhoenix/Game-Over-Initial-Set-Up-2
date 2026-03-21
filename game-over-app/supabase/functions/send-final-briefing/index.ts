@@ -251,10 +251,11 @@ serve(async (req) => {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
   } catch (error) {
-    console.error('[send-final-briefing] Unhandled error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[send-final-briefing] Unhandled error:', message);
+    return new Response(JSON.stringify({ error: 'Internal server error', detail: message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });

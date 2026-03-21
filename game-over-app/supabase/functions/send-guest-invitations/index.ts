@@ -212,8 +212,8 @@ serve(async (req: Request) => {
     });
   }
   const userToken = authHeader.replace('Bearer ', '');
-  const { createClient: createUserClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.3');
-  const userSupabase = createUserClient(
+  // Use the top-level createClient (static import) with anon key + user JWT header
+  const userSupabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_ANON_KEY')!,
     { global: { headers: { Authorization: `Bearer ${userToken}` } } }

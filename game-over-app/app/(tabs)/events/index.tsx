@@ -193,41 +193,44 @@ export default function EventsScreen() {
   // Cache of step 2 (group_confirmed) completion — written by event detail screen
   const [step2ConfirmedMap, setStep2ConfirmedMap] = useState<Record<string, boolean>>({});
 
-  /** Load all event caches in a single multiGet (3 keys → 1 I/O round-trip). */
-  const loadEventCaches = useCallback(() => {
-    AsyncStorage.multiGet(['desired_participant_counts', 'budget_info', 'invited_guest_counts'])
+  /**
+   * Load all event caches in a single multiGet (3 base keys → 1 I/O round-trip).
+   * When `eventIds` are provided, also loads step2_confirmed flags in the same call.
+   */
+  const loadEventCaches = useCallback((eventIds?: string[]) => {
+    const baseKeys = ['desired_participant_counts', 'budget_info', 'invited_guest_counts'];
+    const step2Keys = eventIds?.map(id => `gameover:step2_confirmed:${id}`) ?? [];
+    AsyncStorage.multiGet([...baseKeys, ...step2Keys])
       .then(pairs => {
+        const step2Map: Record<string, boolean> = {};
         for (const [key, raw] of pairs) {
-          if (!raw) continue;
-          try {
-            const data = JSON.parse(raw);
-            if (key === 'desired_participant_counts') setParticipantCounts(data);
-            else if (key === 'budget_info') setBudgetInfos(data);
-            else if (key === 'invited_guest_counts') setInvitedCounts(data);
-          } catch {}
+          if (key === 'desired_participant_counts') {
+            if (raw) try { setParticipantCounts(JSON.parse(raw)); } catch {}
+          } else if (key === 'budget_info') {
+            if (raw) try { setBudgetInfos(JSON.parse(raw)); } catch {}
+          } else if (key === 'invited_guest_counts') {
+            if (raw) try { setInvitedCounts(JSON.parse(raw)); } catch {}
+          } else if (key.startsWith('gameover:step2_confirmed:')) {
+            const id = key.replace('gameover:step2_confirmed:', '');
+            step2Map[id] = !!raw;
+          }
         }
+        if (step2Keys.length > 0) setStep2ConfirmedMap(step2Map);
       })
       .catch(() => {});
   }, []);
 
+  // Initial load: base caches only (events not yet loaded)
   useEffect(() => { loadEventCaches(); }, [loadEventCaches]);
 
   const queryClient = useQueryClient();
   const { data: events, isLoading, error: eventsError, refetch } = useEvents();
 
-  // Load step2_confirmed flags for each event (written by event detail screen when group is confirmed)
+  // Once events load, reload caches + step2 flags in a single multiGet round-trip
   useEffect(() => {
     if (!events?.length) return;
-    Promise.all(
-      events.map(e =>
-        AsyncStorage.getItem(`gameover:step2_confirmed:${e.id}`)
-          .then(v => [e.id, !!v] as [string, boolean])
-          .catch(() => [e.id, false] as [string, boolean])
-      )
-    ).then(entries => {
-      setStep2ConfirmedMap(Object.fromEntries(entries));
-    }).catch(() => {});
-  }, [events]);
+    loadEventCaches(events.map(e => e.id));
+  }, [events, loadEventCaches]);
 
   // Compute urgency: event ≤14 days away + unpaid balance
   const getDaysLeftNum = (startDate?: string): number | null => {
@@ -253,20 +256,8 @@ export default function EventsScreen() {
   useFocusEffect(
     useCallback(() => {
       refetch();
-      // Single multiGet for all event caches (3 keys → 1 I/O round-trip)
-      loadEventCaches();
-      // Reload step2 flags in parallel (one read per event, already concurrent)
-      if (events?.length) {
-        Promise.all(
-          events.map(e =>
-            AsyncStorage.getItem(`gameover:step2_confirmed:${e.id}`)
-              .then(v => [e.id, !!v] as [string, boolean])
-              .catch(() => [e.id, false] as [string, boolean])
-          )
-        ).then(entries => {
-          setStep2ConfirmedMap(Object.fromEntries(entries));
-        }).catch(() => {});
-      }
+      // Single multiGet: 3 base caches + all step2_confirmed flags (1 I/O round-trip total)
+      loadEventCaches(events?.map(e => e.id));
     }, [refetch, events, loadEventCaches])
   );
 

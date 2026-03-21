@@ -62,20 +62,24 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  // --- AUTH GUARD ---
-  // This function runs with service role (bypasses RLS) and can cancel events.
-  // Require CRON_SECRET bearer token — same pattern as send-final-briefing.
+  // --- AUTH GUARD (fail-closed) ---
+  // This function uses the service role key and can auto-cancel events.
+  // Require CRON_SECRET bearer token. If the secret is absent (misconfiguration),
+  // refuse ALL requests rather than running unguarded.
   const cronSecret = Deno.env.get('CRON_SECRET');
-  if (cronSecret) {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-  } else {
-    console.warn('[process-payment-reminders] CRON_SECRET not set — running without auth guard');
+  if (!cronSecret) {
+    console.error('[process-payment-reminders] CRON_SECRET env var is not set — refusing all requests');
+    return new Response(JSON.stringify({ error: 'Service not configured' }), {
+      status: 503,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   try {
