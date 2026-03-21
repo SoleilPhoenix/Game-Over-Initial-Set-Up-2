@@ -276,9 +276,14 @@ export default function PaymentScreen() {
 
       // Process payment with Stripe
       setPaymentStep('processing_payment');
+      // Derive payment type from URL params — never hardcode 'full'
+      const stripePaymentType: 'deposit' | 'remaining' | 'full' =
+        paramAmountCents > 0 ? 'remaining' :
+        isFullPayment ? 'full' :
+        'deposit';
       const { success, error } = await processPayment({
         bookingId: booking.id,
-        paymentType: 'full',
+        paymentType: stripePaymentType,
         currency: 'eur',
       });
 

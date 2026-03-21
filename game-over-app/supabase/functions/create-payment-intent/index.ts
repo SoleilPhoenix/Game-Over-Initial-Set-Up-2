@@ -88,7 +88,7 @@ serve(async (req: Request) => {
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
       .select(`
-        id, total_amount_cents, deposit_amount_cents, payment_status, stripe_payment_intent_id, audit_log,
+        id, total_amount_cents, deposit_amount_cents, deposit_paid_at, payment_status, stripe_payment_intent_id, audit_log,
         event:events!inner(id, created_by, title, honoree_name)
       `)
       .eq('id', booking_id)
@@ -110,9 +110,16 @@ serve(async (req: Request) => {
 
     let serverAmountCents: number;
     if (payment_type === 'deposit') {
-      // 30% deposit
-      serverAmountCents = Math.round(bookingTotalCents * 0.3);
+      // 25% deposit — must match the client-side depositCents calculation in payment.tsx
+      serverAmountCents = Math.ceil(bookingTotalCents * 0.25);
     } else if (payment_type === 'remaining') {
+      // Guard against race: deposit webhook must have fired before remaining balance is payable
+      if (!booking.deposit_paid_at) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'Deposit has not been confirmed yet. Please wait a moment and try again.',
+        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
       // Remaining balance after deposit
       serverAmountCents = bookingTotalCents - depositPaidCents;
     } else {
