@@ -46,7 +46,7 @@ export default function EventSummaryScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
 
-  const { data: event, isLoading: eventLoading } = useEvent(id);
+  const { data: event, isLoading: eventLoading, error: eventError, refetch: refetchEvent } = useEvent(id);
   const { data: participants, isLoading: isLoadingParticipants } = useParticipants(id);
   const { data: booking } = useBooking(id);
   const currentUserId = useAuthStore(s => s.user?.id);
@@ -219,9 +219,9 @@ export default function EventSummaryScreen() {
     if (!event || !id) return;
     if (isGuest) {
       Alert.alert(
-        'Organizer Only',
-        'Only the event organizer can manage planning steps.',
-        [{ text: 'OK' }]
+        t.eventDetail.organizerOnly,
+        t.eventDetail.organizerOnlyMsg,
+        [{ text: t.common.ok }]
       );
       return;
     }
@@ -243,6 +243,28 @@ export default function EventSummaryScreen() {
       },
     });
   };
+
+  // ─── Error state ───────────────────────────────
+  if (eventError && !event) {
+    return (
+      <YStack flex={1} backgroundColor={DARK_THEME.background} justifyContent="center" alignItems="center" padding={24}>
+        <Ionicons name="cloud-offline-outline" size={48} color={DARK_THEME.textTertiary} />
+        <Text color={DARK_THEME.textPrimary} fontSize={16} fontWeight="600" marginTop={16} marginBottom={8} textAlign="center">
+          {t.common.error}
+        </Text>
+        <Text color={DARK_THEME.textSecondary} fontSize={14} textAlign="center" marginBottom={24}>
+          {t.events.loadError}
+        </Text>
+        <Pressable
+          onPress={() => refetchEvent()}
+          style={{ backgroundColor: DARK_THEME.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
+          testID="event-detail-retry-button"
+        >
+          <Text color="#FFFFFF" fontWeight="600">{t.common.retry}</Text>
+        </Pressable>
+      </YStack>
+    );
+  }
 
   // ─── Loading skeleton ──────────────────────────
   if (eventLoading || !event) {
@@ -304,7 +326,7 @@ export default function EventSummaryScreen() {
           color: DARK_THEME.textTertiary,
         };
       case 'packages':
-        return { text: 'View Package Details', color: DARK_THEME.textTertiary };
+        return { text: t.eventDetail.selectedPackage, color: DARK_THEME.textTertiary };
       default:
         return { text: '', color: DARK_THEME.textTertiary };
     }
@@ -415,7 +437,7 @@ export default function EventSummaryScreen() {
                 onPress={() => {
                   if (tool.key === 'packages') {
                     // Navigate to the actual package detail screen with event context
-                    const pkgId = cachedBudget?.packageId || bookingPkgId;
+                    const pkgId = cachedBudget?.packageId || booking?.package_id;
                     if (pkgId) {
                       router.push(`/package/${pkgId}?eventId=${id}&viewOnly=1` as any);
                     }
