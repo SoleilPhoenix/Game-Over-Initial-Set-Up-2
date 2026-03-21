@@ -5,6 +5,7 @@
  */
 
 import { Tabs, useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Alert, View, StyleSheet, Pressable, Platform, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -219,6 +220,11 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabsLayout() {
+  // Safety reset: ensure tab bar is never stuck hidden after hard navigation
+  useEffect(() => {
+    useTabBarStore.getState().setHidden(false);
+  }, []);
+
   return (
     <ErrorBoundary fallbackTitle="Tab Error">
     <Tabs
