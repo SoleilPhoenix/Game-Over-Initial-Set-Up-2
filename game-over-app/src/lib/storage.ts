@@ -15,6 +15,23 @@ import Constants, { ExecutionEnvironment } from 'expo-constants';
 // Detect if we're running in Expo Go (StoreClient = Expo Go app)
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
+// Load MMKV once at module level so the bundler can statically analyse the import.
+// Wrapped in try-catch: the native module throws when running in Expo Go or when
+// the binary hasn't been built yet (e.g. first `expo prebuild`).
+let MMKVClass: (new (options: { id: string }) => {
+  getString: (key: string) => string | undefined;
+  set: (key: string, value: string) => void;
+  delete: (key: string) => void;
+}) | null = null;
+
+if (!isExpoGo) {
+  try {
+    MMKVClass = require('react-native-mmkv').MMKV;
+  } catch {
+    console.warn('[Storage] react-native-mmkv native module not available — will fall back to AsyncStorage');
+  }
+}
+
 // Storage interface that matches what Supabase and Zustand expect
 export interface StorageAdapter {
   getItem: (key: string) => string | null | Promise<string | null>;
@@ -65,8 +82,8 @@ export function createStorage(namespace: string): AsyncStorageAdapter {
   // Wrap initialization in try-catch: MMKV can fail to write manifest in Expo Go sandbox
   let storage: any;
   try {
-    const { MMKV } = require('react-native-mmkv');
-    storage = new MMKV({ id: namespace });
+    if (!MMKVClass) throw new Error('MMKV not available');
+    storage = new MMKVClass({ id: namespace });
     // Verify it works with a probe read — throws if manifest write failed
     storage.getString('__probe__');
   } catch {
@@ -129,8 +146,8 @@ export function createSyncStorage(namespace: string) {
   // Use MMKV for development/production builds
   let storage: any;
   try {
-    const { MMKV } = require('react-native-mmkv');
-    storage = new MMKV({ id: namespace });
+    if (!MMKVClass) throw new Error('MMKV not available');
+    storage = new MMKVClass({ id: namespace });
     storage.getString('__probe__');
   } catch {
     console.warn(`[Storage] MMKV init failed for "${namespace}", falling back to AsyncStorage`);
@@ -171,12 +188,15 @@ export function createSyncStorage(namespace: string) {
  * Direct delete for a namespace (used by wizardStore.clearDraft)
  */
 export function deleteFromStorage(namespace: string, key: string): void {
-  if (isExpoGo) {
+  if (isExpoGo || !MMKVClass) {
     AsyncStorage.removeItem(`${namespace}:${key}`);
   } else {
-    const { MMKV } = require('react-native-mmkv');
-    const storage = new MMKV({ id: namespace });
-    storage.delete(key);
+    try {
+      const storage = new MMKVClass({ id: namespace });
+      storage.delete(key);
+    } catch {
+      AsyncStorage.removeItem(`${namespace}:${key}`);
+    }
   }
 }
 

@@ -493,6 +493,18 @@ const de: TranslationKeys = {
     payRemainingSubtitle: '75% Restbetrag vor dem Event fällig',
     notif14DayTitle: 'Restzahlung bald fällig',
     notif14DayBody: '{{eventName}} ist in {{count}} Tagen. Bezahle jetzt deinen Restbetrag von {{amount}}.',
+    // Alert strings
+    noEventSelected: 'Kein Event ausgewählt',
+    noEventSelectedMsg: 'Wähle zuerst ein Event aus, um Einladungen zu senden.',
+    sendFailed: 'Senden fehlgeschlagen',
+    errorSendingReminders: 'Erinnerungen konnten nicht gesendet werden. Versuche es erneut.',
+    confirmPayment: 'Zahlung bestätigen',
+    confirmPaymentMsg: 'Hast du deinen Anteil an den Organisator überwiesen?',
+    notYet: 'Noch nicht',
+    yesPaid: 'Ja, ich habe bezahlt',
+    thankYou: 'Danke!',
+    paymentConfirmedMsg: 'Deine Zahlung wurde bestätigt. Der Organisator wird benachrichtigt.',
+    errorUpdatingStatus: 'Status konnte nicht aktualisiert werden. Bitte versuche es erneut.',
   },
 
   // ─── Chat Screen ─────────────────────────────
@@ -547,6 +559,12 @@ const de: TranslationKeys = {
     earlier: 'Früher',
     allCaughtUp: 'Alles erledigt!',
     noNewNotifications: 'Du hast keine neuen Benachrichtigungen',
+    // Guest payment confirmation alert
+    confirmPayment: 'Zahlung bestätigen',
+    confirmPaymentMsg: 'Hast du deinen Anteil an {{name}} überwiesen?',
+    notYet: 'Noch nicht',
+    yesPaid: 'Ja, ich habe bezahlt',
+    errorConfirmPayment: 'Zahlung konnte nicht bestätigt werden. Bitte versuche es erneut.',
   },
 
   // ─── Event Detail ─────────────────────────────
@@ -593,6 +611,9 @@ const de: TranslationKeys = {
     viewTips: 'Lokale Tipps & Empfehlungen ansehen',
     inviteYourGroup: 'Gruppe einladen',
     shareSubtext: 'Einladungslink teilen, um loszulegen',
+    // Alert strings
+    organizerOnly: 'Nur für Organisatoren',
+    organizerOnlyMsg: 'Nur der Event-Organisator kann Planungsschritte verwalten.',
   },
 
   // ─── Common ────────────────────────────────────
