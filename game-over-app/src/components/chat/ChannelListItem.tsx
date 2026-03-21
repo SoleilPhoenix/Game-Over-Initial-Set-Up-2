@@ -7,7 +7,7 @@ import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { XStack, YStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/constants/colors';
+import { DARK_THEME } from '@/constants/theme';
 import type { Database } from '@/lib/supabase/types';
 
 type ChatChannel = Database['public']['Tables']['chat_channels']['Row'];
@@ -36,7 +36,7 @@ const getCategoryIcon = (category: ChatChannel['category']): keyof typeof Ionico
 const getCategoryColor = (category: ChatChannel['category']): string => {
   switch (category) {
     case 'general':
-      return colors.light.primary;
+      return DARK_THEME.primary;
     case 'activities':
       return '#47B881';
     case 'accommodation':
@@ -44,7 +44,7 @@ const getCategoryColor = (category: ChatChannel['category']): string => {
     case 'budget':
       return '#FF8551';
     default:
-      return colors.light.primary;
+      return DARK_THEME.primary;
   }
 };
 
@@ -137,7 +137,7 @@ export function ChannelListItem({ channel, onPress, testID }: ChannelListItemPro
         </YStack>
 
         {/* Chevron */}
-        <Ionicons name="chevron-forward" size={18} color={colors.light.textTertiary} />
+        <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
       </XStack>
     </Pressable>
   );
@@ -145,13 +145,13 @@ export function ChannelListItem({ channel, onPress, testID }: ChannelListItemPro
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.light.surface,
+    backgroundColor: DARK_THEME.surface,
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: colors.light.border,
+    borderBottomColor: DARK_THEME.glassBorder,
   },
   pressed: {
-    backgroundColor: colors.light.background,
+    backgroundColor: DARK_THEME.background,
   },
 });
