@@ -117,7 +117,7 @@ export default function PollsScreen() {
           onPress={() => router.back()}
           testID="back-button"
         >
-          <Ionicons name="arrow-back" size={24} color="#1A202C" />
+          <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
         </XStack>
 
         <YStack flex={1}>
