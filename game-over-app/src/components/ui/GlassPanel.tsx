@@ -40,7 +40,7 @@ export function GlassPanel({
           width={32}
           height={32}
           borderRadius="$full"
-          backgroundColor="rgba(37, 140, 244, 0.2)"
+          backgroundColor="rgba(90, 126, 176, 0.2)"
           alignItems="center"
           justifyContent="center"
         >

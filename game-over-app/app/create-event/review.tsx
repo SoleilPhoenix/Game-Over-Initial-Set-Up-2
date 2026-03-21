@@ -210,7 +210,7 @@ export default function WizardStep5() {
         {/* Info Banner */}
         <XStack
           padding="$4"
-          backgroundColor="rgba(37, 140, 244, 0.1)"
+          backgroundColor="rgba(90, 126, 176, 0.1)"
           borderRadius="$lg"
           gap="$3"
           alignItems="flex-start"

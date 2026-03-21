@@ -152,7 +152,7 @@ function HighlightCard({ icon, label, sub }: { icon: string; label: string; sub:
         width={40}
         height={40}
         borderRadius="$full"
-        backgroundColor="rgba(37, 140, 244, 0.15)"
+        backgroundColor="rgba(90, 126, 176, 0.15)"
         alignItems="center"
         justifyContent="center"
       >
@@ -175,7 +175,7 @@ function IncludeItem({ icon, title, sub }: { icon: string; title: string; sub: s
         width={36}
         height={36}
         borderRadius="$full"
-        backgroundColor="rgba(37, 140, 244, 0.15)"
+        backgroundColor="rgba(90, 126, 176, 0.15)"
         alignItems="center"
         justifyContent="center"
         marginTop={2}
