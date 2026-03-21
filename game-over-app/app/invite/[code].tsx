@@ -375,7 +375,17 @@ export default function InviteWizardScreen() {
               Accept Invitation →
             </Button>
 
-            <Pressable onPress={() => router.back()} style={{ alignItems: 'center', paddingVertical: 8 }}>
+            <Pressable
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/(tabs)/events');
+                }
+              }}
+              style={{ alignItems: 'center', paddingVertical: 8 }}
+              testID="decline-invite-button"
+            >
               <Text fontSize={13} color="$textTertiary">Decline</Text>
             </Pressable>
           </YStack>
@@ -500,6 +510,20 @@ export default function InviteWizardScreen() {
             >
               Create Account →
             </Button>
+
+            {/* Persistent link — visible before any error occurs */}
+            <Pressable
+              onPress={handleLoginInstead}
+              style={{ alignItems: 'center', paddingVertical: 12 }}
+              testID="login-instead-link"
+            >
+              <Text fontSize={13} color={DARK_THEME.textTertiary}>
+                Already have an account?{' '}
+                <Text color={DARK_THEME.primary} textDecorationLine="underline">
+                  Log in instead →
+                </Text>
+              </Text>
+            </Pressable>
           </ScrollView>
         </YStack>
       </KeyboardAvoidingView>
