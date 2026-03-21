@@ -1,33 +1,64 @@
 -- supabase/migrations/20260321000001_bookings_integrity_constraints.sql
 -- Financial integrity constraints for bookings table.
--- These enforce that the DB never holds internally inconsistent payment data.
+-- All wrapped in existence checks so the migration is idempotent (safe to re-run).
 
--- Prevent duplicate payment intents (one PI → one booking).
--- NOT VALID defers validation of existing rows so the migration applies cleanly in production
--- even if legacy data has duplicates. New rows are still validated immediately.
--- After verifying no duplicates exist, run:
---   ALTER TABLE bookings VALIDATE CONSTRAINT bookings_stripe_pi_unique;
-ALTER TABLE bookings
-  ADD CONSTRAINT bookings_stripe_pi_unique
-  UNIQUE (stripe_payment_intent_id)
-  NOT VALID
-  DEFERRABLE INITIALLY DEFERRED;
+DO $$
+BEGIN
+  -- Prevent duplicate payment intents (one PI → one booking).
+  -- Only adds the constraint if it doesn't exist AND there are no existing duplicates.
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'bookings_stripe_pi_unique'
+      AND conrelid = 'bookings'::regclass
+  ) THEN
+    IF NOT EXISTS (
+      SELECT stripe_payment_intent_id FROM bookings
+      WHERE stripe_payment_intent_id IS NOT NULL
+      GROUP BY stripe_payment_intent_id HAVING COUNT(*) > 1
+    ) THEN
+      ALTER TABLE bookings
+        ADD CONSTRAINT bookings_stripe_pi_unique
+        UNIQUE (stripe_payment_intent_id)
+        DEFERRABLE INITIALLY DEFERRED;
+    ELSE
+      RAISE WARNING 'bookings_stripe_pi_unique NOT added: duplicate stripe_payment_intent_id values exist.';
+    END IF;
+  END IF;
 
--- Total must be positive when set
-ALTER TABLE bookings
-  ADD CONSTRAINT bookings_total_positive
-  CHECK (total_amount_cents IS NULL OR total_amount_cents > 0);
+  -- Total must be positive when set
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'bookings_total_positive'
+      AND conrelid = 'bookings'::regclass
+  ) THEN
+    ALTER TABLE bookings
+      ADD CONSTRAINT bookings_total_positive
+      CHECK (total_amount_cents IS NULL OR total_amount_cents > 0);
+  END IF;
 
--- Deposit cannot exceed total
-ALTER TABLE bookings
-  ADD CONSTRAINT bookings_deposit_lte_total
-  CHECK (
-    deposit_amount_cents IS NULL
-    OR total_amount_cents IS NULL
-    OR deposit_amount_cents <= total_amount_cents
-  );
+  -- Deposit cannot exceed total
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'bookings_deposit_lte_total'
+      AND conrelid = 'bookings'::regclass
+  ) THEN
+    ALTER TABLE bookings
+      ADD CONSTRAINT bookings_deposit_lte_total
+      CHECK (
+        deposit_amount_cents IS NULL
+        OR total_amount_cents IS NULL
+        OR deposit_amount_cents <= total_amount_cents
+      );
+  END IF;
 
--- Remaining cannot be negative
-ALTER TABLE bookings
-  ADD CONSTRAINT bookings_remaining_non_negative
-  CHECK (remaining_amount_cents IS NULL OR remaining_amount_cents >= 0);
+  -- Remaining cannot be negative
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'bookings_remaining_non_negative'
+      AND conrelid = 'bookings'::regclass
+  ) THEN
+    ALTER TABLE bookings
+      ADD CONSTRAINT bookings_remaining_non_negative
+      CHECK (remaining_amount_cents IS NULL OR remaining_amount_cents >= 0);
+  END IF;
+END $$;
