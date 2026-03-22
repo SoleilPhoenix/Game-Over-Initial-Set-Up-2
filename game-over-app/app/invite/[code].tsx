@@ -22,6 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
+import { useLanguageStore } from '@/stores/languageStore';
 import { usePublicInvitePreview, useAcceptInvite } from '@/hooks/queries/useInvites';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
@@ -61,6 +62,7 @@ export default function InviteWizardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useAuthStore(s => s.user);
+  const language = useLanguageStore(s => s.language);
 
   const [step, setStep] = useState<WizardStep>('preview');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -353,7 +355,7 @@ export default function InviteWizardScreen() {
           <View style={{ position: 'absolute', bottom: 24, left: 24, right: 24 }}>
             <Text fontSize={26} fontWeight="900" color="white">{preview.eventName}</Text>
             <Text fontSize={15} color="rgba(255,255,255,0.8)" marginTop={4}>
-              {new Date(preview.startDate).toLocaleDateString('en-US', {
+              {new Date(preview.startDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', {
                 month: 'long', day: 'numeric', year: 'numeric',
               })} · {preview.cityName}
             </Text>
@@ -465,13 +467,7 @@ export default function InviteWizardScreen() {
                 />
               )}
             />
-            {signupForm.formState.errors.email?.message?.includes('Log in instead') && (
-              <Pressable onPress={handleLoginInstead}>
-                <Text fontSize={13} color={DARK_THEME.primary} textDecorationLine="underline">
-                  Log in instead →
-                </Text>
-              </Pressable>
-            )}
+{/* Persistent login link below the form supersedes this conditional — removed to avoid duplicate */}
             <Controller
               control={signupForm.control}
               name="password"

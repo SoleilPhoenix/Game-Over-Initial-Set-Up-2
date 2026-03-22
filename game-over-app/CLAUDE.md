@@ -298,7 +298,7 @@ const DARK_THEME = {
   surface: '#1E2329',
   surfaceCard: '#23272F',
   deepNavy: '#2D3748',
-  primary: '#258CF4',
+  primary: '#5A7EB0',           // unified muted navy — replaces old #258CF4
   glassCard: 'rgba(45, 55, 72, 0.6)',
   textPrimary: '#FFFFFF',
   textSecondary: '#D1D5DB',
@@ -306,7 +306,7 @@ const DARK_THEME = {
 };
 ```
 
-**Active State Color:** All active elements (bottom nav, FAB, filter tabs) use `#5A7EB0`
+**Primary Color:** `#5A7EB0` (muted navy) — used for all active elements, buttons, icons, highlights. Old value `#258CF4` is deprecated; do not use it.
 
 **IMPORTANT:** Never use `useColorScheme()` or respect system color scheme settings. The app must always render in dark mode.
 
