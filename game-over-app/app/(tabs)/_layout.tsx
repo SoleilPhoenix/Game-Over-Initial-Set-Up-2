@@ -5,6 +5,7 @@
  */
 
 import { Tabs, useRouter } from 'expo-router';
+import { useEffect } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Alert, View, StyleSheet, Pressable, Platform, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -146,19 +147,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const isChannelDetailScreen = currentRoute?.name === 'chat' &&
     innerRoute?.name?.includes('[channelId]');
 
-  // Recursively check if any nested route has an eventId param
-  const routeHasEventId = (route: any): boolean => {
-    if (!route) return false;
-    if ((route.params as any)?.eventId) return true;
-    if (route.state?.routes) return route.state.routes.some(routeHasEventId);
-    return false;
-  };
-
-  // Hide tab bar when chat or budget opened from Event Summary (eventId param present)
-  const isChatFromEventSummary = currentRoute?.name === 'chat' && routeHasEventId(currentRoute);
-  const isBudgetFromEventSummary = currentRoute?.name === 'budget' && routeHasEventId(currentRoute);
-
-  if (tabBarHidden || isChannelDetailScreen || isChatFromEventSummary || isBudgetFromEventSummary) {
+  if (tabBarHidden || isChannelDetailScreen) {
     return null;
   }
 
@@ -231,6 +220,11 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabsLayout() {
+  // Safety reset: ensure tab bar is never stuck hidden after hard navigation
+  useEffect(() => {
+    useTabBarStore.getState().setHidden(false);
+  }, []);
+
   return (
     <ErrorBoundary fallbackTitle="Tab Error">
     <Tabs

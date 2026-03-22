@@ -11,7 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePolls, useCreatePoll, useVote } from '@/hooks/queries/usePolls';
 import { PollCard, CreatePollModal } from '@/components/polls';
-import { colors } from '@/constants/colors';
+import { DARK_THEME } from '@/constants/theme';
 import type { Database } from '@/lib/supabase/types';
 
 type PollCategory = Database['public']['Tables']['polls']['Row']['category'];
@@ -117,7 +117,7 @@ export default function PollsScreen() {
           onPress={() => router.back()}
           testID="back-button"
         >
-          <Ionicons name="arrow-back" size={24} color="#1A202C" />
+          <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
         </XStack>
 
         <YStack flex={1}>
@@ -179,8 +179,8 @@ export default function PollsScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            colors={[colors.light.primary]}
-            tintColor={colors.light.primary}
+            colors={[DARK_THEME.primary]}
+            tintColor={DARK_THEME.primary}
           />
         }
         ListEmptyComponent={
@@ -189,7 +189,7 @@ export default function PollsScreen() {
               width={80}
               height={80}
               borderRadius="$full"
-              backgroundColor={`${colors.light.primary}15`}
+              backgroundColor="rgba(90, 126, 176, 0.08)"
               alignItems="center"
               justifyContent="center"
               marginBottom="$4"
@@ -197,7 +197,7 @@ export default function PollsScreen() {
               <Ionicons
                 name={filter === 'closed' ? 'checkmark-done' : 'bar-chart-outline'}
                 size={40}
-                color={colors.light.primary}
+                color={DARK_THEME.primary}
               />
             </YStack>
             <Text fontSize="$4" fontWeight="700" color="$textPrimary" marginBottom="$2">
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.light.primary,
+    backgroundColor: DARK_THEME.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -247,13 +247,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: colors.light.background,
+    backgroundColor: DARK_THEME.surface,
     borderWidth: 1,
-    borderColor: colors.light.border,
+    borderColor: DARK_THEME.glassBorder,
   },
   filterChipSelected: {
-    backgroundColor: colors.light.primary,
-    borderColor: colors.light.primary,
+    backgroundColor: DARK_THEME.primary,
+    borderColor: DARK_THEME.primary,
   },
   listContent: {
     paddingTop: 16,
@@ -264,7 +264,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.light.primary,
+    backgroundColor: DARK_THEME.primary,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,

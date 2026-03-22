@@ -501,6 +501,18 @@ const en = {
     payRemainingSubtitle: '75% balance due before event',
     notif14DayTitle: 'Final Payment Due Soon',
     notif14DayBody: '{{eventName}} is in {{count}} days. Pay your remaining balance of {{amount}} to secure your booking.',
+    // Alert strings
+    noEventSelected: 'No Event Selected',
+    noEventSelectedMsg: 'Select an event first to send invitations.',
+    sendFailed: 'Send Failed',
+    errorSendingReminders: 'Could not send reminders. Try again.',
+    confirmPayment: 'Confirm Payment',
+    confirmPaymentMsg: 'Have you transferred your share to the organizer?',
+    notYet: 'Not yet',
+    yesPaid: "Yes, I've Paid",
+    thankYou: 'Thank you!',
+    paymentConfirmedMsg: 'Your payment has been confirmed. The organizer will be notified.',
+    errorUpdatingStatus: 'Could not update status. Please try again.',
   },
 
   // ─── Chat Screen ─────────────────────────────
@@ -555,6 +567,12 @@ const en = {
     earlier: 'Earlier',
     allCaughtUp: 'All Caught Up!',
     noNewNotifications: 'You have no new notifications',
+    // Guest payment confirmation alert
+    confirmPayment: 'Confirm Payment',
+    confirmPaymentMsg: 'Have you transferred your share to {{name}}?',
+    notYet: 'Not yet',
+    yesPaid: "Yes, I've Paid",
+    errorConfirmPayment: 'Could not confirm payment. Please try again.',
   },
 
   // ─── Event Detail ─────────────────────────────
@@ -609,6 +627,9 @@ const en = {
     // Invite group
     inviteYourGroup: 'Invite Your Group',
     shareSubtext: 'Share invite link to get started',
+    // Alert strings
+    organizerOnly: 'Organizer Only',
+    organizerOnlyMsg: 'Only the event organizer can manage planning steps.',
   },
 
   // ─── Common ────────────────────────────────────

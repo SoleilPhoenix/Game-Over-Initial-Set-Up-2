@@ -352,6 +352,71 @@ SendGrid free trial ended July 7, 2025. The `/v3/mail/send` API endpoint is bloc
 
 ---
 
+## Migrations & Edge Functions
+
+### Apply Pending DB Migrations
+**Status:** 🔴 Required — 8 untracked migrations must be applied to production before go-live
+
+The following migrations exist locally but have NOT been pushed to the production Supabase project yet:
+
+```bash
+# Apply all pending migrations:
+npx supabase db push --project-ref stdbvehmjpmqbjyiodqg
+```
+
+- [ ] `20260315000000_invite_codes_guest_fields.sql` — guest name/phone fields on invite codes
+- [ ] `20260316000000_invite_preview_rpc.sql` — RPC function for invite preview without auth
+- [ ] `20260316000001_event_participants_guest_insert.sql` — RLS policy for guest participant inserts
+- [ ] `20260316000002_increment_invite_use_count.sql` — atomic use_count increment function
+- [ ] `20260317000000_profiles_add_phone.sql` — phone number field on profiles
+- [ ] `20260317000001_polls_allow_participants_insert.sql` — RLS policy for poll votes
+- [ ] `20260321000000_performance_indexes.sql` — 5 query indexes (events, bookings, notifications)
+- [ ] `20260321000001_bookings_integrity_constraints.sql` — UNIQUE on Stripe PI, CHECK constraints on amounts
+- [ ] `20260321000002_fix_cron_auth.sql` — updates cron jobs to use CRON_SECRET instead of service role key
+
+**Note:** Migration `20260321000001` includes a duplicate-data safety check — it will log a WARNING instead of failing if duplicate Stripe Payment Intent IDs already exist in production.
+
+---
+
+### Deploy Updated Edge Functions
+**Status:** 🔴 Required — 4 functions updated since last deploy
+
+The following edge functions have been modified and must be redeployed:
+
+```bash
+npx supabase functions deploy create-payment-intent --project-ref stdbvehmjpmqbjyiodqg
+npx supabase functions deploy send-guest-invitations --project-ref stdbvehmjpmqbjyiodqg
+npx supabase functions deploy send-final-briefing --project-ref stdbvehmjpmqbjyiodqg
+npx supabase functions deploy process-payment-reminders --project-ref stdbvehmjpmqbjyiodqg
+```
+
+- [ ] `create-payment-intent` — deposit percentage corrected (30% → 25%), added `deposit_paid_at` guard for remaining-balance payments
+- [ ] `send-guest-invitations` — refactored to use shared `_shared/twilio.ts` helper
+- [ ] `send-final-briefing` — refactored to use shared `_shared/twilio.ts` helper; WhatsApp→SMS fallback
+- [ ] `process-payment-reminders` — auto-cancellation rollback fix (cancellation failure now counted as error)
+
+---
+
+### Set Required Supabase Secrets
+**Status:** 🔴 Required — several secrets must be set before edge functions work in production
+
+```bash
+# Generate a strong random secret for cron authentication:
+openssl rand -hex 32
+
+npx supabase secrets set CRON_SECRET=<generated-value> --project-ref stdbvehmjpmqbjyiodqg
+npx supabase secrets set STRIPE_WEBHOOK_SECRET=<from-stripe-dashboard> --project-ref stdbvehmjpmqbjyiodqg
+npx supabase secrets set APP_BASE_URL=https://game-over.app --project-ref stdbvehmjpmqbjyiodqg
+```
+
+- [ ] `CRON_SECRET` — **NEW: required** by `process-payment-reminders` and `send-final-briefing`. Without it, both functions return 503/401 and no payment reminders or final briefings are ever sent.
+- [ ] Store the same `CRON_SECRET` value in Supabase **Vault** (Dashboard → Vault → New Secret, name: `CRON_SECRET`) — this is what the pg_cron jobs read.
+- [ ] `STRIPE_WEBHOOK_SECRET` — required by `stripe-webhook`. Get it from Stripe Dashboard → Webhooks → your endpoint → "Signing secret".
+- [ ] `APP_BASE_URL` — used by `send-guest-invitations` for invite links. Defaults to `https://game-over.app` if not set, but explicit is better.
+- [ ] Verify existing secrets are still set: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `TWILIO_SMS_FROM`, `SENDGRID_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+
+---
+
 ## Backend & Infrastructure
 
 ### Supabase Configuration
@@ -441,12 +506,25 @@ SendGrid free trial ended July 7, 2025. The `/v3/mail/send` API endpoint is bloc
 
 **Status:** ⏸️ Pending
 
+### General
 - [ ] Monitor crash reports
 - [ ] Monitor user feedback and reviews
 - [ ] Set up customer support system
 - [ ] Plan feature updates and bug fix releases
 - [ ] Monitor Stripe dashboard for payment issues
 - [ ] Monitor Supabase usage and costs
+
+### Payment Reminders & Auto-Cancellation (monitor closely first 2 weeks)
+- [ ] **Verify cron jobs are running** — Supabase Dashboard → Database → Cron Jobs → check `process-payment-reminders` and `send-final-briefing-daily` have a recent `last_run`
+- [ ] **Check `payment_reminders` table** for rows being created when bookings approach their milestone dates (21/18/16/14 days before event)
+- [ ] **Confirm auto-cancellation is working** — at 14-day milestone, unpaid bookings should have `events.status = 'cancelled'`. Verify at least one case manually.
+- [ ] **Monitor for `[CRITICAL]` log entries** in `process-payment-reminders` function logs (Supabase → Edge Functions → Logs). A `[CRITICAL]` entry means a cancellation failed and requires manual investigation.
+- [ ] **Verify push + email reminders** are reaching organizers — check that `payment_reminders.push_sent` and `email_sent` columns are `true` for recent rows.
+
+### Final Briefing (monitor after first event hits 3-day mark)
+- [ ] Verify WhatsApp messages delivered to guests 3 days before the first event
+- [ ] Check `planning_checklist.final_briefing = true` is set on events after briefings are sent (prevents re-sending)
+- [ ] Confirm SMS fallback triggers correctly for guests not on WhatsApp (Twilio error codes 63016/63007)
 
 ---
 

@@ -38,6 +38,7 @@ export interface DraftSnapshot {
   id: string;
   createdAt: string;
   updatedAt: string;
+  createdBy: string | null;
   partyType: PartyType | null;
   honoreeName: string;
   honoreeLastName: string;
@@ -102,6 +103,7 @@ interface WizardState {
   currentStep: number;
   lastSavedAt: string | null;
   isDirty: boolean;
+  activeDraftOwner: string | null;
 
   // Multi-draft
   activeDraftId: string | null;
@@ -155,7 +157,7 @@ interface WizardActions {
   getTimeSinceLastSave: () => number | null;
 
   // Multi-draft actions
-  startNewDraft: () => void;
+  startNewDraft: (userId?: string) => void;
   loadDraft: (id: string) => void;
   deleteDraft: (id: string) => void;
   getAllDrafts: () => DraftSnapshot[];
@@ -216,6 +218,7 @@ const initialState: WizardState = {
   ...initialWizardFields,
   lastSavedAt: null,
   isDirty: false,
+  activeDraftOwner: null,
   activeDraftId: null,
   savedDrafts: {},
 };
@@ -229,6 +232,7 @@ function snapshotFromState(state: WizardState, id: string, now: string): DraftSn
     id,
     createdAt: now,
     updatedAt: now,
+    createdBy: state.activeDraftOwner,
     partyType: state.partyType,
     honoreeName: state.honoreeName,
     honoreeLastName: state.honoreeLastName,
@@ -394,7 +398,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
         if (state.activeDraftId) {
           get().deleteDraft(state.activeDraftId);
         } else {
-          set({ ...initialWizardFields, lastSavedAt: null, isDirty: false, activeDraftId: null });
+          set({ ...initialWizardFields, lastSavedAt: null, isDirty: false, activeDraftId: null, activeDraftOwner: null });
         }
       },
       reset: () => {
@@ -410,7 +414,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       },
 
       // Multi-draft actions
-      startNewDraft: () => {
+      startNewDraft: (userId?: string) => {
         const state = get();
         const now = new Date().toISOString();
         let drafts = { ...state.savedDrafts };
@@ -428,6 +432,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           ...initialWizardFields,
           lastSavedAt: null,
           isDirty: false,
+          activeDraftOwner: userId ?? state.activeDraftOwner ?? null,
           activeDraftId: newId,
           savedDrafts: drafts,
         });
@@ -471,6 +476,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
             lastSavedAt: null,
             isDirty: false,
             activeDraftId: null,
+            activeDraftOwner: null,
             savedDrafts: remaining,
           });
         } else {

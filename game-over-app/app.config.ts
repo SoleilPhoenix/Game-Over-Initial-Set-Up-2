@@ -14,7 +14,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     resizeMode: 'contain',
     backgroundColor: '#15181D', // Match DARK_THEME.background
   },
-  assetBundlePatterns: ['**/*'],
+  // Bundle image assets only — excludes assets/store/*.md and assets/store/*.txt (app store copy)
+  assetBundlePatterns: ['**/*.png', '**/*.jpg', '**/*.jpeg', '**/*.gif', '**/*.svg', '**/*.webp'],
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'app.gameover.ios',
