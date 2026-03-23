@@ -93,6 +93,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         websiteId: '403b436b-3ea7-4b76-8d8d-3f860ed63468',
       },
     ],
+    [
+      '@sentry/react-native/expo',
+      {
+        organization: process.env.SENTRY_ORG,
+        project: process.env.SENTRY_PROJECT,
+      },
+    ],
   ],
   experiments: {
     typedRoutes: false,

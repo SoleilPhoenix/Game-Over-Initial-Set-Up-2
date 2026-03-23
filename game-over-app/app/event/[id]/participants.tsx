@@ -793,7 +793,7 @@ export default function ManageInvitationsScreen() {
       >
         <View style={styles.inviteOverlay}>
           <Pressable style={{ flex: 1 }} onPress={() => setInviteModalVisible(false)} />
-          <View style={styles.inviteSheet}>
+          <View style={styles.inviteSheet} accessibilityViewIsModal={true}>
             {/* Header */}
             <View style={styles.inviteHandle} />
             <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>

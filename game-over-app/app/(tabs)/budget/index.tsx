@@ -2032,7 +2032,7 @@ export default function BudgetDashboardScreen() {
           >
             <View style={remindStyles.inviteOverlay}>
               <Pressable style={{ flex: 1 }} onPress={() => setRemindModal(prev => ({ ...prev, visible: false }))} />
-              <View style={remindStyles.inviteSheet}>
+              <View style={remindStyles.inviteSheet} accessibilityViewIsModal={true}>
                 {/* Handle */}
                 <View style={remindStyles.inviteHandle} />
 

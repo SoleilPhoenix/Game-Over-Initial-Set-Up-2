@@ -87,10 +87,16 @@ export const bookingsRepository = {
     if (error) throw error;
 
     // Update event status to 'booked'
-    await supabase
+    const { error: statusError } = await supabase
       .from('events')
       .update({ status: 'booked' })
       .eq('id', booking.event_id);
+
+    if (statusError) {
+      throw new Error(
+        `Booking created but event status update failed: ${statusError?.message ?? JSON.stringify(statusError)}`
+      );
+    }
 
     return data;
   },
@@ -140,22 +146,6 @@ export const bookingsRepository = {
       updates.stripe_payment_intent_id = stripePaymentIntentId;
     }
 
-    // Add to audit log
-    const { data: existing } = await supabase
-      .from('bookings')
-      .select('audit_log')
-      .eq('id', bookingId)
-      .single();
-
-    const auditLog = Array.isArray(existing?.audit_log) ? existing.audit_log : [];
-    auditLog.push({
-      action: 'payment_status_updated',
-      status,
-      timestamp: new Date().toISOString(),
-    });
-
-    updates.audit_log = auditLog;
-
     const { data, error } = await supabase
       .from('bookings')
       .update(updates)
@@ -164,6 +154,16 @@ export const bookingsRepository = {
       .single();
 
     if (error) throw error;
+
+    // Atomically append to audit log (prevents race conditions on concurrent webhook retries)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (supabase as any).rpc('append_booking_audit_log', {
+      booking_id: bookingId,
+      entry: { action: 'payment_status_updated', status, timestamp: new Date().toISOString() },
+    }).catch((err: unknown) => {
+      console.error('[bookings] audit log append failed in updatePaymentStatus', err);
+    });
+
     return data;
   },
 
@@ -171,30 +171,26 @@ export const bookingsRepository = {
    * Request a refund
    */
   async requestRefund(bookingId: string, reason: string): Promise<Booking> {
-    const { data: existing } = await supabase
-      .from('bookings')
-      .select('audit_log')
-      .eq('id', bookingId)
-      .single();
-
-    const auditLog = Array.isArray(existing?.audit_log) ? existing.audit_log : [];
-    auditLog.push({
-      action: 'refund_requested',
-      reason,
-      timestamp: new Date().toISOString(),
-    });
-
     const { data, error } = await supabase
       .from('bookings')
       .update({
         payment_status: 'refunded',
-        audit_log: auditLog,
       })
       .eq('id', bookingId)
       .select()
       .single();
 
     if (error) throw error;
+
+    // Atomically append to audit log (prevents race conditions on concurrent webhook retries)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (supabase as any).rpc('append_booking_audit_log', {
+      booking_id: bookingId,
+      entry: { action: 'refund_requested', reason, timestamp: new Date().toISOString() },
+    }).catch((err: unknown) => {
+      console.error('[bookings] audit log append failed in requestRefund', err);
+    });
+
     return data;
   },
 

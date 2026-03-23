@@ -3,6 +3,16 @@
  * Main app layout with auth state management and navigation
  */
 
+import * as Sentry from '@sentry/react-native';
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  enableNativeCrashHandling: true,
+  enableAutoSessionTracking: true,
+  tracesSampleRate: 0.2,
+  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN,
+});
+
 import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -20,6 +30,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { DARK_THEME } from '@/constants/theme';
 import { preloadPackageImages } from '@/constants/packageImages';
 import { preloadSportLogos, preloadShareImages } from '@/constants/sportLogos';
+import { initBudgetCache } from '@/lib/participantCountCache';
 import config from '../tamagui.config';
 
 // Crisp Chat — native module, not available in Expo Go
@@ -72,6 +83,11 @@ function RootLayoutNav() {
     preloadShareImages().catch(() => {});
     return () => { cleanup?.(); };
   }, []); // initialize is a stable Zustand action
+
+  // Eagerly hydrate budget cache so urgency bell works on cold start
+  useEffect(() => {
+    void initBudgetCache();
+  }, []);
 
   // Sync user info with Crisp when session changes (with identity verification)
   useEffect(() => {
@@ -156,7 +172,7 @@ const styles = StyleSheet.create({
   },
 });
 
-export default function RootLayout() {
+function RootLayout() {
   // Force dark theme - Game Over is a dark-mode-only app
   const colorScheme = 'dark';
 
@@ -182,3 +198,5 @@ export default function RootLayout() {
     </ErrorBoundary>
   );
 }
+
+export default Sentry.wrap(RootLayout) as typeof RootLayout;

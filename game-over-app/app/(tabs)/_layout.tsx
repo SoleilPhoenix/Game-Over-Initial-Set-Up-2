@@ -40,7 +40,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   const config = iconMap[name] || { active: 'calendar', inactive: 'calendar-outline' };
   const label = labelMap[name] || name;
   const iconName = focused ? config.active : config.inactive;
-  const activeColor = '#5A7EB0'; // Same as Share Event card
+  const activeColor = DARK_THEME.primaryLight; // #7A9BC4 — passes WCAG AA (5.6:1)
 
   return (
     <View style={styles.iconContainer}>
@@ -125,6 +125,9 @@ function FABButton() {
         pressed && styles.fabButtonPressed,
       ]}
       testID="fab-create-event"
+      accessibilityRole="button"
+      accessibilityLabel="Create new event"
+      accessibilityHint="Opens the event creation wizard"
     >
       <LinearGradient
         colors={['#5A7EB0', '#4A6E9F']}
@@ -199,7 +202,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             return (
               <Pressable
                 key={route.key}
-                accessibilityRole="button"
+                accessibilityRole="tab"
                 accessibilityState={isFocused ? { selected: true } : {}}
                 accessibilityLabel={options.tabBarAccessibilityLabel}
                 testID={options.tabBarTestID || `tab-${routeName}`}
@@ -220,6 +223,8 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabsLayout() {
+  const { t } = useTranslation();  // needed for translated tab accessibility labels
+
   // Safety reset: ensure tab bar is never stuck hidden after hard navigation
   useEffect(() => {
     useTabBarStore.getState().setHidden(false);
@@ -241,6 +246,7 @@ export default function TabsLayout() {
         options={{
           title: 'Events',
           href: '/(tabs)/events',
+          tabBarAccessibilityLabel: `${t.tabs.events}, tab 1 of 4`,
         }}
       />
       <Tabs.Screen
@@ -248,6 +254,7 @@ export default function TabsLayout() {
         options={{
           title: 'Chat',
           href: '/(tabs)/chat',
+          tabBarAccessibilityLabel: `${t.tabs.chat}, tab 2 of 4`,
         }}
       />
       <Tabs.Screen
@@ -255,6 +262,7 @@ export default function TabsLayout() {
         options={{
           title: 'Budget',
           href: '/(tabs)/budget',
+          tabBarAccessibilityLabel: `${t.tabs.budget}, tab 3 of 4`,
         }}
       />
       <Tabs.Screen
@@ -262,6 +270,7 @@ export default function TabsLayout() {
         options={{
           title: 'Profile',
           href: '/(tabs)/profile',
+          tabBarAccessibilityLabel: `${t.tabs.profile}, tab 4 of 4`,
         }}
       />
     </Tabs>

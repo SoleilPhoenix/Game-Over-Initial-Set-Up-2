@@ -287,6 +287,18 @@ serve(async (req: Request) => {
                 errors++;
                 // Don't count as processed — makes monitoring dashboards visible
               } else {
+                // Also update booking payment_status to 'cancelled' for data consistency.
+                // Non-blocking: event is already cancelled, booking status is secondary.
+                supabase
+                  .from('bookings')
+                  .update({ payment_status: 'cancelled' })
+                  .eq('id', booking.id)
+                  .then(({ error: bookingCancelError }) => {
+                    if (bookingCancelError) {
+                      console.warn(`[process-payment-reminders] Failed to update booking ${booking.id} status to cancelled (non-blocking):`, bookingCancelError.message);
+                    }
+                  });
+
                 // Create cancellation notification (non-blocking)
                 supabase.from('notifications').insert({
                   user_id: userId,
