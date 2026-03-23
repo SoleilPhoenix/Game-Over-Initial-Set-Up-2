@@ -436,11 +436,26 @@ export default function SignupScreen() {
               </Pressable>
 
               {/* Terms */}
-              <Text style={styles.terms}>
-                {t.auth.termsPrefixCreate}{' '}
-                <Text style={styles.termsLink}>{t.auth.termsOfService}</Text> {t.auth.and}{' '}
-                <Text style={styles.termsLink}>{t.auth.privacyPolicy}</Text>
-              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <Text style={styles.terms}>{t.auth.termsPrefixCreate}{' '}</Text>
+                <Pressable
+                  onPress={() => router.push('/(tabs)/profile/terms' as any)}
+                  accessibilityRole="link"
+                  accessibilityLabel={t.auth.termsOfService}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Text style={styles.termsLink}>{t.auth.termsOfService}</Text>
+                </Pressable>
+                <Text style={styles.terms}>{' '}{t.auth.and}{' '}</Text>
+                <Pressable
+                  onPress={() => router.push('/(tabs)/profile/privacy' as any)}
+                  accessibilityRole="link"
+                  accessibilityLabel={t.auth.privacyPolicy}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Text style={styles.termsLink}>{t.auth.privacyPolicy}</Text>
+                </Pressable>
+              </View>
             </View>
           </BlurView>
 
