@@ -108,10 +108,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     router: {
       origin: false,
     },
-    // EAS project ID will be set when building with EAS
-    // eas: {
-    //   projectId: 'your-project-id',
-    // },
+    eas: {
+      projectId: '0e06655a-2e82-4574-b673-5dc6b7c42206',
+    },
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
     googleClientIdIos: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS,
