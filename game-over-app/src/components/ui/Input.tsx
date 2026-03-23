@@ -101,6 +101,7 @@ export interface InputProps extends Omit<GetProps<typeof StyledInput>, 'ref'> {
   testID?: string;
   containerTestID?: string;
   disabled?: boolean;
+  accessibilityLabel?: string;
 }
 
 export const Input = forwardRef<TextInput, InputProps>(
@@ -119,6 +120,7 @@ export const Input = forwardRef<TextInput, InputProps>(
       onFocus,
       onBlur,
       secureTextEntry,
+      accessibilityLabel,
       ...props
     },
     ref
@@ -165,6 +167,8 @@ export const Input = forwardRef<TextInput, InputProps>(
             editable={!disabled}
             placeholderTextColor="$textMuted"
             testID={testID}
+            accessibilityLabel={accessibilityLabel ?? label}
+            accessibilityState={{ disabled }}
           />
           {secureTextEntry && (
             <XStack
@@ -189,7 +193,12 @@ export const Input = forwardRef<TextInput, InputProps>(
           )}
         </StyledInputContainer>
         {(error || hint) && (
-          <StyledHelperText error={hasError}>{error || hint}</StyledHelperText>
+          <StyledHelperText
+            error={hasError}
+            accessibilityLiveRegion={hasError ? 'polite' : 'none'}
+          >
+            {error || hint}
+          </StyledHelperText>
         )}
       </YStack>
     );
