@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tansta
 import { useEffect, useRef } from 'react';
 import { notificationsRepository } from '@/repositories';
 import { useAuthStore } from '@/stores/authStore';
+import { useAppState } from '@/hooks/useAppState';
 import type { Database } from '@/lib/supabase/types';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
@@ -42,12 +43,13 @@ export function useNotifications() {
  */
 export function useUnreadNotificationsCount() {
   const user = useAuthStore((state) => state.user);
+  const appState = useAppState();
 
   return useQuery({
     queryKey: notificationKeys.unreadCount(user?.id || ''),
     queryFn: () => notificationsRepository.getUnreadCount(user!.id),
     enabled: !!user?.id,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: appState === 'active' ? 30000 : false,
   });
 }
 
