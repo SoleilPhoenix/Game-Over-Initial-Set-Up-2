@@ -13,6 +13,10 @@ import {
   ImageBackground,
   Pressable,
   Dimensions,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -46,9 +50,17 @@ function isValidJWTFormat(token: string): boolean {
 
 export default function WelcomeScreen() {
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
+  const [showCodeEntry, setShowCodeEntry] = React.useState(false);
+  const [inviteCode, setInviteCode] = React.useState('');
   const insets = useSafeAreaInsets();
   const setError = useAuthStore((state) => state.setError);
   const { t } = useTranslation();
+
+  const handleJoinWithCode = () => {
+    const code = inviteCode.trim().toUpperCase();
+    if (!code) return;
+    router.push(`/invite/${code}`);
+  };
 
   const handleAppleSignIn = async () => {
     try {
@@ -185,9 +197,13 @@ export default function WelcomeScreen() {
         />
 
         {/* Content */}
-        <View style={[styles.content, { paddingTop: insets.top }]}>
+        <KeyboardAvoidingView
+          style={styles.content}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={0}
+        >
           {/* Top App Bar */}
-          <View style={styles.topBar}>
+          <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
             <View style={styles.logoBadge}>
               <Ionicons name="game-controller" size={20} color={DARK_THEME.primary} />
               <Text style={styles.logoText}>Game-Over.app</Text>
@@ -198,7 +214,11 @@ export default function WelcomeScreen() {
           <View style={styles.spacer} />
 
           {/* Bottom Action Area */}
-          <View style={[styles.bottomArea, { paddingBottom: insets.bottom + 16 }]}>
+          <ScrollView
+            contentContainerStyle={[styles.bottomArea, { paddingBottom: insets.bottom + 16 }]}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
             {/* Glassmorphic Action Card */}
             <BlurView intensity={20} tint="dark" style={styles.glassCard}>
               <View style={styles.glassCardInner}>
@@ -256,6 +276,56 @@ export default function WelcomeScreen() {
                   <Text style={styles.primaryButtonText}>{t.auth.getStarted}</Text>
                   <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
                 </Pressable>
+
+                {/* Invite Code Section — inside glass card */}
+                <View style={styles.inviteDivider}>
+                  <View style={styles.dividerLine} />
+                  <View style={styles.inviteDividerLine} />
+                </View>
+
+                {showCodeEntry ? (
+                  <View style={styles.codeEntrySection}>
+                    <Text style={styles.codeEntryLabel}>Enter your invite code</Text>
+                    <View style={styles.codeEntryRow}>
+                      <TextInput
+                        style={styles.codeInput}
+                        value={inviteCode}
+                        onChangeText={setInviteCode}
+                        placeholder="e.g. 5H1D5U00"
+                        placeholderTextColor={DARK_THEME.textTertiary}
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        returnKeyType="go"
+                        onSubmitEditing={handleJoinWithCode}
+                        autoFocus
+                      />
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.codeJoinButton,
+                          pressed && { opacity: 0.8 },
+                          !inviteCode.trim() && { opacity: 0.5 },
+                        ]}
+                        onPress={handleJoinWithCode}
+                        disabled={!inviteCode.trim()}
+                      >
+                        <Text style={styles.codeJoinButtonText}>Join →</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.inviteCodeButton,
+                      pressed && { opacity: 0.7 },
+                    ]}
+                    onPress={() => setShowCodeEntry(true)}
+                    testID="invite-code-link"
+                  >
+                    <Ionicons name="ticket-outline" size={16} color={DARK_THEME.primary} />
+                    <Text style={styles.inviteCodeButtonText}>Got an invite? Enter code</Text>
+                    <Ionicons name="chevron-forward" size={14} color={DARK_THEME.primary} />
+                  </Pressable>
+                )}
               </View>
             </BlurView>
 
@@ -275,8 +345,8 @@ export default function WelcomeScreen() {
               <Text style={styles.termsLink}>{t.auth.termsOfService}</Text> {t.auth.and}{' '}
               <Text style={styles.termsLink}>{t.auth.privacyPolicy}</Text>
             </Text>
-          </View>
-        </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
       </ImageBackground>
     </View>
   );
@@ -303,7 +373,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingTop: 12,
   },
   logoBadge: {
     flexDirection: 'row',
@@ -421,5 +490,72 @@ const styles = StyleSheet.create({
   },
   termsLink: {
     color: DARK_THEME.primary,
+  },
+  inviteDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inviteDividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+  },
+  inviteCodeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(90, 126, 176, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(90, 126, 176, 0.3)',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  inviteCodeButtonText: {
+    color: DARK_THEME.primary,
+    fontSize: 15,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'center',
+  },
+  codeEntrySection: {
+    gap: 12,
+  },
+  codeEntryLabel: {
+    color: DARK_THEME.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  codeEntryRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  codeInput: {
+    flex: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(90, 126, 176, 0.4)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    color: DARK_THEME.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 3,
+    textAlign: 'center',
+  },
+  codeJoinButton: {
+    backgroundColor: DARK_THEME.primary,
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  codeJoinButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
   },
 });

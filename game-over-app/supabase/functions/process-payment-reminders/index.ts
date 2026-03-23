@@ -62,6 +62,26 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // --- AUTH GUARD (fail-closed) ---
+  // This function uses the service role key and can auto-cancel events.
+  // Require CRON_SECRET bearer token. If the secret is absent (misconfiguration),
+  // refuse ALL requests rather than running unguarded.
+  const cronSecret = Deno.env.get('CRON_SECRET');
+  if (!cronSecret) {
+    console.error('[process-payment-reminders] CRON_SECRET env var is not set — refusing all requests');
+    return new Response(JSON.stringify({ error: 'Service not configured' }), {
+      status: 503,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -249,29 +269,56 @@ serve(async (req: Request) => {
 
           // 4. At 14-day milestone: auto-cancel unpaid events
           if (milestone.daysBefore === 14) {
-            console.log(`Auto-cancelling unpaid event: ${event.id}`);
+            // Guard: only cancel events that are not already cancelled (idempotent)
+            if (event.status !== 'cancelled') {
+              console.log(`Auto-cancelling unpaid event: ${event.id}`);
 
-            const { error: cancelError } = await supabase
-              .from('events')
-              .update({ status: 'cancelled' })
-              .eq('id', event.id);
+              const { error: cancelError } = await supabase
+                .from('events')
+                .update({ status: 'cancelled' })
+                .eq('id', event.id);
 
-            if (cancelError) {
-              console.error('Failed to cancel event:', cancelError);
+              if (cancelError) {
+                // Cancellation failed — log clearly and count as error.
+                // NOTE: payment_reminders row was already inserted above, so the next cron run
+                // will skip via UNIQUE constraint. This is intentional: notifications were already
+                // sent, and a failed cancellation should be investigated manually, not retried blindly.
+                console.error(`[CRITICAL] Failed to cancel event ${event.id} at 14-day milestone:`, cancelError);
+                errors++;
+                // Don't count as processed — makes monitoring dashboards visible
+              } else {
+                // Also update booking payment_status to 'cancelled' for data consistency.
+                // Non-blocking: event is already cancelled, booking status is secondary.
+                supabase
+                  .from('bookings')
+                  .update({ payment_status: 'cancelled' })
+                  .eq('id', booking.id)
+                  .then(({ error: bookingCancelError }) => {
+                    if (bookingCancelError) {
+                      console.warn(`[process-payment-reminders] Failed to update booking ${booking.id} status to cancelled (non-blocking):`, bookingCancelError.message);
+                    }
+                  });
+
+                // Create cancellation notification (non-blocking)
+                supabase.from('notifications').insert({
+                  user_id: userId,
+                  event_id: event.id,
+                  type: 'event_cancelled_nonpayment',
+                  title: 'Event Cancelled',
+                  body: `${event.honoree_name}'s ${event.title} has been cancelled due to non-payment. Your 25% deposit has been retained.`,
+                  action_url: `/event/${event.id}`,
+                }).then(({ error: notifError }) => {
+                  if (notifError) console.warn('Cancellation notification insert failed (non-blocking):', notifError.message);
+                });
+                processed++;
+              }
             } else {
-              // Create cancellation notification
-              await supabase.from('notifications').insert({
-                user_id: userId,
-                event_id: event.id,
-                type: 'event_cancelled_nonpayment',
-                title: 'Event Cancelled',
-                body: `${event.honoree_name}'s ${event.title} has been cancelled due to non-payment. Your 25% deposit has been retained.`,
-                action_url: `/event/${event.id}`,
-              });
+              // Already cancelled on a previous run — count as processed
+              processed++;
             }
+          } else {
+            processed++;
           }
-
-          processed++;
         } catch (bookingError) {
           console.error(`Error processing booking ${booking.id}:`, bookingError);
           errors++;

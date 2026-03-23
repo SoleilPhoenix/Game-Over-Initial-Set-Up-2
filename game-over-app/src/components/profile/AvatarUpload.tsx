@@ -25,7 +25,7 @@ interface AvatarUploadProps {
 
 const THEME = {
   background: '#2D3748',
-  primary: '#4a6fa5',
+  primary: '#5A7EB0',
   textPrimary: '#FFFFFF',
   border: 'rgba(255, 255, 255, 0.08)',
 };

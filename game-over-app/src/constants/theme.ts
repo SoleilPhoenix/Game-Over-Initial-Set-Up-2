@@ -44,3 +44,19 @@ export const DARK_THEME = {
 } as const;
 
 export type DarkTheme = typeof DARK_THEME;
+
+/**
+ * Named card style variants — use these instead of choosing background colors ad-hoc.
+ *
+ * card      — primary surface, used for main content cards (events, packages, profile sections)
+ * glassCard — translucent glass effect, used for overlays and contextual cards
+ * deepCard  — deeper background, used for nested content within a card (sub-sections)
+ */
+export const CARD_VARIANTS = {
+  /** Opaque surface — main content cards */
+  card:      { backgroundColor: DARK_THEME.surface },          // '#1E2329'
+  /** Translucent glass — overlays, contextual cards */
+  glassCard: { backgroundColor: 'rgba(45, 55, 72, 0.4)' },
+  /** Deep surface — nested content within cards */
+  deepCard:  { backgroundColor: DARK_THEME.surfaceCard },      // '#23272F'
+} as const;

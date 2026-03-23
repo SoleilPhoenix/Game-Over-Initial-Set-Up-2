@@ -501,6 +501,18 @@ const en = {
     payRemainingSubtitle: '75% balance due before event',
     notif14DayTitle: 'Final Payment Due Soon',
     notif14DayBody: '{{eventName}} is in {{count}} days. Pay your remaining balance of {{amount}} to secure your booking.',
+    // Alert strings
+    noEventSelected: 'No Event Selected',
+    noEventSelectedMsg: 'Select an event first to send invitations.',
+    sendFailed: 'Send Failed',
+    errorSendingReminders: 'Could not send reminders. Try again.',
+    confirmPayment: 'Confirm Payment',
+    confirmPaymentMsg: 'Have you transferred your share to the organizer?',
+    notYet: 'Not yet',
+    yesPaid: "Yes, I've Paid",
+    thankYou: 'Thank you!',
+    paymentConfirmedMsg: 'Your payment has been confirmed. The organizer will be notified.',
+    errorUpdatingStatus: 'Could not update status. Please try again.',
   },
 
   // ─── Chat Screen ─────────────────────────────
@@ -555,6 +567,12 @@ const en = {
     earlier: 'Earlier',
     allCaughtUp: 'All Caught Up!',
     noNewNotifications: 'You have no new notifications',
+    // Guest payment confirmation alert
+    confirmPayment: 'Confirm Payment',
+    confirmPaymentMsg: 'Have you transferred your share to {{name}}?',
+    notYet: 'Not yet',
+    yesPaid: "Yes, I've Paid",
+    errorConfirmPayment: 'Could not confirm payment. Please try again.',
   },
 
   // ─── Event Detail ─────────────────────────────
@@ -571,19 +589,19 @@ const en = {
     bookingPending: 'Booking Pending',
     draftStatus: 'Draft',
     // Planning steps
-    inviteParticipants: 'Invite Participants',
+    inviteParticipants: 'Participants Invitation',
     inviteParticipantsDesc: 'Send invitations to at least half your group',
-    groupConfirmed: 'Group Confirmed',
+    groupConfirmed: 'Group Confirmation',
     groupConfirmedDesc: 'Wait for participants to confirm attendance',
-    collectBudget: 'Collect Budget',
+    collectBudget: 'Budget Collection',
     collectBudgetDesc: 'Collect payments from at least half the group',
-    completePayment: 'Complete Outstanding Payment',
+    completePayment: 'Outstanding Payment',
     completePaymentDesc: 'Pay the remaining balance at least 14 days before the event. A reminder will be provided via email and app.',
-    planAccommodation: 'Plan Accommodation',
+    planAccommodation: 'Accommodation Planning',
     planAccommodationDesc: 'Book hotels or apartments for the group',
-    organizeTravel: 'Organize Travel',
+    organizeTravel: 'Travel Planning',
     organizeTravelDesc: 'Coordinate carpools, trains, or flights',
-    planSurprise: 'Plan the Surprise',
+    planSurprise: 'Surprise Planning',
     planSurpriseDesc: 'How will the honoree be surprised?',
     finalBriefing: 'Final Briefing',
     finalBriefingDesc: 'Automatically sent 3 days before the event via email and push notification.',
@@ -609,6 +627,9 @@ const en = {
     // Invite group
     inviteYourGroup: 'Invite Your Group',
     shareSubtext: 'Share invite link to get started',
+    // Alert strings
+    organizerOnly: 'Organizer Only',
+    organizerOnlyMsg: 'Only the event organizer can manage planning steps.',
   },
 
   // ─── Common ────────────────────────────────────

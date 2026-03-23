@@ -102,6 +102,7 @@ export interface ButtonProps extends Omit<StyledButtonProps, 'disabled' | 'icon'
   iconPosition?: 'left' | 'right';
   testID?: string;
   children?: React.ReactNode;
+  accessibilityLabel?: string;
 }
 
 export function Button({
@@ -112,6 +113,7 @@ export function Button({
   iconPosition = 'left',
   variant = 'primary',
   testID,
+  accessibilityLabel,
   ...props
 }: ButtonProps) {
   const isDisabled = disabled || loading;
@@ -125,6 +127,7 @@ export function Button({
       testID={testID}
       aria-busy={loading}
       aria-disabled={isDisabled}
+      accessibilityLabel={accessibilityLabel}
     >
       {loading ? (
         <Spinner size="small" color={spinnerColor} />

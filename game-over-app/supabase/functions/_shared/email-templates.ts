@@ -364,10 +364,11 @@ interface GuestInviteEmailParams {
   honoreeName: string;
   inviteUrl: string;         // https://game-over.app/invite/{code}
   guestFirstName?: string;   // personalise greeting if known
+  inviteCode?: string;       // show prominently so guest can type it in the app
 }
 
 export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string {
-  const { organizerName, honoreeName, inviteUrl, guestFirstName } = params;
+  const { organizerName, honoreeName, inviteUrl, guestFirstName, inviteCode } = params;
   const greeting = guestFirstName ? `Hi ${guestFirstName},` : 'Hi there,';
 
   const bodyHtml = `
@@ -447,10 +448,28 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
       </tr>
     </table>
 
+    ${inviteCode ? `
+    <!-- Invite Code Box -->
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+      <tr>
+        <td style="background-color:#23272F;border-radius:12px;padding:24px;text-align:center;border:1px solid rgba(90,126,176,0.3);">
+          <p style="margin:0 0 6px;color:#9CA3AF;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;font-weight:600;">Your Invite Code</p>
+          <p style="margin:0 0 12px;color:#5A7EB0;font-size:34px;font-weight:800;letter-spacing:6px;font-family:monospace;">${inviteCode}</p>
+          <p style="margin:0 0 10px;color:#D1D5DB;font-size:13px;line-height:1.5;">
+            Open the <strong style="color:#FFFFFF;">Game Over app</strong> &rarr; tap <em>"Got an invite code?"</em> &rarr; enter the code above
+          </p>
+          <a href="https://game-over.app" style="display:inline-block;color:#5A7EB0;font-size:13px;font-weight:600;text-decoration:underline;">
+            Download at game-over.app &rarr;
+          </a>
+        </td>
+      </tr>
+    </table>
+    ` : ''}
+
     ${ctaButton("Join the Party 🥂", inviteUrl)}
 
     <p style="margin:0 0 24px;color:#6B7280;font-size:12px;text-align:center;line-height:1.5;">
-      This invite link is personal to you and expires in 30 days.<br>
+      This invite is personal to you and expires in 30 days.<br>
       If you did not expect this invitation, you can safely ignore this email.
     </p>
 

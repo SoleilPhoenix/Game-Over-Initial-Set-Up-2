@@ -13,6 +13,7 @@ import {
   PressableProps,
 } from 'react-native';
 import { colors } from '@/constants/colors';
+import { DARK_THEME } from '@/constants/theme';
 import { spacing, borderRadius, layout } from '@/constants/spacing';
 
 type SocialProvider = 'apple' | 'google' | 'facebook';
@@ -61,7 +62,7 @@ export function SocialButton({
         styles.button,
         {
           backgroundColor: config.backgroundColor,
-          borderColor: provider === 'google' ? colors.light.border : config.backgroundColor,
+          borderColor: provider === 'google' ? DARK_THEME.glassBorder : config.backgroundColor,
         },
         pressed && !isDisabled && styles.pressed,
         isDisabled && styles.disabled,

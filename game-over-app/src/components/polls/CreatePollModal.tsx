@@ -8,7 +8,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, TextInput, Alert } from 'reac
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '@/constants/colors';
+import { DARK_THEME } from '@/constants/theme';
 import { Button } from '@/components/ui/Button';
 import type { Database } from '@/lib/supabase/types';
 
@@ -121,7 +121,7 @@ export function CreatePollModal({
       onRequestClose={handleClose}
       testID="create-poll-modal"
     >
-      <YStack flex={1} backgroundColor="$background">
+      <YStack flex={1} backgroundColor="$background" accessibilityViewIsModal={true}>
         {/* Header */}
         <XStack
           paddingTop={insets.top || 16}
@@ -158,7 +158,7 @@ export function CreatePollModal({
               value={question}
               onChangeText={setQuestion}
               placeholder="What would you like to ask?"
-              placeholderTextColor={colors.light.textTertiary}
+              placeholderTextColor={DARK_THEME.textTertiary}
               multiline
               maxLength={200}
               testID="poll-question-input"
@@ -187,7 +187,7 @@ export function CreatePollModal({
                   <Ionicons
                     name={cat.icon}
                     size={16}
-                    color={category === cat.value ? 'white' : colors.light.textSecondary}
+                    color={category === cat.value ? 'white' : DARK_THEME.textSecondary}
                   />
                   <Text
                     fontSize="$2"
@@ -231,7 +231,7 @@ export function CreatePollModal({
                   value={option}
                   onChangeText={(value) => handleOptionChange(index, value)}
                   placeholder={`Option ${index + 1}`}
-                  placeholderTextColor={colors.light.textTertiary}
+                  placeholderTextColor={DARK_THEME.textTertiary}
                   maxLength={100}
                   testID={`poll-option-${index}`}
                 />
@@ -241,7 +241,7 @@ export function CreatePollModal({
                     style={styles.removeButton}
                     testID={`remove-option-${index}`}
                   >
-                    <Ionicons name="close-circle" size={24} color={colors.light.error} />
+                    <Ionicons name="close-circle" size={24} color={DARK_THEME.error} />
                   </Pressable>
                 )}
               </XStack>
@@ -249,7 +249,7 @@ export function CreatePollModal({
 
             {options.length < 6 && (
               <Pressable style={styles.addOptionButton} onPress={handleAddOption} testID="add-option-button">
-                <Ionicons name="add" size={20} color={colors.light.primary} />
+                <Ionicons name="add" size={20} color={DARK_THEME.primary} />
                 <Text color="$primary" fontWeight="500">
                   Add Option
                 </Text>
@@ -299,13 +299,13 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   questionInput: {
-    backgroundColor: colors.light.surface,
+    backgroundColor: DARK_THEME.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.light.border,
+    borderColor: DARK_THEME.glassBorder,
     padding: 16,
     fontSize: 16,
-    color: colors.light.textPrimary,
+    color: DARK_THEME.textPrimary,
     minHeight: 80,
     textAlignVertical: 'top',
   },
@@ -316,23 +316,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: colors.light.surface,
+    backgroundColor: DARK_THEME.surface,
     borderWidth: 1,
-    borderColor: colors.light.border,
+    borderColor: DARK_THEME.glassBorder,
   },
   categoryChipSelected: {
-    backgroundColor: colors.light.primary,
-    borderColor: colors.light.primary,
+    backgroundColor: DARK_THEME.primary,
+    borderColor: DARK_THEME.primary,
   },
   optionInput: {
     flex: 1,
-    backgroundColor: colors.light.surface,
+    backgroundColor: DARK_THEME.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.light.border,
+    borderColor: DARK_THEME.glassBorder,
     padding: 12,
     fontSize: 15,
-    color: colors.light.textPrimary,
+    color: DARK_THEME.textPrimary,
   },
   removeButton: {
     padding: 4,
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: colors.light.primary,
-    backgroundColor: `${colors.light.primary}08`,
+    borderColor: DARK_THEME.primary,
+    backgroundColor: 'rgba(90, 126, 176, 0.08)',
   },
 });

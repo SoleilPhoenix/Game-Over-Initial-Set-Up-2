@@ -276,9 +276,14 @@ export default function PaymentScreen() {
 
       // Process payment with Stripe
       setPaymentStep('processing_payment');
+      // Derive payment type from URL params — never hardcode 'full'
+      const stripePaymentType: 'deposit' | 'remaining' | 'full' =
+        paramAmountCents > 0 ? 'remaining' :
+        isFullPayment ? 'full' :
+        'deposit';
       const { success, error } = await processPayment({
         bookingId: booking.id,
-        amountCents: activePricing.totalCents,
+        paymentType: stripePaymentType,
         currency: 'eur',
       });
 
@@ -448,7 +453,7 @@ export default function PaymentScreen() {
                   alignItems="center"
                   gap="$3"
                 >
-                  <Ionicons name="card" size={24} color="#258CF4" />
+                  <Ionicons name="card" size={24} color="#5A7EB0" />
                   <YStack flex={1}>
                     <Text fontWeight="600" color="$textPrimary">
                       {t.booking.creditOrDebit}
@@ -457,7 +462,7 @@ export default function PaymentScreen() {
                       {t.booking.visaMastercard}
                     </Text>
                   </YStack>
-                  <Ionicons name="checkmark-circle" size={24} color="#258CF4" />
+                  <Ionicons name="checkmark-circle" size={24} color="#5A7EB0" />
                 </XStack>
 
                 {/* Apple Pay — Coming Soon */}
@@ -517,11 +522,11 @@ export default function PaymentScreen() {
                   width={48}
                   height={48}
                   borderRadius="$md"
-                  backgroundColor="rgba(37, 140, 244, 0.1)"
+                  backgroundColor="rgba(90, 126, 176, 0.1)"
                   alignItems="center"
                   justifyContent="center"
                 >
-                  <Ionicons name="gift" size={24} color="#258CF4" />
+                  <Ionicons name="gift" size={24} color="#5A7EB0" />
                 </YStack>
                 <YStack flex={1}>
                   <Text fontWeight="600" color="$textPrimary">

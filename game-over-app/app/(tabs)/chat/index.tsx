@@ -3,7 +3,7 @@
  * Chat, Voting, Decisions with organized channel sections
  */
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Animated, PanResponder, ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,6 +21,7 @@ import { DARK_THEME } from '@/constants/theme';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { useUser } from '@/stores/authStore';
+import { useTabBarStore } from '@/stores/tabBarStore';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import type { Database } from '@/lib/supabase/types';
 
@@ -526,6 +527,16 @@ export default function CommunicationScreen() {
         }
       });
     }, [])
+  );
+
+  const setTabBarHidden = useTabBarStore((s) => s.setHidden);
+
+  // Hide tab bar when accessed from Event Summary (eventId present in URL)
+  useFocusEffect(
+    useCallback(() => {
+      if (eventIdParam) setTabBarHidden(true);
+      return () => setTabBarHidden(false);
+    }, [eventIdParam, setTabBarHidden])
   );
 
   // Fetch user's events
@@ -1204,8 +1215,8 @@ export default function CommunicationScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Share Event Card */}
-        {renderShareEventCard()}
+        {/* Share Event Card — organizers only */}
+        {selectedEvent?.created_by === user?.id && renderShareEventCard()}
 
         {selectedTab === 'topics' ? (
           /* Topics tab */

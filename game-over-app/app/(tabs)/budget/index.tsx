@@ -11,9 +11,11 @@ import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
-import { useParticipants } from '@/hooks/queries/useParticipants';
+import { useParticipants, participantKeys } from '@/hooks/queries/useParticipants';
+import { useInviteGuests } from '@/hooks/queries/useInvites';
 import { useUser } from '@/stores/authStore';
 import { DARK_THEME } from '@/constants/theme';
 import { useTabBarStore } from '@/stores/tabBarStore';
@@ -124,6 +126,7 @@ function SwipeableRefundRow({
 
 export default function BudgetDashboardScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const { hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
   // eventId = opened via /(tabs)/budget?eventId=xxx (old approach, kept for safety)
   // id     = opened via /event/[id]/budget (event-stack, router.back() works correctly)
@@ -132,6 +135,9 @@ export default function BudgetDashboardScreen() {
   const insets = useSafeAreaInsets();
   const user = useUser();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(eventIdParam || null);
+  const [markingPaidUserId, setMarkingPaidUserId] = useState<string | null>(null);
+  // Derived: is the current user the organizer of the selected event?
+  // Used to hide organizer-only actions (Pay Remaining Balance, Invite Guests, Remind All).
   const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<BudgetCategory>('package');
   const [cachedBudget, setCachedBudget] = useState<BudgetInfo | null>(null);
@@ -141,20 +147,27 @@ export default function BudgetDashboardScreen() {
   const setTabBarHidden = useTabBarStore((s) => s.setHidden);
 
   // Remind-all channel picker modal
-  const [remindModalVisible, setRemindModalVisible] = useState(false);
-  const [remindSendStatus, setRemindSendStatus] = useState<'idle' | 'sending' | 'done'>('idle');
-  const [remindActiveChannel, setRemindActiveChannel] = useState<'email' | 'sms' | 'whatsapp' | null>(null);
-  const [remindResults, setRemindResults] = useState<Array<{ status: string; recipient: string; error?: string }>>([]);
+  const [remindModal, setRemindModal] = useState<{
+    visible: boolean;
+    sendStatus: 'idle' | 'sending' | 'done';
+    activeChannel: 'email' | 'sms' | 'whatsapp' | null;
+    results: Array<{ status: string; recipient: string; error?: string }>;
+  }>({ visible: false, sendStatus: 'idle', activeChannel: null, results: [] });
 
   // Expense modal
-  const [expenseModalVisible, setExpenseModalVisible] = useState(false);
-  const [expenseCategoryKey, setExpenseCategoryKey] = useState<string | null>(null);
-  const [expenseViewMode, setExpenseViewMode] = useState<'list' | 'form'>('form');
-  const [expenseDescription, setExpenseDescription] = useState('');
-  const [expenseAmount, setExpenseAmount] = useState('');
-  const [expensePaidBy, setExpensePaidBy] = useState<'you' | 'other'>('you');
-  const [expensePaidByPerson, setExpensePaidByPerson] = useState<string | null>(null);
-  const [expenseContributors, setExpenseContributors] = useState<string[]>([]);
+  const [expenseModal, setExpenseModal] = useState<{
+    visible: boolean;
+    categoryKey: string | null;
+    viewMode: 'list' | 'form';
+    description: string;
+    amount: string;
+    paidBy: 'you' | 'other';
+    paidByPerson: string | null;
+    contributors: string[];
+    editingIndex: number | null;
+    payerDropdownOpen: boolean;
+  }>({ visible: false, categoryKey: null, viewMode: 'form', description: '', amount: '', paidBy: 'you', paidByPerson: null, contributors: [], editingIndex: null, payerDropdownOpen: false });
+
   const [addedExpenses, setAddedExpenses] = useState<Array<{
     categoryKey: string; description: string; amount: string;
     paidBy: 'you' | 'other'; paidByPerson?: string | null; contributors: string[];
@@ -162,22 +175,23 @@ export default function BudgetDashboardScreen() {
 
   // Custom categories (user-created)
   const [customCategories, setCustomCategories] = useState<ExpenseCategory[]>([]);
-  const [customCategoryModalVisible, setCustomCategoryModalVisible] = useState(false);
-  const [customCategoryLabel, setCustomCategoryLabel] = useState('');
+  const [customCatModal, setCustomCatModal] = useState<{
+    visible: boolean;
+    label: string;
+  }>({ visible: false, label: '' });
 
   // Refund modal
-  const [refundModalVisible, setRefundModalVisible] = useState(false);
-  const [refundTemplateKey, setRefundTemplateKey] = useState<string | null>(null);
-  const [refundDescription, setRefundDescription] = useState('');
-  const [refundAmount, setRefundAmount] = useState('');
+  const [refundModal, setRefundModal] = useState<{
+    visible: boolean;
+    templateKey: string | null;
+    description: string;
+    amount: string;
+  }>({ visible: false, templateKey: null, description: '', amount: '' });
+
   const [addedRefunds, setAddedRefunds] = useState<Array<{ description: string; amount: string; status: 'processing' | 'received'; icon?: string; color?: string; bg?: string; }>>([]);
 
   // Ref always holds latest contributors — avoids declaration-order TDZ issue with useCallback
-  const allContributorsRef = useRef<Array<{ id: string; name: string }>>([]);
-
-  // Track which expense index is being edited (null = creating new)
-  const [editingExpenseIndex, setEditingExpenseIndex] = useState<number | null>(null);
-  const [payerDropdownOpen, setPayerDropdownOpen] = useState(false);
+  const allContributorsRef = useRef<Array<{ id: string; name: string; userId?: string | null; role?: string }>>([]);
 
   // Drag-to-dismiss for budget modals (matches destination.tsx pattern)
   const expenseSheetY = useRef(new Animated.Value(0)).current;
@@ -199,75 +213,77 @@ export default function BudgetDashboardScreen() {
       },
     });
 
-  const expenseSheetPan = useRef(makeModalPan(expenseSheetY, () => setExpenseModalVisible(false))).current;
-  const refundSheetPan = useRef(makeModalPan(refundSheetY, () => setRefundModalVisible(false))).current;
-  const customCatSheetPan = useRef(makeModalPan(customCatSheetY, () => setCustomCategoryModalVisible(false))).current;
+  const expenseSheetPan = useRef(makeModalPan(expenseSheetY, () => setExpenseModal(prev => ({ ...prev, visible: false })))).current;
+  const refundSheetPan = useRef(makeModalPan(refundSheetY, () => setRefundModal(prev => ({ ...prev, visible: false })))).current;
+  const customCatSheetPan = useRef(makeModalPan(customCatSheetY, () => setCustomCatModal(prev => ({ ...prev, visible: false })))).current;
 
   const openExpenseModal = useCallback((categoryKey: string) => {
-    setEditingExpenseIndex(null);
-    setExpenseCategoryKey(categoryKey);
     const existing = addedExpenses.filter(e => e.categoryKey === categoryKey);
-    setExpenseViewMode(existing.length > 0 ? 'list' : 'form');
-    setExpenseDescription('');
-    setExpenseAmount('');
-    setExpensePaidBy('you');
-    setExpensePaidByPerson(null);
-    setExpenseContributors([]);
-    setExpenseModalVisible(true);
+    setExpenseModal(prev => ({
+      ...prev,
+      editingIndex: null,
+      categoryKey,
+      viewMode: existing.length > 0 ? 'list' : 'form',
+      description: '',
+      amount: '',
+      paidBy: 'you',
+      paidByPerson: null,
+      contributors: [],
+      visible: true,
+    }));
   }, [addedExpenses]);
 
   const openEditExpense = useCallback((globalIdx: number) => {
     const exp = addedExpenses[globalIdx];
     if (!exp) return;
-    setEditingExpenseIndex(globalIdx);
-    setExpenseCategoryKey(exp.categoryKey);
-    setExpenseDescription(exp.description);
-    setExpenseAmount(exp.amount);
-    setExpensePaidBy(exp.paidBy);
-    setExpensePaidByPerson(exp.paidByPerson || null);
-    setExpenseContributors(exp.contributors);
-    setExpenseViewMode('form');
-    setExpenseModalVisible(true);
+    setExpenseModal(prev => ({
+      ...prev,
+      editingIndex: globalIdx,
+      categoryKey: exp.categoryKey,
+      description: exp.description,
+      amount: exp.amount,
+      paidBy: exp.paidBy,
+      paidByPerson: exp.paidByPerson || null,
+      contributors: exp.contributors,
+      viewMode: 'form',
+      visible: true,
+    }));
   }, [addedExpenses]);
 
   const submitExpense = useCallback(() => {
-    if (!expenseDescription.trim() || !expenseAmount.trim() || !expenseCategoryKey) return;
+    if (!expenseModal.description.trim() || !expenseModal.amount.trim() || !expenseModal.categoryKey) return;
     const newExpense = {
-      categoryKey: expenseCategoryKey,
-      description: expenseDescription.trim(),
-      amount: expenseAmount.trim(),
-      paidBy: expensePaidBy,
-      paidByPerson: expensePaidBy === 'other' ? expensePaidByPerson : null,
-      contributors: expenseContributors,
+      categoryKey: expenseModal.categoryKey,
+      description: expenseModal.description.trim(),
+      amount: expenseModal.amount.trim(),
+      paidBy: expenseModal.paidBy,
+      paidByPerson: expenseModal.paidBy === 'other' ? expenseModal.paidByPerson : null,
+      contributors: expenseModal.contributors,
     };
     setAddedExpenses(prev => {
-      const updated = editingExpenseIndex !== null
-        ? prev.map((e, i) => i === editingExpenseIndex ? newExpense : e)
+      const updated = expenseModal.editingIndex !== null
+        ? prev.map((e, i) => i === expenseModal.editingIndex ? newExpense : e)
         : [...prev, newExpense];
       if (selectedEventId) {
         AsyncStorage.setItem(`gameover:expenses:${selectedEventId}`, JSON.stringify(updated));
       }
       return updated;
     });
-    setEditingExpenseIndex(null);
-    setExpenseModalVisible(false);
-  }, [expenseDescription, expenseAmount, expenseCategoryKey, expensePaidBy, expensePaidByPerson, expenseContributors, selectedEventId, editingExpenseIndex]);
+    setExpenseModal(prev => ({ ...prev, editingIndex: null, visible: false }));
+  }, [expenseModal, selectedEventId]);
 
   const openRefundModal = useCallback(() => {
-    setRefundTemplateKey(null);
-    setRefundDescription('');
-    setRefundAmount('');
-    setRefundModalVisible(true);
+    setRefundModal({ visible: true, templateKey: null, description: '', amount: '' });
   }, []);
 
   const submitRefund = useCallback(() => {
-    if (!refundDescription.trim() || !refundAmount.trim()) return;
-    const tmpl = REFUND_TEMPLATES.find(t => t.key === refundTemplateKey);
+    if (!refundModal.description.trim() || !refundModal.amount.trim()) return;
+    const tmpl = REFUND_TEMPLATES.find(t => t.key === refundModal.templateKey);
     setAddedRefunds(prev => {
       const customColor = CUSTOM_COLORS[prev.length % CUSTOM_COLORS.length];
       const updated = [{
-        description: refundDescription.trim(),
-        amount: refundAmount.trim(),
+        description: refundModal.description.trim(),
+        amount: refundModal.amount.trim(),
         status: 'processing' as const,
         icon: tmpl?.icon ?? 'receipt-outline',
         color: tmpl?.color ?? customColor.color,
@@ -278,15 +294,19 @@ export default function BudgetDashboardScreen() {
       }
       return updated;
     });
-    setRefundModalVisible(false);
-  }, [refundDescription, refundAmount, refundTemplateKey, selectedEventId]);
+    setRefundModal(prev => ({ ...prev, visible: false }));
+  }, [refundModal, selectedEventId]);
 
-  // Hide tab bar when opened from Event Summary (eventIdParam present)
+  // Hide tab bar when opened from Event Summary (eventIdParam present).
+  // Also refetch participants on focus so payment status reflects "I've Paid" from Notifications screen.
   useFocusEffect(
     useCallback(() => {
       if (eventIdParam) setTabBarHidden(true);
+      if (selectedEventId) {
+        queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(selectedEventId) });
+      }
       return () => setTabBarHidden(false);
-    }, [eventIdParam])
+    }, [eventIdParam, selectedEventId, queryClient])
   );
 
   const BUDGET_TABS = ['package', 'otherExpenses'] as const;
@@ -321,11 +341,7 @@ export default function BudgetDashboardScreen() {
   const handleNotifications = () => {
     markUrgencySeen();
     if (isGuestContribution && guestUrgentEvent) {
-      Alert.alert(
-        'Contribution Due',
-        `Your share for ${guestUrgentEvent.title} is due in ${guestDaysLeft} days.\nPlease transfer your contribution to the organizer.`,
-        [{ text: 'OK' }]
-      );
+      router.push(`/event/${guestUrgentEvent.id}/budget` as any);
     } else {
       router.push('/notifications');
     }
@@ -359,6 +375,21 @@ export default function BudgetDashboardScreen() {
   );
 
   const selectedEvent = bookedEvents.find((e: EventWithDetails) => e.id === selectedEventId);
+  const isOrganizer = selectedEvent?.created_by === user?.id;
+
+  // Fetch invite codes to include non-registered invited guests in contributors list
+  const { data: rawInviteGuests = [] } = useInviteGuests(selectedEventId ?? null);
+  const inviteCodeGuests = useMemo(
+    () => rawInviteGuests
+      .filter(ic => ic.guest_email || ic.guest_first_name)
+      .map(ic => ({
+        id: ic.id,
+        name: [ic.guest_first_name, ic.guest_last_name].filter(Boolean).join(' ')
+          || ic.guest_email?.split('@')[0] || 'Guest',
+        email: ic.guest_email?.toLowerCase() || '',
+      })),
+    [rawInviteGuests]
+  );
 
   // Load all persisted data when event changes
   useEffect(() => {
@@ -476,23 +507,19 @@ export default function BudgetDashboardScreen() {
     if (effectiveEventId) {
       router.push(`/event/${effectiveEventId}/share`);
     } else {
-      Alert.alert('No Event Selected', 'Select an event first to send invitations.');
+      Alert.alert(t.budget.noEventSelected, t.budget.noEventSelectedMsg);
     }
   }, [selectedEventId, eventIdParam, router]);
 
   // Remind All — opens channel picker modal (same UX as Manage Invitations)
   const handleRemindAll = useCallback(() => {
-    setRemindSendStatus('idle');
-    setRemindResults([]);
-    setRemindActiveChannel(null);
-    setRemindModalVisible(true);
+    setRemindModal({ visible: true, sendStatus: 'idle', activeChannel: null, results: [] });
   }, []);
 
   // Send reminder via chosen channel using the guest-invitations edge function
   const handleRemindViaChannel = useCallback(async (channel: 'email' | 'sms' | 'whatsapp') => {
     if (!selectedEventId) return;
-    setRemindActiveChannel(channel);
-    setRemindSendStatus('sending');
+    setRemindModal(prev => ({ ...prev, activeChannel: channel, sendStatus: 'sending' }));
     try {
       await supabase.auth.refreshSession().catch(() => {});
       const guestDetailsMap = await loadGuestDetails(selectedEventId);
@@ -512,15 +539,14 @@ export default function BudgetDashboardScreen() {
           const body = await (error as any).context?.json?.();
           if (body?.error) detail = body.error;
         } catch {}
-        Alert.alert('Send failed', detail);
-        setRemindSendStatus('idle');
+        Alert.alert(t.budget.sendFailed, detail);
+        setRemindModal(prev => ({ ...prev, sendStatus: 'idle' }));
         return;
       }
-      setRemindResults(data?.results ?? []);
-      setRemindSendStatus('done');
+      setRemindModal(prev => ({ ...prev, results: data?.results ?? [], sendStatus: 'done' }));
     } catch {
-      Alert.alert('Error', 'Could not send reminders. Try again.');
-      setRemindSendStatus('idle');
+      Alert.alert(t.common.error, t.budget.errorSendingReminders);
+      setRemindModal(prev => ({ ...prev, sendStatus: 'idle' }));
     }
   }, [selectedEventId]);
 
@@ -544,9 +570,10 @@ export default function BudgetDashboardScreen() {
     })
   ).current;
 
-  // Build demo participant list when no DB booking record exists
+  // Build demo participant list only when neither DB booking nor DB participants exist
   const demoParticipants = useMemo(() => {
-    if (booking) return null; // real data — use DB participants
+    if (booking) return null; // real booking record — use DB participants
+    if (participants && participants.length > 0) return null; // DB participants loaded — use them directly
     const guestCount = Object.keys(cachedGuests).length;
     const totalPaying = (cachedBudget?.payingCount
       || (cachedParticipantCount ? cachedParticipantCount - 1 : 0)
@@ -581,24 +608,109 @@ export default function BudgetDashboardScreen() {
       list.push({ id: 'honoree', name: honoreeName, status: 'pending', amount: budgetStats.perPerson });
     }
     return list;
-  }, [booking, cachedBudget, cachedParticipantCount, cachedGuests, userName, budgetStats, selectedEvent]);
+  }, [booking, participants, cachedBudget, cachedParticipantCount, cachedGuests, userName, budgetStats, selectedEvent]);
+
+  // Sort DB participants so organizer is always first in contribution list
+  const sortedParticipants = useMemo(() => {
+    if (!participants) return null;
+    return [...(participants as any[])].sort((a, b) => {
+      if (a.role === 'organizer') return -1;
+      if (b.role === 'organizer') return 1;
+      return 0;
+    });
+  }, [participants]);
 
   // Normalised contributor list for expense modal (works with both demo + DB participants)
-  const allContributors = useMemo<Array<{ id: string; name: string }>>(() => {
-    if (demoParticipants) return demoParticipants.map(p => ({ id: p.id, name: p.name }));
-    if (participants) return (participants as any[]).map(p => ({
-      id: p.id as string,
-      name: p.profile?.full_name || p.profile?.email?.split('@')[0] || 'Guest',
+  // Includes userId + role for filtering (exclude self, exclude honoree)
+  const allContributors = useMemo<Array<{ id: string; name: string; userId?: string | null; role?: string }>>(() => {
+    if (demoParticipants) return demoParticipants.map(p => ({
+      id: p.id,
+      name: p.name,
+      userId: p.id === 'organizer' ? (selectedEvent?.created_by ?? null) : null,
+      role: p.id === 'organizer' ? 'organizer' : p.id === 'honoree' ? 'honoree' : 'guest',
     }));
+    if (sortedParticipants) {
+      const base: Array<{ id: string; name: string; userId?: string | null; role?: string }> =
+        sortedParticipants.map(p => ({
+          id: p.id as string,
+          name: p.profile?.full_name || p.profile?.email?.split('@')[0] || 'Guest',
+          userId: (p as any).user_id ?? null,
+          role: (p as any).role,
+        }));
+      // Add non-registered invited guests from invite_codes (e.g. Hans Zimmer), deduplicated
+      const registeredEmails = new Set(
+        sortedParticipants
+          .map(p => p.profile?.email?.toLowerCase())
+          .filter(Boolean)
+      );
+      const seenInvites = new Set<string>();
+      for (const ic of inviteCodeGuests) {
+        if (ic.email && registeredEmails.has(ic.email)) continue; // already registered
+        const dedupeKey = ic.email || ic.name.toLowerCase();
+        if (seenInvites.has(dedupeKey)) continue;
+        seenInvites.add(dedupeKey);
+        base.push({ id: `invite-${ic.id}`, name: ic.name, userId: null, role: 'guest' });
+      }
+      // Also include locally-cached guests (entered in Manage Invitations but not yet sent)
+      for (const guest of Object.values(cachedGuests)) {
+        const name = [guest.firstName, guest.lastName].filter(Boolean).join(' ');
+        const email = guest.email?.toLowerCase() || '';
+        if (!name && !email) continue;
+        if (email && registeredEmails.has(email)) continue;
+        const dedupeKey = email || name.toLowerCase();
+        if (seenInvites.has(dedupeKey)) continue;
+        seenInvites.add(dedupeKey);
+        base.push({ id: `cached-${dedupeKey}`, name: name || email.split('@')[0] || 'Guest', userId: null, role: 'guest' });
+      }
+      return base;
+    }
     return [];
-  }, [demoParticipants, participants]);
+  }, [demoParticipants, sortedParticipants, inviteCodeGuests, cachedGuests, selectedEvent?.created_by]);
   // Keep ref in sync so openExpenseModal always has the latest list
   allContributorsRef.current = allContributors;
 
-  // For "Someone else paid" — only guests (no organizer, no honoree)
+  // Registered participant emails (for deduplication with invite guests)
+  const registeredEmailSet = useMemo(() => new Set(
+    (sortedParticipants || []).map(p => p.profile?.email?.toLowerCase()).filter(Boolean) as string[]
+  ), [sortedParticipants]);
+
+  // Non-registered invited guests to show in Group Contributions
+  // Includes both invite_codes (sent invitations) AND locally-cached guests (entered but not yet sent)
+  // Deduplicated so the same person never appears twice
+  const nonRegisteredInviteGuests = useMemo(() => {
+    if (demoParticipants) return [];
+    const seen = new Set<string>();
+    const result: Array<{ id: string; name: string; email: string }> = [];
+    // 1. Sent invitations (invite_codes DB rows)
+    for (const ic of inviteCodeGuests) {
+      if (ic.email && registeredEmailSet.has(ic.email)) continue;
+      const dedupeKey = ic.email || ic.name.toLowerCase();
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      result.push(ic);
+    }
+    // 2. Locally-cached guests (entered in Manage Invitations but not yet formally invited)
+    for (const guest of Object.values(cachedGuests)) {
+      const name = [guest.firstName, guest.lastName].filter(Boolean).join(' ');
+      const email = guest.email?.toLowerCase() || '';
+      if (!name && !email) continue;
+      if (email && registeredEmailSet.has(email)) continue;
+      const dedupeKey = email || name.toLowerCase();
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      result.push({ id: `cached-${dedupeKey}`, name: name || email.split('@')[0] || 'Guest', email });
+    }
+    return result;
+  }, [demoParticipants, inviteCodeGuests, registeredEmailSet, cachedGuests]);
+
+  // For "Someone else paid" — exclude current user AND honoree (can't pay yourself or honoree)
   const payerOptions = useMemo(
-    () => allContributors.filter(c => c.id !== 'organizer' && c.id !== 'honoree'),
-    [allContributors]
+    () => allContributors.filter(c =>
+      c.role !== 'honoree' &&
+      c.id !== 'honoree' &&
+      c.userId !== user?.id
+    ),
+    [allContributors, user?.id]
   );
 
   // Days until event (calendar-date comparison — no time-of-day skew)
@@ -1064,36 +1176,43 @@ export default function BudgetDashboardScreen() {
                   );
                 })()}
 
-                {/* Pay Remaining Balance — inside card, below total price */}
+                {/* Pay Remaining Balance — organizers only */}
                 {budgetStats.percentage < 100 && budgetStats.pending > 0 && (
-                  <Pressable
-                    style={styles.payRemainingButton}
-                    onPress={() => {
-                      if (!selectedEventId) return;
-                      // Prefer cached slug over DB package_id (which is a UUID, not a slug)
-                      const packageIdForPayment = cachedBudget?.packageId || (booking as any)?.package_id;
-                      const participantsForPayment = cachedBudget?.payingCount;
-                      const params = new URLSearchParams({ payFull: '1' });
-                      if (packageIdForPayment) params.set('packageId', packageIdForPayment);
-                      if (participantsForPayment) params.set('participants', String(participantsForPayment + 1));
-                      if (selectedEvent?.city_id) params.set('cityId', selectedEvent.city_id);
-                      // Pass remaining amount + full total so payment screen works without package lookup
-                      params.set('amountCents', String(budgetStats.pending));
-                      params.set('totalCents', String(budgetStats.totalBudget));
-                      router.push(`/booking/${selectedEventId}/payment?${params.toString()}` as any);
-                    }}
-                  >
-                    <View style={styles.payRemainingIcon}>
-                      <Ionicons name="card-outline" size={20} color="#F97316" />
-                    </View>
-                    <YStack flex={1}>
-                      <Text style={styles.payRemainingTitle}>{(t.budget as any).payRemainingBtn}</Text>
-                      <Text style={styles.payRemainingSubtitleText}>
-                        {formatCurrencyRounded(budgetStats.pending)} · {(t.budget as any).payRemainingSubtitle}
+                  isOrganizer ? (
+                    <Pressable
+                      style={styles.payRemainingButton}
+                      onPress={() => {
+                        if (!selectedEventId) return;
+                        const packageIdForPayment = cachedBudget?.packageId || (booking as any)?.package_id;
+                        const participantsForPayment = cachedBudget?.payingCount;
+                        const params = new URLSearchParams({ payFull: '1' });
+                        if (packageIdForPayment) params.set('packageId', packageIdForPayment);
+                        if (participantsForPayment) params.set('participants', String(participantsForPayment + 1));
+                        if (selectedEvent?.city_id) params.set('cityId', selectedEvent.city_id);
+                        params.set('amountCents', String(budgetStats.pending));
+                        params.set('totalCents', String(budgetStats.totalBudget));
+                        router.push(`/booking/${selectedEventId}/payment?${params.toString()}` as any);
+                      }}
+                    >
+                      <View style={styles.payRemainingIcon}>
+                        <Ionicons name="card-outline" size={20} color="#F97316" />
+                      </View>
+                      <YStack flex={1}>
+                        <Text style={styles.payRemainingTitle}>{(t.budget as any).payRemainingBtn}</Text>
+                        <Text style={styles.payRemainingSubtitleText}>
+                          {formatCurrencyRounded(budgetStats.pending)} · {(t.budget as any).payRemainingSubtitle}
+                        </Text>
+                      </YStack>
+                      <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+                    </Pressable>
+                  ) : (
+                    <View style={styles.guestRemainingInfo}>
+                      <Ionicons name="information-circle-outline" size={18} color={DARK_THEME.textSecondary} />
+                      <Text style={styles.guestRemainingText}>
+                        The remaining {formatCurrencyRounded(budgetStats.pending)} will be paid by the organizer 14 days before the event.
                       </Text>
-                    </YStack>
-                    <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
-                  </Pressable>
+                    </View>
+                  )
                 )}
               </YStack>
             </View>
@@ -1104,7 +1223,7 @@ export default function BudgetDashboardScreen() {
                 <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
                   {t.budget.groupContributions}
                 </Text>
-                {budgetStats.pendingCount > 0 && (
+                {isOrganizer && budgetStats.pendingCount > 0 && (
                   <Pressable onPress={handleRemindAll}>
                     <Text fontSize={12} fontWeight="500" color={DARK_THEME.primary}>
                       {t.budget.remindAll}
@@ -1115,90 +1234,179 @@ export default function BudgetDashboardScreen() {
 
               <View style={[styles.glassCard, { paddingHorizontal: 8, paddingTop: 8, paddingBottom: 8 }]}>
                 {/* Use demo participants when no DB booking, otherwise DB participants */}
-                {(demoParticipants || participants)?.map((participantRaw, index) => {
+                {(demoParticipants || sortedParticipants)?.map((participantRaw, index) => {
                   type DemoP = { id: string; name: string; status: 'paid' | 'pending'; amount: number };
                   const isDemo = !!demoParticipants;
                   // Normalise to common shape
                   const name = isDemo
                     ? (participantRaw as DemoP).name
                     : (((participantRaw as any).profile?.full_name) || (participantRaw as any).profile?.email?.split('@')[0] || '—');
+                  const isOrganizerRow = isDemo
+                    ? (participantRaw as DemoP).id === 'organizer'
+                    : (participantRaw as any).role === 'organizer';
                   const isPaid = isDemo
                     ? (participantRaw as DemoP).status === 'paid'
-                    : (participantRaw as any).payment_status === 'paid';
+                    // Organizer is always considered paid — they covered the deposit for the whole group
+                    : (participantRaw as any).payment_status === 'paid' || isOrganizerRow;
                   const isPending = !isPaid;
+                  const perPersonAmount = booking?.per_person_cents || budgetStats.perPerson || 0;
                   const amountForRow = isDemo
                     ? (participantRaw as DemoP).amount
-                    : (booking?.per_person_cents || budgetStats.perPerson || 0);
-                  const isCurrentUser = index === 0;
+                    // Organizer: show deposit paid (not full per-person) when balance still outstanding
+                    : isOrganizerRow && budgetStats.percentage < 100
+                      ? budgetStats.collected
+                      : perPersonAmount;
+                  // isCurrentUser: true when this row represents the currently logged-in user.
+                  // Demo mode: index 0 is always the organizer — mark as (You) only if they ARE the organizer.
+                  // DB mode: compare user_id directly.
+                  const isCurrentUser = isDemo
+                    ? (participantRaw as DemoP).id === 'organizer'
+                      ? selectedEvent?.created_by === user?.id
+                      : false
+                    : (participantRaw as any).user_id === user?.id;
                   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
                   const initials = (name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2)) || '?';
                   const key = (participantRaw as any).id as string;
 
                   return (
+                    <React.Fragment key={key}>
+                      <View
+                        style={[
+                          styles.contributionRow,
+                          (index !== ((demoParticipants || sortedParticipants)?.length || 0) - 1 || nonRegisteredInviteGuests.length > 0) && styles.contributionRowBorder,
+                        ]}
+                      >
+                        {/* Avatar */}
+                        <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
+                          <Text style={styles.participantInitialsText}>{initials}</Text>
+                        </View>
+
+                        {/* Name + amount — flex: 1 with right margin to keep space for badge */}
+                        <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
+                          <Text
+                            style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}
+                            numberOfLines={1}
+                          >
+                            {name}{isCurrentUser ? ` ${t.budget.you}` : ''}
+                          </Text>
+                          <Text
+                            style={{ fontSize: 12, color: DARK_THEME.textTertiary }}
+                            numberOfLines={1}
+                          >
+                            {isPending
+                              ? t.budget.pendingOwes.replace('{{amount}}', formatCurrency(amountForRow))
+                              : t.budget.contribution.replace('{{amount}}', formatCurrency(amountForRow))
+                            }
+                          </Text>
+                        </View>
+
+                        {/* Status Badge — compact, top-aligned */}
+                        <View style={[
+                          styles.paymentBadge,
+                          { flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 },
+                          isPaid ? styles.paidBadge : styles.pendingBadge,
+                        ]}>
+                          <Ionicons
+                            name={isPaid ? 'checkmark' : 'time-outline'}
+                            size={10}
+                            color={isPaid ? DARK_THEME.success : DARK_THEME.warning}
+                          />
+                          <Text style={[
+                            styles.paymentBadgeText,
+                            { color: isPaid ? DARK_THEME.success : DARK_THEME.warning }
+                          ]}>
+                            {isPaid ? t.budget.paid : t.budget.pending}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* "I've Paid" button — guest's own pending row only */}
+                      {isCurrentUser && isPending && !isOrganizer && !isDemo && (
+                        <Pressable
+                          style={[styles.markPaidButton, markingPaidUserId === user?.id && { opacity: 0.6 }]}
+                          disabled={markingPaidUserId === user?.id}
+                          onPress={() => {
+                            Alert.alert(
+                              t.budget.confirmPayment,
+                              t.budget.confirmPaymentMsg,
+                              [
+                                { text: t.budget.notYet, style: 'cancel' },
+                                {
+                                  text: t.budget.yesPaid,
+                                  onPress: async () => {
+                                    if (!selectedEventId || !user?.id) return;
+                                    setMarkingPaidUserId(user.id);
+                                    try {
+                                      await supabase
+                                        .from('event_participants')
+                                        .update({ payment_status: 'paid' })
+                                        .eq('event_id', selectedEventId)
+                                        .eq('user_id', user.id);
+                                      queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(selectedEventId) });
+                                      queryClient.invalidateQueries({ queryKey: ['guestParticipations', user.id] });
+                                      Alert.alert(t.budget.thankYou, t.budget.paymentConfirmedMsg);
+                                    } catch {
+                                      Alert.alert(t.common.error, t.budget.errorUpdatingStatus);
+                                    } finally {
+                                      setMarkingPaidUserId(null);
+                                    }
+                                  },
+                                },
+                              ]
+                            );
+                          }}
+                        >
+                          <Ionicons name="checkmark-circle-outline" size={14} color={DARK_THEME.primary} />
+                          <Text style={styles.markPaidButtonText}>I've Paid</Text>
+                        </Pressable>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+
+                {/* Non-registered invited guests (invited but not yet signed up) */}
+                {nonRegisteredInviteGuests.map((ic, idx) => {
+                  const perPerson = booking?.per_person_cents || budgetStats.perPerson || 0;
+                  const avatarColor = AVATAR_COLORS[((demoParticipants || sortedParticipants)?.length || 0 + idx) % AVATAR_COLORS.length];
+                  const initials = ic.name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2) || '?';
+                  const isLast = idx === nonRegisteredInviteGuests.length - 1;
+                  return (
                     <View
-                      key={key}
-                      style={[
-                        styles.contributionRow,
-                        index !== ((demoParticipants || participants)?.length || 0) - 1 && styles.contributionRowBorder,
-                      ]}
+                      key={`invite-${ic.id}`}
+                      style={[styles.contributionRow, !isLast && styles.contributionRowBorder]}
                     >
-                      {/* Avatar */}
                       <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
                         <Text style={styles.participantInitialsText}>{initials}</Text>
                       </View>
-
-                      {/* Name + amount — flex: 1 with right margin to keep space for badge */}
                       <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
-                        <Text
-                          style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}
-                          numberOfLines={1}
-                        >
-                          {name}{isCurrentUser ? ` ${t.budget.you}` : ''}
+                        <Text style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }} numberOfLines={1}>
+                          {ic.name}
                         </Text>
-                        <Text
-                          style={{ fontSize: 12, color: DARK_THEME.textTertiary }}
-                          numberOfLines={1}
-                        >
-                          {isPending
-                            ? t.budget.pendingOwes.replace('{{amount}}', formatCurrency(amountForRow))
-                            : t.budget.contribution.replace('{{amount}}', formatCurrency(amountForRow))
-                          }
+                        <Text style={{ fontSize: 12, color: DARK_THEME.textTertiary }} numberOfLines={1}>
+                          {t.budget.pendingOwes.replace('{{amount}}', formatCurrency(perPerson))}
                         </Text>
                       </View>
-
-                      {/* Status Badge — compact, top-aligned */}
-                      <View style={[
-                        styles.paymentBadge,
-                        { flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 },
-                        isPaid ? styles.paidBadge : styles.pendingBadge,
-                      ]}>
-                        <Ionicons
-                          name={isPaid ? 'checkmark' : 'time-outline'}
-                          size={10}
-                          color={isPaid ? DARK_THEME.success : DARK_THEME.warning}
-                        />
-                        <Text style={[
-                          styles.paymentBadgeText,
-                          { color: isPaid ? DARK_THEME.success : DARK_THEME.warning }
-                        ]}>
-                          {isPaid ? t.budget.paid : t.budget.pending}
-                        </Text>
+                      <View style={[styles.paymentBadge, { flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 }, styles.pendingBadge]}>
+                        <Ionicons name="time-outline" size={10} color={DARK_THEME.warning} />
+                        <Text style={[styles.paymentBadgeText, { color: DARK_THEME.warning }]}>{t.budget.pending}</Text>
                       </View>
                     </View>
                   );
                 })}
               </View>
 
-              {/* Invite button — send invitations via share sheet */}
-              <Pressable style={styles.inviteButton} onPress={handleInvite}>
-                <View style={styles.inviteButtonIcon}>
-                  <Ionicons name="share-social-outline" size={18} color="#5A7EB0" />
-                </View>
-                <Text style={styles.inviteButtonText} numberOfLines={1}>
-                  Invite Guests — Email, SMS, WhatsApp
-                </Text>
-                <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
-              </Pressable>
+              {/* Invite button — organizers only */}
+              {isOrganizer && (
+                <Pressable style={styles.inviteButton} onPress={handleInvite}>
+                  <View style={styles.inviteButtonIcon}>
+                    <Ionicons name="share-social-outline" size={18} color="#5A7EB0" />
+                  </View>
+                  <Text style={styles.inviteButtonText} numberOfLines={1}>
+                    Invite Guests — Email, SMS, WhatsApp
+                  </Text>
+                  <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+                </Pressable>
+              )}
 
             </YStack>
             </>
@@ -1211,7 +1419,7 @@ export default function BudgetDashboardScreen() {
                   {(t.budget as any).expenseBreakdown}
                 </Text>
                 <Pressable
-                  onPress={() => { setExpenseCategoryKey(null); setExpenseViewMode('form'); setExpenseModalVisible(true); }}
+                  onPress={() => { setExpenseModal(prev => ({ ...prev, categoryKey: null, viewMode: 'form', visible: true })); }}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 >
                   <Ionicons name="add-circle-outline" size={16} color={DARK_THEME.primary} />
@@ -1294,8 +1502,7 @@ export default function BudgetDashboardScreen() {
                 <Pressable
                   style={styles.addCustomCategoryRow}
                   onPress={() => {
-                    setCustomCategoryLabel('');
-                    setCustomCategoryModalVisible(true);
+                    setCustomCatModal({ visible: true, label: '' });
                   }}
                 >
                   <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
@@ -1365,21 +1572,21 @@ export default function BudgetDashboardScreen() {
       </Animated.View>
 
       {/* ─── Expense Popup — inline, no Modal (matches destination.tsx drag pattern) ─── */}
-      {expenseModalVisible && (
+      {expenseModal.visible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setExpenseModalVisible(false)} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
             <Animated.View style={[styles.modalSheet, { transform: [{ translateY: expenseSheetY }] }]}>
               <View {...expenseSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>
               <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-                {!expenseCategoryKey ? (
+                {!expenseModal.categoryKey ? (
                   /* ── Mode 1: Category picker ── */
                   <>
                     <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
                       <Text style={styles.modalTitle}>Select Category</Text>
-                      <Pressable onPress={() => setExpenseModalVisible(false)} hitSlop={10}>
+                      <Pressable onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
                         <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
                       </Pressable>
                     </XStack>
@@ -1389,13 +1596,16 @@ export default function BudgetDashboardScreen() {
                         style={styles.templateRow}
                         onPress={() => {
                           const existing = addedExpenses.filter(e => e.categoryKey === cat.key);
-                          setExpenseCategoryKey(cat.key);
-                          setExpenseViewMode(existing.length > 0 ? 'list' : 'form');
-                          setExpenseDescription('');
-                          setExpenseAmount('');
-                          setExpensePaidBy('you');
-                          setExpensePaidByPerson(null);
-                          setExpenseContributors([]);
+                          setExpenseModal(prev => ({
+                            ...prev,
+                            categoryKey: cat.key,
+                            viewMode: existing.length > 0 ? 'list' : 'form',
+                            description: '',
+                            amount: '',
+                            paidBy: 'you',
+                            paidByPerson: null,
+                            contributors: [],
+                          }));
                         }}
                       >
                         <View style={[styles.refundIcon, { backgroundColor: cat.bg }]}>
@@ -1411,9 +1621,8 @@ export default function BudgetDashboardScreen() {
                     <Pressable
                       style={styles.templateRow}
                       onPress={() => {
-                        setExpenseModalVisible(false);
-                        setCustomCategoryLabel('');
-                        setCustomCategoryModalVisible(true);
+                        setExpenseModal(prev => ({ ...prev, visible: false }));
+                        setCustomCatModal({ visible: true, label: '' });
                       }}
                     >
                       <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
@@ -1423,11 +1632,11 @@ export default function BudgetDashboardScreen() {
                       <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
                     </Pressable>
                   </>
-                ) : expenseViewMode === 'list' ? (
+                ) : expenseModal.viewMode === 'list' ? (
                   /* ── Mode 2: Existing expenses list ── */
                   (() => {
-                    const expCat = allExpenseCategories.find(c => c.key === expenseCategoryKey)!;
-                    const catExpenses = [...addedExpenses.filter(e => e.categoryKey === expenseCategoryKey)].reverse();
+                    const expCat = allExpenseCategories.find(c => c.key === expenseModal.categoryKey)!;
+                    const catExpenses = [...addedExpenses.filter(e => e.categoryKey === expenseModal.categoryKey)].reverse();
                     return (
                       <>
                         <XStack alignItems="center" gap={12} marginBottom={20}>
@@ -1440,7 +1649,7 @@ export default function BudgetDashboardScreen() {
                             </Text>
                             <Text style={styles.modalNote}>{catExpenses.length} expense{catExpenses.length !== 1 ? 's' : ''}</Text>
                           </YStack>
-                          <Pressable onPress={() => setExpenseModalVisible(false)} hitSlop={10}>
+                          <Pressable onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
                             <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
                           </Pressable>
                         </XStack>
@@ -1451,13 +1660,16 @@ export default function BudgetDashboardScreen() {
                               key={i}
                               style={[styles.expenseListRow, i < catExpenses.length - 1 && styles.contributionRowBorder]}
                               onPress={() => {
-                                setEditingExpenseIndex(globalIdx);
-                                setExpenseDescription(exp.description);
-                                setExpenseAmount(exp.amount);
-                                setExpensePaidBy(exp.paidBy);
-                                setExpensePaidByPerson(exp.paidByPerson || null);
-                                setExpenseContributors(exp.contributors);
-                                setExpenseViewMode('form');
+                                setExpenseModal(prev => ({
+                                  ...prev,
+                                  editingIndex: globalIdx,
+                                  description: exp.description,
+                                  amount: exp.amount,
+                                  paidBy: exp.paidBy,
+                                  paidByPerson: exp.paidByPerson || null,
+                                  contributors: exp.contributors,
+                                  viewMode: 'form',
+                                }));
                               }}
                             >
                               <YStack flex={1}>
@@ -1475,18 +1687,21 @@ export default function BudgetDashboardScreen() {
                         <Pressable
                           style={[styles.submitButton, { marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
                           onPress={() => {
-                            setExpenseViewMode('form');
-                            setExpenseDescription('');
-                            setExpenseAmount('');
-                            setExpensePaidBy('you');
-                            setExpensePaidByPerson(null);
-                            setExpenseContributors([]);
+                            setExpenseModal(prev => ({
+                              ...prev,
+                              viewMode: 'form',
+                              description: '',
+                              amount: '',
+                              paidBy: 'you',
+                              paidByPerson: null,
+                              contributors: [],
+                            }));
                           }}
                         >
                           <Ionicons name="add" size={18} color="#FFFFFF" />
                           <Text style={styles.submitButtonText}>Add Another</Text>
                         </Pressable>
-                        <Pressable style={{ marginTop: 12, alignItems: 'center' }} onPress={() => setExpenseCategoryKey(null)}>
+                        <Pressable style={{ marginTop: 12, alignItems: 'center' }} onPress={() => setExpenseModal(prev => ({ ...prev, categoryKey: null }))}>
                           <Text style={{ color: DARK_THEME.textSecondary, fontSize: 13 }}>← Change category</Text>
                         </Pressable>
                       </>
@@ -1495,8 +1710,8 @@ export default function BudgetDashboardScreen() {
                 ) : (
                   /* ── Mode 3: Expense form with contributor selection ── */
                   (() => {
-                    const expCat = allExpenseCategories.find(c => c.key === expenseCategoryKey)!;
-                    const hasExisting = addedExpenses.filter(e => e.categoryKey === expenseCategoryKey).length > 0;
+                    const expCat = allExpenseCategories.find(c => c.key === expenseModal.categoryKey)!;
+                    const hasExisting = addedExpenses.filter(e => e.categoryKey === expenseModal.categoryKey).length > 0;
                     return (
                       <>
                         <XStack alignItems="center" gap={12} marginBottom={20}>
@@ -1511,7 +1726,7 @@ export default function BudgetDashboardScreen() {
                               <Text style={styles.modalNote}>{(t.budget as any).expensePackageNote || 'Extra costs beyond package'}</Text>
                             )}
                           </YStack>
-                          <Pressable onPress={() => setExpenseModalVisible(false)} hitSlop={10}>
+                          <Pressable onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
                             <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
                           </Pressable>
                         </XStack>
@@ -1520,8 +1735,8 @@ export default function BudgetDashboardScreen() {
                           style={styles.modalInput}
                           placeholder="e.g. Hotel booking, train tickets..."
                           placeholderTextColor={DARK_THEME.textTertiary}
-                          value={expenseDescription}
-                          onChangeText={setExpenseDescription}
+                          value={expenseModal.description}
+                          onChangeText={v => setExpenseModal(prev => ({ ...prev, description: v }))}
                           autoCapitalize="sentences"
                         />
                         <Text style={styles.inputLabel}>Amount (€)</Text>
@@ -1529,49 +1744,49 @@ export default function BudgetDashboardScreen() {
                           style={styles.modalInput}
                           placeholder="0.00"
                           placeholderTextColor={DARK_THEME.textTertiary}
-                          value={expenseAmount}
-                          onChangeText={setExpenseAmount}
+                          value={expenseModal.amount}
+                          onChangeText={v => setExpenseModal(prev => ({ ...prev, amount: v }))}
                           keyboardType="decimal-pad"
                         />
                         <Text style={styles.inputLabel}>Who paid?</Text>
-                        <XStack gap={10} style={{ marginBottom: expensePaidBy === 'other' ? 12 : 20 }}>
+                        <XStack gap={10} style={{ marginBottom: expenseModal.paidBy === 'other' ? 12 : 20 }}>
                           {(['you', 'other'] as const).map(opt => (
                             <Pressable
                               key={opt}
-                              style={[styles.paidByButton, expensePaidBy === opt && styles.paidByButtonActive]}
-                              onPress={() => { setExpensePaidBy(opt); if (opt !== 'other') setExpensePaidByPerson(null); }}
+                              style={[styles.paidByButton, expenseModal.paidBy === opt && styles.paidByButtonActive]}
+                              onPress={() => { setExpenseModal(prev => ({ ...prev, paidBy: opt, paidByPerson: opt !== 'other' ? null : prev.paidByPerson })); }}
                             >
-                              <Text style={[styles.paidByText, expensePaidBy === opt && styles.paidByTextActive]}>
+                              <Text style={[styles.paidByText, expenseModal.paidBy === opt && styles.paidByTextActive]}>
                                 {opt === 'you' ? 'You' : 'Someone else'}
                               </Text>
                             </Pressable>
                           ))}
                         </XStack>
                         {/* Person picker — dropdown button when "Someone else" is selected */}
-                        {expensePaidBy === 'other' && payerOptions.length > 0 && (
+                        {expenseModal.paidBy === 'other' && payerOptions.length > 0 && (
                           <View style={{ marginBottom: 16 }}>
                             {/* Dropdown trigger button */}
                             <Pressable
-                              style={[styles.dropdownButton, expensePaidByPerson && styles.dropdownButtonSelected]}
-                              onPress={() => setPayerDropdownOpen(o => !o)}
+                              style={[styles.dropdownButton, expenseModal.paidByPerson && styles.dropdownButtonSelected]}
+                              onPress={() => setExpenseModal(prev => ({ ...prev, payerDropdownOpen: !prev.payerDropdownOpen }))}
                             >
-                              <Text style={[styles.dropdownButtonText, expensePaidByPerson && { color: DARK_THEME.textPrimary }]}>
-                                {expensePaidByPerson
-                                  ? payerOptions.find(c => c.id === expensePaidByPerson)?.name ?? 'Select person'
+                              <Text style={[styles.dropdownButtonText, expenseModal.paidByPerson && { color: DARK_THEME.textPrimary }]}>
+                                {expenseModal.paidByPerson
+                                  ? payerOptions.find(c => c.id === expenseModal.paidByPerson)?.name ?? 'Select person'
                                   : 'Select person'}
                               </Text>
                               <Ionicons
-                                name={payerDropdownOpen ? 'chevron-up' : 'chevron-down'}
+                                name={expenseModal.payerDropdownOpen ? 'chevron-up' : 'chevron-down'}
                                 size={16}
                                 color={DARK_THEME.textTertiary}
                               />
                             </Pressable>
                             {/* Dropdown list — max 4 rows visible, inner scroll for rest */}
-                            {payerDropdownOpen && (
+                            {expenseModal.payerDropdownOpen && (
                               <View style={[styles.dropdownList, { maxHeight: 176 }]}>
                                 <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                                 {payerOptions.map((c, i) => {
-                                  const sel = expensePaidByPerson === c.id;
+                                  const sel = expenseModal.paidByPerson === c.id;
                                   return (
                                     <Pressable
                                       key={c.id}
@@ -1581,8 +1796,7 @@ export default function BudgetDashboardScreen() {
                                         i < payerOptions.length - 1 && styles.dropdownItemBorder,
                                       ]}
                                       onPress={() => {
-                                        setExpensePaidByPerson(sel ? null : c.id);
-                                        setPayerDropdownOpen(false);
+                                        setExpenseModal(prev => ({ ...prev, paidByPerson: sel ? null : c.id, payerDropdownOpen: false }));
                                       }}
                                     >
                                       <Text style={[styles.dropdownItemText, sel && { color: '#5A7EB0', fontWeight: '700' as const }]}>
@@ -1599,23 +1813,27 @@ export default function BudgetDashboardScreen() {
                         )}
                         {/* Contributors — payer is always excluded to avoid duplication */}
                         {(() => {
-                          const payerExcludedId = expensePaidBy === 'you'
-                            ? (allContributors[0]?.id || null)
-                            : expensePaidByPerson;
+                          // When "You" pays, exclude the current user's entry (not index 0 which is always the organizer)
+                          const payerExcludedId = expenseModal.paidBy === 'you'
+                            ? (allContributors.find(c => c.userId === user?.id)?.id ?? allContributors[0]?.id ?? null)
+                            : expenseModal.paidByPerson;
                           const contributorOptions = allContributors.filter(c => c.id !== payerExcludedId);
                           if (contributorOptions.length === 0) return null;
                           return (
                             <>
                               <Text style={styles.inputLabel}>Who should contribute?</Text>
                               {contributorOptions.map(contributor => {
-                                const selected = expenseContributors.includes(contributor.id);
+                                const selected = expenseModal.contributors.includes(contributor.id);
                                 return (
                                   <Pressable
                                     key={contributor.id}
                                     style={[styles.contributorRow, selected && styles.contributorRowSelected]}
-                                    onPress={() => setExpenseContributors(prev =>
-                                      selected ? prev.filter(id => id !== contributor.id) : [...prev, contributor.id]
-                                    )}
+                                    onPress={() => setExpenseModal(prev => ({
+                                      ...prev,
+                                      contributors: selected
+                                        ? prev.contributors.filter(id => id !== contributor.id)
+                                        : [...prev.contributors, contributor.id],
+                                    }))}
                                   >
                                     <Text style={styles.contributorName}>{contributor.name}</Text>
                                     <View style={[styles.contributorCheck, selected && styles.contributorCheckSelected]}>
@@ -1628,21 +1846,21 @@ export default function BudgetDashboardScreen() {
                           );
                         })()}
                         <Pressable
-                          style={[styles.submitButton, { marginTop: 20 }, (!expenseDescription.trim() || !expenseAmount.trim()) && styles.submitButtonDisabled]}
+                          style={[styles.submitButton, { marginTop: 20 }, (!expenseModal.description.trim() || !expenseModal.amount.trim()) && styles.submitButtonDisabled]}
                           onPress={submitExpense}
-                          disabled={!expenseDescription.trim() || !expenseAmount.trim()}
+                          disabled={!expenseModal.description.trim() || !expenseModal.amount.trim()}
                         >
                           <Text style={styles.submitButtonText}>
-                            {editingExpenseIndex !== null ? 'Save Changes' : 'Add Expense'}
+                            {expenseModal.editingIndex !== null ? 'Save Changes' : 'Add Expense'}
                           </Text>
                         </Pressable>
                         <Pressable
                           style={{ marginTop: 12, alignItems: 'center' }}
                           onPress={() => {
                             if (hasExisting) {
-                              setExpenseViewMode('list');
+                              setExpenseModal(prev => ({ ...prev, viewMode: 'list' }));
                             } else {
-                              setExpenseCategoryKey(null);
+                              setExpenseModal(prev => ({ ...prev, categoryKey: null }));
                             }
                           }}
                         >
@@ -1661,9 +1879,9 @@ export default function BudgetDashboardScreen() {
       )}
 
       {/* ─── Refund Popup — inline, no Modal (matches destination.tsx drag pattern) ─── */}
-      {refundModalVisible && (
+      {refundModal.visible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setRefundModalVisible(false)} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setRefundModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
             <Animated.View style={[styles.modalSheet, { transform: [{ translateY: refundSheetY }] }]}>
               <View {...refundSheetPan.panHandlers} style={styles.modalDragHandleArea}>
@@ -1671,12 +1889,12 @@ export default function BudgetDashboardScreen() {
               </View>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
                 <Text style={styles.modalTitle}>Track a Refund</Text>
-                <Pressable onPress={() => setRefundModalVisible(false)} hitSlop={10}>
+                <Pressable onPress={() => setRefundModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
                   <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
                 </Pressable>
               </XStack>
               <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
-              {!refundTemplateKey ? (
+              {!refundModal.templateKey ? (
                 /* Template selection */
                 <>
                   <Text style={styles.inputLabel}>Choose a refund type</Text>
@@ -1685,8 +1903,7 @@ export default function BudgetDashboardScreen() {
                       key={tmpl.key}
                       style={styles.templateRow}
                       onPress={() => {
-                        setRefundTemplateKey(tmpl.key);
-                        setRefundDescription(tmpl.label);
+                        setRefundModal(prev => ({ ...prev, templateKey: tmpl.key, description: tmpl.label }));
                       }}
                     >
                       <View style={[styles.refundIcon, { backgroundColor: tmpl.bg }]}>
@@ -1699,7 +1916,7 @@ export default function BudgetDashboardScreen() {
                   {/* Custom refund */}
                   <Pressable
                     style={styles.templateRow}
-                    onPress={() => { setRefundTemplateKey('custom'); setRefundDescription(''); }}
+                    onPress={() => { setRefundModal(prev => ({ ...prev, templateKey: 'custom', description: '' })); }}
                   >
                     <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
                       <Ionicons name="add" size={18} color={DARK_THEME.textTertiary} />
@@ -1714,8 +1931,8 @@ export default function BudgetDashboardScreen() {
                   <Text style={styles.inputLabel}>Description</Text>
                   <TextInput
                     style={styles.modalInput}
-                    value={refundDescription}
-                    onChangeText={setRefundDescription}
+                    value={refundModal.description}
+                    onChangeText={v => setRefundModal(prev => ({ ...prev, description: v }))}
                     autoCapitalize="sentences"
                   />
                   <Text style={styles.inputLabel}>Expected Amount (€)</Text>
@@ -1723,18 +1940,18 @@ export default function BudgetDashboardScreen() {
                     style={styles.modalInput}
                     placeholder="0.00"
                     placeholderTextColor={DARK_THEME.textTertiary}
-                    value={refundAmount}
-                    onChangeText={setRefundAmount}
+                    value={refundModal.amount}
+                    onChangeText={v => setRefundModal(prev => ({ ...prev, amount: v }))}
                     keyboardType="decimal-pad"
                   />
                   <Pressable
-                    style={[styles.submitButton, { marginTop: 8 }, (!refundDescription.trim() || !refundAmount.trim()) && styles.submitButtonDisabled]}
+                    style={[styles.submitButton, { marginTop: 8 }, (!refundModal.description.trim() || !refundModal.amount.trim()) && styles.submitButtonDisabled]}
                     onPress={submitRefund}
-                    disabled={!refundDescription.trim() || !refundAmount.trim()}
+                    disabled={!refundModal.description.trim() || !refundModal.amount.trim()}
                   >
                     <Text style={styles.submitButtonText}>Track Refund</Text>
                   </Pressable>
-                  <Pressable style={{ marginTop: 12, marginBottom: 8, alignItems: 'center' }} onPress={() => setRefundTemplateKey(null)}>
+                  <Pressable style={{ marginTop: 12, marginBottom: 8, alignItems: 'center' }} onPress={() => setRefundModal(prev => ({ ...prev, templateKey: null }))}>
                     <Text style={{ color: DARK_THEME.textSecondary, fontSize: 13 }}>← Change type</Text>
                   </Pressable>
                 </>
@@ -1746,9 +1963,9 @@ export default function BudgetDashboardScreen() {
       )}
 
       {/* ─── Custom Category Popup — inline, no Modal (matches destination.tsx drag pattern) ─── */}
-      {customCategoryModalVisible && (
+      {customCatModal.visible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setCustomCategoryModalVisible(false)} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setCustomCatModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
             <Animated.View style={[styles.modalSheet, { transform: [{ translateY: customCatSheetY }] }]}>
               <View {...customCatSheetPan.panHandlers} style={styles.modalDragHandleArea}>
@@ -1756,7 +1973,7 @@ export default function BudgetDashboardScreen() {
               </View>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
                 <Text style={styles.modalTitle}>New Category</Text>
-                <Pressable onPress={() => setCustomCategoryModalVisible(false)} hitSlop={10}>
+                <Pressable onPress={() => setCustomCatModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
                   <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
                 </Pressable>
               </XStack>
@@ -1765,20 +1982,20 @@ export default function BudgetDashboardScreen() {
                 style={styles.modalInput}
                 placeholder="e.g. Decorations, Photography..."
                 placeholderTextColor={DARK_THEME.textTertiary}
-                value={customCategoryLabel}
-                onChangeText={setCustomCategoryLabel}
+                value={customCatModal.label}
+                onChangeText={v => setCustomCatModal(prev => ({ ...prev, label: v }))}
                 autoCapitalize="sentences"
                 autoFocus
               />
               <Pressable
-                style={[styles.submitButton, !customCategoryLabel.trim() && styles.submitButtonDisabled]}
-                disabled={!customCategoryLabel.trim()}
+                style={[styles.submitButton, !customCatModal.label.trim() && styles.submitButtonDisabled]}
+                disabled={!customCatModal.label.trim()}
                 onPress={() => {
                   const key = `custom_${Date.now()}`;
                   const customCatColor = CUSTOM_COLORS[customCategories.length % CUSTOM_COLORS.length];
                   const newCat: ExpenseCategory = {
                     key,
-                    labelKey: customCategoryLabel.trim(),
+                    labelKey: customCatModal.label.trim(),
                     icon: 'pricetag-outline',
                     color: customCatColor.color,
                     bg: customCatColor.bg,
@@ -1787,16 +2004,9 @@ export default function BudgetDashboardScreen() {
                   const updated = [...customCategories, newCat];
                   setCustomCategories(updated);
                   saveCustomCategories(updated);
-                  setCustomCategoryModalVisible(false);
+                  setCustomCatModal(prev => ({ ...prev, visible: false }));
                   // Open expense form directly for new category
-                  setExpenseCategoryKey(key);
-                  setExpenseViewMode('form');
-                  setExpenseDescription('');
-                  setExpenseAmount('');
-                  setExpensePaidBy('you');
-                  setExpensePaidByPerson(null);
-                  setExpenseContributors([]);
-                  setExpenseModalVisible(true);
+                  setExpenseModal({ visible: true, categoryKey: key, viewMode: 'form', description: '', amount: '', paidBy: 'you', paidByPerson: null, contributors: [], editingIndex: null, payerDropdownOpen: false });
                 }}
               >
                 <Text style={styles.submitButtonText}>Create & Add Expense</Text>
@@ -1807,7 +2017,7 @@ export default function BudgetDashboardScreen() {
       )}
 
       {/* ─── Remind All Channel Picker (matches Manage Invitations UX) ── */}
-      {remindModalVisible && (() => {
+      {remindModal.visible && (() => {
         const guestList = Object.values(cachedGuests);
         const emailCount = guestList.filter(g => g.email).length;
         const phoneCount = guestList.filter(g => g.phone).length;
@@ -1815,33 +2025,33 @@ export default function BudgetDashboardScreen() {
         const hasPhones = phoneCount > 0;
         return (
           <Modal
-            visible={remindModalVisible}
+            visible={remindModal.visible}
             transparent
             animationType="slide"
-            onRequestClose={() => setRemindModalVisible(false)}
+            onRequestClose={() => setRemindModal(prev => ({ ...prev, visible: false }))}
           >
             <View style={remindStyles.inviteOverlay}>
-              <Pressable style={{ flex: 1 }} onPress={() => setRemindModalVisible(false)} />
-              <View style={remindStyles.inviteSheet}>
+              <Pressable style={{ flex: 1 }} onPress={() => setRemindModal(prev => ({ ...prev, visible: false }))} />
+              <View style={remindStyles.inviteSheet} accessibilityViewIsModal={true}>
                 {/* Handle */}
                 <View style={remindStyles.inviteHandle} />
 
                 {/* Header */}
                 <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
                   <Text style={remindStyles.inviteTitle}>
-                    {remindSendStatus === 'done'
-                      ? `${remindActiveChannel === 'email' ? 'Email' : remindActiveChannel === 'sms' ? 'SMS' : 'WhatsApp'} sent`
+                    {remindModal.sendStatus === 'done'
+                      ? `${remindModal.activeChannel === 'email' ? 'Email' : remindModal.activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} sent`
                       : 'Remind All Guests'}
                   </Text>
-                  {remindSendStatus !== 'sending' && (
-                    <Pressable onPress={() => setRemindModalVisible(false)} hitSlop={10}>
+                  {remindModal.sendStatus !== 'sending' && (
+                    <Pressable onPress={() => setRemindModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
                       <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
                     </Pressable>
                   )}
                 </XStack>
 
                 {/* idle: horizontal 3 channel buttons */}
-                {remindSendStatus === 'idle' && (
+                {remindModal.sendStatus === 'idle' && (
                   <>
                     <Text style={remindStyles.inviteSectionLabel}>SEND PAYMENT REMINDER VIA</Text>
                     <XStack gap={10} marginBottom={20}>
@@ -1874,24 +2084,24 @@ export default function BudgetDashboardScreen() {
                 )}
 
                 {/* sending: spinner */}
-                {remindSendStatus === 'sending' && (
+                {remindModal.sendStatus === 'sending' && (
                   <View style={{ alignItems: 'center', paddingVertical: 32, gap: 16 }}>
                     <ActivityIndicator size="large" color="#5A7EB0" />
                     <Text style={{ fontSize: 15, fontWeight: '600', color: DARK_THEME.textPrimary }}>
-                      Sending {remindActiveChannel === 'email' ? 'email' : remindActiveChannel === 'sms' ? 'SMS' : 'WhatsApp'} reminders…
+                      Sending {remindModal.activeChannel === 'email' ? 'email' : remindModal.activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} reminders…
                     </Text>
                   </View>
                 )}
 
                 {/* done: results */}
-                {remindSendStatus === 'done' && (
+                {remindModal.sendStatus === 'done' && (
                   <>
                     <View style={{ backgroundColor: DARK_THEME.deepNavy, borderRadius: 12, padding: 12, marginBottom: 16 }}>
                       <Text style={{ fontSize: 13, color: DARK_THEME.textSecondary, marginBottom: 8 }}>
-                        {remindResults.filter(r => r.status === 'sent').length} sent ·{' '}
-                        {remindResults.filter(r => r.status === 'failed').length} failed
+                        {remindModal.results.filter(r => r.status === 'sent').length} sent ·{' '}
+                        {remindModal.results.filter(r => r.status === 'failed').length} failed
                       </Text>
-                      {remindResults.map((r, i) => (
+                      {remindModal.results.map((r, i) => (
                         <XStack key={i} alignItems="center" gap={10} paddingVertical={6}
                           style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
                           <Ionicons
@@ -1907,7 +2117,7 @@ export default function BudgetDashboardScreen() {
                     </View>
                     <Pressable
                       style={[remindStyles.inviteChannelBtn, { flex: 0, paddingHorizontal: 20 }]}
-                      onPress={() => { setRemindSendStatus('idle'); setRemindResults([]); setRemindActiveChannel(null); }}
+                      onPress={() => { setRemindModal(prev => ({ ...prev, sendStatus: 'idle', results: [], activeChannel: null })); }}
                     >
                       <Text style={[remindStyles.inviteChannelLabel, { color: '#5A7EB0' }]}>Send via another channel</Text>
                     </Pressable>
@@ -2243,6 +2453,25 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderRadius: 12,
   },
+  markPaidButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginHorizontal: 8,
+    marginBottom: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(90, 126, 176, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(90, 126, 176, 0.25)',
+  },
+  markPaidButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: DARK_THEME.primary,
+  },
   inviteButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2267,6 +2496,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
     color: DARK_THEME.textSecondary,
+  },
+  guestRemainingInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: 'rgba(90, 126, 176, 0.1)',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(90, 126, 176, 0.25)',
+  },
+  guestRemainingText: {
+    flex: 1,
+    fontSize: 13,
+    color: DARK_THEME.textSecondary,
+    lineHeight: 18,
   },
   payRemainingButton: {
     flexDirection: 'row',

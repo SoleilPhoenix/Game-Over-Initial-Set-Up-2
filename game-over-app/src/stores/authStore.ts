@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
 import { tokenStorage } from '@/lib/auth/storage';
+import { useFavoritesStore } from '@/stores/favoritesStore';
 
 interface AuthState {
   // State
@@ -58,6 +59,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         async (event, session) => {
           console.log('Auth state changed:', event);
 
+          const prevUser = get().user;
           set({
             session,
             user: session?.user ?? null,
@@ -66,6 +68,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           // Handle specific events
           if (event === 'SIGNED_OUT') {
             await tokenStorage.clearAll();
+          }
+
+          // Clear device-scoped favorites when a different user signs in
+          if (event === 'SIGNED_IN' && session?.user && prevUser && prevUser.id !== session.user.id) {
+            useFavoritesStore.getState().clearAll();
           }
 
           if (event === 'TOKEN_REFRESHED' && session) {
@@ -130,6 +137,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       // Clear all stored tokens
       await tokenStorage.clearAll();
+
+      // Clear device-scoped favorites so a new user doesn't inherit previous user's saved packages
+      useFavoritesStore.getState().clearAll();
 
       set({
         session: null,

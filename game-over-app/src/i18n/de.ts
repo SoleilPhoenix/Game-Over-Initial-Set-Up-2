@@ -493,6 +493,18 @@ const de: TranslationKeys = {
     payRemainingSubtitle: '75% Restbetrag vor dem Event fällig',
     notif14DayTitle: 'Restzahlung bald fällig',
     notif14DayBody: '{{eventName}} ist in {{count}} Tagen. Bezahle jetzt deinen Restbetrag von {{amount}}.',
+    // Alert strings
+    noEventSelected: 'Kein Event ausgewählt',
+    noEventSelectedMsg: 'Wähle zuerst ein Event aus, um Einladungen zu senden.',
+    sendFailed: 'Senden fehlgeschlagen',
+    errorSendingReminders: 'Erinnerungen konnten nicht gesendet werden. Versuche es erneut.',
+    confirmPayment: 'Zahlung bestätigen',
+    confirmPaymentMsg: 'Hast du deinen Anteil an den Organisator überwiesen?',
+    notYet: 'Noch nicht',
+    yesPaid: 'Ja, ich habe bezahlt',
+    thankYou: 'Danke!',
+    paymentConfirmedMsg: 'Deine Zahlung wurde bestätigt. Der Organisator wird benachrichtigt.',
+    errorUpdatingStatus: 'Status konnte nicht aktualisiert werden. Bitte versuche es erneut.',
   },
 
   // ─── Chat Screen ─────────────────────────────
@@ -547,6 +559,12 @@ const de: TranslationKeys = {
     earlier: 'Früher',
     allCaughtUp: 'Alles erledigt!',
     noNewNotifications: 'Du hast keine neuen Benachrichtigungen',
+    // Guest payment confirmation alert
+    confirmPayment: 'Zahlung bestätigen',
+    confirmPaymentMsg: 'Hast du deinen Anteil an {{name}} überwiesen?',
+    notYet: 'Noch nicht',
+    yesPaid: 'Ja, ich habe bezahlt',
+    errorConfirmPayment: 'Zahlung konnte nicht bestätigt werden. Bitte versuche es erneut.',
   },
 
   // ─── Event Detail ─────────────────────────────
@@ -560,19 +578,19 @@ const de: TranslationKeys = {
     planningProgress: 'Planungsfortschritt',
     bookingPending: 'Buchung ausstehend',
     draftStatus: 'Entwurf',
-    inviteParticipants: 'Teilnehmer einladen',
+    inviteParticipants: 'Teilnehmer-Einladung',
     inviteParticipantsDesc: 'Einladungen an mindestens die Hälfte der Gruppe senden',
-    groupConfirmed: 'Gruppe bestätigt',
+    groupConfirmed: 'Gruppenbestätigung',
     groupConfirmedDesc: 'Warten auf Bestätigung der Teilnehmer',
-    collectBudget: 'Budget einsammeln',
+    collectBudget: 'Budget-Einzug',
     collectBudgetDesc: 'Zahlungen von mindestens der Hälfte der Gruppe einsammeln',
-    completePayment: 'Restzahlung leisten',
+    completePayment: 'Restzahlung',
     completePaymentDesc: 'Den Restbetrag mindestens 14 Tage vor dem Event bezahlen. Eine Erinnerung erfolgt per E-Mail und App.',
-    planAccommodation: 'Unterkunft planen',
+    planAccommodation: 'Unterkunftsplanung',
     planAccommodationDesc: 'Hotels oder Apartments für die Gruppe buchen',
-    organizeTravel: 'Anreise organisieren',
+    organizeTravel: 'Anreiseplanung',
     organizeTravelDesc: 'Fahrgemeinschaften, Züge oder Flüge koordinieren',
-    planSurprise: 'Überraschung planen',
+    planSurprise: 'Überraschungsplanung',
     planSurpriseDesc: 'Wie wird der Ehrengast überrascht?',
     finalBriefing: 'Finales Briefing',
     finalBriefingDesc: 'Wird automatisch 3 Tage vor dem Event per E-Mail und Push-Benachrichtigung versendet.',
@@ -593,6 +611,9 @@ const de: TranslationKeys = {
     viewTips: 'Lokale Tipps & Empfehlungen ansehen',
     inviteYourGroup: 'Gruppe einladen',
     shareSubtext: 'Einladungslink teilen, um loszulegen',
+    // Alert strings
+    organizerOnly: 'Nur für Organisatoren',
+    organizerOnlyMsg: 'Nur der Event-Organisator kann Planungsschritte verwalten.',
   },
 
   // ─── Common ────────────────────────────────────

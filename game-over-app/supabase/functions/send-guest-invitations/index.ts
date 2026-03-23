@@ -22,6 +22,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { sendEmail } from '../_shared/email.ts';
 import { getGuestInviteEmailHtml } from '../_shared/email-templates.ts';
+import { sendSMS, sendWhatsApp } from '../_shared/twilio.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -60,11 +61,17 @@ function maskPhone(phone: string): string {
   return `${phone.slice(0, 5)}***`;
 }
 
-/** Normalise to E.164: keep leading + and digits only, strip spaces/dashes/parens */
+/** Normalise to E.164: keep leading + and digits only, strip spaces/dashes/parens.
+ *  Numbers starting with 0 are treated as German (+49) local format: 0177... → +49177...
+ *  Numbers already starting with + are kept as-is.
+ */
 function normalisePhone(phone: string): string {
   const stripped = phone.replace(/[^\d+]/g, '');
-  // Ensure only one leading + (in case input had none, assume international)
-  return stripped.startsWith('+') ? stripped : `+${stripped}`;
+  if (stripped.startsWith('+')) return stripped;
+  // German local format: leading 0 → replace with +49
+  if (stripped.startsWith('0')) return `+49${stripped.slice(1)}`;
+  // Assume already international without + prefix
+  return `+${stripped}`;
 }
 
 function generateCode(): string {
@@ -128,71 +135,34 @@ async function validatePhone(phone: string): Promise<{ valid: boolean; reason?: 
   }
 }
 
-// ─── Sending ──────────────────────────────────────────────────
-
-async function sendSMS(to: string, body: string): Promise<{ success: boolean; error?: string }> {
-  const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
-  const token = Deno.env.get('TWILIO_AUTH_TOKEN');
-  const from = Deno.env.get('TWILIO_SMS_FROM') ?? 'GameOver';
-
-  if (!sid || !token) return { success: false, error: 'Twilio not configured' };
-
-  const params = new URLSearchParams({ To: to, From: from, Body: body });
-
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    }
-  );
-
-  if (res.ok) return { success: true };
-  const err = await res.json();
-  return { success: false, error: err.message ?? `Twilio error ${res.status}` };
-}
-
-async function sendWhatsApp(to: string, body: string): Promise<{ success: boolean; error?: string; twilioCode?: number }> {
-  const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
-  const token = Deno.env.get('TWILIO_AUTH_TOKEN');
-  const from = Deno.env.get('TWILIO_WHATSAPP_FROM');
-
-  if (!sid || !token || !from) {
-    return { success: false, error: 'WhatsApp not configured — TWILIO_WHATSAPP_FROM missing' };
-  }
-
-  // Normalise recipient to whatsapp: prefix
-  const toFormatted = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
-
-  const params = new URLSearchParams({ To: toFormatted, From: from, Body: body });
-
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    }
-  );
-
-  if (res.ok) return { success: true };
-  const err = await res.json();
-  // Return Twilio error code so callers can handle specific cases (e.g. 63016 = outside 24h window)
-  return { success: false, error: err.message ?? `Twilio WhatsApp error ${res.status}`, twilioCode: err.code };
-}
-
 // ─── Main handler ─────────────────────────────────────────────
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // Auth verification
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  const userToken = authHeader.replace('Bearer ', '');
+  // Use the top-level createClient (static import) with anon key + user JWT header
+  const userSupabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY')!,
+    { global: { headers: { Authorization: `Bearer ${userToken}` } } }
+  );
+  const { data: { user }, error: authError } = await userSupabase.auth.getUser();
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   try {
@@ -218,6 +188,34 @@ serve(async (req: Request) => {
         JSON.stringify({ error: 'channel must be email, sms, or whatsapp' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
+    }
+
+    // ── Ownership check ──
+    const { data: eventCheck, error: eventCheckError } = await supabase
+      .from('events')
+      .select('id, created_by')
+      .eq('id', eventId)
+      .single();
+    if (eventCheckError || !eventCheck) {
+      return new Response(JSON.stringify({ error: 'Event not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (eventCheck.created_by !== user.id) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ── Batch size guard ──
+    const MAX_GUESTS_PER_CALL = 50;
+    if ((guestsRaw ?? []).length > MAX_GUESTS_PER_CALL) {
+      return new Response(JSON.stringify({ error: `Too many guests. Maximum ${MAX_GUESTS_PER_CALL} per call.` }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // ── Fetch event details ──
@@ -320,32 +318,47 @@ serve(async (req: Request) => {
         continue;
       }
 
-      // 2. Generate unique invite code and store it (non-blocking)
+      // 2. Generate unique invite code and store it with guest contact details
       const code = generateCode();
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      supabase.from('invite_codes').insert({
+      const { error: codeInsertError } = await supabase.from('invite_codes').insert({
         event_id: eventId,
         code,
+        created_by: event.created_by,  // organizer's user id — required NOT NULL field
         max_uses: 1,
         expires_at: expiresAt,
-      }).then(({ error }) => {
-        if (error) console.warn('[invite_codes] insert failed:', error.message);
+        guest_first_name: guest.firstName ?? null,
+        guest_last_name: guest.lastName ?? null,
+        guest_email: channel === 'email' ? contact : (guest.email ?? null),
+        guest_phone: channel !== 'email' ? contact : (guest.phone ?? null),
       });
-      const inviteUrl = `https://game-over.app/invite/${code}`;
+      if (codeInsertError) {
+        console.error('[invite_codes] insert failed:', codeInsertError.message, 'code=', code);
+        // Non-critical for sending the message, but log clearly
+      }
+      const appBaseUrl = Deno.env.get('APP_BASE_URL') ?? 'https://game-over.app';
+      const inviteUrl = `${appBaseUrl}/invite/${code}`;
 
       // 3. Build message body
       const guestName = guest.firstName ?? '';
       const greeting = guestName ? `${guestName}, you're` : `You're`;
       const smsBody =
         `🎉 ${greeting} invited to ${honoreeName}'s ${partyTypeLabel}!\n\n` +
-        `${organizerName} is organizing the ultimate celebration on "Game-Over.app" 🥂\n\n` +
+        `${organizerName} is planning the ultimate celebration on Game-Over.app 🥂\n\n` +
         `Why join instead of endless back-and-forth coordination?\n` +
         `✅ Eliminates planning stress — simple, guided & stress-free\n` +
         `💰 Full budget transparency — zero hidden costs or awkward money talk\n` +
         `🤖 AI-curated experiences matched to what YOUR group actually wants\n` +
         `⚡ Everything in one place — plans, chat & payments, ready in minutes\n` +
         `🤝 Preserves your friendships — no coordination chaos after the event\n\n` +
-        `Join & RSVP here:\n${inviteUrl}\n\n` +
+        `━━━━━━━━━━━━━━━━━\n` +
+        `YOUR INVITE CODE:\n` +
+        `👉 ${code}\n` +
+        `━━━━━━━━━━━━━━━━━\n\n` +
+        `How to join:\n` +
+        `1. Download the app: https://game-over.app\n` +
+        `2. Tap "Got an invite code?"\n` +
+        `3. Enter code: ${code}\n\n` +
         `Reply STOP to opt out.`;
 
       // 4. Send
@@ -358,6 +371,7 @@ serve(async (req: Request) => {
           honoreeName,
           inviteUrl,
           guestFirstName: guest.firstName,
+          inviteCode: code,
         });
         const subject = `You're invited to ${honoreeName}'s ${partyTypeLabel}! 🎉`;
         sendResult = await sendEmail({ to: contact, subject, html });

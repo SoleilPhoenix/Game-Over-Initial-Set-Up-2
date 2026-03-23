@@ -14,8 +14,6 @@ import { createSyncStorage, deleteFromStorage } from '@/lib/storage';
 // Storage instance for wizard (works in both Expo Go and dev builds)
 const wizardStorage = createSyncStorage('wizard-storage');
 
-// Auto-save timer reference
-let autoSaveTimer: ReturnType<typeof setInterval> | null = null;
 const AUTO_SAVE_INTERVAL = 30000; // 30 seconds
 
 // Types
@@ -40,6 +38,7 @@ export interface DraftSnapshot {
   id: string;
   createdAt: string;
   updatedAt: string;
+  createdBy: string | null;
   partyType: PartyType | null;
   honoreeName: string;
   honoreeLastName: string;
@@ -104,6 +103,7 @@ interface WizardState {
   currentStep: number;
   lastSavedAt: string | null;
   isDirty: boolean;
+  activeDraftOwner: string | null;
 
   // Multi-draft
   activeDraftId: string | null;
@@ -153,13 +153,11 @@ interface WizardActions {
   saveDraft: () => void;
   clearDraft: () => void;
   reset: () => void;
-  startAutoSave: () => void;
-  stopAutoSave: () => void;
   hasDraft: () => boolean;
   getTimeSinceLastSave: () => number | null;
 
   // Multi-draft actions
-  startNewDraft: () => void;
+  startNewDraft: (userId?: string) => void;
   loadDraft: (id: string) => void;
   deleteDraft: (id: string) => void;
   getAllDrafts: () => DraftSnapshot[];
@@ -220,6 +218,7 @@ const initialState: WizardState = {
   ...initialWizardFields,
   lastSavedAt: null,
   isDirty: false,
+  activeDraftOwner: null,
   activeDraftId: null,
   savedDrafts: {},
 };
@@ -233,6 +232,7 @@ function snapshotFromState(state: WizardState, id: string, now: string): DraftSn
     id,
     createdAt: now,
     updatedAt: now,
+    createdBy: state.activeDraftOwner,
     partyType: state.partyType,
     honoreeName: state.honoreeName,
     honoreeLastName: state.honoreeLastName,
@@ -398,34 +398,11 @@ export const useWizardStore = create<WizardState & WizardActions>()(
         if (state.activeDraftId) {
           get().deleteDraft(state.activeDraftId);
         } else {
-          if (autoSaveTimer) {
-            clearInterval(autoSaveTimer);
-            autoSaveTimer = null;
-          }
-          set({ ...initialWizardFields, lastSavedAt: null, isDirty: false, activeDraftId: null });
+          set({ ...initialWizardFields, lastSavedAt: null, isDirty: false, activeDraftId: null, activeDraftOwner: null });
         }
       },
       reset: () => {
         set(initialState);
-      },
-      startAutoSave: () => {
-        // Clear any existing timer
-        if (autoSaveTimer) {
-          clearInterval(autoSaveTimer);
-        }
-        // Start new auto-save timer
-        autoSaveTimer = setInterval(() => {
-          const state = get();
-          if (state.isDirty) {
-            state.saveDraft();
-          }
-        }, AUTO_SAVE_INTERVAL);
-      },
-      stopAutoSave: () => {
-        if (autoSaveTimer) {
-          clearInterval(autoSaveTimer);
-          autoSaveTimer = null;
-        }
       },
       hasDraft: () => {
         return Object.keys(get().savedDrafts).length > 0 || hasActiveData(get());
@@ -437,7 +414,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       },
 
       // Multi-draft actions
-      startNewDraft: () => {
+      startNewDraft: (userId?: string) => {
         const state = get();
         const now = new Date().toISOString();
         let drafts = { ...state.savedDrafts };
@@ -455,6 +432,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           ...initialWizardFields,
           lastSavedAt: null,
           isDirty: false,
+          activeDraftOwner: userId ?? state.activeDraftOwner ?? null,
           activeDraftId: newId,
           savedDrafts: drafts,
         });
@@ -492,16 +470,13 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       deleteDraft: (id: string) => {
         const state = get();
         const { [id]: _removed, ...remaining } = state.savedDrafts;
-        if (autoSaveTimer) {
-          clearInterval(autoSaveTimer);
-          autoSaveTimer = null;
-        }
         if (id === state.activeDraftId) {
           set({
             ...initialWizardFields,
             lastSavedAt: null,
             isDirty: false,
             activeDraftId: null,
+            activeDraftOwner: null,
             savedDrafts: remaining,
           });
         } else {

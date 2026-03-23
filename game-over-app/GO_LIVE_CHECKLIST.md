@@ -91,9 +91,9 @@ This document tracks all tasks that must be completed before launching the Game 
 
 **Current Status:**
 - ✅ Domain purchased: `Game-Over.app`
-- ✅ Deep linking configured in app for `gameover.app`
-- ✅ Universal Links (iOS) configured for `applinks:gameover.app`
-- ✅ App Links (Android) configured for `gameover.app`
+- ✅ Deep linking configured in app for `game-over.app`
+- ✅ Universal Links (iOS) configured for `applinks:game-over.app`
+- ✅ App Links (Android) configured for `game-over.app`
 - ❌ DNS records not yet configured
 - ❌ Supabase custom domain not set up
 
@@ -151,6 +151,52 @@ This document tracks all tasks that must be completed before launching the Game 
 
 ---
 
+### 🚀 Invite Link — Web Redirect Setup (Phase 2, vor Go-Live)
+
+**Ziel:** Wenn ein Gast den Invite-Link öffnet (`https://game-over.app/invite/CODE`), soll er:
+1. Die Game Over Landing Page sehen
+2. Automatisch in den App Store (iOS) / Play Store (Android) weitergeleitet werden
+3. Nach App-Installation: App öffnet direkt den Invite-Wizard
+
+**Schritt 1 — Vercel Deploy (Web App):**
+```bash
+cd game-over-app
+npx vercel login        # Browser-Login mit Vercel-Account
+npx vercel --prod       # Deploy → gibt URL wie https://game-over-app.vercel.app
+```
+- Die Expo Web App enthält bereits die `/invite/[code]` Seite (app/invite/[code].tsx)
+- Vercel URL direkt testbar ohne DNS-Änderung
+
+**Schritt 2 — Strato DNS auf Vercel zeigen:**
+```
+Strato Domain-Verwaltung → game-over.app → DNS-Einstellungen:
+  A-Record:     @        → 76.76.21.21   (Vercel IPv4)
+  CNAME-Record: www      → cname.vercel-dns.com
+```
+→ Vercel erkennt die Domain automatisch (im Vercel Dashboard unter "Domains" hinzufügen)
+
+**Schritt 3 — Invite URL in Edge Function zurückschalten:**
+```typescript
+// supabase/functions/send-guest-invitations/index.ts — Zeile 340:
+// TODO: Zurückschalten von gameover:// auf https:// nach Domain-Setup
+const inviteUrl = `https://game-over.app/invite/${code}`;  // ← so wiederherstellen
+```
+
+**Schritt 4 — Apple App Site Association & Android Asset Links:**
+- Dateien liegen bereits in `public/.well-known/` (automatisch via Expo/Vercel)
+- Universal Links (iOS): `applinks:game-over.app` → App öffnet direkt ohne Browser
+- Fallback (Browser): `/invite/[code]` zeigt "Download Game Over" Button mit App Store Link
+
+**Schritt 5 — App Store Links eintragen** (sobald Apps veröffentlicht):
+```
+iOS App Store:   https://apps.apple.com/app/game-over/id[APP_ID]
+Google Play:     https://play.google.com/store/apps/details?id=app.gameover.android
+```
+
+**Status:** ⏸️ Pending — Deploy mit `npx vercel --prod` nach Vercel-Login
+
+---
+
 ## Environment Variables
 
 ### Production Environment Setup
@@ -165,6 +211,31 @@ This document tracks all tasks that must be completed before launching the Game 
 ---
 
 ## App Store Preparation
+
+### EAS Project ID — Push Notifications
+**Status:** ⏸️ Pending — Required before production builds
+
+**Why it matters:** Without an EAS `projectId` in `app.config.ts`, Expo cannot bind push notification tokens to the correct project endpoint. Push notifications are completely non-functional in production builds until this is configured. (The `eas` block in `app.config.ts` is currently commented out.)
+
+**Steps:**
+- [ ] Create a free account at [expo.dev](https://expo.dev) (if not already done)
+- [ ] Run in the project root:
+  ```bash
+  npx expo login
+  npx eas init
+  ```
+  This automatically writes the `projectId` into `app.config.ts`.
+- [ ] Verify `app.config.ts` now contains:
+  ```typescript
+  eas: {
+    projectId: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx',
+  },
+  ```
+- [ ] Test push notification delivery on a physical device via EAS build
+
+**Note:** `npx eas init` is non-destructive — it only adds the project ID. No other configuration changes.
+
+---
 
 ### iOS App Store
 **Status:** ⏸️ Pending
@@ -281,6 +352,72 @@ SendGrid free trial ended July 7, 2025. The `/v3/mail/send` API endpoint is bloc
 
 ---
 
+## Migrations & Edge Functions
+
+### Apply Pending DB Migrations
+**Status:** ✅ All migrations applied — database is up to date
+
+```bash
+# Apply any future pending migrations:
+npx supabase db push --project-ref stdbvehmjpmqbjyiodqg
+```
+
+- [x] `20260315000000_invite_codes_guest_fields.sql` — guest name/phone fields on invite codes
+- [x] `20260316000000_invite_preview_rpc.sql` — RPC function for invite preview without auth
+- [x] `20260316000001_event_participants_guest_insert.sql` — RLS policy for guest participant inserts
+- [x] `20260316000002_increment_invite_use_count.sql` — atomic use_count increment function
+- [x] `20260317000000_profiles_add_phone.sql` — phone number field on profiles
+- [x] `20260317000001_polls_allow_participants_insert.sql` — RLS policy for poll votes
+- [x] `20260321000000_performance_indexes.sql` — 5 query indexes (events, bookings, notifications)
+- [x] `20260321000001_bookings_integrity_constraints.sql` — UNIQUE on Stripe PI, CHECK constraints on amounts
+- [x] `20260321000002_fix_cron_auth.sql` — updates cron jobs to use CRON_SECRET instead of service role key
+- [x] `20260323000000_append_booking_audit_log.sql` — atomic JSONB append RPC for audit log race fix
+
+**Note:** Migration `20260321000001` includes a duplicate-data safety check — it will log a WARNING instead of failing if duplicate Stripe Payment Intent IDs already exist in production.
+
+---
+
+### Deploy Updated Edge Functions
+**Status:** 🔴 Required — 4 functions updated since last deploy
+
+The following edge functions have been modified and must be redeployed:
+
+```bash
+npx supabase functions deploy create-payment-intent --project-ref stdbvehmjpmqbjyiodqg
+npx supabase functions deploy stripe-webhook --project-ref stdbvehmjpmqbjyiodqg
+npx supabase functions deploy send-guest-invitations --project-ref stdbvehmjpmqbjyiodqg
+npx supabase functions deploy send-final-briefing --project-ref stdbvehmjpmqbjyiodqg
+npx supabase functions deploy process-payment-reminders --project-ref stdbvehmjpmqbjyiodqg
+```
+
+- [ ] `create-payment-intent` — deposit percentage corrected (30% → 25%), added `deposit_paid_at` guard for remaining-balance payments; server-side amount computation (client cannot pass amount_cents)
+- [ ] `stripe-webhook` — idempotency guards on all 4 payment event handlers; audit log race condition fixed via atomic `append_booking_audit_log` RPC
+- [ ] `send-guest-invitations` — refactored to use shared `_shared/twilio.ts` helper; auth + ownership verification
+- [ ] `send-final-briefing` — refactored to use shared `_shared/twilio.ts` helper; WhatsApp→SMS fallback
+- [ ] `process-payment-reminders` — CRON_SECRET auth guard; booking `payment_status` set to `cancelled` when auto-cancelling at 14-day milestone
+
+---
+
+### Set Required Supabase Secrets
+**Status:** 🔴 Required — several secrets must be set before edge functions work in production
+
+```bash
+# Generate a strong random secret for cron authentication:
+openssl rand -hex 32
+
+npx supabase secrets set CRON_SECRET=<generated-value> --project-ref stdbvehmjpmqbjyiodqg
+npx supabase secrets set STRIPE_WEBHOOK_SECRET=<from-stripe-dashboard> --project-ref stdbvehmjpmqbjyiodqg
+npx supabase secrets set APP_BASE_URL=https://game-over.app --project-ref stdbvehmjpmqbjyiodqg
+```
+
+- [ ] `CRON_SECRET` — **NEW: required** by `process-payment-reminders` and `send-final-briefing`. Without it, both functions return 503/401 and no payment reminders or final briefings are ever sent.
+- [ ] Store the same `CRON_SECRET` value in Supabase **Vault** (Dashboard → Vault → New Secret, name: `CRON_SECRET`) — this is what the pg_cron jobs read.
+- [ ] `STRIPE_WEBHOOK_SECRET` — required by `stripe-webhook`. Get it from Stripe Dashboard → Webhooks → your endpoint → "Signing secret".
+- [ ] `APP_BASE_URL` — used by `send-guest-invitations` for invite links. Defaults to `https://game-over.app` if not set, but explicit is better.
+- [ ] Verify existing secrets are still set: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `TWILIO_SMS_FROM`, `SENDGRID_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+
+---
+
 ## Backend & Infrastructure
 
 ### Supabase Configuration
@@ -311,6 +448,24 @@ SendGrid free trial ended July 7, 2025. The `/v3/mail/send` API endpoint is bloc
 - [ ] Review Edge Function rate limits
 - [ ] Configure CORS policies for production domain
 
+### Post-Launch DB Optimization (nach stabilem Go-Live)
+
+> ⏳ **Bewusst zurückgestellt** — Die unten stehenden RPC-Konsolidierungen sind Architekturverbesserungen, keine kritischen Bugs. Sie werden nach dem Go-Live umgesetzt, wenn das Schema eingefroren ist und in einer Staging-Umgebung getestet werden kann. Der Hintergrund: Das Projekt hatte eine RLS-Rekursionskrise (42P17) — PostgreSQL-Funktionen innerhalb des RLS-Kontexts sind risikobehaftet bis die Policies vollständig stabil sind.
+
+**Item 9 — `get_user_events` RPC konsolidieren**
+- [ ] Aktuell macht `eventsRepository.getByUser()` 2 separate DB-Queries (eigene Events + Events wo User Teilnehmer ist) und fügt sie clientseitig zusammen
+- [ ] Ziel: Eine `get_user_events(user_id uuid)` PostgreSQL-Funktion als SECURITY DEFINER, die beide Queries in einem DB-Call erledigt
+- [ ] Vorteil: Eliminiert N+1-Pattern auf dem Events-Tab, reduziert Ladezeit beim App-Start
+- [ ] Vorgehen: Migration schreiben → in Staging testen → RLS-Verhalten gegen `is_event_participant()` prüfen → deployen
+
+**Item 10 — `accept_invite` atomare Transaktion**
+- [ ] Aktuell: Einladen annehmen = 2 sequentielle Operationen: (1) `invite_codes` updaten, (2) `event_participants` insert — ohne DB-Transaktion
+- [ ] Risiko: Wenn Operation 2 schlägt fehl (z.B. RLS-Fehler), ist der invite_code bereits als benutzt markiert aber der User wurde nicht als Teilnehmer eingetragen → inkonsistenter Zustand
+- [ ] Ziel: Eine `accept_invite(invite_code text, user_id uuid)` PostgreSQL-Funktion als SECURITY DEFINER, die beide Operationen atomar ausführt
+- [ ] Vorgehen: Migration mit DO $$-Block testen → Rollback-Verhalten verifizieren → use_count-Idempotenz prüfen
+
+---
+
 ### Stripe Configuration
 **Status:** ⏸️ Pending
 
@@ -338,9 +493,30 @@ SendGrid free trial ended July 7, 2025. The `/v3/mail/send` API endpoint is bloc
 
 ## Monitoring & Analytics
 
-**Status:** ⏸️ Pending
+**Status:** 🟡 In Progress — Sentry SDK installed, DSN required
 
-- [ ] Set up error tracking (Sentry, Bugsnag, etc.)
+### Sentry Error Tracking
+**Status:** 🟡 In Progress — SDK integrated, needs DSN and secrets configured
+
+The Sentry SDK (`@sentry/react-native`) is already installed and wired up. Three manual steps remain before crash reports flow to your Sentry dashboard:
+
+- [ ] **Add `EXPO_PUBLIC_SENTRY_DSN` to your `.env` file**
+  - Go to [sentry.io](https://sentry.io) → Your Project → Settings → Client Keys (DSN)
+  - Copy the DSN value and add it:
+    ```
+    EXPO_PUBLIC_SENTRY_DSN=https://xxxx@xxxxxx.ingest.sentry.io/xxxxxxx
+    ```
+  - Without this, Sentry is silently disabled (`enabled: !!dsn` guard in `app/_layout.tsx`)
+
+- [ ] **Set EAS build secrets for source map uploads** (required for readable stack traces in production builds):
+  ```bash
+  eas secret:create --name SENTRY_AUTH_TOKEN --value <token-from-sentry.io/settings/auth-tokens>
+  eas secret:create --name SENTRY_ORG --value <your-sentry-org-slug>
+  eas secret:create --name SENTRY_PROJECT --value <your-sentry-project-slug>
+  ```
+
+- [ ] **Verify crash reports are flowing** — trigger a test error in development and confirm it appears in Sentry Issues
+
 - [ ] Configure analytics (Firebase Analytics, Mixpanel, etc.)
 - [ ] Set up performance monitoring
 - [ ] Configure push notification analytics
@@ -352,12 +528,25 @@ SendGrid free trial ended July 7, 2025. The `/v3/mail/send` API endpoint is bloc
 
 **Status:** ⏸️ Pending
 
+### General
 - [ ] Monitor crash reports
 - [ ] Monitor user feedback and reviews
 - [ ] Set up customer support system
 - [ ] Plan feature updates and bug fix releases
 - [ ] Monitor Stripe dashboard for payment issues
 - [ ] Monitor Supabase usage and costs
+
+### Payment Reminders & Auto-Cancellation (monitor closely first 2 weeks)
+- [ ] **Verify cron jobs are running** — Supabase Dashboard → Database → Cron Jobs → check `process-payment-reminders` and `send-final-briefing-daily` have a recent `last_run`
+- [ ] **Check `payment_reminders` table** for rows being created when bookings approach their milestone dates (21/18/16/14 days before event)
+- [ ] **Confirm auto-cancellation is working** — at 14-day milestone, unpaid bookings should have `events.status = 'cancelled'`. Verify at least one case manually.
+- [ ] **Monitor for `[CRITICAL]` log entries** in `process-payment-reminders` function logs (Supabase → Edge Functions → Logs). A `[CRITICAL]` entry means a cancellation failed and requires manual investigation.
+- [ ] **Verify push + email reminders** are reaching organizers — check that `payment_reminders.push_sent` and `email_sent` columns are `true` for recent rows.
+
+### Final Briefing (monitor after first event hits 3-day mark)
+- [ ] Verify WhatsApp messages delivered to guests 3 days before the first event
+- [ ] Check `planning_checklist.final_briefing = true` is set on events after briefings are sent (prevents re-sending)
+- [ ] Confirm SMS fallback triggers correctly for guests not on WhatsApp (Twilio error codes 63016/63007)
 
 ---
 

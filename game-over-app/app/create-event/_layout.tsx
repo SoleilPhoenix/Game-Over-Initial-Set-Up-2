@@ -11,7 +11,7 @@ import { Stack, useRouter, usePathname } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useWizardStore, useWizardLastSavedAt, useWizardIsDirty } from '@/stores/wizardStore';
+import { useWizardStore, useWizardLastSavedAt, useWizardIsDirty, useWizardAutoSave } from '@/stores/wizardStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { DARK_THEME } from '@/constants/theme';
 
@@ -114,8 +114,10 @@ export default function CreateEventLayout() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const { deleteDraft, activeDraftId, saveDraft, startAutoSave, stopAutoSave, hasDraft, partyType, goToStep } = useWizardStore();
+  const { deleteDraft, activeDraftId, saveDraft, hasDraft, partyType, goToStep } = useWizardStore();
   const { t } = useTranslation();
+  // useWizardAutoSave handles the auto-save lifecycle (replaces startAutoSave/stopAutoSave)
+  useWizardAutoSave(true);
 
   // Navigate to the Events tab — dismiss modal stack back to tabs
   const goToEventsTab = () => {
@@ -125,14 +127,6 @@ export default function CreateEventLayout() {
       router.replace('/(tabs)/events');
     }
   };
-
-  // Start auto-save when wizard mounts, stop when unmounts
-  useEffect(() => {
-    startAutoSave();
-    return () => {
-      stopAutoSave();
-    };
-  }, [startAutoSave, stopAutoSave]);
 
   const currentStepIndex = STEPS.findIndex(s => s.path === pathname);
   const currentStep = currentStepIndex >= 0 ? currentStepIndex + 1 : 1;

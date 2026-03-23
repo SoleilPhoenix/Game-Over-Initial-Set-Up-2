@@ -31,8 +31,10 @@ export interface InvitePreview {
   startDate: string;
   organizerName: string;
   acceptedCount: number;
-  /** Pre-fill email field in signup step if invite was sent to email. Always undefined — email is not fetched for privacy. */
   guestEmail: string | undefined;
+  guestFirstName: string | undefined;
+  guestLastName: string | undefined;
+  guestPhone: string | undefined;
 }
 
 /**
@@ -49,22 +51,6 @@ function generateCode(): string {
   return code;
 }
 
-interface InvitePreviewRow {
-  id: string;
-  code: string;
-  expires_at: string | null;
-  max_uses: number | null;
-  use_count: number;
-  event: {
-    id: string;
-    title: string;
-    honoree_name: string;
-    start_date: string;
-    city_id: string;
-    city: { name: string } | null;
-    created_by_profile: { full_name: string } | null;
-  };
-}
 
 export const invitesRepository = {
   /**
@@ -131,63 +117,35 @@ export const invitesRepository = {
 
   /**
    * Fetch public invite preview — works WITHOUT authentication.
-   * Uses the anonymous SELECT policy on invite_codes.
+   * Uses a SECURITY DEFINER RPC function to bypass events/profiles RLS
+   * (anonymous users cannot SELECT those tables directly).
    */
   async getPreview(code: string): Promise<InvitePreview | null> {
-    const upperCode = code.toUpperCase();
-
-    // First: fetch invite + event (needed for subsequent queries)
     const { data, error } = await supabase
-      .from('invite_codes')
-      .select(`
-        expires_at,
-        max_uses,
-        use_count,
-        event:events (
-          id,
-          title,
-          honoree_name,
-          start_date,
-          city_id,
-          city:cities ( name ),
-          created_by_profile:profiles!events_created_by_fkey ( full_name )
-        )
-      `)
-      .eq('code', upperCode)
-      .eq('is_active', true)
-      .single();
+      .rpc('get_invite_preview', { p_code: code.toUpperCase() });
 
-    if (error || !data?.event) return null;
+    if (error) {
+      console.error('[getPreview] RPC error:', error.message);
+      return null;
+    }
 
-    // Validate expiry
-    if (data.expires_at && new Date(data.expires_at) < new Date()) return null;
-
-    // Validate max uses
-    if (data.max_uses !== null && (data.use_count ?? 0) >= data.max_uses) return null;
-
-    const typedData = data as unknown as InvitePreviewRow;
-    const ev = typedData.event;
-
-    // Fetch accepted participant count
-    const countResult = await supabase
-      .from('event_participants')
-      .select('id', { count: 'exact', head: true })
-      .eq('event_id', ev.id)
-      .eq('role', 'guest')
-      .not('confirmed_at', 'is', null);
-
-    const acceptedCount = countResult.error ? 0 : (countResult.count ?? 0);
+    // rpc returns an array; take the first row
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) return null;
 
     return {
-      eventId: ev.id,
-      eventName: ev.title || `${ev.honoree_name}'s Party`,
-      honoreeName: ev.honoree_name,
-      cityName: ev.city?.name ?? '',
-      cityId: ev.city_id,
-      startDate: ev.start_date,
-      organizerName: ev.created_by_profile?.full_name ?? 'The organizer',
-      acceptedCount,
-      guestEmail: undefined,
+      eventId: row.event_id,
+      eventName: row.event_title,
+      honoreeName: row.honoree_name,
+      cityName: row.city_name ?? '',
+      cityId: row.city_id,
+      startDate: row.start_date,
+      organizerName: row.organizer_name,
+      acceptedCount: Number(row.accepted_count ?? 0),
+      guestEmail: row.guest_email ?? undefined,
+      guestFirstName: row.guest_first_name ?? undefined,
+      guestLastName: row.guest_last_name ?? undefined,
+      guestPhone: row.guest_phone ?? undefined,
     };
   },
 
@@ -203,7 +161,7 @@ export const invitesRepository = {
     }
   ): Promise<InviteCode> {
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + (options?.expiresInDays || 7));
+    expiresAt.setDate(expiresAt.getDate() + (options?.expiresInDays ?? 7));
 
     const { data, error } = await supabase
       .from('invite_codes')
@@ -351,5 +309,26 @@ export const invitesRepository = {
       .eq('id', inviteId);
 
     if (error) throw error;
+  },
+
+  /**
+   * Get guest details from invite codes for an event
+   */
+  async getGuestsByEventId(eventId: string): Promise<Array<{
+    id: string;
+    guest_first_name: string | null;
+    guest_last_name: string | null;
+    guest_email: string | null;
+  }>> {
+    const { data, error } = await supabase
+      .from('invite_codes')
+      .select('id, guest_first_name, guest_last_name, guest_email')
+      .eq('event_id', eventId);
+
+    if (error) {
+      console.warn('[invitesRepository.getGuestsByEventId]', error.message);
+      return [];
+    }
+    return data ?? [];
   },
 };

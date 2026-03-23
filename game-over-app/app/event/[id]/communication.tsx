@@ -239,7 +239,7 @@ export default function CommunicationCenterScreen() {
             position="absolute"
             top={16}
             right={16}
-            backgroundColor="#4A6FA5"
+            backgroundColor="#5A7EB0"
             paddingHorizontal={6}
             paddingVertical={2}
             borderRadius="$full"
@@ -270,13 +270,13 @@ export default function CommunicationCenterScreen() {
           style={styles.newPollButton}
           onPress={() => setShowCreatePollModal(true)}
         >
-          <Text fontSize={12} color="#4A6FA5" fontWeight="500">New Poll</Text>
-          <Ionicons name="add" size={16} color="#4A6FA5" />
+          <Text fontSize={12} color="#5A7EB0" fontWeight="500">New Poll</Text>
+          <Ionicons name="add" size={16} color="#5A7EB0" />
         </Pressable>
       )}
       {activeTab === 'chat' && section.category !== 'general' && (
         <Pressable>
-          <Ionicons name="add" size={18} color="#4A6FA5" />
+          <Ionicons name="add" size={18} color="#5A7EB0" />
         </Pressable>
       )}
     </XStack>
@@ -304,7 +304,7 @@ export default function CommunicationCenterScreen() {
     if (channelsLoading) {
       return (
         <YStack flex={1} justifyContent="center" alignItems="center">
-          <Spinner size="large" color="#4A6FA5" />
+          <Spinner size="large" color="#5A7EB0" />
         </YStack>
       );
     }
@@ -321,7 +321,7 @@ export default function CommunicationCenterScreen() {
             justifyContent="center"
             marginBottom="$4"
           >
-            <Ionicons name="chatbubbles-outline" size={40} color="#4A6FA5" />
+            <Ionicons name="chatbubbles-outline" size={40} color="#5A7EB0" />
           </YStack>
           <Text fontSize={16} fontWeight="700" color="white" marginBottom="$2">
             No Channels Yet
@@ -344,7 +344,7 @@ export default function CommunicationCenterScreen() {
           <RefreshControl
             refreshing={isRefetchingChannels}
             onRefresh={handleRefresh}
-            tintColor="#4A6FA5"
+            tintColor="#5A7EB0"
           />
         }
         contentContainerStyle={styles.listContent}
@@ -357,7 +357,7 @@ export default function CommunicationCenterScreen() {
     if (pollsLoading) {
       return (
         <YStack flex={1} justifyContent="center" alignItems="center">
-          <Spinner size="large" color="#4A6FA5" />
+          <Spinner size="large" color="#5A7EB0" />
         </YStack>
       );
     }
@@ -374,7 +374,7 @@ export default function CommunicationCenterScreen() {
             justifyContent="center"
             marginBottom="$4"
           >
-            <Ionicons name="bar-chart-outline" size={40} color="#4A6FA5" />
+            <Ionicons name="bar-chart-outline" size={40} color="#5A7EB0" />
           </YStack>
           <Text fontSize={16} fontWeight="700" color="white" marginBottom="$2">
             No Active Polls
@@ -409,7 +409,7 @@ export default function CommunicationCenterScreen() {
           <RefreshControl
             refreshing={isRefetchingPolls}
             onRefresh={handleRefresh}
-            tintColor="#4A6FA5"
+            tintColor="#5A7EB0"
           />
         }
         contentContainerStyle={styles.listContent}
@@ -422,7 +422,7 @@ export default function CommunicationCenterScreen() {
     if (pollsLoading) {
       return (
         <YStack flex={1} justifyContent="center" alignItems="center">
-          <Spinner size="large" color="#4A6FA5" />
+          <Spinner size="large" color="#5A7EB0" />
         </YStack>
       );
     }
@@ -464,7 +464,7 @@ export default function CommunicationCenterScreen() {
           <RefreshControl
             refreshing={isRefetchingPolls}
             onRefresh={handleRefresh}
-            tintColor="#4A6FA5"
+            tintColor="#5A7EB0"
           />
         }
         contentContainerStyle={styles.listContent}
@@ -612,10 +612,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   tabActive: {
-    backgroundColor: '#4A6FA5',
+    backgroundColor: '#5A7EB0',
   },
   shareEventBanner: {
-    backgroundColor: '#4A6FA5',
+    backgroundColor: '#5A7EB0',
     borderRadius: 16,
     padding: 20,
     position: 'relative',
@@ -676,7 +676,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#4A6FA5',
+    backgroundColor: '#5A7EB0',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,

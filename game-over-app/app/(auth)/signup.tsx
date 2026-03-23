@@ -3,16 +3,18 @@
  * Dark glassmorphic design matching UI specifications
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   StatusBar,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Pressable,
+  Linking,
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
@@ -22,7 +24,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Input } from '@/components/ui/Input';
 import { DARK_THEME } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
 import { useAuthStore } from '@/stores/authStore';
@@ -30,7 +31,9 @@ import { supabase } from '@/lib/supabase/client';
 
 const signupSchema = z
   .object({
-    fullName: z.string().min(2, 'Name must be at least 2 characters'),
+    firstName: z.string().min(1, 'First name is required'),
+    lastName: z.string().min(1, 'Last name is required'),
+    phone: z.string().min(6, 'Please enter a valid phone number'),
     email: z.string().email('Please enter a valid email'),
     password: z
       .string()
@@ -49,6 +52,10 @@ type SignupFormData = z.infer<typeof signupSchema>;
 
 export default function SignupScreen() {
   const [isLoading, setIsLoading] = React.useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState('');
   const insets = useSafeAreaInsets();
   const { setError, error, clearError } = useAuthStore();
   const { t } = useTranslation();
@@ -60,7 +67,9 @@ export default function SignupScreen() {
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      fullName: '',
+      firstName: '',
+      lastName: '',
+      phone: '',
       email: '',
       password: '',
       confirmPassword: '',
@@ -72,17 +81,32 @@ export default function SignupScreen() {
       setIsLoading(true);
       clearError();
 
-      const { error } = await supabase.auth.signUp({
+      const fullName = `${data.firstName.trim()} ${data.lastName.trim()}`.trim();
+      const { error, data: signUpData } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
           data: {
-            full_name: data.fullName,
+            full_name: fullName,
           },
         },
       });
 
       if (error) throw error;
+
+      // Check if email confirmation is pending (Supabase returns identities: [] when unconfirmed)
+      if (signUpData.user?.identities?.length === 0) {
+        setSubmittedEmail(data.email);
+        setEmailSent(true);
+        return;
+      }
+
+      // Save phone to profiles table (not stored in auth user_metadata)
+      if (signUpData.user) {
+        void supabase.from('profiles')
+          .update({ full_name: fullName, phone: data.phone.trim() })
+          .eq('id', signUpData.user.id); // non-blocking, fire-and-forget
+      }
     } catch (error: any) {
       // Provide user-friendly error messages for common Supabase errors
       let errorMessage = error.message || 'Failed to create account';
@@ -98,6 +122,34 @@ export default function SignupScreen() {
       setIsLoading(false);
     }
   };
+
+  if (emailSent) {
+    return (
+      <View style={styles.container} testID="email-confirmation-screen">
+        <LinearGradient
+          colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
+          <Ionicons name="mail-open-outline" size={64} color={DARK_THEME.primaryLight} style={{ alignSelf: 'center', marginBottom: 24 }} />
+          <Text style={[styles.title, { textAlign: 'center' }]} accessibilityRole="header">
+            Check your email
+          </Text>
+          <Text style={[styles.subtitle, { textAlign: 'center', marginBottom: 32 }]}>
+            We sent a confirmation link to {submittedEmail}. Tap it to activate your account.
+          </Text>
+          <Pressable
+            style={styles.primaryButton}
+            onPress={() => router.replace('/(auth)/login')}
+            accessibilityRole="button"
+            accessibilityLabel="Go to login"
+          >
+            <Text style={styles.primaryButtonText}>Back to Login</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container} testID="signup-screen">
@@ -132,6 +184,8 @@ export default function SignupScreen() {
               style={styles.backButton}
               hitSlop={10}
               testID="back-button"
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
             >
               <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
             </Pressable>
@@ -150,7 +204,7 @@ export default function SignupScreen() {
             <View style={styles.glassCardInner}>
               {/* Error Message */}
               {error && (
-                <View style={styles.errorContainer} testID="error-message">
+                <View style={styles.errorContainer} testID="error-message" accessibilityLiveRegion="polite" accessibilityRole="alert">
                   <Ionicons name="alert-circle" size={18} color={DARK_THEME.error} />
                   <Text style={styles.errorText}>{error}</Text>
                 </View>
@@ -158,33 +212,93 @@ export default function SignupScreen() {
 
               {/* Form */}
               <View style={styles.form}>
-                <View style={styles.inputWrapper}>
-                  <Text style={styles.inputLabel}>{t.auth.fullName}</Text>
-                  <Controller
-                    control={control}
-                    name="fullName"
-                    render={({ field: { onChange, onBlur, value } }) => (
-                      <View style={[styles.inputContainer, errors.fullName && styles.inputError]}>
-                        <Ionicons name="person-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
+                {/* First Name + Last Name side by side */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={[styles.inputWrapper, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>First Name</Text>
+                    <Controller
+                      control={control}
+                      name="firstName"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <View style={[styles.inputContainer, errors.firstName && styles.inputError]}>
+                          <TextInput
+                            style={[styles.darkInput, { flex: 1 }]}
                             value={value}
                             onChangeText={onChange}
                             onBlur={onBlur}
-                            placeholder={t.auth.enterFullName}
+                            placeholder="First name"
                             placeholderTextColor={DARK_THEME.textTertiary}
                             autoCapitalize="words"
-                            autoComplete="name"
-                            textContentType="name"
-                            testID="input-full-name"
-                            style={styles.darkInput}
+                            autoComplete="given-name"
+                            textContentType="givenName"
+                            testID="input-first-name"
+                            accessibilityLabel="First name"
+                            accessibilityHint="Enter your first name"
                           />
                         </View>
+                      )}
+                    />
+                    {errors.firstName && (
+                      <Text style={styles.fieldError}>{errors.firstName.message}</Text>
+                    )}
+                  </View>
+                  <View style={[styles.inputWrapper, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>Last Name</Text>
+                    <Controller
+                      control={control}
+                      name="lastName"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <View style={[styles.inputContainer, errors.lastName && styles.inputError]}>
+                          <TextInput
+                            style={[styles.darkInput, { flex: 1 }]}
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            placeholder="Last name"
+                            placeholderTextColor={DARK_THEME.textTertiary}
+                            autoCapitalize="words"
+                            autoComplete="family-name"
+                            textContentType="familyName"
+                            testID="input-last-name"
+                            accessibilityLabel="Last name"
+                            accessibilityHint="Enter your last name"
+                          />
+                        </View>
+                      )}
+                    />
+                    {errors.lastName && (
+                      <Text style={styles.fieldError}>{errors.lastName.message}</Text>
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>Phone / WhatsApp</Text>
+                  <Controller
+                    control={control}
+                    name="phone"
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <View style={[styles.inputContainer, errors.phone && styles.inputError]}>
+                        <Ionicons name="call-outline" size={20} color={DARK_THEME.textTertiary} />
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder="+49 152 12345678"
+                          placeholderTextColor={DARK_THEME.textTertiary}
+                          keyboardType="phone-pad"
+                          autoComplete="tel"
+                          textContentType="telephoneNumber"
+                          testID="input-phone"
+                          accessibilityLabel="Phone number"
+                          accessibilityHint="Enter your phone or WhatsApp number"
+                        />
                       </View>
                     )}
                   />
-                  {errors.fullName && (
-                    <Text style={styles.fieldError}>{errors.fullName.message}</Text>
+                  {errors.phone && (
+                    <Text style={styles.fieldError}>{errors.phone.message}</Text>
                   )}
                 </View>
 
@@ -196,21 +310,21 @@ export default function SignupScreen() {
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.email && styles.inputError]}>
                         <Ionicons name="mail-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.enterEmail}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoComplete="email"
-                            textContentType="emailAddress"
-                            testID="input-email"
-                            style={styles.darkInput}
-                          />
-                        </View>
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder={t.auth.enterEmail}
+                          placeholderTextColor={DARK_THEME.textTertiary}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          autoComplete="email"
+                          textContentType="emailAddress"
+                          testID="input-email"
+                          accessibilityLabel="Email address"
+                          accessibilityHint="Enter your email address"
+                        />
                       </View>
                     )}
                   />
@@ -227,20 +341,27 @@ export default function SignupScreen() {
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.password && styles.inputError]}>
                         <Ionicons name="lock-closed-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.createPassword}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            secureTextEntry
-                            autoComplete="password-new"
-                            textContentType="newPassword"
-                            testID="input-password"
-                            style={styles.darkInput}
-                          />
-                        </View>
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder={t.auth.createPassword}
+                          placeholderTextColor={DARK_THEME.textTertiary}
+                          secureTextEntry={!showPassword}
+                          autoComplete="password-new"
+                          textContentType="newPassword"
+                          testID="input-password"
+                          accessibilityLabel="Password"
+                          accessibilityHint="At least 8 characters with uppercase, lowercase, and number"
+                        />
+                        <Pressable
+                          onPress={() => setShowPassword(!showPassword)}
+                          accessibilityRole="button"
+                          accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          <Text style={styles.showHideText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                        </Pressable>
                       </View>
                     )}
                   />
@@ -261,20 +382,27 @@ export default function SignupScreen() {
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.confirmPassword && styles.inputError]}>
                         <Ionicons name="shield-checkmark-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.confirmYourPassword}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            secureTextEntry
-                            autoComplete="password-new"
-                            textContentType="newPassword"
-                            testID="input-confirm-password"
-                            style={styles.darkInput}
-                          />
-                        </View>
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder={t.auth.confirmYourPassword}
+                          placeholderTextColor={DARK_THEME.textTertiary}
+                          secureTextEntry={!showConfirmPassword}
+                          autoComplete="password-new"
+                          textContentType="newPassword"
+                          testID="input-confirm-password"
+                          accessibilityLabel="Confirm password"
+                          accessibilityHint="Re-enter your password"
+                        />
+                        <Pressable
+                          onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                          accessibilityRole="button"
+                          accessibilityLabel={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                        >
+                          <Text style={styles.showHideText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
+                        </Pressable>
                       </View>
                     )}
                   />
@@ -294,6 +422,9 @@ export default function SignupScreen() {
                 onPress={handleSubmit(onSubmit)}
                 disabled={isLoading}
                 testID="signup-submit-button"
+                accessibilityRole="button"
+                accessibilityLabel={isLoading ? 'Creating account, please wait' : 'Create account'}
+                accessibilityState={{ disabled: isLoading }}
               >
                 {isLoading ? (
                   <Text style={styles.primaryButtonText}>{t.auth.creatingAccount}</Text>
@@ -306,11 +437,26 @@ export default function SignupScreen() {
               </Pressable>
 
               {/* Terms */}
-              <Text style={styles.terms}>
-                {t.auth.termsPrefixCreate}{' '}
-                <Text style={styles.termsLink}>{t.auth.termsOfService}</Text> {t.auth.and}{' '}
-                <Text style={styles.termsLink}>{t.auth.privacyPolicy}</Text>
-              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <Text style={styles.terms}>{t.auth.termsPrefixCreate}{' '}</Text>
+                <Pressable
+                  onPress={() => void Linking.openURL('https://game-over.app/terms')}
+                  accessibilityRole="link"
+                  accessibilityLabel={t.auth.termsOfService}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Text style={styles.termsLink}>{t.auth.termsOfService}</Text>
+                </Pressable>
+                <Text style={styles.terms}>{' '}{t.auth.and}{' '}</Text>
+                <Pressable
+                  onPress={() => void Linking.openURL('https://game-over.app/privacy')}
+                  accessibilityRole="link"
+                  accessibilityLabel={t.auth.privacyPolicy}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Text style={styles.termsLink}>{t.auth.privacyPolicy}</Text>
+                </Pressable>
+              </View>
             </View>
           </BlurView>
 
@@ -446,7 +592,7 @@ const styles = StyleSheet.create({
   darkInput: {
     backgroundColor: 'transparent',
     borderWidth: 0,
-    color: '#1A202C', // Dark text for visibility on light input backgrounds
+    color: '#FFFFFF',
     fontSize: 16,
     paddingVertical: 0,
     paddingHorizontal: 0,
@@ -456,6 +602,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: DARK_THEME.error,
     marginTop: 4,
+  },
+  showHideText: {
+    color: DARK_THEME.primaryLight,
+    fontSize: 14,
+    fontWeight: '600' as const,
+    paddingLeft: 8,
   },
   fieldHint: {
     fontSize: 12,
@@ -495,7 +647,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   termsLink: {
-    color: DARK_THEME.primary,
+    color: DARK_THEME.primaryLight,
   },
   loginLink: {
     flexDirection: 'row',
@@ -508,7 +660,7 @@ const styles = StyleSheet.create({
   },
   loginLinkText: {
     fontSize: 14,
-    color: DARK_THEME.primary,
+    color: DARK_THEME.primaryLight,
     fontWeight: '700',
   },
 });

@@ -3,10 +3,11 @@
  * Dark glassmorphic design matching UI specifications
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   StatusBar,
   KeyboardAvoidingView,
@@ -23,7 +24,6 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { DARK_THEME } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
 import { useAuthStore } from '@/stores/authStore';
@@ -38,6 +38,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginScreen() {
   const [isLoading, setIsLoading] = React.useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const insets = useSafeAreaInsets();
   const { setError, error, clearError } = useAuthStore();
   const { t } = useTranslation();
@@ -146,21 +147,19 @@ export default function LoginScreen() {
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.email && styles.inputError]}>
                         <Ionicons name="mail-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.enterEmail}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoComplete="email"
-                            textContentType="emailAddress"
-                            testID="input-email"
-                            style={styles.darkInput}
-                          />
-                        </View>
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder={t.auth.enterEmail}
+                          placeholderTextColor={DARK_THEME.textTertiary}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          autoComplete="email"
+                          textContentType="emailAddress"
+                          testID="input-email"
+                        />
                       </View>
                     )}
                   />
@@ -177,20 +176,21 @@ export default function LoginScreen() {
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.password && styles.inputError]}>
                         <Ionicons name="lock-closed-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.enterPassword}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            secureTextEntry
-                            autoComplete="password"
-                            textContentType="password"
-                            testID="input-password"
-                            style={styles.darkInput}
-                          />
-                        </View>
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder={t.auth.enterPassword}
+                          placeholderTextColor={DARK_THEME.textTertiary}
+                          secureTextEntry={!showPassword}
+                          autoComplete="password"
+                          textContentType="password"
+                          testID="input-password"
+                        />
+                        <Pressable onPress={() => setShowPassword(!showPassword)}>
+                          <Text style={styles.showHideText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                        </Pressable>
                       </View>
                     )}
                   />
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
   darkInput: {
     backgroundColor: 'transparent',
     borderWidth: 0,
-    color: '#1A202C', // Dark text for visibility on light input backgrounds
+    color: '#FFFFFF',
     fontSize: 16,
     paddingVertical: 0,
     paddingHorizontal: 0,
@@ -371,6 +371,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: DARK_THEME.error,
     marginTop: 4,
+  },
+  showHideText: {
+    color: DARK_THEME.primary,
+    fontSize: 14,
+    fontWeight: '600',
+    paddingLeft: 8,
   },
   forgotPassword: {
     alignSelf: 'flex-end',

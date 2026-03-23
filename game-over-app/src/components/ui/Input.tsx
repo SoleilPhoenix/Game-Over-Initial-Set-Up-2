@@ -6,6 +6,7 @@
 import React, { useState, forwardRef } from 'react';
 import { TextInput } from 'react-native';
 import { styled, Input as TamaguiInput, YStack, XStack, Text, GetProps } from 'tamagui';
+import { DARK_THEME } from '@/constants/theme';
 
 const StyledInputContainer = styled(XStack, {
   name: 'InputContainer',
@@ -44,7 +45,7 @@ const StyledInput = styled(TamaguiInput, {
   backgroundColor: 'transparent',
   borderWidth: 0,
   fontSize: '$3',
-  color: '$textPrimary',
+  color: '#FFFFFF',
   paddingVertical: 0,
   height: '100%',
 
@@ -63,7 +64,7 @@ const StyledLabel = styled(Text, {
   variants: {
     focused: {
       true: {
-        color: '$primary',
+        color: DARK_THEME.primaryLight,
       },
     },
     error: {
@@ -100,6 +101,7 @@ export interface InputProps extends Omit<GetProps<typeof StyledInput>, 'ref'> {
   testID?: string;
   containerTestID?: string;
   disabled?: boolean;
+  accessibilityLabel?: string;
 }
 
 export const Input = forwardRef<TextInput, InputProps>(
@@ -118,6 +120,7 @@ export const Input = forwardRef<TextInput, InputProps>(
       onFocus,
       onBlur,
       secureTextEntry,
+      accessibilityLabel,
       ...props
     },
     ref
@@ -164,6 +167,8 @@ export const Input = forwardRef<TextInput, InputProps>(
             editable={!disabled}
             placeholderTextColor="$textMuted"
             testID={testID}
+            accessibilityLabel={accessibilityLabel ?? label}
+            accessibilityState={{ disabled }}
           />
           {secureTextEntry && (
             <XStack
@@ -172,7 +177,7 @@ export const Input = forwardRef<TextInput, InputProps>(
               pressStyle={{ opacity: 0.7 }}
               testID={`${testID}-toggle-password`}
             >
-              <Text color="$primary" fontWeight="600" fontSize="$2">
+              <Text color={DARK_THEME.primaryLight} fontWeight="600" fontSize="$2">
                 {showPassword ? 'Hide' : 'Show'}
               </Text>
             </XStack>
@@ -188,7 +193,12 @@ export const Input = forwardRef<TextInput, InputProps>(
           )}
         </StyledInputContainer>
         {(error || hint) && (
-          <StyledHelperText error={hasError}>{error || hint}</StyledHelperText>
+          <StyledHelperText
+            error={hasError}
+            accessibilityLiveRegion={hasError ? 'polite' : 'none'}
+          >
+            {error || hint}
+          </StyledHelperText>
         )}
       </YStack>
     );

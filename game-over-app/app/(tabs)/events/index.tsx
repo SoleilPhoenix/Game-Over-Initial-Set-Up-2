@@ -49,6 +49,7 @@ type FilterTab = 'organizing' | 'attending';
 const getBookedStepCount = (
   event: EventWithDetails,
   invitedCount = 0,
+  step2Confirmed = false,
 ): number => {
   const checklist = event.planning_checklist || {};
   // Mirror calculatePlanningSteps: threshold based on participant_count (expected total)
@@ -66,11 +67,10 @@ const getBookedStepCount = (
     else break;
   }
 
-  // Step 2 (group_confirmed): we can't check confirmed count on the list card.
+  // Step 2 (group_confirmed): use cached flag written by the event detail screen (which has participant data).
   // If any manual step is present, sequential enforcement guarantees step2 was already done.
-  // Otherwise we cannot confirm it — keep step2=0 so the card correctly shows "Next Step 2".
-  const step2 = manualCount > 0 ? 1 : 0;
-  const effectiveStep1 = manualCount > 0 ? 1 : step1;
+  const step2 = (manualCount > 0 || step2Confirmed) ? 1 : 0;
+  const effectiveStep1 = (manualCount > 0 || step2Confirmed) ? 1 : step1;
 
   return effectiveStep1 + step2 + manualCount;
 };
@@ -91,6 +91,7 @@ const getProgressConfig = (
   event: EventWithDetails,
   t: any,
   invitedCount = 0,
+  step2Confirmed = false,
 ): {
   phase: string;
   nextStepNum: number;
@@ -104,7 +105,7 @@ const getProgressConfig = (
   const status = event.status;
   switch (status) {
     case 'booked': {
-      const completed = getBookedStepCount(event, invitedCount);
+      const completed = getBookedStepCount(event, invitedCount, step2Confirmed);
       const percentage = Math.round((completed / 8) * 100);
       if (completed === 8) {
         return { phase: t.events.allSetReady, nextStepNum: 8, nextStepLabel: '', percentage: 100, color: '#10B981', icon: 'checkmark-circle', isBooked: true, completedSteps: 8 };
@@ -189,20 +190,47 @@ export default function EventsScreen() {
   const [budgetInfos, setBudgetInfos] = useState<Record<string, BudgetInfo>>({});
   // Cache of invited guest counts (set after sending invitations)
   const [invitedCounts, setInvitedCounts] = useState<Record<string, number>>({});
-  useEffect(() => {
-    AsyncStorage.getItem('desired_participant_counts')
-      .then(raw => { if (raw) setParticipantCounts(JSON.parse(raw)); })
-      .catch(() => {});
-    AsyncStorage.getItem('budget_info')
-      .then(raw => { if (raw) setBudgetInfos(JSON.parse(raw)); })
-      .catch(() => {});
-    AsyncStorage.getItem('invited_guest_counts')
-      .then(raw => { if (raw) setInvitedCounts(JSON.parse(raw)); })
+  // Cache of step 2 (group_confirmed) completion — written by event detail screen
+  const [step2ConfirmedMap, setStep2ConfirmedMap] = useState<Record<string, boolean>>({});
+
+  /**
+   * Load all event caches in a single multiGet (3 base keys → 1 I/O round-trip).
+   * When `eventIds` are provided, also loads step2_confirmed flags in the same call.
+   */
+  const loadEventCaches = useCallback((eventIds?: string[]) => {
+    const baseKeys = ['desired_participant_counts', 'budget_info', 'invited_guest_counts'];
+    const step2Keys = eventIds?.map(id => `gameover:step2_confirmed:${id}`) ?? [];
+    AsyncStorage.multiGet([...baseKeys, ...step2Keys])
+      .then(pairs => {
+        const step2Map: Record<string, boolean> = {};
+        for (const [key, raw] of pairs) {
+          if (key === 'desired_participant_counts') {
+            if (raw) try { setParticipantCounts(JSON.parse(raw)); } catch {}
+          } else if (key === 'budget_info') {
+            if (raw) try { setBudgetInfos(JSON.parse(raw)); } catch {}
+          } else if (key === 'invited_guest_counts') {
+            if (raw) try { setInvitedCounts(JSON.parse(raw)); } catch {}
+          } else if (key.startsWith('gameover:step2_confirmed:')) {
+            const id = key.replace('gameover:step2_confirmed:', '');
+            step2Map[id] = !!raw;
+          }
+        }
+        if (step2Keys.length > 0) setStep2ConfirmedMap(step2Map);
+      })
       .catch(() => {});
   }, []);
 
+  // Initial load: base caches only (events not yet loaded)
+  useEffect(() => { loadEventCaches(); }, [loadEventCaches]);
+
   const queryClient = useQueryClient();
   const { data: events, isLoading, error: eventsError, refetch } = useEvents();
+
+  // Once events load, reload caches + step2 flags in a single multiGet round-trip
+  useEffect(() => {
+    if (!events?.length) return;
+    loadEventCaches(events.map(e => e.id));
+  }, [events, loadEventCaches]);
 
   // Compute urgency: event ≤14 days away + unpaid balance
   const getDaysLeftNum = (startDate?: string): number | null => {
@@ -228,13 +256,9 @@ export default function EventsScreen() {
   useFocusEffect(
     useCallback(() => {
       refetch();
-      AsyncStorage.getItem('invited_guest_counts')
-        .then(raw => { if (raw) setInvitedCounts(JSON.parse(raw)); })
-        .catch(() => {});
-      AsyncStorage.getItem('budget_info')
-        .then(raw => { if (raw) setBudgetInfos(JSON.parse(raw)); })
-        .catch(() => {});
-    }, [refetch])
+      // Single multiGet: 3 base caches + all step2_confirmed flags (1 I/O round-trip total)
+      loadEventCaches(events?.map(e => e.id));
+    }, [refetch, events, loadEventCaches])
   );
 
   // Hide events still in wizard booking flow (created at Step 4 but not yet paid)
@@ -288,29 +312,42 @@ export default function EventsScreen() {
     setIsRefreshing(false);
   }, [refetch]);
 
-  // Draft state (multi-draft) — filter out drafts that match an already-booked event
+  // Draft state (multi-draft) — filter out drafts that don't belong to current user
+  // and drafts whose event has already been created in the DB
   const rawDrafts = useWizardStore((s) => s.getAllDrafts());
   const allDrafts = useMemo(() => {
-    if (!events || events.length === 0) return rawDrafts;
-    // If a booked/completed event exists with the same honoree name, hide the draft
-    const bookedNames = new Set(
+    // Filter 1: Only show this user's drafts (strict — legacy drafts without createdBy are hidden)
+    const userDrafts = rawDrafts.filter(d => d.createdBy === user?.id);
+
+    if (!events || events.length === 0) return userDrafts;
+
+    // Filter 2: If an event already exists in DB with same honoree name (any status), hide the draft
+    const existingHonoreeNames = new Set(
       events
-        .filter(e => e.status === 'booked' || e.status === 'completed')
+        .filter(e => e.created_by === user?.id) // only organizer's own events
         .map(e => e.honoree_name?.toLowerCase())
         .filter(Boolean)
     );
-    const filtered = rawDrafts.filter(d => !bookedNames.has(d.honoreeName?.toLowerCase()));
+    // Filter 3: If a draft's createdEventId matches a DB event, it was already submitted
+    const existingEventIds = new Set(events.map(e => e.id));
+
+    const filtered = userDrafts.filter(d => {
+      if (d.createdEventId && existingEventIds.has(d.createdEventId)) return false;
+      if (d.honoreeName && existingHonoreeNames.has(d.honoreeName.toLowerCase())) return false;
+      return true;
+    });
     return [...filtered].sort((a, b) => {
       const aTime = a.startDate ? new Date(a.startDate).getTime() : Infinity;
       const bTime = b.startDate ? new Date(b.startDate).getTime() : Infinity;
       return aTime - bTime;
     });
-  }, [rawDrafts, events]);
+  }, [rawDrafts, events, user?.id]);
   const hasDrafts = allDrafts.length > 0;
 
   const handleCreateEvent = () => {
-    const store = useWizardStore.getState();
-    if (store.hasDraft()) {
+    // Use filtered allDrafts (user-scoped) instead of store.hasDraft() to avoid
+    // showing the dialog when the device has another user's drafts
+    if (hasDrafts) {
       const tr = getTranslation();
       Alert.alert(
         tr.wizard.existingDraftTitle,
@@ -320,15 +357,14 @@ export default function EventsScreen() {
           {
             text: tr.wizard.continueDraft,
             onPress: () => {
-              const drafts = store.getAllDrafts();
-              if (drafts.length > 0) handleResumeDraft(drafts[0].id);
+              if (allDrafts.length > 0) handleResumeDraft(allDrafts[0].id);
             },
           },
           {
             text: tr.wizard.startFresh,
             style: 'destructive',
             onPress: () => {
-              useWizardStore.getState().startNewDraft();
+              useWizardStore.getState().startNewDraft(user?.id);
               router.push('/create-event');
             },
           },
@@ -336,7 +372,7 @@ export default function EventsScreen() {
       );
       return;
     }
-    useWizardStore.getState().startNewDraft();
+    useWizardStore.getState().startNewDraft(user?.id);
     router.push('/create-event');
   };
 
@@ -367,20 +403,13 @@ export default function EventsScreen() {
       queryFn: () => bookingsRepository.getByEventId(eventId),
       staleTime: 60 * 1000,
     });
-    router.push(`/event/${eventId}`);
+    const role = activeFilter === 'attending' ? 'guest' : 'organizer';
+    router.push(`/event/${eventId}?role=${role}`);
   };
 
   const handleNotifications = () => {
     markUrgencySeen();
-    if (isGuestContribution && guestUrgentEvent) {
-      Alert.alert(
-        'Contribution Due',
-        `Your share for ${guestUrgentEvent.title} is due in ${guestDaysLeft} days.\nPlease transfer your contribution to the organizer.`,
-        [{ text: 'OK' }]
-      );
-    } else {
-      router.push('/notifications');
-    }
+    router.push('/notifications');
   };
 
   // Note: this heuristic uses created_by to determine role.
@@ -451,11 +480,14 @@ export default function EventsScreen() {
     </View>
   );
 
-  const renderEventCard = ({ item }: { item: EventWithDetails }) => {
+  const keyExtractor = useCallback((item: EventWithDetails) => item.id, []);
+
+  const renderEventCard = useCallback(({ item }: { item: EventWithDetails }) => {
     const role = getUserRole(item);
     const progress = getProgressConfig(
       item, t,
       invitedCounts[item.id] || 0,
+      step2ConfirmedMap[item.id] || false,
     );
     const daysLeft = getDaysLeft(item.start_date);
     const paymentStatus = getPaymentStatus(item);
@@ -473,7 +505,7 @@ export default function EventsScreen() {
         ]}
         testID={`event-card-${item.id}`}
       >
-        {getUserRole(item) === 'guest' && (
+        {role === 'guest' && (
           <View style={{
             position: 'absolute', top: 8, right: 8,
             backgroundColor: 'rgba(90,126,176,0.85)',
@@ -587,7 +619,8 @@ export default function EventsScreen() {
         </View>
       </Pressable>
     );
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t, invitedCounts, step2ConfirmedMap, budgetInfos, isEventUrgent, handleEventPress]);
 
   const renderStartNewPlanButton = () => (
     <Pressable
@@ -803,6 +836,10 @@ export default function EventsScreen() {
   // Drafts section rendered BELOW booked events with visual separator
   const renderDraftSection = () => {
     if (activeFilter === 'attending') return null;
+    // Don't show device-level wizard drafts if this user has no organizing events in DB.
+    // Prevents a guest (who joins as attending) from seeing the organizer's drafts on a shared device.
+    const hasOrganizingEvents = (events || []).some(e => e.created_by === user?.id);
+    if (!hasOrganizingEvents) return null;
     const showDrafts = hasDrafts;
     return (
       <View>
@@ -902,7 +939,7 @@ export default function EventsScreen() {
           <FlatList
             data={filteredEvents}
             renderItem={renderEventCard}
-            keyExtractor={(item) => item.id}
+            keyExtractor={keyExtractor}
             contentContainerStyle={{
               padding: 16,
               paddingBottom: insets.bottom + 180
@@ -917,9 +954,12 @@ export default function EventsScreen() {
             }
             showsVerticalScrollIndicator={false}
             ListFooterComponent={renderListFooter}
+            removeClippedSubviews
+            maxToRenderPerBatch={5}
+            windowSize={10}
             testID="events-list"
           />
-        ) : hasDrafts && activeFilter !== 'attending' ? (
+        ) : hasDrafts && activeFilter !== 'attending' && (events || []).some(e => e.created_by === user?.id) ? (
           <FlatList
             data={[]}
             renderItem={null}

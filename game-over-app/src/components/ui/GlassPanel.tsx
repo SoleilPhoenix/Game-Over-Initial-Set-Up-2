@@ -6,8 +6,8 @@
 
 import React from 'react';
 import { YStack, XStack, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
 import { DARK_THEME } from '@/constants/theme';
+import { IconCircle } from './IconCircle';
 
 export interface GlassPanelProps {
   icon: string;
@@ -36,16 +36,11 @@ export function GlassPanel({
     >
       {/* Header with Icon */}
       <XStack alignItems="center" gap="$3" marginBottom="$5">
-        <YStack
-          width={32}
-          height={32}
-          borderRadius="$full"
-          backgroundColor="rgba(37, 140, 244, 0.2)"
-          alignItems="center"
-          justifyContent="center"
-        >
-          <Ionicons name={icon as any} size={18} color={DARK_THEME.primary} />
-        </YStack>
+        <IconCircle
+          name={icon}
+          color={DARK_THEME.primary}
+          backgroundColor="rgba(90, 126, 176, 0.2)"
+        />
         <Text fontSize="$4" fontWeight="600" color="$textPrimary" flex={1}>
           {title}
         </Text>

@@ -5,6 +5,8 @@
  */
 
 import { Tabs, useRouter } from 'expo-router';
+import { useEffect } from 'react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Alert, View, StyleSheet, Pressable, Platform, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -14,6 +16,8 @@ import { DARK_THEME } from '@/constants/theme';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useTranslation, getTranslation } from '@/i18n';
+import { useUser } from '@/stores/authStore';
+import { useEvents } from '@/hooks/queries/useEvents';
 
 type IconName = 'calendar' | 'calendar-outline' | 'chatbubbles' | 'chatbubbles-outline' |
   'card' | 'card-outline' | 'person-circle' | 'person-circle-outline' | 'add';
@@ -36,7 +40,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   const config = iconMap[name] || { active: 'calendar', inactive: 'calendar-outline' };
   const label = labelMap[name] || name;
   const iconName = focused ? config.active : config.inactive;
-  const activeColor = '#5A7EB0'; // Same as Share Event card
+  const activeColor = DARK_THEME.primaryLight; // #7A9BC4 — passes WCAG AA (5.6:1)
 
   return (
     <View style={styles.iconContainer}>
@@ -59,10 +63,27 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
 
 function FABButton() {
   const router = useRouter();
+  const user = useUser();
+  const { data: events } = useEvents();
+  const rawDrafts = useWizardStore((s) => s.getAllDrafts());
+
+  // User-scoped draft filtering (same logic as events/index.tsx)
+  const userDrafts = rawDrafts.filter(d => {
+    if (!d.createdBy || d.createdBy !== user?.id) return false;
+    if (!events) return true;
+    const existingNames = new Set(
+      events.filter(e => e.created_by === user?.id).map(e => e.honoree_name?.toLowerCase()).filter(Boolean)
+    );
+    const existingIds = new Set(events.map(e => e.id));
+    if (d.createdEventId && existingIds.has(d.createdEventId)) return false;
+    if (d.honoreeName && existingNames.has(d.honoreeName.toLowerCase())) return false;
+    return true;
+  });
+  const hasUserDrafts = userDrafts.length > 0;
 
   const handlePress = () => {
     const store = useWizardStore.getState();
-    if (store.hasDraft()) {
+    if (hasUserDrafts) {
       const tr = getTranslation();
       Alert.alert(
         tr.wizard.existingDraftTitle,
@@ -72,11 +93,10 @@ function FABButton() {
           {
             text: tr.wizard.continueDraft,
             onPress: () => {
-              const drafts = store.getAllDrafts();
-              if (drafts.length > 0) {
-                store.loadDraft(drafts[0].id);
+              if (userDrafts.length > 0) {
+                store.loadDraft(userDrafts[0].id);
                 const stepPaths = ['/create-event', '/create-event/preferences', '/create-event/participants', '/create-event/packages'];
-                const targetPath = stepPaths[Math.min(drafts[0].currentStep - 1, 3)];
+                const targetPath = stepPaths[Math.min(userDrafts[0].currentStep - 1, 3)];
                 router.push(targetPath as any);
               }
             },
@@ -85,7 +105,7 @@ function FABButton() {
             text: tr.wizard.startFresh,
             style: 'destructive',
             onPress: () => {
-              store.startNewDraft();
+              store.startNewDraft(user?.id);
               router.push('/create-event');
             },
           },
@@ -93,7 +113,7 @@ function FABButton() {
       );
       return;
     }
-    store.startNewDraft();
+    store.startNewDraft(user?.id);
     router.push('/create-event');
   };
 
@@ -105,6 +125,9 @@ function FABButton() {
         pressed && styles.fabButtonPressed,
       ]}
       testID="fab-create-event"
+      accessibilityRole="button"
+      accessibilityLabel="Create new event"
+      accessibilityHint="Opens the event creation wizard"
     >
       <LinearGradient
         colors={['#5A7EB0', '#4A6E9F']}
@@ -127,19 +150,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const isChannelDetailScreen = currentRoute?.name === 'chat' &&
     innerRoute?.name?.includes('[channelId]');
 
-  // Recursively check if any nested route has an eventId param
-  const routeHasEventId = (route: any): boolean => {
-    if (!route) return false;
-    if ((route.params as any)?.eventId) return true;
-    if (route.state?.routes) return route.state.routes.some(routeHasEventId);
-    return false;
-  };
-
-  // Hide tab bar when chat or budget opened from Event Summary (eventId param present)
-  const isChatFromEventSummary = currentRoute?.name === 'chat' && routeHasEventId(currentRoute);
-  const isBudgetFromEventSummary = currentRoute?.name === 'budget' && routeHasEventId(currentRoute);
-
-  if (tabBarHidden || isChannelDetailScreen || isChatFromEventSummary || isBudgetFromEventSummary) {
+  if (tabBarHidden || isChannelDetailScreen) {
     return null;
   }
 
@@ -191,7 +202,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             return (
               <Pressable
                 key={route.key}
-                accessibilityRole="button"
+                accessibilityRole="tab"
                 accessibilityState={isFocused ? { selected: true } : {}}
                 accessibilityLabel={options.tabBarAccessibilityLabel}
                 testID={options.tabBarTestID || `tab-${routeName}`}
@@ -212,7 +223,15 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabsLayout() {
+  const { t } = useTranslation();  // needed for translated tab accessibility labels
+
+  // Safety reset: ensure tab bar is never stuck hidden after hard navigation
+  useEffect(() => {
+    useTabBarStore.getState().setHidden(false);
+  }, []);
+
   return (
+    <ErrorBoundary fallbackTitle="Tab Error">
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
@@ -227,6 +246,7 @@ export default function TabsLayout() {
         options={{
           title: 'Events',
           href: '/(tabs)/events',
+          tabBarAccessibilityLabel: `${t.tabs.events}, tab 1 of 4`,
         }}
       />
       <Tabs.Screen
@@ -234,6 +254,7 @@ export default function TabsLayout() {
         options={{
           title: 'Chat',
           href: '/(tabs)/chat',
+          tabBarAccessibilityLabel: `${t.tabs.chat}, tab 2 of 4`,
         }}
       />
       <Tabs.Screen
@@ -241,6 +262,7 @@ export default function TabsLayout() {
         options={{
           title: 'Budget',
           href: '/(tabs)/budget',
+          tabBarAccessibilityLabel: `${t.tabs.budget}, tab 3 of 4`,
         }}
       />
       <Tabs.Screen
@@ -248,9 +270,11 @@ export default function TabsLayout() {
         options={{
           title: 'Profile',
           href: '/(tabs)/profile',
+          tabBarAccessibilityLabel: `${t.tabs.profile}, tab 4 of 4`,
         }}
       />
     </Tabs>
+    </ErrorBoundary>
   );
 }
 
