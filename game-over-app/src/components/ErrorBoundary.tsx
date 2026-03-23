@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import * as Sentry from '@sentry/react-native';
 import { DARK_THEME } from '@/constants/theme';
 
 interface Props {
@@ -23,7 +24,9 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    // TODO: forward to Sentry once integrated (Tier 4)
+    Sentry.captureException(error, {
+      contexts: { react: { componentStack: info.componentStack ?? '' } },
+    });
     console.error('[ErrorBoundary]', error, info);
   }
 
