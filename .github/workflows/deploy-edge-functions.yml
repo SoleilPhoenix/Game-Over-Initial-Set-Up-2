@@ -4,7 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - 'supabase/functions/**'
+      - 'game-over-app/supabase/functions/**'
+
+defaults:
+  run:
+    working-directory: game-over-app
 
 jobs:
   deploy:

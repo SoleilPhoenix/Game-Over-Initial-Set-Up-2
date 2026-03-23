@@ -4,7 +4,11 @@ on:
   push:
     branches: [main]
     paths:
-      - 'supabase/migrations/**'
+      - 'game-over-app/supabase/migrations/**'
+
+defaults:
+  run:
+    working-directory: game-over-app
 
 jobs:
   migrate:
