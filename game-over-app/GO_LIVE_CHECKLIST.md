@@ -355,24 +355,23 @@ SendGrid free trial ended July 7, 2025. The `/v3/mail/send` API endpoint is bloc
 ## Migrations & Edge Functions
 
 ### Apply Pending DB Migrations
-**Status:** 🔴 Required — 8 untracked migrations must be applied to production before go-live
-
-The following migrations exist locally but have NOT been pushed to the production Supabase project yet:
+**Status:** ✅ All migrations applied — database is up to date
 
 ```bash
-# Apply all pending migrations:
+# Apply any future pending migrations:
 npx supabase db push --project-ref stdbvehmjpmqbjyiodqg
 ```
 
-- [ ] `20260315000000_invite_codes_guest_fields.sql` — guest name/phone fields on invite codes
-- [ ] `20260316000000_invite_preview_rpc.sql` — RPC function for invite preview without auth
-- [ ] `20260316000001_event_participants_guest_insert.sql` — RLS policy for guest participant inserts
-- [ ] `20260316000002_increment_invite_use_count.sql` — atomic use_count increment function
-- [ ] `20260317000000_profiles_add_phone.sql` — phone number field on profiles
-- [ ] `20260317000001_polls_allow_participants_insert.sql` — RLS policy for poll votes
-- [ ] `20260321000000_performance_indexes.sql` — 5 query indexes (events, bookings, notifications)
-- [ ] `20260321000001_bookings_integrity_constraints.sql` — UNIQUE on Stripe PI, CHECK constraints on amounts
-- [ ] `20260321000002_fix_cron_auth.sql` — updates cron jobs to use CRON_SECRET instead of service role key
+- [x] `20260315000000_invite_codes_guest_fields.sql` — guest name/phone fields on invite codes
+- [x] `20260316000000_invite_preview_rpc.sql` — RPC function for invite preview without auth
+- [x] `20260316000001_event_participants_guest_insert.sql` — RLS policy for guest participant inserts
+- [x] `20260316000002_increment_invite_use_count.sql` — atomic use_count increment function
+- [x] `20260317000000_profiles_add_phone.sql` — phone number field on profiles
+- [x] `20260317000001_polls_allow_participants_insert.sql` — RLS policy for poll votes
+- [x] `20260321000000_performance_indexes.sql` — 5 query indexes (events, bookings, notifications)
+- [x] `20260321000001_bookings_integrity_constraints.sql` — UNIQUE on Stripe PI, CHECK constraints on amounts
+- [x] `20260321000002_fix_cron_auth.sql` — updates cron jobs to use CRON_SECRET instead of service role key
+- [x] `20260323000000_append_booking_audit_log.sql` — atomic JSONB append RPC for audit log race fix
 
 **Note:** Migration `20260321000001` includes a duplicate-data safety check — it will log a WARNING instead of failing if duplicate Stripe Payment Intent IDs already exist in production.
 
@@ -385,15 +384,17 @@ The following edge functions have been modified and must be redeployed:
 
 ```bash
 npx supabase functions deploy create-payment-intent --project-ref stdbvehmjpmqbjyiodqg
+npx supabase functions deploy stripe-webhook --project-ref stdbvehmjpmqbjyiodqg
 npx supabase functions deploy send-guest-invitations --project-ref stdbvehmjpmqbjyiodqg
 npx supabase functions deploy send-final-briefing --project-ref stdbvehmjpmqbjyiodqg
 npx supabase functions deploy process-payment-reminders --project-ref stdbvehmjpmqbjyiodqg
 ```
 
-- [ ] `create-payment-intent` — deposit percentage corrected (30% → 25%), added `deposit_paid_at` guard for remaining-balance payments
-- [ ] `send-guest-invitations` — refactored to use shared `_shared/twilio.ts` helper
+- [ ] `create-payment-intent` — deposit percentage corrected (30% → 25%), added `deposit_paid_at` guard for remaining-balance payments; server-side amount computation (client cannot pass amount_cents)
+- [ ] `stripe-webhook` — idempotency guards on all 4 payment event handlers; audit log race condition fixed via atomic `append_booking_audit_log` RPC
+- [ ] `send-guest-invitations` — refactored to use shared `_shared/twilio.ts` helper; auth + ownership verification
 - [ ] `send-final-briefing` — refactored to use shared `_shared/twilio.ts` helper; WhatsApp→SMS fallback
-- [ ] `process-payment-reminders` — auto-cancellation rollback fix (cancellation failure now counted as error)
+- [ ] `process-payment-reminders` — CRON_SECRET auth guard; booking `payment_status` set to `cancelled` when auto-cancelling at 14-day milestone
 
 ---
 
@@ -492,9 +493,30 @@ npx supabase secrets set APP_BASE_URL=https://game-over.app --project-ref stdbve
 
 ## Monitoring & Analytics
 
-**Status:** ⏸️ Pending
+**Status:** 🟡 In Progress — Sentry SDK installed, DSN required
 
-- [ ] Set up error tracking (Sentry, Bugsnag, etc.)
+### Sentry Error Tracking
+**Status:** 🟡 In Progress — SDK integrated, needs DSN and secrets configured
+
+The Sentry SDK (`@sentry/react-native`) is already installed and wired up. Three manual steps remain before crash reports flow to your Sentry dashboard:
+
+- [ ] **Add `EXPO_PUBLIC_SENTRY_DSN` to your `.env` file**
+  - Go to [sentry.io](https://sentry.io) → Your Project → Settings → Client Keys (DSN)
+  - Copy the DSN value and add it:
+    ```
+    EXPO_PUBLIC_SENTRY_DSN=https://xxxx@xxxxxx.ingest.sentry.io/xxxxxxx
+    ```
+  - Without this, Sentry is silently disabled (`enabled: !!dsn` guard in `app/_layout.tsx`)
+
+- [ ] **Set EAS build secrets for source map uploads** (required for readable stack traces in production builds):
+  ```bash
+  eas secret:create --name SENTRY_AUTH_TOKEN --value <token-from-sentry.io/settings/auth-tokens>
+  eas secret:create --name SENTRY_ORG --value <your-sentry-org-slug>
+  eas secret:create --name SENTRY_PROJECT --value <your-sentry-project-slug>
+  ```
+
+- [ ] **Verify crash reports are flowing** — trigger a test error in development and confirm it appears in Sentry Issues
+
 - [ ] Configure analytics (Firebase Analytics, Mixpanel, etc.)
 - [ ] Set up performance monitoring
 - [ ] Configure push notification analytics
