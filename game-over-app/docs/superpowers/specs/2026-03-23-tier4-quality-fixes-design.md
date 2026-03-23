@@ -242,11 +242,72 @@ Add all four to `.env` and `.env.example`. `SENTRY_ORG`, `SENTRY_PROJECT`, and `
 | `metro.config.js` | Sentry metro plugin wrapper |
 | `supabase/migrations/20260323000000_append_booking_audit_log.sql` | Atomic audit log RPC |
 | `.env` + `.env.example` | Sentry env vars (all 4) |
+| `src/hooks/useAppState.ts` | New shared hook for AppState detection |
+| `src/hooks/queries/useNotifications.ts` | Pause polling when app is backgrounded |
+| `src/hooks/queries/useChat.ts` | Pause polling when app is backgrounded |
+| `app/(auth)/signup.tsx` | Email confirmation "Check your email" state |
+
+---
+
+## Section 5 — Background Polling Fix
+
+### 5.1 Problem
+`useUnreadNotificationsCount` (`src/hooks/queries/useNotifications.ts:50`) and `useUnreadCount` (`src/hooks/queries/useChat.ts:72`) both use `refetchInterval: 30000` unconditionally. With 100 users, this generates 200 DB requests/minute even when every app is backgrounded.
+
+React Query's `refetchIntervalInBackground` option only works on web via `document.visibilityState` — it has no effect in React Native.
+
+### 5.2 Fix
+
+**New file: `src/hooks/useAppState.ts`**
+```ts
+import { useState, useEffect } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
+
+export function useAppState(): AppStateStatus {
+  const [appState, setAppState] = useState<AppStateStatus>(AppState.currentState);
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', setAppState);
+    return () => sub.remove();
+  }, []);
+  return appState;
+}
+```
+
+**`useUnreadNotificationsCount` and `useUnreadCount`:** Import `useAppState` and make the interval conditional:
+```ts
+const appState = useAppState();
+// ...
+refetchInterval: appState === 'active' ? 30000 : false,
+```
+
+---
+
+## Section 6 — Email Confirmation (B2)
+
+### 6.1 Dashboard Step (manual, done once)
+Supabase Dashboard → Authentication → Settings → enable **"Enable email confirmations"**.
+
+### 6.2 Code Change (`app/(auth)/signup.tsx`)
+When email confirmation is enabled, `supabase.auth.signUp()` returns a user with `identities: []` (unconfirmed) instead of an error. Without a UI change, the user lands on a blank events screen and gets no feedback.
+
+Add a `emailSent` state. After a successful `signUp()`, check `signUpData.user?.identities?.length === 0` — if true, show a "Check your email" confirmation view instead of the normal success flow:
+
+```tsx
+if (signUpData.user?.identities?.length === 0) {
+  setEmailSent(true); // renders a "Check your email" message
+  return;
+}
+```
+
+The confirmation view should show: email address, instruction to click the link, and a "Back to Login" button.
 
 ---
 
 ## Out of Scope
 
-- **B2 (Email confirmation):** Supabase dashboard setting — no code change possible
-- **B6 (WhatsApp Meta Business Verification):** External service account verification — no code change possible
-- **useUnreadCount background polling:** Noted as P1 post-launch; deferred to separate optimization sprint
+- **B6 (WhatsApp Meta Business Verification):** Purely external — no code change possible. Steps to complete manually:
+  1. Verify Meta Business Account at `business.facebook.com` → Settings → Business Verification (requires legal documents)
+  2. Apply for WhatsApp Business API in Meta Business Manager → WhatsApp
+  3. Choose a BSP: Twilio WhatsApp (easiest) or Meta Cloud API directly (free first 1,000 conversations/month)
+  4. Verify phone number in WhatsApp Business dashboard
+  5. Await Meta review (1–4 weeks)
