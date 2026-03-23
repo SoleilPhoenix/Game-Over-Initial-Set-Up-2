@@ -40,7 +40,7 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   const config = iconMap[name] || { active: 'calendar', inactive: 'calendar-outline' };
   const label = labelMap[name] || name;
   const iconName = focused ? config.active : config.inactive;
-  const activeColor = '#5A7EB0'; // Same as Share Event card
+  const activeColor = DARK_THEME.primaryLight; // #7A9BC4 — passes WCAG AA (5.6:1)
 
   return (
     <View style={styles.iconContainer}>

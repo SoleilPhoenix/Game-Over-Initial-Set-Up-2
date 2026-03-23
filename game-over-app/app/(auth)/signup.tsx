@@ -526,7 +526,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   showHideText: {
-    color: DARK_THEME.primary,
+    color: DARK_THEME.primaryLight,
     fontSize: 14,
     fontWeight: '600' as const,
     paddingLeft: 8,
@@ -569,7 +569,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   termsLink: {
-    color: DARK_THEME.primary,
+    color: DARK_THEME.primaryLight,
   },
   loginLink: {
     flexDirection: 'row',
@@ -582,7 +582,7 @@ const styles = StyleSheet.create({
   },
   loginLinkText: {
     fontSize: 14,
-    color: DARK_THEME.primary,
+    color: DARK_THEME.primaryLight,
     fontWeight: '700',
   },
 });
