@@ -14,6 +14,7 @@ import {
   Platform,
   ScrollView,
   Pressable,
+  Linking,
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
@@ -439,7 +440,7 @@ export default function SignupScreen() {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
                 <Text style={styles.terms}>{t.auth.termsPrefixCreate}{' '}</Text>
                 <Pressable
-                  onPress={() => router.push('/(tabs)/profile/terms' as any)}
+                  onPress={() => void Linking.openURL('https://game-over.app/terms')}
                   accessibilityRole="link"
                   accessibilityLabel={t.auth.termsOfService}
                   hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
@@ -448,7 +449,7 @@ export default function SignupScreen() {
                 </Pressable>
                 <Text style={styles.terms}>{' '}{t.auth.and}{' '}</Text>
                 <Pressable
-                  onPress={() => router.push('/(tabs)/profile/privacy' as any)}
+                  onPress={() => void Linking.openURL('https://game-over.app/privacy')}
                   accessibilityRole="link"
                   accessibilityLabel={t.auth.privacyPolicy}
                   hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
