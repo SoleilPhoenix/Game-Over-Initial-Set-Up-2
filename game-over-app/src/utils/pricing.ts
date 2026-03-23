@@ -32,7 +32,7 @@ export interface BookingPricing {
  * - Honoree exclusion only changes the per-person split, not the total
  * - Service fee = max(10% of package base, €50)
  * - Per person = ceil(total / payingCount)
- * - Deposit = 30% of total
+ * - Deposit = 25% of total
  */
 export function calculateBookingPricing(input: PackagePricingInput): BookingPricing {
   const {
