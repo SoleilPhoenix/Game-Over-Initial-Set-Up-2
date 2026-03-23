@@ -522,6 +522,28 @@ The Sentry SDK (`@sentry/react-native`) is already installed and wired up. Three
 - [ ] Configure push notification analytics
 - [ ] Set up uptime monitoring for Edge Functions
 
+### Product Analytics — Full Funnel (Post-MVP — Phase 3)
+**What it does:** Goes beyond ad attribution (Meta SDK) to understand in-depth user behaviour: screen flows, feature adoption, drop-off points, retention cohorts, and A/B testing. Complements Meta tracking which is optimised for ad conversions, not product insights.
+
+**Recommended tools:**
+- **Mixpanel** — Event-based product analytics, funnel analysis, retention curves, user profiles. Best for "where do users drop out of the booking flow?"
+- **Amplitude** — Similar to Mixpanel, stronger on behavioural cohorts and experiment/A/B testing. Best for "which onboarding variant converts better?"
+
+**Suggested events to track (Phase 3):**
+- [ ] Screen views (all major screens)
+- [ ] Wizard step completion rates (Step 1–4 funnel)
+- [ ] Feature engagement: Budget tab, Chat, Poll creation
+- [ ] Invite sent / accepted ratio
+- [ ] Session length and return visits
+
+**Implementation approach:**
+- [ ] Evaluate Mixpanel vs. Amplitude based on pricing at user scale
+- [ ] Create `AnalyticsManager.ts` adapter (same wrapper pattern as Meta SDK) to swap providers without touching app code
+- [ ] Add events progressively — start with booking funnel, then expand
+- [ ] GDPR: Add Mixpanel/Amplitude to Datenschutzerklärung and cookie consent
+
+> ⚠️ **Note:** Do not build this before the Meta SDK integration (Tier 6) is stable and generating real conversion data. Use Meta data to validate which funnel steps need deeper analysis first.
+
 ---
 
 ## Post-Launch
