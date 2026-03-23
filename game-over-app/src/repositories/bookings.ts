@@ -87,10 +87,16 @@ export const bookingsRepository = {
     if (error) throw error;
 
     // Update event status to 'booked'
-    await supabase
+    const { error: statusError } = await supabase
       .from('events')
       .update({ status: 'booked' })
       .eq('id', booking.event_id);
+
+    if (statusError) {
+      throw new Error(
+        `Booking created but event status update failed: ${statusError?.message ?? JSON.stringify(statusError)}`
+      );
+    }
 
     return data;
   },
@@ -140,22 +146,6 @@ export const bookingsRepository = {
       updates.stripe_payment_intent_id = stripePaymentIntentId;
     }
 
-    // Add to audit log
-    const { data: existing } = await supabase
-      .from('bookings')
-      .select('audit_log')
-      .eq('id', bookingId)
-      .single();
-
-    const auditLog = Array.isArray(existing?.audit_log) ? existing.audit_log : [];
-    auditLog.push({
-      action: 'payment_status_updated',
-      status,
-      timestamp: new Date().toISOString(),
-    });
-
-    updates.audit_log = auditLog;
-
     const { data, error } = await supabase
       .from('bookings')
       .update(updates)
@@ -164,6 +154,14 @@ export const bookingsRepository = {
       .single();
 
     if (error) throw error;
+
+    // Atomically append to audit log (prevents race conditions on concurrent webhook retries)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (supabase as any).rpc('append_booking_audit_log', {
+      booking_id: bookingId,
+      entry: { action: 'payment_status_updated', status, timestamp: new Date().toISOString() },
+    });
+
     return data;
   },
 
