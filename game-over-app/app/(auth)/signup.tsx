@@ -53,6 +53,8 @@ export default function SignupScreen() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState('');
   const insets = useSafeAreaInsets();
   const { setError, error, clearError } = useAuthStore();
   const { t } = useTranslation();
@@ -91,6 +93,13 @@ export default function SignupScreen() {
 
       if (error) throw error;
 
+      // Check if email confirmation is pending (Supabase returns identities: [] when unconfirmed)
+      if (signUpData.user?.identities?.length === 0) {
+        setSubmittedEmail(data.email);
+        setEmailSent(true);
+        return;
+      }
+
       // Save phone to profiles table (not stored in auth user_metadata)
       if (signUpData.user) {
         void supabase.from('profiles')
@@ -112,6 +121,34 @@ export default function SignupScreen() {
       setIsLoading(false);
     }
   };
+
+  if (emailSent) {
+    return (
+      <View style={styles.container} testID="email-confirmation-screen">
+        <LinearGradient
+          colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
+          <Ionicons name="mail-open-outline" size={64} color={DARK_THEME.primaryLight} style={{ alignSelf: 'center', marginBottom: 24 }} />
+          <Text style={[styles.title, { textAlign: 'center' }]} accessibilityRole="header">
+            Check your email
+          </Text>
+          <Text style={[styles.subtitle, { textAlign: 'center', marginBottom: 32 }]}>
+            We sent a confirmation link to {submittedEmail}. Tap it to activate your account.
+          </Text>
+          <Pressable
+            style={styles.primaryButton}
+            onPress={() => router.replace('/(auth)/login')}
+            accessibilityRole="button"
+            accessibilityLabel="Go to login"
+          >
+            <Text style={styles.primaryButtonText}>Back to Login</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container} testID="signup-screen">
@@ -146,6 +183,8 @@ export default function SignupScreen() {
               style={styles.backButton}
               hitSlop={10}
               testID="back-button"
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
             >
               <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
             </Pressable>
@@ -164,7 +203,7 @@ export default function SignupScreen() {
             <View style={styles.glassCardInner}>
               {/* Error Message */}
               {error && (
-                <View style={styles.errorContainer} testID="error-message">
+                <View style={styles.errorContainer} testID="error-message" accessibilityLiveRegion="polite" accessibilityRole="alert">
                   <Ionicons name="alert-circle" size={18} color={DARK_THEME.error} />
                   <Text style={styles.errorText}>{error}</Text>
                 </View>
@@ -192,6 +231,8 @@ export default function SignupScreen() {
                             autoComplete="given-name"
                             textContentType="givenName"
                             testID="input-first-name"
+                            accessibilityLabel="First name"
+                            accessibilityHint="Enter your first name"
                           />
                         </View>
                       )}
@@ -218,6 +259,8 @@ export default function SignupScreen() {
                             autoComplete="family-name"
                             textContentType="familyName"
                             testID="input-last-name"
+                            accessibilityLabel="Last name"
+                            accessibilityHint="Enter your last name"
                           />
                         </View>
                       )}
@@ -247,6 +290,8 @@ export default function SignupScreen() {
                           autoComplete="tel"
                           textContentType="telephoneNumber"
                           testID="input-phone"
+                          accessibilityLabel="Phone number"
+                          accessibilityHint="Enter your phone or WhatsApp number"
                         />
                       </View>
                     )}
@@ -276,6 +321,8 @@ export default function SignupScreen() {
                           autoComplete="email"
                           textContentType="emailAddress"
                           testID="input-email"
+                          accessibilityLabel="Email address"
+                          accessibilityHint="Enter your email address"
                         />
                       </View>
                     )}
@@ -304,8 +351,14 @@ export default function SignupScreen() {
                           autoComplete="password-new"
                           textContentType="newPassword"
                           testID="input-password"
+                          accessibilityLabel="Password"
+                          accessibilityHint="At least 8 characters with uppercase, lowercase, and number"
                         />
-                        <Pressable onPress={() => setShowPassword(!showPassword)}>
+                        <Pressable
+                          onPress={() => setShowPassword(!showPassword)}
+                          accessibilityRole="button"
+                          accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                        >
                           <Text style={styles.showHideText}>{showPassword ? 'Hide' : 'Show'}</Text>
                         </Pressable>
                       </View>
@@ -339,8 +392,14 @@ export default function SignupScreen() {
                           autoComplete="password-new"
                           textContentType="newPassword"
                           testID="input-confirm-password"
+                          accessibilityLabel="Confirm password"
+                          accessibilityHint="Re-enter your password"
                         />
-                        <Pressable onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+                        <Pressable
+                          onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                          accessibilityRole="button"
+                          accessibilityLabel={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                        >
                           <Text style={styles.showHideText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
                         </Pressable>
                       </View>
@@ -362,6 +421,9 @@ export default function SignupScreen() {
                 onPress={handleSubmit(onSubmit)}
                 disabled={isLoading}
                 testID="signup-submit-button"
+                accessibilityRole="button"
+                accessibilityLabel={isLoading ? 'Creating account, please wait' : 'Create account'}
+                accessibilityState={{ disabled: isLoading }}
               >
                 {isLoading ? (
                   <Text style={styles.primaryButtonText}>{t.auth.creatingAccount}</Text>
