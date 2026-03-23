@@ -171,7 +171,6 @@ export default function NotificationsScreen() {
                 accessibilityRole="switch"
                 accessibilityLabel="Enable push notifications"
                 accessibilityState={{ checked: pushNotificationsEnabled, disabled: isSaving }}
-                onPress={() => handleTogglePush(!pushNotificationsEnabled)}
               >
                 <XStack flex={1} alignItems="center" gap="$3" marginRight="$3">
                   <View width={36} height={36} borderRadius={18}
@@ -203,7 +202,6 @@ export default function NotificationsScreen() {
                 accessibilityRole="switch"
                 accessibilityLabel="Payment due alerts"
                 accessibilityState={{ checked: paymentAlertsEnabled, disabled: isSaving }}
-                onPress={() => handleTogglePaymentAlerts(!paymentAlertsEnabled)}
               >
                 <XStack flex={1} alignItems="center" gap="$3" marginRight="$3">
                   <View width={36} height={36} borderRadius={18}
@@ -240,7 +238,6 @@ export default function NotificationsScreen() {
                 accessibilityRole="switch"
                 accessibilityLabel="Email notifications for event updates"
                 accessibilityState={{ checked: emailNotificationsEnabled, disabled: isSaving }}
-                onPress={() => handleToggleEmail(!emailNotificationsEnabled)}
               >
                 <XStack flex={1} alignItems="center" gap="$3" marginRight="$3">
                   <View width={36} height={36} borderRadius={18}
