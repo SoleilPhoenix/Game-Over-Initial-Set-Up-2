@@ -22,6 +22,9 @@ expo-env.d.ts
 .env.*.local
 .env.backup
 
+# Google Play credentials - NEVER commit these!
+google-service-account.json
+
 # Build outputs and logs
 *.log
 *.tsbuildinfo
