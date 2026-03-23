@@ -140,7 +140,10 @@ export default function NotificationsScreen() {
         borderBottomWidth={1}
         borderBottomColor={DARK_THEME.border}
       >
-        <Pressable onPress={() => router.back()} style={styles.headerButton} testID="notifications-back">
+        <Pressable onPress={() => router.back()} style={styles.headerButton} testID="notifications-back"
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="chevron-back" size={24} color={DARK_THEME.textPrimary} />
         </Pressable>
         <Text fontSize={17} fontWeight="600" color={DARK_THEME.textPrimary}>
@@ -164,7 +167,12 @@ export default function NotificationsScreen() {
             </Text>
             <View style={styles.card}>
               {/* General push toggle */}
-              <XStack paddingVertical="$3" paddingHorizontal="$4" alignItems="center" justifyContent="space-between">
+              <XStack paddingVertical="$3" paddingHorizontal="$4" alignItems="center" justifyContent="space-between"
+                accessibilityRole="switch"
+                accessibilityLabel="Enable push notifications"
+                accessibilityState={{ checked: pushNotificationsEnabled, disabled: isSaving }}
+                onPress={() => handleTogglePush(!pushNotificationsEnabled)}
+              >
                 <XStack flex={1} alignItems="center" gap="$3" marginRight="$3">
                   <View width={36} height={36} borderRadius={18}
                     backgroundColor="rgba(96, 165, 250, 0.2)" alignItems="center" justifyContent="center">
@@ -191,7 +199,12 @@ export default function NotificationsScreen() {
               <View height={1} backgroundColor={DARK_THEME.border} marginHorizontal={16} />
 
               {/* Payment Due Alerts */}
-              <XStack paddingVertical="$3" paddingHorizontal="$4" alignItems="center" justifyContent="space-between">
+              <XStack paddingVertical="$3" paddingHorizontal="$4" alignItems="center" justifyContent="space-between"
+                accessibilityRole="switch"
+                accessibilityLabel="Payment due alerts"
+                accessibilityState={{ checked: paymentAlertsEnabled, disabled: isSaving }}
+                onPress={() => handleTogglePaymentAlerts(!paymentAlertsEnabled)}
+              >
                 <XStack flex={1} alignItems="center" gap="$3" marginRight="$3">
                   <View width={36} height={36} borderRadius={18}
                     backgroundColor="rgba(249, 115, 22, 0.15)" alignItems="center" justifyContent="center">
@@ -223,7 +236,12 @@ export default function NotificationsScreen() {
               {t.notificationPrefs.emailNotifications}
             </Text>
             <View style={styles.card}>
-              <XStack paddingVertical="$3" paddingHorizontal="$4" alignItems="center" justifyContent="space-between">
+              <XStack paddingVertical="$3" paddingHorizontal="$4" alignItems="center" justifyContent="space-between"
+                accessibilityRole="switch"
+                accessibilityLabel="Email notifications for event updates"
+                accessibilityState={{ checked: emailNotificationsEnabled, disabled: isSaving }}
+                onPress={() => handleToggleEmail(!emailNotificationsEnabled)}
+              >
                 <XStack flex={1} alignItems="center" gap="$3" marginRight="$3">
                   <View width={36} height={36} borderRadius={18}
                     backgroundColor="rgba(52, 211, 153, 0.2)" alignItems="center" justifyContent="center">

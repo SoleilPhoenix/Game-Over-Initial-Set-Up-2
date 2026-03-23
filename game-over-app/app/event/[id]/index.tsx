@@ -566,7 +566,7 @@ export default function EventSummaryScreen() {
           flex: 1, backgroundColor: 'rgba(0,0,0,0.6)',
           justifyContent: 'center', alignItems: 'center', padding: 24,
         }}>
-          <View style={{
+          <View accessibilityViewIsModal={true} style={{
             backgroundColor: DARK_THEME.surfaceCard, borderRadius: 20,
             padding: 24, width: '100%',
             borderWidth: 1, borderColor: 'rgba(249,115,22,0.3)',

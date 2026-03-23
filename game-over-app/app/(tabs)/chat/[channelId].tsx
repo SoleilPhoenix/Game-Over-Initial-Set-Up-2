@@ -455,6 +455,7 @@ export default function ChatChannelScreen() {
         >
           <Pressable onPress={() => {}}>
           <Animated.View
+            accessibilityViewIsModal={true}
             style={{
               backgroundColor: '#1E2329',
               borderTopLeftRadius: 24,

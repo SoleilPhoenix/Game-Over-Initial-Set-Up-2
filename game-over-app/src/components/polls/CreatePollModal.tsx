@@ -121,7 +121,7 @@ export function CreatePollModal({
       onRequestClose={handleClose}
       testID="create-poll-modal"
     >
-      <YStack flex={1} backgroundColor="$background">
+      <YStack flex={1} backgroundColor="$background" accessibilityViewIsModal={true}>
         {/* Header */}
         <XStack
           paddingTop={insets.top || 16}
