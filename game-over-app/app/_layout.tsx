@@ -20,6 +20,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { DARK_THEME } from '@/constants/theme';
 import { preloadPackageImages } from '@/constants/packageImages';
 import { preloadSportLogos, preloadShareImages } from '@/constants/sportLogos';
+import { initBudgetCache } from '@/lib/participantCountCache';
 import config from '../tamagui.config';
 
 // Crisp Chat — native module, not available in Expo Go
@@ -72,6 +73,11 @@ function RootLayoutNav() {
     preloadShareImages().catch(() => {});
     return () => { cleanup?.(); };
   }, []); // initialize is a stable Zustand action
+
+  // Eagerly hydrate budget cache so urgency bell works on cold start
+  useEffect(() => {
+    void initBudgetCache();
+  }, []);
 
   // Sync user info with Crisp when session changes (with identity verification)
   useEffect(() => {
