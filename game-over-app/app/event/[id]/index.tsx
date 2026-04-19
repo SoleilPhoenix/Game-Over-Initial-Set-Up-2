@@ -1,6 +1,8 @@
 /**
- * Event Summary Screen — Redesigned
- * Clean header, info card, unified planning progress with checklist, 2×2 planning tools grid
+ * Event Summary Screen — Editorial re-skin (content-preserving).
+ * ALL logic / hooks / data flow kept 1:1 — only styling switches to
+ * the editorial design tokens via useTheme(). Text containers use
+ * editorial primitives (SerifHeading, SectionLabel, GoldButton).
  */
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
@@ -18,7 +20,9 @@ import { useBooking } from '@/hooks/queries/useBookings';
 import { useCreateInvite } from '@/hooks/queries/useInvites';
 import { ShareEventBanner } from '@/components/events';
 import { useTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { SPACING, RADII, TYPE_SCALE, ambientShadow, type EditorialTheme } from '@/constants/designSystem';
+import { SerifHeading, SectionLabel, GoldButton } from '@/components/ui/editorial';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import {
   calculatePlanningSteps,
@@ -32,7 +36,9 @@ import { SkeletonEventCard } from '@/components/ui/Skeleton';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { loadDesiredParticipants, loadChecklist, setChecklistItem, loadInvitedCount, loadBudgetInfo, type BudgetInfo } from '@/lib/participantCountCache';
 
-// ─── Planning Tools ────────────────────────────
+// ─── Planning Tools ─────────────────────────────
+// Icon tints kept as semantic colours — they encode tool identity
+// (people / chat / money / gift) and aren't part of the theme swap.
 const TOOL_CONFIGS = [
   { key: 'invitations', icon: 'people', iconBg: 'rgba(236, 72, 153, 0.15)', iconColor: '#EC4899', route: 'participants', isTab: false },
   { key: 'communication', icon: 'chatbubbles', iconBg: 'rgba(59, 130, 246, 0.15)', iconColor: '#3B82F6', route: '/(tabs)/chat', isTab: true, passEventId: true },
@@ -45,25 +51,21 @@ export default function EventSummaryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   const { data: event, isLoading: eventLoading, error: eventError, refetch: refetchEvent } = useEvent(id);
   const { data: participants, isLoading: isLoadingParticipants } = useParticipants(id);
   const { data: booking } = useBooking(id);
   const currentUserId = useAuthStore(s => s.user?.id);
   const currentParticipant = participants?.find(p => p.user_id === currentUserId);
-  // Use role from URL param (set by Events tab — known immediately) as the source of truth.
-  // Falls back to participants query once loaded (covers direct navigation / deep links).
   const isGuest = roleParam === 'guest' || (!roleParam && currentParticipant?.role === 'guest');
   const updateEvent = useUpdateEvent();
   const createInvite = useCreateInvite();
 
-  // Load cached desired participant count (set during wizard/booking)
   const [cachedParticipants, setCachedParticipants] = useState<number | undefined>(undefined);
-  // Load cached checklist state (fallback when DB column unavailable)
   const [localChecklist, setLocalChecklist] = useState<Record<string, boolean>>({});
-  // Load cached invited count (set after sending invitations in participants screen)
   const [cachedInvitedCount, setCachedInvitedCount] = useState(0);
-  // Load cached budget to detect urgency
   const [cachedBudget, setCachedBudget] = useState<BudgetInfo | null>(null);
   useEffect(() => {
     if (!id) return;
@@ -72,8 +74,6 @@ export default function EventSummaryScreen() {
     loadBudgetInfo(id).then(info => setCachedBudget(info ?? null));
   }, [id]);
 
-  // Refresh invited count every time this screen gains focus
-  // so returning from Manage Invitations immediately reflects the sent count
   useFocusEffect(
     useCallback(() => {
       if (!id) return;
@@ -82,7 +82,6 @@ export default function EventSummaryScreen() {
     }, [id])
   );
 
-  // ─── First-time contribution card (guests only) ──
   const [showContributionCard, setShowContributionCard] = useState(false);
   const [contributionCents, setContributionCents] = useState(0);
 
@@ -94,9 +93,8 @@ export default function EventSummaryScreen() {
       AsyncStorage.getItem(key),
       loadBudgetInfo(id),
     ]).then(([seen, info]) => {
-      if (seen) return; // already dismissed
+      if (seen) return;
 
-      // Calculate amount before showing
       let cents = 0;
       if (info?.totalCents && info?.payingCount) {
         cents = Math.ceil(info.totalCents / info.payingCount);
@@ -105,7 +103,7 @@ export default function EventSummaryScreen() {
       }
 
       setContributionCents(cents);
-      if (cents > 0) setShowContributionCard(true);  // only show if we have an amount
+      if (cents > 0) setShowContributionCard(true);
     });
   }, [isGuest, firstVisit, currentUserId, id, booking, participants]);
 
@@ -115,24 +113,15 @@ export default function EventSummaryScreen() {
     setShowContributionCard(false);
   };
 
-  // Planning steps (only for booked events)
-  // Use DB planning_checklist if available, fallback to local cache
   const effectiveChecklist = useMemo(() => {
     const dbChecklist = (event?.planning_checklist ?? {}) as PlanningChecklist;
-    // Merge: local cache overrides DB values (DB might not have the column)
     return { ...dbChecklist, ...localChecklist };
   }, [event, localChecklist]);
 
-  // Compute desired total early (before early return) so planningSteps can use it.
-  // cachedParticipants and booking are loaded above; rawDesiredTotal below the early return
-  // re-uses the same logic but needs it here too for the memoised planning step.
   const bookingDesiredTotalEarly = booking
     ? (booking.paying_participants ?? 0) + (booking.exclude_honoree ? 1 : 0)
     : 0;
-  // No hardcoded fallback: if neither cache nor booking available (e.g. guest device),
-  // pass undefined so calculatePlanningSteps uses the actual loaded participants.length.
   const rawDesiredTotalEarly = cachedParticipants || bookingDesiredTotalEarly || 0;
-  // Non-honoree desired count = total − 1 honoree slot (used as Group Confirmation threshold)
   const nonHonoreeDesiredEarly = rawDesiredTotalEarly > 1 ? rawDesiredTotalEarly - 1 : undefined;
 
   const planningSteps = useMemo(() => {
@@ -150,7 +139,6 @@ export default function EventSummaryScreen() {
   const progressPct = getProgressPercentage(planningSteps);
   const isBooked = event?.status === 'booked' || event?.status === 'completed';
 
-  // Budget urgency: ≤14 days until event AND balance still unpaid
   const isBudgetUrgent = useMemo(() => {
     if (!event?.start_date || !cachedBudget) return false;
     const start = new Date(event.start_date);
@@ -161,17 +149,10 @@ export default function EventSummaryScreen() {
     return daysLeft >= 0 && daysLeft <= 14 && (cachedBudget.paidAmountCents || 0) < cachedBudget.totalCents;
   }, [event?.start_date, cachedBudget]);
 
-  // Derive package highlight — the top activity from the assembled package
   const vibeText = useMemo(() => {
     if (!event) return '';
-
-    // Best source: packageHighlight stored in cache when payment was made
     if (cachedBudget?.packageHighlight) return cachedBudget.packageHighlight;
-
-    // Fallback: reconstruct from cached features array (also stored at payment time)
     if (cachedBudget?.packageFeatures?.[0]) return cachedBudget.packageFeatures[0];
-
-    // For older events: derive from packageId slug by assembling with defaults
     if (cachedBudget?.packageId) {
       const parts = cachedBudget.packageId.split('-');
       const citySlug = parts[0];
@@ -184,29 +165,21 @@ export default function EventSummaryScreen() {
         } catch {}
       }
     }
-
-    // Try features from the booking record (DB path)
     const bookingFeatures = (booking?.package as Record<string, unknown> | null)?.features;
     if (Array.isArray(bookingFeatures) && bookingFeatures.length > 0) return bookingFeatures[0] as string;
-
-    // Final fallback for events still in planning
     if (event.status === 'planning') return t.events.planningPhase || 'Planning in progress';
     return '';
   }, [event, booking, cachedBudget]);
 
-  // Generate invite code for sharing
   const handleGenerateInvite = async (): Promise<string> => {
     const invite = await createInvite.mutateAsync({ eventId: id! })
       .catch(error => { console.error('[handleGenerateInvite]', error); throw error; });
     return invite.code;
   };
 
-  // Write step 2 completion state to AsyncStorage so the events list card can read it.
-  // IMPORTANT: also clear the key when step2 is not complete — otherwise the stale
-  // 'true' value persists after the desired participant count increases.
   useEffect(() => {
     if (!id || !planningSteps.length) return;
-    const step2 = planningSteps[1]; // index 1 = group_confirmed
+    const step2 = planningSteps[1];
     if (step2?.completed) {
       AsyncStorage.setItem(`gameover:step2_confirmed:${id}`, '1').catch(() => {});
     } else {
@@ -214,7 +187,6 @@ export default function EventSummaryScreen() {
     }
   }, [id, planningSteps]);
 
-  // Toggle a manual checklist item — try DB update, always persist locally
   const handleToggleChecklist = (key: string, currentValue: boolean) => {
     if (!event || !id) return;
     if (isGuest) {
@@ -226,42 +198,34 @@ export default function EventSummaryScreen() {
       return;
     }
     const newValue = !currentValue;
-
-    // Optimistic local update
     setLocalChecklist(prev => ({ ...prev, [key]: newValue }));
     setChecklistItem(id, key, newValue).catch(() => {});
-
-    // Also try DB update (non-blocking, may fail if column doesn't exist)
     updateEvent.mutate({
       eventId: event.id,
       updates: {
         planning_checklist: { ...effectiveChecklist, [key]: newValue },
       } as any,
     }, {
-      onError: () => {
-        // DB update failed (PGRST204) — local cache already handles persistence
-      },
+      onError: () => {},
     });
   };
 
   // ─── Error state ───────────────────────────────
   if (eventError && !event) {
     return (
-      <YStack flex={1} backgroundColor={DARK_THEME.background} justifyContent="center" alignItems="center" padding={24}>
-        <Ionicons name="cloud-offline-outline" size={48} color={DARK_THEME.textTertiary} />
-        <Text color={DARK_THEME.textPrimary} fontSize={16} fontWeight="600" marginTop={16} marginBottom={8} textAlign="center">
+      <YStack flex={1} backgroundColor={theme.background} justifyContent="center" alignItems="center" padding={24}>
+        <Ionicons name="cloud-offline-outline" size={48} color={theme.textTertiary} />
+        <Text color={theme.textPrimary} fontSize={16} fontWeight="600" marginTop={16} marginBottom={8} textAlign="center">
           {t.common.error}
         </Text>
-        <Text color={DARK_THEME.textSecondary} fontSize={14} textAlign="center" marginBottom={24}>
+        <Text color={theme.textSecondary} fontSize={14} textAlign="center" marginBottom={24}>
           {t.events.loadError}
         </Text>
-        <Pressable
+        <GoldButton
+          label={t.common.retry}
           onPress={() => refetchEvent()}
-          style={{ backgroundColor: DARK_THEME.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 }}
           testID="event-detail-retry-button"
-        >
-          <Text color="#FFFFFF" fontWeight="600">{t.common.retry}</Text>
-        </Pressable>
+        />
       </YStack>
     );
   }
@@ -285,30 +249,23 @@ export default function EventSummaryScreen() {
     ? new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : 'TBD';
 
-  // Confirmed participant count for tool subtext (exclude honoree; count registered users as confirmed)
   const confirmedCount = participants?.filter(p =>
     p.role !== 'honoree' && (p.role === 'organizer' || p.confirmed_at != null || p.user_id != null)
   ).length ?? 0;
-  // Derive desired total: cache > booking > fallback
   const bookingDesiredTotal = booking
     ? (booking.paying_participants ?? 0) + (booking.exclude_honoree ? 1 : 0)
     : 0;
   const rawDesiredTotal = cachedParticipants || bookingDesiredTotal || 10;
-  // Display total excludes the honoree (already counted separately)
   const totalParticipants = Math.max(rawDesiredTotal - 1, 1);
 
-  // Per-person cost from booking
   const perPersonCents = booking?.per_person_cents || booking?.total_amount_cents
     ? Math.round((booking?.total_amount_cents || 0) / Math.max(totalParticipants, 1))
     : 0;
   const perPersonDisplay = perPersonCents > 0 ? Math.round(perPersonCents / 100) : null;
 
-  // City image for destination guide — tier-aware from booking data
   const citySlug = event.city?.name?.toLowerCase() || 'berlin';
-  // booking.package_id is the correct field (selected_package_id does not exist on this table)
   const cityImage = getEventImage(citySlug, booking?.package_id || event.hero_image_url);
 
-  // Tool subtext
   const getToolSubtext = (key: string): { text: string; color: string } => {
     switch (key) {
       case 'invitations':
@@ -317,18 +274,18 @@ export default function EventSummaryScreen() {
           color: '#10B981',
         };
       case 'communication':
-        return { text: (t.eventDetail as any).chatSubtext || 'Align with your group', color: DARK_THEME.textTertiary };
+        return { text: (t.eventDetail as any).chatSubtext || 'Align with your group', color: theme.textTertiary };
       case 'budget':
         return {
           text: perPersonDisplay
             ? t.eventDetail.personEst.replace('{{amount}}', String(perPersonDisplay))
             : (t.eventDetail as any).budgetSubtext || 'Track Expenses and More',
-          color: DARK_THEME.textTertiary,
+          color: theme.textTertiary,
         };
       case 'packages':
-        return { text: t.eventDetail.selectedPackage, color: DARK_THEME.textTertiary };
+        return { text: t.eventDetail.selectedPackage, color: theme.textTertiary };
       default:
-        return { text: '', color: DARK_THEME.textTertiary };
+        return { text: '', color: theme.textTertiary };
     }
   };
 
@@ -338,12 +295,12 @@ export default function EventSummaryScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={16}>
           <Pressable onPress={() => router.back()} hitSlop={8} testID="back-button">
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>{t.eventDetail.title}</Text>
           {!isGuest ? (
             <Pressable onPress={() => router.push(`/event/${id}/edit`)} hitSlop={8} testID="edit-button">
-              <Ionicons name="create-outline" size={22} color="#FFFFFF" />
+              <Ionicons name="create-outline" size={22} color={theme.textPrimary} />
             </Pressable>
           ) : (
             <View style={{ width: 22 }} />
@@ -358,13 +315,14 @@ export default function EventSummaryScreen() {
       >
         {/* ─── Title + Motto ──────────────────────── */}
         <YStack marginBottom={20}>
-          <Text style={styles.eventTitle}>{eventTitle}</Text>
+          <SerifHeading variant="displaySm" style={{ marginBottom: 4 }}>
+            {eventTitle}
+          </SerifHeading>
           <Text style={styles.motto}>{t.eventDetail.motto}</Text>
         </YStack>
 
         {/* ─── Info Card ──────────────────────────── */}
         <View style={styles.infoCard}>
-          {/* Location */}
           <View style={styles.infoRow}>
             <View style={[styles.infoIconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}>
               <Ionicons name="location" size={18} color="#3B82F6" />
@@ -377,7 +335,6 @@ export default function EventSummaryScreen() {
 
           <View style={styles.infoDivider} />
 
-          {/* Dates */}
           <View style={styles.infoRow}>
             <View style={[styles.infoIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
               <Ionicons name="calendar" size={18} color="#10B981" />
@@ -390,10 +347,9 @@ export default function EventSummaryScreen() {
 
           <View style={styles.infoDivider} />
 
-          {/* Package Highlight */}
           <View style={styles.infoRow}>
-            <View style={[styles.infoIconCircle, { backgroundColor: 'rgba(249, 115, 22, 0.15)' }]}>
-              <Ionicons name="trophy" size={18} color="#F97316" />
+            <View style={[styles.infoIconCircle, { backgroundColor: 'rgba(198, 167, 94, 0.2)' }]}>
+              <Ionicons name="trophy" size={18} color={theme.accentGold} />
             </View>
             <YStack flex={1}>
               <Text style={styles.infoLabel}>{t.eventDetail.vibe}</Text>
@@ -415,7 +371,7 @@ export default function EventSummaryScreen() {
         )}
 
         {/* ─── Planning Tools 2×2 Grid ───────────── */}
-        <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>{t.eventDetail.planningTools}</Text>
+        <SectionLabel style={{ marginBottom: 12 }}>{t.eventDetail.planningTools}</SectionLabel>
         <View style={styles.toolsGrid}>
           {TOOL_CONFIGS.map((tool) => {
             const sub = getToolSubtext(tool.key);
@@ -436,7 +392,6 @@ export default function EventSummaryScreen() {
                 ]}
                 onPress={() => {
                   if (tool.key === 'packages') {
-                    // Navigate to the actual package detail screen with event context
                     const pkgId = cachedBudget?.packageId || booking?.package_id;
                     if (pkgId) {
                       router.push(`/package/${pkgId}?eventId=${id}&viewOnly=1` as any);
@@ -453,12 +408,12 @@ export default function EventSummaryScreen() {
               >
                 <View style={[
                   styles.toolIconCircle,
-                  { backgroundColor: isUrgentBudgetTool ? 'rgba(249, 115, 22, 0.2)' : tool.iconBg },
+                  { backgroundColor: isUrgentBudgetTool ? 'rgba(232, 131, 107, 0.2)' : tool.iconBg },
                 ]}>
                   <Ionicons
                     name={tool.icon as any}
                     size={22}
-                    color={isUrgentBudgetTool ? '#F97316' : tool.iconColor}
+                    color={isUrgentBudgetTool ? theme.error : tool.iconColor}
                   />
                 </View>
                 <Text style={styles.toolLabel}>{toolLabel}</Text>
@@ -473,22 +428,20 @@ export default function EventSummaryScreen() {
         {/* ─── Unified Planning Progress (booked only) ── */}
         {isBooked && planningSteps.length > 0 && (
           <View style={[styles.progressCard, { marginTop: 8 }]}>
-            {/* Header + count */}
             <XStack justifyContent="space-between" alignItems="center" marginBottom={10}>
-              <Text style={styles.sectionLabel}>{t.eventDetail.planningProgress}</Text>
+              <SectionLabel>{t.eventDetail.planningProgress}</SectionLabel>
               <Text style={styles.progressCount}>
                 {t.eventDetail.stepsComplete.replace('{{completed}}', String(completedCount))}
               </Text>
             </XStack>
 
-            {/* Segmented progress bar */}
             <View style={styles.segmentedBar}>
               {Array.from({ length: 8 }, (_, i) => (
                 <View
                   key={i}
                   style={[
                     styles.segment,
-                    { backgroundColor: i < completedCount ? DARK_THEME.primary : DARK_THEME.deepNavy },
+                    { backgroundColor: i < completedCount ? theme.accentGold : theme.surfaceHigh },
                     i === 0 && styles.segmentFirst,
                     i === 7 && styles.segmentLast,
                   ]}
@@ -496,10 +449,8 @@ export default function EventSummaryScreen() {
               ))}
             </View>
 
-            {/* Divider between bar and step list */}
             <View style={[styles.infoDivider, { marginHorizontal: 0, marginTop: 14, marginBottom: 4 }]} />
 
-            {/* Inline step list — sequential: each step locked until previous is complete */}
             {planningSteps.map((step, idx) => {
               const locked = idx > 0 && !planningSteps[idx - 1].completed;
               return (
@@ -511,6 +462,7 @@ export default function EventSummaryScreen() {
                     t={t}
                     onToggle={handleToggleChecklist}
                     locked={locked}
+                    theme={theme}
                   />
                 </React.Fragment>
               );
@@ -520,7 +472,7 @@ export default function EventSummaryScreen() {
 
         {/* ─── Destination Guide ─────────────────── */}
         <View style={{ marginTop: 20 }}>
-          <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>{t.eventDetail.destinationGuide}</Text>
+          <SectionLabel style={{ marginBottom: 12 }}>{t.eventDetail.destinationGuide}</SectionLabel>
           <Pressable
             style={({ pressed }) => [styles.destinationCard, pressed && { opacity: 0.9 }]}
             onPress={() => router.push(`/event/${id}/destination`)}
@@ -545,13 +497,13 @@ export default function EventSummaryScreen() {
       {/* ─── Book Package CTA (planning only) ──── */}
       {event.status === 'planning' && (
         <View style={[styles.ctaBar, { paddingBottom: insets.bottom + 16 }]}>
-          <Pressable
-            style={styles.ctaButton}
+          <GoldButton
+            label="Book Package"
+            fullWidth
+            size="lg"
             onPress={() => router.push(`/booking/${id}/summary`)}
             testID="book-package-button"
-          >
-            <Text style={styles.ctaButtonText}>Book Package</Text>
-          </Pressable>
+          />
         </View>
       )}
 
@@ -567,38 +519,35 @@ export default function EventSummaryScreen() {
           justifyContent: 'center', alignItems: 'center', padding: 24,
         }}>
           <View accessibilityViewIsModal={true} style={{
-            backgroundColor: DARK_THEME.surfaceCard, borderRadius: 20,
+            backgroundColor: theme.surfaceBright, borderRadius: RADII.xl,
             padding: 24, width: '100%',
-            borderWidth: 1, borderColor: 'rgba(249,115,22,0.3)',
+            borderWidth: StyleSheet.hairlineWidth, borderColor: theme.accentGold,
           }}>
             <Text style={{ fontSize: 20 }}>💰</Text>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: 'white', marginTop: 8 }}>
+            <SerifHeading variant="headlineMd" style={{ marginTop: 8 }}>
               Your Contribution
-            </Text>
-            {/* TODO: use Intl.NumberFormat with booking currency when multi-currency support is added */}
+            </SerifHeading>
             {contributionCents > 0 && (
-              <Text style={{ fontSize: 32, fontWeight: '900', color: DARK_THEME.primary, marginTop: 4 }}>
+              <Text style={{ fontSize: 32, fontWeight: '900', color: theme.accentGold, marginTop: 4 }}>
                 €{Math.round(contributionCents / 100)}
               </Text>
             )}
-            <Text style={{ fontSize: 13, color: DARK_THEME.textTertiary, marginTop: 8, lineHeight: 20 }}>
+            <Text style={{ fontSize: 13, color: theme.textTertiary, marginTop: 8, lineHeight: 20 }}>
               Please transfer this amount to{' '}
-              <Text style={{ color: 'white', fontWeight: '600' }}>
+              <Text style={{ color: theme.textPrimary, fontWeight: '600' }}>
                 {participants?.find(p => p.role === 'organizer')?.profile?.full_name
                   ?? 'the organizer'}
               </Text>
               . Your share is due 14 days before the event.
             </Text>
-            <Pressable
-              onPress={handleDismissContributionCard}
-              style={{
-                marginTop: 20, backgroundColor: DARK_THEME.primary,
-                borderRadius: 12, paddingVertical: 14, alignItems: 'center',
-              }}
-              testID="contribution-card-dismiss"
-            >
-              <Text style={{ color: 'white', fontWeight: '700', fontSize: 15 }}>Got it</Text>
-            </Pressable>
+            <View style={{ marginTop: 20 }}>
+              <GoldButton
+                label="Got it"
+                fullWidth
+                onPress={handleDismissContributionCard}
+                testID="contribution-card-dismiss"
+              />
+            </View>
           </View>
         </View>
       </Modal>
@@ -613,53 +562,56 @@ function ChecklistRow({
   t,
   onToggle,
   locked,
+  theme,
 }: {
   step: PlanningStep;
   stepNumber: number;
   t: any;
   onToggle: (key: string, current: boolean) => void;
   locked: boolean;
+  theme: EditorialTheme;
 }) {
   const label = (t.eventDetail as any)[step.labelKey] || step.labelKey;
   const isDisabled = step.auto || locked;
 
-  // Icon color: green for completed auto, primary for completed manual, muted otherwise
   const iconBgColor = step.completed
-    ? (step.auto ? 'rgba(16, 185, 129, 0.15)' : 'rgba(90, 126, 176, 0.15)')
+    ? (step.auto ? 'rgba(16, 185, 129, 0.15)' : 'rgba(198, 167, 94, 0.2)')
     : locked
       ? 'rgba(156, 163, 175, 0.08)'
       : 'rgba(156, 163, 175, 0.12)';
   const iconColor = step.completed
-    ? (step.auto ? '#10B981' : DARK_THEME.primary)
+    ? (step.auto ? '#10B981' : theme.accentGold)
     : locked
       ? 'rgba(156, 163, 175, 0.4)'
-      : DARK_THEME.textTertiary;
+      : theme.textTertiary;
 
   return (
     <Pressable
-      style={[styles.checklistRow, locked && { opacity: 0.45 }]}
+      style={[rowStyles.checklistRow, locked && { opacity: 0.45 }]}
       onPress={isDisabled ? undefined : () => onToggle(step.key, step.completed)}
       disabled={isDisabled}
     >
-      {/* Step icon circle */}
-      <View style={[styles.stepIconCircle, { backgroundColor: iconBgColor }]}>
+      <View style={[rowStyles.stepIconCircle, { backgroundColor: iconBgColor }]}>
         <Ionicons name={step.icon as any} size={16} color={iconColor} />
       </View>
 
-      {/* Step number + label */}
       <YStack flex={1}>
-        <Text style={[styles.checklistLabel, step.completed && styles.checklistLabelDone]}>
+        <Text style={[
+          rowStyles.checklistLabel,
+          { color: theme.textPrimary },
+          step.completed && { color: theme.textSecondary },
+        ]}>
           {stepNumber}. {label}
         </Text>
       </YStack>
 
-      {/* Right side: AUTO tag + checkbox (aligned with manual checkboxes) */}
       {step.auto ? (
         <XStack alignItems="center" gap={6}>
-          <Text style={styles.autoTag}>AUTO</Text>
+          <Text style={rowStyles.autoTag}>AUTO</Text>
           <View style={[
-            styles.checkbox,
-            step.completed && styles.checkboxAuto,
+            rowStyles.checkbox,
+            { borderColor: theme.textTertiary },
+            step.completed && rowStyles.checkboxAuto,
           ]}>
             {step.completed && (
               <Ionicons name="checkmark" size={14} color="#10B981" />
@@ -667,14 +619,15 @@ function ChecklistRow({
           </View>
         </XStack>
       ) : locked ? (
-        <Ionicons name="lock-closed" size={14} color={DARK_THEME.textTertiary} />
+        <Ionicons name="lock-closed" size={14} color={theme.textTertiary} />
       ) : (
         <View style={[
-          styles.checkbox,
-          step.completed && styles.checkboxChecked,
+          rowStyles.checkbox,
+          { borderColor: theme.textTertiary },
+          step.completed && { backgroundColor: theme.accentGold, borderColor: theme.accentGold },
         ]}>
           {step.completed && (
-            <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+            <Ionicons name="checkmark" size={14} color={theme.textOnPrimary} />
           )}
         </View>
       )}
@@ -682,157 +635,8 @@ function ChecklistRow({
   );
 }
 
-// ─── Styles ────────────────────────────────────
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: DARK_THEME.background,
-  },
-  header: {
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: DARK_THEME.textPrimary,
-  },
-  eventTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: DARK_THEME.textPrimary,
-    marginBottom: 4,
-  },
-  motto: {
-    fontSize: 14,
-    color: DARK_THEME.textTertiary,
-    fontStyle: 'italic',
-  },
-
-  // Info Card
-  infoCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
-    padding: 4,
-    marginBottom: 20,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    gap: 12,
-  },
-  infoIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  infoLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: DARK_THEME.textTertiary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  infoValue: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: DARK_THEME.textPrimary,
-    marginTop: 1,
-  },
-  infoDivider: {
-    height: 1,
-    backgroundColor: DARK_THEME.glassBorder,
-    marginHorizontal: 14,
-  },
-
-  // Progress
-  progressCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
-    padding: 16,
-    marginBottom: 20,
-  },
-  sectionLabel: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: DARK_THEME.textPrimary,
-  },
-  progressCount: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: DARK_THEME.textSecondary,
-  },
-  segmentedBar: {
-    flexDirection: 'row',
-    gap: 3,
-    height: 8,
-  },
-  segment: {
-    flex: 1,
-    height: '100%',
-    borderRadius: 1,
-  },
-  segmentFirst: {
-    borderTopLeftRadius: 4,
-    borderBottomLeftRadius: 4,
-  },
-  segmentLast: {
-    borderTopRightRadius: 4,
-    borderBottomRightRadius: 4,
-  },
-
-  // Planning Tools Grid
-  toolsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 20,
-  },
-  toolCard: {
-    width: '47%',
-    flexGrow: 1,
-    backgroundColor: DARK_THEME.surfaceCard,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
-    padding: 16,
-    alignItems: 'flex-start',
-    gap: 8,
-  },
-  toolCardPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.98 }],
-  },
-  toolCardUrgent: {
-    borderColor: '#F97316',
-    borderWidth: 1.5,
-  },
-  toolIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  toolLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: DARK_THEME.textPrimary,
-  },
-  toolSubtext: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
-
-  // Planning Checklist (inside progress card)
+// Row styles independent of theme (only layout + neutral tones).
+const rowStyles = StyleSheet.create({
   checklistRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -852,13 +656,8 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: DARK_THEME.textTertiary,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  checkboxChecked: {
-    backgroundColor: DARK_THEME.primary,
-    borderColor: DARK_THEME.primary,
   },
   checkboxAuto: {
     backgroundColor: 'transparent',
@@ -867,10 +666,6 @@ const styles = StyleSheet.create({
   checklistLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: DARK_THEME.textPrimary,
-  },
-  checklistLabelDone: {
-    color: DARK_THEME.textSecondary,
   },
   autoTag: {
     fontSize: 9,
@@ -883,59 +678,202 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(16, 185, 129, 0.15)',
     overflow: 'hidden',
   },
-
-  // Destination Guide
-  destinationCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    height: 160,
-    position: 'relative',
-  },
-  destinationImage: {
-    width: '100%',
-    height: '100%',
-  },
-  destinationOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-  },
-  destinationContent: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
-  },
-  destinationLabel: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  destinationLink: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-  },
-
-  // CTA Bar
-  ctaBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    backgroundColor: DARK_THEME.surface,
-    borderTopWidth: 1,
-    borderTopColor: DARK_THEME.glassBorder,
-  },
-  ctaButton: {
-    backgroundColor: DARK_THEME.primary,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  ctaButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
 });
+
+// ─── Styles (theme-aware factory) ──────────────
+function makeStyles(theme: EditorialTheme) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: theme.background,
+    },
+    header: {
+      paddingBottom: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: theme.ghostBorder,
+    },
+    headerTitle: {
+      fontSize: 17,
+      fontWeight: '600',
+      color: theme.textPrimary,
+      fontFamily: TYPE_SCALE.titleLg.fontFamily,
+    },
+    motto: {
+      fontSize: 14,
+      color: theme.textTertiary,
+      fontStyle: 'italic',
+      fontFamily: TYPE_SCALE.body.fontFamily,
+    },
+
+    // Info Card
+    infoCard: {
+      backgroundColor: theme.surfaceCard,
+      borderRadius: RADII.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.ghostBorder,
+      padding: 4,
+      marginBottom: 20,
+      ...ambientShadow(theme),
+    },
+    infoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      padding: 14,
+      gap: 12,
+    },
+    infoIconCircle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    infoLabel: {
+      fontSize: 11,
+      fontWeight: '600',
+      color: theme.textTertiary,
+      textTransform: 'uppercase',
+      letterSpacing: 1.2,
+      fontFamily: TYPE_SCALE.label.fontFamily,
+    },
+    infoValue: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: theme.textPrimary,
+      marginTop: 2,
+      fontFamily: TYPE_SCALE.titleMd.fontFamily,
+    },
+    infoDivider: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: theme.ghostBorder,
+      marginHorizontal: 14,
+    },
+
+    // Progress
+    progressCard: {
+      backgroundColor: theme.surfaceCard,
+      borderRadius: RADII.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.ghostBorder,
+      padding: 16,
+      marginBottom: 20,
+      ...ambientShadow(theme),
+    },
+    progressCount: {
+      fontSize: 13,
+      fontWeight: '500',
+      color: theme.textSecondary,
+      fontFamily: TYPE_SCALE.body.fontFamily,
+    },
+    segmentedBar: {
+      flexDirection: 'row',
+      gap: 3,
+      height: 8,
+    },
+    segment: {
+      flex: 1,
+      height: '100%',
+      borderRadius: 1,
+    },
+    segmentFirst: {
+      borderTopLeftRadius: 4,
+      borderBottomLeftRadius: 4,
+    },
+    segmentLast: {
+      borderTopRightRadius: 4,
+      borderBottomRightRadius: 4,
+    },
+
+    // Planning Tools Grid
+    toolsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 12,
+      marginBottom: 20,
+    },
+    toolCard: {
+      width: '47%',
+      flexGrow: 1,
+      backgroundColor: theme.surfaceCard,
+      borderRadius: RADII.lg,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: theme.ghostBorder,
+      padding: 16,
+      alignItems: 'flex-start',
+      gap: 8,
+      ...ambientShadow(theme),
+    },
+    toolCardPressed: {
+      opacity: 0.85,
+      transform: [{ scale: 0.98 }],
+    },
+    toolCardUrgent: {
+      borderColor: theme.error,
+      borderWidth: 1.5,
+    },
+    toolIconCircle: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    toolLabel: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: theme.textPrimary,
+      fontFamily: TYPE_SCALE.titleMd.fontFamily,
+    },
+    toolSubtext: {
+      fontSize: 12,
+      fontWeight: '500',
+      fontFamily: TYPE_SCALE.body.fontFamily,
+    },
+
+    // Destination Guide
+    destinationCard: {
+      borderRadius: RADII.lg,
+      overflow: 'hidden',
+      height: 160,
+      position: 'relative',
+    },
+    destinationImage: {
+      width: '100%',
+      height: '100%',
+    },
+    destinationOverlay: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(13, 27, 42, 0.55)',
+    },
+    destinationContent: {
+      position: 'absolute',
+      bottom: 16,
+      left: 16,
+      right: 16,
+    },
+    destinationLabel: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: '#FFFFFF',
+      marginBottom: 4,
+      fontFamily: TYPE_SCALE.headlineMd.fontFamily,
+    },
+    destinationLink: {
+      fontSize: 13,
+      color: 'rgba(255,255,255,0.8)',
+      fontFamily: TYPE_SCALE.body.fontFamily,
+    },
+
+    // CTA Bar
+    ctaBar: {
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      padding: 16,
+      backgroundColor: theme.surfaceLow,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: theme.ghostBorder,
+    },
+  });
+}
