@@ -31,6 +31,7 @@ import { DARK_THEME } from '@/constants/theme';
 import { preloadPackageImages } from '@/constants/packageImages';
 import { preloadSportLogos, preloadShareImages } from '@/constants/sportLogos';
 import { initBudgetCache } from '@/lib/participantCountCache';
+import { useEditorialFonts } from '@/hooks/useEditorialFonts';
 import config from '../tamagui.config';
 
 // Crisp Chat — native module, not available in Expo Go
@@ -67,6 +68,7 @@ const queryClient = new QueryClient({
 
 function RootLayoutNav() {
   const { isInitialized, isLoading, session, initialize } = useAuthStore();
+  const { fontsLoaded } = useEditorialFonts();
   const segments = useSegments();
   const router = useRouter();
 
@@ -123,7 +125,7 @@ function RootLayoutNav() {
     }
   }, [session, isInitialized, segments, router]);
 
-  if (!isInitialized || isLoading) {
+  if (!isInitialized || isLoading || !fontsLoaded) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={DARK_THEME.background}>
         <LinearGradient
