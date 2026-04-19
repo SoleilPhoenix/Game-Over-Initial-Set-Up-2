@@ -1,6 +1,8 @@
 /**
- * Wizard Step 1: Key Details (Mockup 7.1)
- * Party type, honoree name, city, participants, date with calendar picker
+ * Wizard Step 1: Key Details — Editorial re-skin (content-preserving).
+ * Party type, honoree name, city, participants, date with calendar picker.
+ * Uses useTheme() tokens; GlassPanel/OptionBlock retain their own styling
+ * (they'll receive their own editorial pass in Phase C).
  */
 
 import React, { useState } from 'react';
@@ -15,7 +17,7 @@ import { OptionBlock, OptionBlockGroup } from '@/components/ui/OptionBlock';
 import { GlassPanel } from '@/components/ui/GlassPanel';
 import { WizardFooter } from '@/components/ui/WizardFooter';
 import { useTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
 
 // PRD-defined cities: Berlin, Hamburg, Hannover
 // UUIDs must match supabase/migrations/20260211000000_add_german_cities.sql
@@ -46,6 +48,7 @@ export default function WizardStep1() {
   const [isFocusedFirst, setIsFocusedFirst] = useState(false);
   const [isFocusedLast, setIsFocusedLast] = useState(false);
   const { t } = useTranslation();
+  const { theme, resolvedMode } = useTheme();
   const {
     partyType,
     honoreeName,
@@ -84,8 +87,16 @@ export default function WizardStep1() {
   const today = new Date();
   const maxDate = new Date(2035, 11, 31);
 
+  // Input field styling — reused across first name, last name, and date picker.
+  const inputFieldStyle = {
+    height: 48,
+    borderRadius: 999,
+    backgroundColor: theme.surfaceHigh,
+    paddingHorizontal: 16,
+  } as const;
+
   return (
-    <YStack flex={1} backgroundColor="$background">
+    <YStack flex={1} backgroundColor={theme.background}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -120,44 +131,38 @@ export default function WizardStep1() {
               {/* First Name */}
               <XStack
                 flex={1}
-                height={48}
-                borderRadius="$full"
-                backgroundColor="rgba(45, 55, 72, 0.6)"
+                {...inputFieldStyle}
                 borderWidth={isFocusedFirst ? 2 : 1}
-                borderColor={isFocusedFirst ? DARK_THEME.primary : 'rgba(255, 255, 255, 0.08)'}
+                borderColor={isFocusedFirst ? theme.accentGold : theme.ghostBorder}
                 alignItems="center"
-                paddingHorizontal="$4"
               >
                 <TextInput
                   placeholder={t.wizard.honoreeNamePlaceholder}
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={theme.textTertiary}
                   value={honoreeName}
                   onChangeText={setHonoreeName}
                   onFocus={() => setIsFocusedFirst(true)}
                   onBlur={() => setIsFocusedFirst(false)}
-                  style={{ flex: 1, color: '#FFFFFF', fontSize: 15, fontWeight: '600', height: '100%' }}
+                  style={{ flex: 1, color: theme.textPrimary, fontSize: 15, fontWeight: '600', height: '100%' }}
                   testID="honoree-name-input"
                 />
               </XStack>
               {/* Last Name */}
               <XStack
                 flex={1}
-                height={48}
-                borderRadius="$full"
-                backgroundColor="rgba(45, 55, 72, 0.6)"
+                {...inputFieldStyle}
                 borderWidth={isFocusedLast ? 2 : 1}
-                borderColor={isFocusedLast ? DARK_THEME.primary : 'rgba(255, 255, 255, 0.08)'}
+                borderColor={isFocusedLast ? theme.accentGold : theme.ghostBorder}
                 alignItems="center"
-                paddingHorizontal="$4"
               >
                 <TextInput
                   placeholder={t.wizard.honoreeLastNamePlaceholder}
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={theme.textTertiary}
                   value={honoreeLastName}
                   onChangeText={setHonoreeLastName}
                   onFocus={() => setIsFocusedLast(true)}
                   onBlur={() => setIsFocusedLast(false)}
-                  style={{ flex: 1, color: '#FFFFFF', fontSize: 15, fontWeight: '600', height: '100%' }}
+                  style={{ flex: 1, color: theme.textPrimary, fontSize: 15, fontWeight: '600', height: '100%' }}
                   testID="honoree-last-name-input"
                 />
               </XStack>
@@ -185,12 +190,12 @@ export default function WizardStep1() {
             title={t.wizard.participantCount}
             rightElement={
               <YStack
-                backgroundColor={DARK_THEME.primary}
+                backgroundColor={theme.accentGold}
                 paddingHorizontal="$3"
                 paddingVertical="$1"
                 borderRadius="$full"
               >
-                <Text color="#FFFFFF" fontWeight="700" fontSize="$3">
+                <Text color={theme.textOnPrimary} fontWeight="700" fontSize="$3">
                   {participantCount}
                 </Text>
               </YStack>
@@ -204,16 +209,16 @@ export default function WizardStep1() {
               step={1}
               value={participantCount}
               onValueChange={(value) => setParticipantCount(Math.round(value))}
-              minimumTrackTintColor={DARK_THEME.primary}
-              maximumTrackTintColor="rgba(255, 255, 255, 0.1)"
-              thumbTintColor={DARK_THEME.primary}
+              minimumTrackTintColor={theme.accentGold}
+              maximumTrackTintColor={theme.ghostBorder}
+              thumbTintColor={theme.accentGold}
               testID="participant-slider"
             />
             <XStack justifyContent="space-between" marginTop="$1">
-              <Text fontSize="$1" color="$textTertiary">1</Text>
-              <Text fontSize="$1" color="$textTertiary">30</Text>
+              <Text fontSize="$1" color={theme.textTertiary}>1</Text>
+              <Text fontSize="$1" color={theme.textTertiary}>30</Text>
             </XStack>
-            <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" marginTop="$2">
+            <Text fontSize={12} color={theme.textTertiary} textAlign="center" marginTop="$2">
               {partyType === 'bachelorette' ? t.wizard.inclBachelorette : t.wizard.inclBachelor}
             </Text>
           </GlassPanel>
@@ -222,23 +227,20 @@ export default function WizardStep1() {
           <GlassPanel icon="calendar" title={t.wizard.dateLabel} testID="panel-date">
             <Pressable onPress={() => setShowDatePicker(true)}>
               <XStack
-                height={48}
-                borderRadius="$full"
-                backgroundColor="rgba(45, 55, 72, 0.6)"
+                {...inputFieldStyle}
                 borderWidth={1}
-                borderColor="rgba(255, 255, 255, 0.08)"
+                borderColor={theme.ghostBorder}
                 alignItems="center"
-                paddingHorizontal="$4"
               >
                 <Text
                   flex={1}
                   fontSize={15}
                   fontWeight="600"
-                  color={startDate ? '#FFFFFF' : '#9CA3AF'}
+                  color={startDate ? theme.textPrimary : theme.textTertiary}
                 >
                   {startDate ? formatDateDisplay(new Date(startDate)) : t.wizard.datePlaceholder}
                 </Text>
-                <Ionicons name="calendar-outline" size={22} color={DARK_THEME.primary} />
+                <Ionicons name="calendar-outline" size={22} color={theme.accentGold} />
               </XStack>
             </Pressable>
 
@@ -252,7 +254,7 @@ export default function WizardStep1() {
                   minimumDate={today}
                   maximumDate={maxDate}
                   onChange={handleDateChange}
-                  themeVariant="dark"
+                  themeVariant={resolvedMode}
                   testID="date-picker"
                 />
                 {Platform.OS === 'ios' && (
@@ -261,11 +263,11 @@ export default function WizardStep1() {
                       paddingHorizontal="$4"
                       paddingVertical="$2"
                       borderRadius="$full"
-                      backgroundColor={DARK_THEME.primary}
+                      backgroundColor={theme.accentGold}
                       pressStyle={{ opacity: 0.8 }}
                       onPress={() => setShowDatePicker(false)}
                     >
-                      <Text color="white" fontWeight="600" fontSize={14}>{t.common.done}</Text>
+                      <Text color={theme.textOnPrimary} fontWeight="600" fontSize={14}>{t.common.done}</Text>
                     </XStack>
                   </XStack>
                 )}
