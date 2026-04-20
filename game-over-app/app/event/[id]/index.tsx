@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { Alert, ScrollView, Pressable, StyleSheet, View, Modal } from 'react-native';
+import { Alert, ScrollView, Pressable, StyleSheet, View, Modal, Share } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -18,11 +18,10 @@ import { useParticipants } from '@/hooks/queries/useParticipants';
 import { useAuthStore } from '@/stores/authStore';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { useCreateInvite } from '@/hooks/queries/useInvites';
-import { ShareEventBanner } from '@/components/events';
 import { useTranslation } from '@/i18n';
 import { useTheme } from '@/hooks/useTheme';
 import { SPACING, RADII, TYPE_SCALE, ambientShadow, type EditorialTheme } from '@/constants/designSystem';
-import { SerifHeading, SectionLabel, GoldButton } from '@/components/ui/editorial';
+import { SerifHeading, GoldButton } from '@/components/ui/editorial';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import {
   calculatePlanningSteps,
@@ -266,29 +265,6 @@ export default function EventSummaryScreen() {
   const citySlug = event.city?.name?.toLowerCase() || 'berlin';
   const cityImage = getEventImage(citySlug, booking?.package_id || event.hero_image_url);
 
-  const getToolSubtext = (key: string): { text: string; color: string } => {
-    switch (key) {
-      case 'invitations':
-        return {
-          text: t.eventDetail.confirmed.replace('{{count}}', String(confirmedCount)).replace('{{total}}', String(totalParticipants)),
-          color: '#10B981',
-        };
-      case 'communication':
-        return { text: (t.eventDetail as any).chatSubtext || 'Align with your group', color: theme.textTertiary };
-      case 'budget':
-        return {
-          text: perPersonDisplay
-            ? t.eventDetail.personEst.replace('{{amount}}', String(perPersonDisplay))
-            : (t.eventDetail as any).budgetSubtext || 'Track Expenses and More',
-          color: theme.textTertiary,
-        };
-      case 'packages':
-        return { text: t.eventDetail.selectedPackage, color: theme.textTertiary };
-      default:
-        return { text: '', color: theme.textTertiary };
-    }
-  };
-
   return (
     <View style={styles.container}>
       {/* ─── Header bar ─────────────────────────── */}
@@ -313,68 +289,63 @@ export default function EventSummaryScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 100 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* ─── Title + Motto ──────────────────────── */}
-        <YStack marginBottom={20}>
-          <SerifHeading variant="displaySm" style={{ marginBottom: 4 }}>
+        {/* ─── Title + Motto (centered per mockup) ──── */}
+        <YStack alignItems="center" marginTop={8} marginBottom={24}>
+          <SerifHeading variant="displayMd" style={{ textAlign: 'center', marginBottom: 6 }}>
             {eventTitle}
           </SerifHeading>
-          <Text style={styles.motto}>{t.eventDetail.motto}</Text>
+          <Text style={[styles.motto, { textAlign: 'center' }]}>{t.eventDetail.motto}</Text>
         </YStack>
 
-        {/* ─── Info Card ──────────────────────────── */}
+        {/* ─── Info Card (3-column per mockup) ────── */}
         <View style={styles.infoCard}>
-          <View style={styles.infoRow}>
-            <View style={[styles.infoIconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}>
-              <Ionicons name="location" size={18} color="#3B82F6" />
-            </View>
-            <YStack flex={1}>
-              <Text style={styles.infoLabel}>{t.eventDetail.location}</Text>
-              <Text style={styles.infoValue}>{cityName}</Text>
-            </YStack>
+          <View style={styles.infoColumn}>
+            <Ionicons name="location" size={24} color={theme.accentGold} />
+            <Text style={styles.infoLabel}>{t.eventDetail.location}</Text>
+            <Text style={styles.infoValue} numberOfLines={1}>{cityName}</Text>
           </View>
 
-          <View style={styles.infoDivider} />
-
-          <View style={styles.infoRow}>
-            <View style={[styles.infoIconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-              <Ionicons name="calendar" size={18} color="#10B981" />
-            </View>
-            <YStack flex={1}>
-              <Text style={styles.infoLabel}>{t.eventDetail.dates}</Text>
-              <Text style={styles.infoValue}>{dateStr}</Text>
-            </YStack>
+          <View style={styles.infoColumn}>
+            <Ionicons name="calendar" size={24} color={theme.accentGold} />
+            <Text style={styles.infoLabel}>{t.eventDetail.dates}</Text>
+            <Text style={styles.infoValue} numberOfLines={1}>{dateStr}</Text>
           </View>
 
-          <View style={styles.infoDivider} />
-
-          <View style={styles.infoRow}>
-            <View style={[styles.infoIconCircle, { backgroundColor: 'rgba(198, 167, 94, 0.2)' }]}>
-              <Ionicons name="trophy" size={18} color={theme.accentGold} />
-            </View>
-            <YStack flex={1}>
-              <Text style={styles.infoLabel}>{t.eventDetail.vibe}</Text>
-              <Text style={styles.infoValue}>{vibeText || '—'}</Text>
-            </YStack>
+          <View style={styles.infoColumn}>
+            <Ionicons name="trophy" size={24} color={theme.accentGold} />
+            <Text style={styles.infoLabel} numberOfLines={1}>{t.eventDetail.vibe}</Text>
+            <Text style={styles.infoValue} numberOfLines={1}>{vibeText || '—'}</Text>
           </View>
         </View>
 
-        {/* ─── Share / Invite Banner (organizer only) ── */}
+        {/* ─── Share Invite (gold CTA per mockup) ── */}
         {!isGuest && (
-          <View style={{ marginBottom: 20 }}>
-            <ShareEventBanner
-              eventId={id!}
-              eventTitle={eventTitle}
-              participantCount={participants?.length || 0}
-              onGenerateInvite={handleGenerateInvite}
+          <View style={{ marginBottom: 28 }}>
+            <GoldButton
+              label="Share Invite — Invite Friends to Join"
+              fullWidth
+              size="md"
+              leftIcon={<Ionicons name="share-social" size={18} color={theme.textOnPrimary} />}
+              onPress={async () => {
+                try {
+                  const code = await handleGenerateInvite();
+                  const url = `https://game-over.app/invite/${code}`;
+                  await Share.share({ message: `Join ${eventTitle}: ${url}`, url });
+                } catch (e: any) {
+                  Alert.alert(t.common.error, e?.message || t.events.loadError);
+                }
+              }}
+              testID="share-invite-button"
             />
           </View>
         )}
 
-        {/* ─── Planning Tools 2×2 Grid ───────────── */}
-        <SectionLabel style={{ marginBottom: 12 }}>{t.eventDetail.planningTools}</SectionLabel>
+        {/* ─── Planning Tools 2×2 Grid (mockup: titles only) ── */}
+        <SerifHeading variant="headlineMd" style={{ marginBottom: 16 }}>
+          {t.eventDetail.planningTools}
+        </SerifHeading>
         <View style={styles.toolsGrid}>
           {TOOL_CONFIGS.map((tool) => {
-            const sub = getToolSubtext(tool.key);
             const toolLabel = t.eventDetail[
               tool.key === 'invitations' ? 'manageInvitations'
                 : tool.key === 'communication' ? 'communication'
@@ -406,20 +377,12 @@ export default function EventSummaryScreen() {
                 }}
                 testID={`planning-tool-${tool.key}`}
               >
-                <View style={[
-                  styles.toolIconCircle,
-                  { backgroundColor: isUrgentBudgetTool ? 'rgba(232, 131, 107, 0.2)' : tool.iconBg },
-                ]}>
-                  <Ionicons
-                    name={tool.icon as any}
-                    size={22}
-                    color={isUrgentBudgetTool ? theme.error : tool.iconColor}
-                  />
-                </View>
+                <Ionicons
+                  name={tool.icon as any}
+                  size={36}
+                  color={isUrgentBudgetTool ? theme.error : theme.accentGold}
+                />
                 <Text style={styles.toolLabel}>{toolLabel}</Text>
-                <Text style={[styles.toolSubtext, { color: sub.color }]} numberOfLines={1}>
-                  {sub.text}
-                </Text>
               </Pressable>
             );
           })}
@@ -428,8 +391,8 @@ export default function EventSummaryScreen() {
         {/* ─── Unified Planning Progress (booked only) ── */}
         {isBooked && planningSteps.length > 0 && (
           <View style={[styles.progressCard, { marginTop: 8 }]}>
-            <XStack justifyContent="space-between" alignItems="center" marginBottom={10}>
-              <SectionLabel>{t.eventDetail.planningProgress}</SectionLabel>
+            <XStack justifyContent="space-between" alignItems="center" marginBottom={14}>
+              <SerifHeading variant="headlineMd">{t.eventDetail.planningProgress}</SerifHeading>
               <Text style={styles.progressCount}>
                 {t.eventDetail.stepsComplete.replace('{{completed}}', String(completedCount))}
               </Text>
@@ -472,7 +435,7 @@ export default function EventSummaryScreen() {
 
         {/* ─── Destination Guide ─────────────────── */}
         <View style={{ marginTop: 20 }}>
-          <SectionLabel style={{ marginBottom: 12 }}>{t.eventDetail.destinationGuide}</SectionLabel>
+          <SerifHeading variant="headlineMd" style={{ marginBottom: 12 }}>{t.eventDetail.destinationGuide}</SerifHeading>
           <Pressable
             style={({ pressed }) => [styles.destinationCard, pressed && { opacity: 0.9 }]}
             onPress={() => router.push(`/event/${id}/destination`)}
@@ -705,43 +668,40 @@ function makeStyles(theme: EditorialTheme) {
       fontFamily: TYPE_SCALE.body.fontFamily,
     },
 
-    // Info Card
+    // Info Card — 3 columns in one row (mockup)
     infoCard: {
+      flexDirection: 'row',
       backgroundColor: theme.surfaceCard,
       borderRadius: RADII.lg,
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: theme.ghostBorder,
-      padding: 4,
+      paddingVertical: 18,
+      paddingHorizontal: 8,
       marginBottom: 20,
       ...ambientShadow(theme),
     },
-    infoRow: {
-      flexDirection: 'row',
+    infoColumn: {
+      flex: 1,
       alignItems: 'center',
-      padding: 14,
-      gap: 12,
-    },
-    infoIconCircle: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent: 'flex-start',
+      gap: 6,
+      paddingHorizontal: 4,
     },
     infoLabel: {
-      fontSize: 11,
-      fontWeight: '600',
+      fontSize: 10,
+      fontWeight: '700',
       color: theme.textTertiary,
       textTransform: 'uppercase',
       letterSpacing: 1.2,
       fontFamily: TYPE_SCALE.label.fontFamily,
+      textAlign: 'center',
     },
     infoValue: {
-      fontSize: 15,
+      fontSize: 14,
       fontWeight: '600',
       color: theme.textPrimary,
-      marginTop: 2,
       fontFamily: TYPE_SCALE.titleMd.fontFamily,
+      textAlign: 'center',
     },
     infoDivider: {
       height: StyleSheet.hairlineWidth,
@@ -784,23 +744,26 @@ function makeStyles(theme: EditorialTheme) {
       borderBottomRightRadius: 4,
     },
 
-    // Planning Tools Grid
+    // Planning Tools Grid (mockup: centered, gold-outlined, title only)
     toolsGrid: {
       flexDirection: 'row',
       flexWrap: 'wrap',
-      gap: 12,
-      marginBottom: 20,
+      gap: 14,
+      marginBottom: 24,
     },
     toolCard: {
       width: '47%',
       flexGrow: 1,
+      minHeight: 140,
       backgroundColor: theme.surfaceCard,
       borderRadius: RADII.lg,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: theme.ghostBorder,
-      padding: 16,
-      alignItems: 'flex-start',
-      gap: 8,
+      borderWidth: 1,
+      borderColor: theme.accentGold,
+      paddingVertical: 24,
+      paddingHorizontal: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 14,
       ...ambientShadow(theme),
     },
     toolCardPressed: {
@@ -811,23 +774,12 @@ function makeStyles(theme: EditorialTheme) {
       borderColor: theme.error,
       borderWidth: 1.5,
     },
-    toolIconCircle: {
-      width: 44,
-      height: 44,
-      borderRadius: 22,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
     toolLabel: {
-      fontSize: 14,
+      fontSize: 15,
       fontWeight: '600',
       color: theme.textPrimary,
       fontFamily: TYPE_SCALE.titleMd.fontFamily,
-    },
-    toolSubtext: {
-      fontSize: 12,
-      fontWeight: '500',
-      fontFamily: TYPE_SCALE.body.fontFamily,
+      textAlign: 'center',
     },
 
     // Destination Guide
