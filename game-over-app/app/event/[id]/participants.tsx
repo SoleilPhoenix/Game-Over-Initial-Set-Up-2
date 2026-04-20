@@ -436,11 +436,11 @@ export default function ManageInvitationsScreen() {
   const getRoleBadge = (role: SlotRole) => {
     switch (role) {
       case 'organizer':
-        return { label: t.manageInvitations.organizer, bg: 'rgba(59, 130, 246, 0.2)', color: '#3B82F6' };
+        return { label: t.manageInvitations.organizer, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
       case 'honoree':
-        return { label: t.manageInvitations.honoree, bg: 'rgba(198, 167, 94, 0.18)', color: '#C6A75E' };
+        return { label: t.manageInvitations.honoree, bg: 'rgba(198,167,94,0.18)', color: '#C6A75E' };
       default:
-        return { label: t.manageInvitations.guest, bg: 'rgba(107, 114, 128, 0.2)', color: theme.textSecondary };
+        return { label: t.manageInvitations.guest, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
     }
   };
 
@@ -472,18 +472,22 @@ export default function ManageInvitationsScreen() {
         onPress={!isGuest && slot.isEditable ? () => setExpandedSlot(slot.isExpanded ? null : slot.index) : undefined}
       >
         <XStack alignItems="center" gap={12}>
-          {/* Avatar / Number */}
+          {/* Avatar with gold ring for honoree */}
           <View style={[
-            styles.avatar,
-            slot.role === 'organizer' && styles.avatarOrganizer,
-            slot.role === 'honoree' && styles.avatarHonoree,
-            isEmpty && styles.avatarEmpty,
+            styles.avatarRing,
+            slot.role === 'honoree' && styles.avatarRingHonoree,
           ]}>
-            {slot.role === 'honoree' ? (
-              <Ionicons name="star" size={18} color="#C6A75E" />
-            ) : (
-              <Text style={styles.avatarText}>{initial}</Text>
-            )}
+            <View style={[
+              styles.avatar,
+              slot.role === 'honoree' && styles.avatarHonoree,
+              isEmpty && styles.avatarEmpty,
+            ]}>
+              {slot.role === 'honoree' ? (
+                <Ionicons name="star" size={18} color="#C6A75E" />
+              ) : (
+                <Text style={styles.avatarText}>{initial}</Text>
+              )}
+            </View>
           </View>
 
           {/* Details */}
@@ -532,11 +536,40 @@ export default function ManageInvitationsScreen() {
             )}
           </YStack>
 
-          {/* Status indicator */}
-          <XStack alignItems="center" gap={4}>
-            <Ionicons name={statusConfig.icon} size={16} color={statusConfig.color} />
-          </XStack>
+          {/* Status indicator — top-right */}
+          <Ionicons name={statusConfig.icon} size={20} color={statusConfig.color} />
         </XStack>
+
+        {/* ── Bottom action strip (per mockup) ── */}
+        {!isEmpty && (
+          <XStack
+            justifyContent="space-between"
+            alignItems="center"
+            marginTop={10}
+            paddingTop={10}
+            borderTopWidth={StyleSheet.hairlineWidth}
+            borderTopColor={theme.ghostBorder}
+          >
+            <XStack gap={10} alignItems="center">
+              {/* Confirmed checkmark */}
+              <View style={[
+                styles.actionChip,
+                slot.status === 'confirmed' && styles.actionChipActive,
+              ]}>
+                <Ionicons
+                  name="checkmark"
+                  size={14}
+                  color={slot.status === 'confirmed' ? '#C6A75E' : theme.textTertiary}
+                />
+              </View>
+              {/* Chat/message bubble */}
+              <View style={styles.actionChip}>
+                <Ionicons name="chatbubble-outline" size={14} color={theme.textTertiary} />
+              </View>
+            </XStack>
+            <Text style={styles.statusLabel}>{statusConfig.label}</Text>
+          </XStack>
+        )}
 
         {/* Expanded edit form */}
         {slot.isEditable && slot.isExpanded && (
@@ -730,22 +763,25 @@ export default function ManageInvitationsScreen() {
           </View>
         </XStack>
 
-        {/* Slots info */}
-        <XStack alignItems="center" justifyContent="space-between" marginBottom={12}>
-          <Text style={styles.sectionTitle}>
-            {t.manageInvitations.slots
-              .replace('{{filled}}', String(filledCount))
-              .replace('{{total}}', String(totalSlots))}
-          </Text>
-        </XStack>
+        {/* Slots info — STATUS chip */}
+        <View style={styles.statusChipRow}>
+          <Text style={styles.statusChipLabel}>STATUS</Text>
+          <View style={styles.statusChip}>
+            <Text style={styles.statusChipText}>
+              {t.manageInvitations.slots
+                .replace('{{filled}}', String(filledCount))
+                .replace('{{total}}', String(totalSlots))}
+            </Text>
+          </View>
+        </View>
 
         {/* Slot Cards */}
         {slots.map((slot) => renderSlotCard(slot))}
       </ScrollView>
 
-      {/* Invite All Footer — organizers only */}
+      {/* Invite All Footer — organizers only, edge-to-edge */}
       {!isGuest && (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
+        <View style={[styles.footer, { paddingBottom: insets.bottom }]}>
           <GoldButton
             label={inviteLoading ? 'Sending…' : t.manageInvitations.inviteAll}
             fullWidth
@@ -800,32 +836,38 @@ export default function ManageInvitationsScreen() {
         <View style={styles.inviteOverlay}>
           <Pressable style={{ flex: 1 }} onPress={() => setInviteModalVisible(false)} />
           <View style={styles.inviteSheet} accessibilityViewIsModal={true}>
-            {/* Header */}
+            {/* Handle + centered header */}
             <View style={styles.inviteHandle} />
-            <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
+            <View style={{ alignItems: 'center', marginBottom: 4 }}>
               <Text style={styles.inviteTitle}>
                 {inviteSendStatus === 'done'
                   ? `${activeChannel === 'email' ? 'Email' : activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} sent`
                   : 'Invite All Guests'}
               </Text>
-              {inviteSendStatus !== 'sending' && (
-                <Pressable onPress={() => setInviteModalVisible(false)} hitSlop={10}>
-                  <Ionicons name="close" size={22} color={theme.textSecondary} />
-                </Pressable>
-              )}
-            </XStack>
+            </View>
+            {inviteSendStatus !== 'sending' && (
+              <Pressable
+                style={{ position: 'absolute', top: 20, right: 16 }}
+                onPress={() => setInviteModalVisible(false)}
+                hitSlop={10}
+              >
+                <Ionicons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            )}
 
             {/* ── idle: channel picker ── */}
             {inviteSendStatus === 'idle' && (
               <>
-                <Text style={styles.inviteSectionLabel}>SEND FROM GAME OVER</Text>
+                <Text style={[styles.inviteSectionLabel, { textAlign: 'center', marginBottom: 16 }]}>
+                  SEND FROM GAME OVER
+                </Text>
                 <XStack gap={10} marginBottom={20}>
                   <Pressable
                     style={[styles.inviteChannelBtn, !hasEmails && styles.inviteChannelBtnDisabled]}
                     onPress={() => hasEmails && handleSendViaChannel('email')}
                   >
-                    <Ionicons name="mail-outline" size={22} color={hasEmails ? '#3B82F6' : theme.textTertiary} />
-                    <Text style={[styles.inviteChannelLabel, { color: hasEmails ? '#3B82F6' : theme.textTertiary }]}>Email</Text>
+                    <Ionicons name="mail-outline" size={22} color={hasEmails ? '#C6A75E' : theme.textTertiary} />
+                    <Text style={[styles.inviteChannelLabel, { color: hasEmails ? '#C6A75E' : theme.textTertiary }]}>Email</Text>
                     <Text style={styles.inviteChannelCount}>{emailCount} guest{emailCount !== 1 ? 's' : ''}</Text>
                   </Pressable>
                   <Pressable
@@ -840,8 +882,8 @@ export default function ManageInvitationsScreen() {
                     style={[styles.inviteChannelBtn, !hasPhones && styles.inviteChannelBtnDisabled]}
                     onPress={() => hasPhones && handleSendViaChannel('whatsapp')}
                   >
-                    <Ionicons name="logo-whatsapp" size={22} color={hasPhones ? '#25D366' : theme.textTertiary} />
-                    <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#25D366' : theme.textTertiary }]}>WhatsApp</Text>
+                    <Ionicons name="logo-whatsapp" size={22} color={hasPhones ? '#C6A75E' : theme.textTertiary} />
+                    <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#C6A75E' : theme.textTertiary }]}>WhatsApp</Text>
                     <Text style={styles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
                   </Pressable>
                 </XStack>
@@ -1117,11 +1159,71 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 16,
+    // No background/border — GoldButton is the visual element
+  },
+  // ─── Status chip (above participant list) ───
+  statusChipRow: {
+    marginBottom: 14,
+    gap: 6,
+  },
+  statusChipLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+    color: theme.textTertiary,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  statusChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: theme.surfaceCard,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.accentGold,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  statusChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.accentGold,
+  },
+  // ─── Avatar ring ───────────────────────────
+  avatarRing: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: theme.ghostBorder,
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarRingHonoree: {
+    borderColor: theme.accentGold,
+    borderWidth: 2,
+  },
+  // ─── Bottom action strip ───────────────────
+  actionChip: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.ghostBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: theme.surfaceLow,
-    borderTopWidth: 1,
-    borderTopColor: theme.ghostBorder,
-    flexDirection: 'row',
+  },
+  actionChipActive: {
+    borderColor: theme.accentGold,
+    backgroundColor: 'rgba(198,167,94,0.1)',
+  },
+  statusLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   // ─── Invite Modal ───
   inviteOverlay: {
