@@ -1129,59 +1129,6 @@ export default function BudgetDashboardScreen() {
                   />
                 </View>
 
-                {/* Price Breakdown — always shown */}
-                {budgetStats.payingCount > 0 && (() => {
-                  const pkgSlug = cachedBudget?.packageId || (booking as any)?.package_id || '';
-                  const pkgTier = pkgSlug.split('-').pop() as string;
-                  const tierPriceCents: Record<string, number> = { essential: 9900, classic: 14900, grand: 19900 };
-                  const tierNames: Record<string, string> = { essential: 'Bronze', classic: 'Silver', grand: 'Gold' };
-                  const basePerPkg = tierPriceCents[pkgTier] ?? budgetStats.perPerson;
-                  const pkgName = tierNames[pkgTier] || 'Package';
-                  const totalCount = cachedParticipantCount || (budgetStats.payingCount + 1);
-                  const honoreeExcluded = cachedParticipantCount != null && budgetStats.payingCount < cachedParticipantCount;
-                  const baseAmount = basePerPkg * totalCount;
-                  const serviceFee = Math.ceil(baseAmount * 0.1);
-                  const grandTotal = baseAmount + serviceFee;
-                  const perPayingPerson = honoreeExcluded ? Math.ceil(grandTotal / budgetStats.payingCount) : 0;
-                  return (
-                    <View style={{ marginTop: 8 }}>
-                      {/* Thin divider */}
-                      <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 8 }} />
-                      {/* Row 1: package price × total participants */}
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text fontSize={12} color={theme.textTertiary}>
-                          {formatCurrencyRounded(basePerPkg)} / {pkgName} Package × {totalCount}
-                        </Text>
-                        <Text fontSize={12} color={theme.textTertiary}>
-                          {formatCurrencyRounded(baseAmount)}
-                        </Text>
-                      </View>
-                      {/* Row 2: service fee */}
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <Text fontSize={12} color="rgba(249,115,22,0.9)">Service Fee (10%)</Text>
-                        <Text fontSize={12} color="rgba(249,115,22,0.9)">{formatCurrencyRounded(serviceFee)}</Text>
-                      </View>
-                      {/* Row 3: total — thin divider + total line */}
-                      <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 6 }} />
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: honoreeExcluded ? 8 : 0 }}>
-                        <Text fontSize={12} fontWeight="600" color={theme.textSecondary}>Total Package Price</Text>
-                        <Text fontSize={12} fontWeight="600" color={theme.textSecondary}>{formatCurrencyRounded(grandTotal)}</Text>
-                      </View>
-                      {/* Row 4: per paying person — only when honoree is covered by group */}
-                      {honoreeExcluded && (
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: 'rgba(255,255,255,0.12)' }}>
-                          <Text fontSize={11} color={theme.textTertiary}>
-                            ↳ {budgetStats.payingCount} persons · Honoree covered by group
-                          </Text>
-                          <Text fontSize={11} fontWeight="600" color={theme.textSecondary}>
-                            {formatCurrencyRounded(perPayingPerson)}/person
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  );
-                })()}
-
                 {/* Pay Remaining Balance — organizers only */}
                 {budgetStats.percentage < 100 && budgetStats.pending > 0 && (
                   isOrganizer ? (

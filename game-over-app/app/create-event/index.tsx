@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { ScrollView, KeyboardAvoidingView, Platform, Pressable, TextInput } from 'react-native';
+import { ScrollView, KeyboardAvoidingView, Platform, Pressable, TextInput, Image, View, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +18,7 @@ import { GlassPanel } from '@/components/ui/GlassPanel';
 import { WizardFooter } from '@/components/ui/WizardFooter';
 import { useTranslation } from '@/i18n';
 import { useTheme } from '@/hooks/useTheme';
+import { getPackageImage } from '@/constants/packageImages';
 
 // PRD-defined cities: Berlin, Hamburg, Hannover
 // UUIDs must match supabase/migrations/20260211000000_add_german_cities.sql
@@ -171,17 +172,47 @@ export default function WizardStep1() {
 
           {/* City Selection */}
           <GlassPanel icon="location" title={t.wizard.city} testID="panel-city">
-            <OptionBlockGroup testID="city-options">
-              {AVAILABLE_CITIES.map(city => (
-                <OptionBlock
-                  key={city.id}
-                  label={city.name}
-                  selected={cityId === city.id}
-                  onPress={() => setCityId(city.id)}
-                  testID={`city-chip-${city.name.toLowerCase()}`}
-                />
-              ))}
-            </OptionBlockGroup>
+            <View style={{ gap: 10 }} testID="city-options">
+              {AVAILABLE_CITIES.map(city => {
+                const isSelected = cityId === city.id;
+                return (
+                  <Pressable
+                    key={city.id}
+                    testID={`city-chip-${city.name.toLowerCase()}`}
+                    onPress={() => setCityId(city.id)}
+                    style={{
+                      borderRadius: 14,
+                      overflow: 'hidden',
+                      borderWidth: isSelected ? 2 : 1,
+                      borderColor: isSelected ? theme.accentGold : theme.ghostBorder,
+                    }}
+                  >
+                    <View style={{ height: 88, overflow: 'hidden' }}>
+                      <Image
+                        source={getPackageImage(city.slug, 'classic')}
+                        style={StyleSheet.absoluteFillObject}
+                        resizeMode="cover"
+                      />
+                      <View style={{
+                        ...StyleSheet.absoluteFillObject,
+                        backgroundColor: 'rgba(13,27,42,0.42)',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                      }}>
+                        <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700', letterSpacing: 0.4 }}>
+                          {city.name}
+                        </Text>
+                      </View>
+                      {isSelected && (
+                        <View style={{ position: 'absolute', top: 8, right: 10 }}>
+                          <Ionicons name="checkmark-circle" size={20} color={theme.accentGold} />
+                        </View>
+                      )}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
           </GlassPanel>
 
           {/* Participants */}

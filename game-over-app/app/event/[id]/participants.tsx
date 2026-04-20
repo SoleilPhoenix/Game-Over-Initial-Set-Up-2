@@ -66,6 +66,7 @@ import { useTranslation } from '@/i18n';
 import { useTheme } from '@/hooks/useTheme';
 import { ambientShadow, type EditorialTheme } from '@/constants/designSystem';
 import { Button } from '@/components/ui/Button';
+import { GoldButton } from '@/components/ui/editorial';
 import type { ParticipantWithProfile } from '@/repositories';
 import { loadDesiredParticipants, loadBudgetInfo, loadGuestDetails, saveGuestDetails, setInvitedCount, type GuestDetail } from '@/lib/participantCountCache';
 import { supabase } from '@/lib/supabase/client';
@@ -437,7 +438,7 @@ export default function ManageInvitationsScreen() {
       case 'organizer':
         return { label: t.manageInvitations.organizer, bg: 'rgba(59, 130, 246, 0.2)', color: '#3B82F6' };
       case 'honoree':
-        return { label: t.manageInvitations.honoree, bg: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B' };
+        return { label: t.manageInvitations.honoree, bg: 'rgba(198, 167, 94, 0.18)', color: '#C6A75E' };
       default:
         return { label: t.manageInvitations.guest, bg: 'rgba(107, 114, 128, 0.2)', color: theme.textSecondary };
     }
@@ -446,9 +447,9 @@ export default function ManageInvitationsScreen() {
   const getStatusConfig = (status: SlotStatus) => {
     switch (status) {
       case 'confirmed':
-        return { icon: 'checkmark-circle' as const, color: '#10B981', label: t.manageInvitations.confirmed };
+        return { icon: 'checkmark-circle' as const, color: '#C6A75E', label: t.manageInvitations.confirmed };
       case 'pending':
-        return { icon: 'time-outline' as const, color: '#F59E0B', label: t.manageInvitations.pending };
+        return { icon: 'time-outline' as const, color: '#C6A75E', label: t.manageInvitations.pending };
       default:
         return { icon: 'ellipse-outline' as const, color: theme.textTertiary, label: t.manageInvitations.notInvited };
     }
@@ -479,7 +480,7 @@ export default function ManageInvitationsScreen() {
             isEmpty && styles.avatarEmpty,
           ]}>
             {slot.role === 'honoree' ? (
-              <Ionicons name="star" size={18} color="#F59E0B" />
+              <Ionicons name="star" size={18} color="#C6A75E" />
             ) : (
               <Text style={styles.avatarText}>{initial}</Text>
             )}
@@ -496,7 +497,7 @@ export default function ManageInvitationsScreen() {
               </View>
               {slot.role === 'honoree' && (
                 <Pressable onPress={() => setShowHonoreeInfo(true)} hitSlop={10}>
-                  <Ionicons name="information-circle-outline" size={17} color="#F59E0B" />
+                  <Ionicons name="information-circle-outline" size={17} color="#C6A75E" />
                 </Pressable>
               )}
             </XStack>
@@ -716,11 +717,11 @@ export default function ManageInvitationsScreen() {
         {/* Stats Row */}
         <XStack gap={12} marginBottom={20}>
           <View style={[styles.statCard, { flex: 1 }]}>
-            <Text style={[styles.statNumber, { color: '#10B981' }]}>{confirmedCount}</Text>
+            <Text style={[styles.statNumber, { color: theme.accentGold }]}>{confirmedCount}</Text>
             <Text style={styles.statLabel}>{t.manageInvitations.confirmed}</Text>
           </View>
           <View style={[styles.statCard, { flex: 1 }]}>
-            <Text style={[styles.statNumber, { color: '#F59E0B' }]}>{pendingCount}</Text>
+            <Text style={[styles.statNumber, { color: theme.accentGold }]}>{pendingCount}</Text>
             <Text style={styles.statLabel}>{t.manageInvitations.pending}</Text>
           </View>
           <View style={[styles.statCard, { flex: 1 }]}>
@@ -745,15 +746,14 @@ export default function ManageInvitationsScreen() {
       {/* Invite All Footer — organizers only */}
       {!isGuest && (
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Button
-            flex={1}
+          <GoldButton
+            label={inviteLoading ? 'Sending…' : t.manageInvitations.inviteAll}
+            fullWidth
+            size="lg"
+            leftIcon={<Ionicons name="paper-plane-outline" size={20} color="#1A2F47" />}
             onPress={handleInviteAll}
-            loading={inviteLoading}
-            icon={<Ionicons name="paper-plane-outline" size={20} color="white" />}
             testID="invite-all-button"
-          >
-            {t.manageInvitations.inviteAll}
-          </Button>
+          />
         </View>
       )}
 
@@ -764,7 +764,7 @@ export default function ManageInvitationsScreen() {
             <View style={styles.infoHandle} />
             <XStack gap={12} alignItems="center" marginBottom={14}>
               <View style={styles.infoIconCircle}>
-                <Ionicons name="notifications" size={20} color="#F59E0B" />
+                <Ionicons name="notifications" size={20} color="#C6A75E" />
               </View>
               <YStack flex={1}>
                 <Text style={styles.infoTitle}>
@@ -780,7 +780,7 @@ export default function ManageInvitationsScreen() {
                 .replace('{{time}}', (t.manageInvitations as any).honoreeNotificationTime)}
             </Text>
             <XStack alignItems="center" gap={6} marginTop={12} style={styles.infoPrivacyRow}>
-              <Ionicons name="eye-off-outline" size={14} color="#10B981" />
+              <Ionicons name="eye-off-outline" size={14} color="#C6A75E" />
               <Text style={styles.infoPrivacyText}>
                 {(t.manageInvitations as any).honoreePrivacyNote}
               </Text>
@@ -832,8 +832,8 @@ export default function ManageInvitationsScreen() {
                     style={[styles.inviteChannelBtn, !hasPhones && styles.inviteChannelBtnDisabled]}
                     onPress={() => hasPhones && handleSendViaChannel('sms')}
                   >
-                    <Ionicons name="chatbubble-outline" size={22} color={hasPhones ? '#10B981' : theme.textTertiary} />
-                    <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#10B981' : theme.textTertiary }]}>SMS</Text>
+                    <Ionicons name="chatbubble-outline" size={22} color={hasPhones ? '#C6A75E' : theme.textTertiary} />
+                    <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#C6A75E' : theme.textTertiary }]}>SMS</Text>
                     <Text style={styles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
                   </Pressable>
                   <Pressable
@@ -967,7 +967,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     backgroundColor: 'rgba(59, 130, 246, 0.2)',
   },
   avatarHonoree: {
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    backgroundColor: 'rgba(198, 167, 94, 0.18)',
   },
   avatarEmpty: {
     backgroundColor: theme.surfaceLow,
@@ -1072,7 +1072,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
   infoTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#F59E0B',
+    color: '#C6A75E',
   },
   infoBody: {
     fontSize: 14,
@@ -1087,7 +1087,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
   },
   infoPrivacyText: {
     fontSize: 13,
-    color: '#10B981',
+    color: '#C6A75E',
     fontWeight: '500',
     flex: 1,
   },

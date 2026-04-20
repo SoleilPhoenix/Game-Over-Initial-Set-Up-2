@@ -810,13 +810,13 @@ function makeStyles(theme: EditorialTheme) {
     destinationLabel: {
       fontSize: 20,
       fontWeight: '700',
-      color: theme.accentGold,
+      color: '#FFFFFF',
       marginBottom: 4,
       fontFamily: TYPE_SCALE.headlineMd.fontFamily,
     },
     destinationLink: {
       fontSize: 13,
-      color: theme.accentGold,
+      color: 'rgba(255,255,255,0.85)',
       fontFamily: TYPE_SCALE.body.fontFamily,
     },
 
