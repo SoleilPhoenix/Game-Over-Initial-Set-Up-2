@@ -17,7 +17,8 @@ import { useBooking } from '@/hooks/queries/useBookings';
 import { useParticipants, participantKeys } from '@/hooks/queries/useParticipants';
 import { useInviteGuests } from '@/hooks/queries/useInvites';
 import { useUser } from '@/stores/authStore';
-import { DARK_THEME } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { ambientShadow, type EditorialTheme } from '@/constants/designSystem';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
@@ -77,6 +78,8 @@ function SwipeableRefundRow({
   description: string; amount: string; processingLabel: string; processingText: string; showBorder: boolean; onDelete: () => void;
   icon?: string; color?: string; bg?: string;
 }) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const translateX = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
     PanResponder.create({
@@ -106,15 +109,15 @@ function SwipeableRefundRow({
       <View style={styles.refundRow}>
         <XStack alignItems="center" gap="$3" flex={1}>
           <View style={[styles.refundIcon, { backgroundColor: bg ?? 'rgba(255,255,255,0.08)' }]}>
-            <Ionicons name={(icon ?? 'receipt-outline') as any} size={18} color={color ?? DARK_THEME.textSecondary} />
+            <Ionicons name={(icon ?? 'receipt-outline') as any} size={18} color={color ?? theme.textSecondary} />
           </View>
           <YStack>
-            <Text style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}>{description}</Text>
-            <Text style={{ fontSize: 12, color: DARK_THEME.textTertiary }}>{processingLabel}</Text>
+            <Text style={{ fontSize: 14, fontWeight: '500', color: theme.textPrimary }}>{description}</Text>
+            <Text style={{ fontSize: 12, color: theme.textTertiary }}>{processingLabel}</Text>
           </YStack>
         </XStack>
         <YStack alignItems="flex-end">
-          <Text style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}>+€{amount}</Text>
+          <Text style={{ fontSize: 14, fontWeight: '500', color: theme.textPrimary }}>+€{amount}</Text>
           <View style={styles.processingBadge}>
             <Text style={styles.processingText}>{processingText}</Text>
           </View>
@@ -127,6 +130,9 @@ function SwipeableRefundRow({
 export default function BudgetDashboardScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+  const remindStyles = useMemo(() => makeRemindStyles(theme), [theme]);
   const { hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
   // eventId = opened via /(tabs)/budget?eventId=xxx (old approach, kept for safety)
   // id     = opened via /event/[id]/budget (event-stack, router.back() works correctly)
@@ -807,7 +813,7 @@ export default function BudgetDashboardScreen() {
               <Ionicons
                 name={eventSelectorOpen ? 'chevron-up' : 'chevron-down'}
                 size={18}
-                color={DARK_THEME.textPrimary}
+                color={theme.textPrimary}
               />
             </View>
           )}
@@ -855,7 +861,7 @@ export default function BudgetDashboardScreen() {
                       </Text>
                     </View>
                     {isSelected && (
-                      <Ionicons name="checkmark-circle" size={20} color="#5A7EB0" />
+                      <Ionicons name="checkmark-circle" size={20} color={theme.accentGold} />
                     )}
                   </Pressable>
                 );
@@ -900,7 +906,7 @@ export default function BudgetDashboardScreen() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
         <LinearGradient
-          colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
+          colors={[theme.surfaceHigh, theme.background]}
           style={StyleSheet.absoluteFill}
         />
         <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
@@ -922,7 +928,7 @@ export default function BudgetDashboardScreen() {
               style={styles.notificationButton}
               testID="notifications-button"
             >
-              <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
+              <Ionicons name="notifications-outline" size={24} color={theme.textPrimary} />
               {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
             </Pressable>
           </XStack>
@@ -942,8 +948,8 @@ export default function BudgetDashboardScreen() {
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={handleRefresh}
-              tintColor={DARK_THEME.primary}
-              colors={[DARK_THEME.primary]}
+              tintColor={theme.accentGold}
+              colors={[theme.accentGold]}
             />
           }
           showsVerticalScrollIndicator={false}
@@ -951,18 +957,18 @@ export default function BudgetDashboardScreen() {
             <YStack justifyContent="center" alignItems="center">
               <View style={styles.emptyIconContainer}>
                 <LinearGradient
-                  colors={[`${DARK_THEME.primary}30`, `${DARK_THEME.primary}10`]}
+                  colors={[`${theme.accentGold}30`, `${theme.accentGold}10`]}
                   style={styles.emptyIconGradient}
                 >
                   <Text fontSize={56}>💰</Text>
                 </LinearGradient>
               </View>
-              <Text fontSize={24} fontWeight="800" color={DARK_THEME.textPrimary} marginBottom={8} textAlign="center">
+              <Text fontSize={24} fontWeight="800" color={theme.textPrimary} marginBottom={8} textAlign="center">
                 {t.budget.noBudgetTitle}
               </Text>
               <Text
                 fontSize={16}
-                color={DARK_THEME.textTertiary}
+                color={theme.textTertiary}
                 textAlign="center"
                 maxWidth={240}
                 lineHeight={24}
@@ -982,7 +988,7 @@ export default function BudgetDashboardScreen() {
 
       {/* Background */}
       <LinearGradient
-        colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
+        colors={[theme.surfaceHigh, theme.background]}
         style={StyleSheet.absoluteFill}
       />
 
@@ -997,7 +1003,7 @@ export default function BudgetDashboardScreen() {
                 hitSlop={8}
                 style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
               >
-                <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+                <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
               </Pressable>
             ) : (
               <View style={styles.avatarContainer}>
@@ -1022,7 +1028,7 @@ export default function BudgetDashboardScreen() {
             style={styles.notificationButton}
             testID="notifications-button"
           >
-            <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
+            <Ionicons name="notifications-outline" size={24} color={theme.textPrimary} />
             {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
           </Pressable>
         </XStack>
@@ -1042,7 +1048,7 @@ export default function BudgetDashboardScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={handleRefresh}
-            tintColor={DARK_THEME.primary}
+            tintColor={theme.accentGold}
           />
         }
       >
@@ -1060,7 +1066,7 @@ export default function BudgetDashboardScreen() {
                   /* Fully paid: Package Price left (green), Due €0 right (grey) */
                   <XStack justifyContent="space-between" alignItems="flex-start" marginBottom="$3">
                     <YStack gap={4}>
-                      <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.5}>
+                      <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.5}>
                         Total Package Paid
                       </Text>
                       <Text fontSize={24} fontWeight="700" color="#10B981" letterSpacing={-0.5}>
@@ -1068,10 +1074,10 @@ export default function BudgetDashboardScreen() {
                       </Text>
                     </YStack>
                     <YStack gap={4} alignItems="flex-end">
-                      <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.3}>
+                      <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.3}>
                         Due
                       </Text>
-                      <Text fontSize={24} fontWeight="700" color={DARK_THEME.textTertiary} letterSpacing={-0.5}>
+                      <Text fontSize={24} fontWeight="700" color={theme.textTertiary} letterSpacing={-0.5}>
                         {formatCurrencyRounded(0)}
                       </Text>
                     </YStack>
@@ -1083,7 +1089,7 @@ export default function BudgetDashboardScreen() {
                     return (
                   <XStack justifyContent="space-between" alignItems="flex-start" marginBottom="$3">
                     <YStack gap={4}>
-                      <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.5}>
+                      <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.5}>
                         Deposit (25%)
                       </Text>
                       <Text fontSize={24} fontWeight="700" color="#10B981" letterSpacing={-0.5}>
@@ -1091,17 +1097,17 @@ export default function BudgetDashboardScreen() {
                       </Text>
                     </YStack>
                     <YStack gap={4} alignItems="flex-end">
-                      <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.3}>
+                      <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.3}>
                         Due (75%)
                       </Text>
-                      <Text fontSize={24} fontWeight="700" color={DARK_THEME.textPrimary} letterSpacing={-0.5}>
+                      <Text fontSize={24} fontWeight="700" color={theme.textPrimary} letterSpacing={-0.5}>
                         {fmtDue}
                       </Text>
                       {daysUntilEvent !== null && daysUntilEvent > 0 && (
                         <Text
                           fontSize={11}
                           fontWeight="600"
-                          color={daysUntilEvent <= 14 ? '#F97316' : DARK_THEME.textTertiary}
+                          color={daysUntilEvent <= 14 ? '#F97316' : theme.textTertiary}
                           letterSpacing={0.2}
                         >
                           {(t.budget as any).dueInDays.replace('{{count}}', String(daysUntilEvent))}
@@ -1118,7 +1124,7 @@ export default function BudgetDashboardScreen() {
                   <View
                     style={[styles.progressBar, {
                       width: `${budgetStats.percentage}%`,
-                      backgroundColor: DARK_THEME.primary,
+                      backgroundColor: theme.accentGold,
                     }]}
                   />
                 </View>
@@ -1143,10 +1149,10 @@ export default function BudgetDashboardScreen() {
                       <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 8 }} />
                       {/* Row 1: package price × total participants */}
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                        <Text fontSize={12} color={theme.textTertiary}>
                           {formatCurrencyRounded(basePerPkg)} / {pkgName} Package × {totalCount}
                         </Text>
-                        <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                        <Text fontSize={12} color={theme.textTertiary}>
                           {formatCurrencyRounded(baseAmount)}
                         </Text>
                       </View>
@@ -1158,16 +1164,16 @@ export default function BudgetDashboardScreen() {
                       {/* Row 3: total — thin divider + total line */}
                       <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 6 }} />
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: honoreeExcluded ? 8 : 0 }}>
-                        <Text fontSize={12} fontWeight="600" color={DARK_THEME.textSecondary}>Total Package Price</Text>
-                        <Text fontSize={12} fontWeight="600" color={DARK_THEME.textSecondary}>{formatCurrencyRounded(grandTotal)}</Text>
+                        <Text fontSize={12} fontWeight="600" color={theme.textSecondary}>Total Package Price</Text>
+                        <Text fontSize={12} fontWeight="600" color={theme.textSecondary}>{formatCurrencyRounded(grandTotal)}</Text>
                       </View>
                       {/* Row 4: per paying person — only when honoree is covered by group */}
                       {honoreeExcluded && (
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: 'rgba(255,255,255,0.12)' }}>
-                          <Text fontSize={11} color={DARK_THEME.textTertiary}>
+                          <Text fontSize={11} color={theme.textTertiary}>
                             ↳ {budgetStats.payingCount} persons · Honoree covered by group
                           </Text>
-                          <Text fontSize={11} fontWeight="600" color={DARK_THEME.textSecondary}>
+                          <Text fontSize={11} fontWeight="600" color={theme.textSecondary}>
                             {formatCurrencyRounded(perPayingPerson)}/person
                           </Text>
                         </View>
@@ -1203,11 +1209,11 @@ export default function BudgetDashboardScreen() {
                           {formatCurrencyRounded(budgetStats.pending)} · {(t.budget as any).payRemainingSubtitle}
                         </Text>
                       </YStack>
-                      <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+                      <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
                     </Pressable>
                   ) : (
                     <View style={styles.guestRemainingInfo}>
-                      <Ionicons name="information-circle-outline" size={18} color={DARK_THEME.textSecondary} />
+                      <Ionicons name="information-circle-outline" size={18} color={theme.textSecondary} />
                       <Text style={styles.guestRemainingText}>
                         The remaining {formatCurrencyRounded(budgetStats.pending)} will be paid by the organizer 14 days before the event.
                       </Text>
@@ -1220,12 +1226,12 @@ export default function BudgetDashboardScreen() {
             {/* Group Contributions */}
             <YStack marginBottom="$4">
               <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
-                <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
+                <Text fontSize={12} fontWeight="700" color={theme.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
                   {t.budget.groupContributions}
                 </Text>
                 {isOrganizer && budgetStats.pendingCount > 0 && (
                   <Pressable onPress={handleRemindAll}>
-                    <Text fontSize={12} fontWeight="500" color={DARK_THEME.primary}>
+                    <Text fontSize={12} fontWeight="500" color={theme.accentGold}>
                       {t.budget.remindAll}
                     </Text>
                   </Pressable>
@@ -1284,13 +1290,13 @@ export default function BudgetDashboardScreen() {
                         {/* Name + amount — flex: 1 with right margin to keep space for badge */}
                         <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
                           <Text
-                            style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}
+                            style={{ fontSize: 14, fontWeight: '500', color: theme.textPrimary }}
                             numberOfLines={1}
                           >
                             {name}{isCurrentUser ? ` ${t.budget.you}` : ''}
                           </Text>
                           <Text
-                            style={{ fontSize: 12, color: DARK_THEME.textTertiary }}
+                            style={{ fontSize: 12, color: theme.textTertiary }}
                             numberOfLines={1}
                           >
                             {isPending
@@ -1309,11 +1315,11 @@ export default function BudgetDashboardScreen() {
                           <Ionicons
                             name={isPaid ? 'checkmark' : 'time-outline'}
                             size={10}
-                            color={isPaid ? DARK_THEME.success : DARK_THEME.warning}
+                            color={isPaid ? theme.success : theme.warning}
                           />
                           <Text style={[
                             styles.paymentBadgeText,
-                            { color: isPaid ? DARK_THEME.success : DARK_THEME.warning }
+                            { color: isPaid ? theme.success : theme.warning }
                           ]}>
                             {isPaid ? t.budget.paid : t.budget.pending}
                           </Text>
@@ -1356,7 +1362,7 @@ export default function BudgetDashboardScreen() {
                             );
                           }}
                         >
-                          <Ionicons name="checkmark-circle-outline" size={14} color={DARK_THEME.primary} />
+                          <Ionicons name="checkmark-circle-outline" size={14} color={theme.accentGold} />
                           <Text style={styles.markPaidButtonText}>I've Paid</Text>
                         </Pressable>
                       )}
@@ -1379,16 +1385,16 @@ export default function BudgetDashboardScreen() {
                         <Text style={styles.participantInitialsText}>{initials}</Text>
                       </View>
                       <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }} numberOfLines={1}>
+                        <Text style={{ fontSize: 14, fontWeight: '500', color: theme.textPrimary }} numberOfLines={1}>
                           {ic.name}
                         </Text>
-                        <Text style={{ fontSize: 12, color: DARK_THEME.textTertiary }} numberOfLines={1}>
+                        <Text style={{ fontSize: 12, color: theme.textTertiary }} numberOfLines={1}>
                           {t.budget.pendingOwes.replace('{{amount}}', formatCurrency(perPerson))}
                         </Text>
                       </View>
                       <View style={[styles.paymentBadge, { flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 }, styles.pendingBadge]}>
-                        <Ionicons name="time-outline" size={10} color={DARK_THEME.warning} />
-                        <Text style={[styles.paymentBadgeText, { color: DARK_THEME.warning }]}>{t.budget.pending}</Text>
+                        <Ionicons name="time-outline" size={10} color={theme.warning} />
+                        <Text style={[styles.paymentBadgeText, { color: theme.warning }]}>{t.budget.pending}</Text>
                       </View>
                     </View>
                   );
@@ -1399,12 +1405,12 @@ export default function BudgetDashboardScreen() {
               {isOrganizer && (
                 <Pressable style={styles.inviteButton} onPress={handleInvite}>
                   <View style={styles.inviteButtonIcon}>
-                    <Ionicons name="share-social-outline" size={18} color="#5A7EB0" />
+                    <Ionicons name="share-social-outline" size={18} color={theme.accentGold} />
                   </View>
                   <Text style={styles.inviteButtonText} numberOfLines={1}>
                     Invite Guests — Email, SMS, WhatsApp
                   </Text>
-                  <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
                 </Pressable>
               )}
 
@@ -1415,15 +1421,15 @@ export default function BudgetDashboardScreen() {
             {/* Expense Breakdown */}
             <YStack marginBottom="$4">
               <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
-                <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
+                <Text fontSize={12} fontWeight="700" color={theme.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
                   {(t.budget as any).expenseBreakdown}
                 </Text>
                 <Pressable
                   onPress={() => { setExpenseModal(prev => ({ ...prev, categoryKey: null, viewMode: 'form', visible: true })); }}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 >
-                  <Ionicons name="add-circle-outline" size={16} color={DARK_THEME.primary} />
-                  <Text fontSize={12} fontWeight="500" color={DARK_THEME.primary}>Add</Text>
+                  <Ionicons name="add-circle-outline" size={16} color={theme.accentGold} />
+                  <Text fontSize={12} fontWeight="500" color={theme.accentGold}>Add</Text>
                 </Pressable>
               </XStack>
               <View style={styles.glassCard}>
@@ -1443,17 +1449,17 @@ export default function BudgetDashboardScreen() {
                             <Ionicons name={item.icon as any} size={18} color={item.color} />
                           </View>
                           <YStack>
-                            <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
+                            <Text fontSize={14} fontWeight="500" color={theme.textPrimary}>
                               {item.labelKey in t.budget ? (t.budget as any)[item.labelKey] : item.labelKey}
                             </Text>
                             {catExpenses.length === 0 && item.packageNote && (
                               <>
-                                <Text fontSize={12} color={DARK_THEME.textTertiary}>Extra cost beyond package</Text>
+                                <Text fontSize={12} color={theme.textTertiary}>Extra cost beyond package</Text>
                                 <Text fontSize={11} color="rgba(156,163,175,0.65)">Pre & post-event</Text>
                               </>
                             )}
                             {catExpenses.length === 0 && !item.packageNote && (
-                              <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                              <Text fontSize={12} color={theme.textTertiary}>
                                 {(t.budget as any).expenseEstimated}
                               </Text>
                             )}
@@ -1488,7 +1494,7 @@ export default function BudgetDashboardScreen() {
                           >
                             <View style={styles.expenseSubIndent} />
                             <Text style={styles.expenseSubDesc} numberOfLines={1}>{exp.description}</Text>
-                            <Ionicons name="pencil-outline" size={12} color={DARK_THEME.textTertiary} style={{ marginRight: 4 }} />
+                            <Ionicons name="pencil-outline" size={12} color={theme.textTertiary} style={{ marginRight: 4 }} />
                             <Text style={[styles.expenseSubAmount, { color: item.color }]}>
                               €{exp.amount}
                             </Text>
@@ -1506,12 +1512,12 @@ export default function BudgetDashboardScreen() {
                   }}
                 >
                   <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
-                    <Ionicons name="add" size={18} color={DARK_THEME.textTertiary} />
+                    <Ionicons name="add" size={18} color={theme.textTertiary} />
                   </View>
-                  <Text style={{ fontSize: 14, color: DARK_THEME.textTertiary, flex: 1 }}>
+                  <Text style={{ fontSize: 14, color: theme.textTertiary, flex: 1 }}>
                     Add custom category
                   </Text>
-                  <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                 </Pressable>
               </View>
             </YStack>
@@ -1519,21 +1525,21 @@ export default function BudgetDashboardScreen() {
             {/* Refund Tracking */}
             <YStack marginBottom="$6">
               <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
-                <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
+                <Text fontSize={12} fontWeight="700" color={theme.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
                   {t.budget.refundTracking}
                 </Text>
                 <Pressable
                   onPress={openRefundModal}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 >
-                  <Ionicons name="add-circle-outline" size={16} color={DARK_THEME.primary} />
-                  <Text fontSize={12} fontWeight="500" color={DARK_THEME.primary}>Add</Text>
+                  <Ionicons name="add-circle-outline" size={16} color={theme.accentGold} />
+                  <Text fontSize={12} fontWeight="500" color={theme.accentGold}>Add</Text>
                 </Pressable>
               </XStack>
               <View style={styles.glassCard}>
                 {addedRefunds.length === 0 ? (
                   <Pressable onPress={openRefundModal} style={styles.emptyRefundBox}>
-                    <Ionicons name="receipt-outline" size={22} color={DARK_THEME.textTertiary} />
+                    <Ionicons name="receipt-outline" size={22} color={theme.textTertiary} />
                     <Text style={styles.emptyRefundText}>Tap + Add to track a refund</Text>
                   </Pressable>
                 ) : (
@@ -1564,7 +1570,7 @@ export default function BudgetDashboardScreen() {
           )}
 
             {/* Footer */}
-            <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" marginTop="$2">
+            <Text fontSize={12} color={theme.textTertiary} textAlign="center" marginTop="$2">
               {t.budget.dataUpdated}
             </Text>
         </>
@@ -1587,7 +1593,7 @@ export default function BudgetDashboardScreen() {
                     <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
                       <Text style={styles.modalTitle}>Select Category</Text>
                       <Pressable onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
-                        <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                        <Ionicons name="close" size={22} color={theme.textSecondary} />
                       </Pressable>
                     </XStack>
                     {allExpenseCategories.map(cat => (
@@ -1614,7 +1620,7 @@ export default function BudgetDashboardScreen() {
                         <Text style={styles.templateLabel}>
                           {cat.labelKey in t.budget ? (t.budget as any)[cat.labelKey] : cat.labelKey}
                         </Text>
-                        <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                        <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                       </Pressable>
                     ))}
                     {/* Add custom category */}
@@ -1626,10 +1632,10 @@ export default function BudgetDashboardScreen() {
                       }}
                     >
                       <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
-                        <Ionicons name="add" size={18} color={DARK_THEME.textTertiary} />
+                        <Ionicons name="add" size={18} color={theme.textTertiary} />
                       </View>
-                      <Text style={[styles.templateLabel, { color: DARK_THEME.textTertiary }]}>Add custom category</Text>
-                      <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                      <Text style={[styles.templateLabel, { color: theme.textTertiary }]}>Add custom category</Text>
+                      <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                     </Pressable>
                   </>
                 ) : expenseModal.viewMode === 'list' ? (
@@ -1650,7 +1656,7 @@ export default function BudgetDashboardScreen() {
                             <Text style={styles.modalNote}>{catExpenses.length} expense{catExpenses.length !== 1 ? 's' : ''}</Text>
                           </YStack>
                           <Pressable onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
-                            <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                            <Ionicons name="close" size={22} color={theme.textSecondary} />
                           </Pressable>
                         </XStack>
                         {catExpenses.map((exp, i) => {
@@ -1673,13 +1679,13 @@ export default function BudgetDashboardScreen() {
                               }}
                             >
                               <YStack flex={1}>
-                                <Text style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}>{exp.description}</Text>
-                                <Text style={{ fontSize: 11, color: DARK_THEME.textTertiary }}>
+                                <Text style={{ fontSize: 14, fontWeight: '500', color: theme.textPrimary }}>{exp.description}</Text>
+                                <Text style={{ fontSize: 11, color: theme.textTertiary }}>
                                   {exp.paidBy === 'other' ? `Paid by ${exp.paidByPerson || 'someone else'}` : 'Paid by you'}
                                   {exp.contributors.length > 0 ? ` · ${exp.contributors.length} contributors` : ''}
                                 </Text>
                               </YStack>
-                              <Ionicons name="pencil-outline" size={14} color={DARK_THEME.textTertiary} style={{ marginRight: 6 }} />
+                              <Ionicons name="pencil-outline" size={14} color={theme.textTertiary} style={{ marginRight: 6 }} />
                               <Text style={{ fontSize: 14, fontWeight: '600', color: expCat.color }}>€{exp.amount}</Text>
                             </Pressable>
                           );
@@ -1702,7 +1708,7 @@ export default function BudgetDashboardScreen() {
                           <Text style={styles.submitButtonText}>Add Another</Text>
                         </Pressable>
                         <Pressable style={{ marginTop: 12, alignItems: 'center' }} onPress={() => setExpenseModal(prev => ({ ...prev, categoryKey: null }))}>
-                          <Text style={{ color: DARK_THEME.textSecondary, fontSize: 13 }}>← Change category</Text>
+                          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>← Change category</Text>
                         </Pressable>
                       </>
                     );
@@ -1727,14 +1733,14 @@ export default function BudgetDashboardScreen() {
                             )}
                           </YStack>
                           <Pressable onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
-                            <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                            <Ionicons name="close" size={22} color={theme.textSecondary} />
                           </Pressable>
                         </XStack>
                         <Text style={styles.inputLabel}>What was this expense for?</Text>
                         <TextInput
                           style={styles.modalInput}
                           placeholder="e.g. Hotel booking, train tickets..."
-                          placeholderTextColor={DARK_THEME.textTertiary}
+                          placeholderTextColor={theme.textTertiary}
                           value={expenseModal.description}
                           onChangeText={v => setExpenseModal(prev => ({ ...prev, description: v }))}
                           autoCapitalize="sentences"
@@ -1743,7 +1749,7 @@ export default function BudgetDashboardScreen() {
                         <TextInput
                           style={styles.modalInput}
                           placeholder="0.00"
-                          placeholderTextColor={DARK_THEME.textTertiary}
+                          placeholderTextColor={theme.textTertiary}
                           value={expenseModal.amount}
                           onChangeText={v => setExpenseModal(prev => ({ ...prev, amount: v }))}
                           keyboardType="decimal-pad"
@@ -1770,7 +1776,7 @@ export default function BudgetDashboardScreen() {
                               style={[styles.dropdownButton, expenseModal.paidByPerson && styles.dropdownButtonSelected]}
                               onPress={() => setExpenseModal(prev => ({ ...prev, payerDropdownOpen: !prev.payerDropdownOpen }))}
                             >
-                              <Text style={[styles.dropdownButtonText, expenseModal.paidByPerson && { color: DARK_THEME.textPrimary }]}>
+                              <Text style={[styles.dropdownButtonText, expenseModal.paidByPerson && { color: theme.textPrimary }]}>
                                 {expenseModal.paidByPerson
                                   ? payerOptions.find(c => c.id === expenseModal.paidByPerson)?.name ?? 'Select person'
                                   : 'Select person'}
@@ -1778,7 +1784,7 @@ export default function BudgetDashboardScreen() {
                               <Ionicons
                                 name={expenseModal.payerDropdownOpen ? 'chevron-up' : 'chevron-down'}
                                 size={16}
-                                color={DARK_THEME.textTertiary}
+                                color={theme.textTertiary}
                               />
                             </Pressable>
                             {/* Dropdown list — max 4 rows visible, inner scroll for rest */}
@@ -1799,10 +1805,10 @@ export default function BudgetDashboardScreen() {
                                         setExpenseModal(prev => ({ ...prev, paidByPerson: sel ? null : c.id, payerDropdownOpen: false }));
                                       }}
                                     >
-                                      <Text style={[styles.dropdownItemText, sel && { color: '#5A7EB0', fontWeight: '700' as const }]}>
+                                      <Text style={[styles.dropdownItemText, sel && { color: theme.accentGold, fontWeight: '700' as const }]}>
                                         {c.name}
                                       </Text>
-                                      {sel && <Ionicons name="checkmark" size={16} color="#5A7EB0" />}
+                                      {sel && <Ionicons name="checkmark" size={16} color={theme.accentGold} />}
                                     </Pressable>
                                   );
                                 })}
@@ -1864,7 +1870,7 @@ export default function BudgetDashboardScreen() {
                             }
                           }}
                         >
-                          <Text style={{ color: DARK_THEME.textSecondary, fontSize: 13 }}>
+                          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
                             {hasExisting ? '← Back to list' : '← Change category'}
                           </Text>
                         </Pressable>
@@ -1890,7 +1896,7 @@ export default function BudgetDashboardScreen() {
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
                 <Text style={styles.modalTitle}>Track a Refund</Text>
                 <Pressable onPress={() => setRefundModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
-                  <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                  <Ionicons name="close" size={22} color={theme.textSecondary} />
                 </Pressable>
               </XStack>
               <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
@@ -1910,7 +1916,7 @@ export default function BudgetDashboardScreen() {
                         <Ionicons name={tmpl.icon as any} size={18} color={tmpl.color} />
                       </View>
                       <Text style={styles.templateLabel}>{tmpl.label}</Text>
-                      <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                      <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                     </Pressable>
                   ))}
                   {/* Custom refund */}
@@ -1919,10 +1925,10 @@ export default function BudgetDashboardScreen() {
                     onPress={() => { setRefundModal(prev => ({ ...prev, templateKey: 'custom', description: '' })); }}
                   >
                     <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
-                      <Ionicons name="add" size={18} color={DARK_THEME.textTertiary} />
+                      <Ionicons name="add" size={18} color={theme.textTertiary} />
                     </View>
-                    <Text style={[styles.templateLabel, { color: DARK_THEME.textTertiary }]}>Custom description</Text>
-                    <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                    <Text style={[styles.templateLabel, { color: theme.textTertiary }]}>Custom description</Text>
+                    <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                   </Pressable>
                 </>
               ) : (
@@ -1939,7 +1945,7 @@ export default function BudgetDashboardScreen() {
                   <TextInput
                     style={styles.modalInput}
                     placeholder="0.00"
-                    placeholderTextColor={DARK_THEME.textTertiary}
+                    placeholderTextColor={theme.textTertiary}
                     value={refundModal.amount}
                     onChangeText={v => setRefundModal(prev => ({ ...prev, amount: v }))}
                     keyboardType="decimal-pad"
@@ -1952,7 +1958,7 @@ export default function BudgetDashboardScreen() {
                     <Text style={styles.submitButtonText}>Track Refund</Text>
                   </Pressable>
                   <Pressable style={{ marginTop: 12, marginBottom: 8, alignItems: 'center' }} onPress={() => setRefundModal(prev => ({ ...prev, templateKey: null }))}>
-                    <Text style={{ color: DARK_THEME.textSecondary, fontSize: 13 }}>← Change type</Text>
+                    <Text style={{ color: theme.textSecondary, fontSize: 13 }}>← Change type</Text>
                   </Pressable>
                 </>
               )}
@@ -1974,14 +1980,14 @@ export default function BudgetDashboardScreen() {
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
                 <Text style={styles.modalTitle}>New Category</Text>
                 <Pressable onPress={() => setCustomCatModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
-                  <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                  <Ionicons name="close" size={22} color={theme.textSecondary} />
                 </Pressable>
               </XStack>
               <Text style={styles.inputLabel}>Category name</Text>
               <TextInput
                 style={styles.modalInput}
                 placeholder="e.g. Decorations, Photography..."
-                placeholderTextColor={DARK_THEME.textTertiary}
+                placeholderTextColor={theme.textTertiary}
                 value={customCatModal.label}
                 onChangeText={v => setCustomCatModal(prev => ({ ...prev, label: v }))}
                 autoCapitalize="sentences"
@@ -2045,7 +2051,7 @@ export default function BudgetDashboardScreen() {
                   </Text>
                   {remindModal.sendStatus !== 'sending' && (
                     <Pressable onPress={() => setRemindModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
-                      <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                      <Ionicons name="close" size={22} color={theme.textSecondary} />
                     </Pressable>
                   )}
                 </XStack>
@@ -2059,24 +2065,24 @@ export default function BudgetDashboardScreen() {
                         style={[remindStyles.inviteChannelBtn, !hasEmails && remindStyles.inviteChannelBtnDisabled]}
                         onPress={() => hasEmails && handleRemindViaChannel('email')}
                       >
-                        <Ionicons name="mail-outline" size={22} color={hasEmails ? '#3B82F6' : DARK_THEME.textTertiary} />
-                        <Text style={[remindStyles.inviteChannelLabel, { color: hasEmails ? '#3B82F6' : DARK_THEME.textTertiary }]}>Email</Text>
+                        <Ionicons name="mail-outline" size={22} color={hasEmails ? '#3B82F6' : theme.textTertiary} />
+                        <Text style={[remindStyles.inviteChannelLabel, { color: hasEmails ? '#3B82F6' : theme.textTertiary }]}>Email</Text>
                         <Text style={remindStyles.inviteChannelCount}>{emailCount} guest{emailCount !== 1 ? 's' : ''}</Text>
                       </Pressable>
                       <Pressable
                         style={[remindStyles.inviteChannelBtn, !hasPhones && remindStyles.inviteChannelBtnDisabled]}
                         onPress={() => hasPhones && handleRemindViaChannel('sms')}
                       >
-                        <Ionicons name="chatbubble-outline" size={22} color={hasPhones ? '#10B981' : DARK_THEME.textTertiary} />
-                        <Text style={[remindStyles.inviteChannelLabel, { color: hasPhones ? '#10B981' : DARK_THEME.textTertiary }]}>SMS</Text>
+                        <Ionicons name="chatbubble-outline" size={22} color={hasPhones ? '#10B981' : theme.textTertiary} />
+                        <Text style={[remindStyles.inviteChannelLabel, { color: hasPhones ? '#10B981' : theme.textTertiary }]}>SMS</Text>
                         <Text style={remindStyles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
                       </Pressable>
                       <Pressable
                         style={[remindStyles.inviteChannelBtn, !hasPhones && remindStyles.inviteChannelBtnDisabled]}
                         onPress={() => hasPhones && handleRemindViaChannel('whatsapp')}
                       >
-                        <Ionicons name="logo-whatsapp" size={22} color={hasPhones ? '#25D366' : DARK_THEME.textTertiary} />
-                        <Text style={[remindStyles.inviteChannelLabel, { color: hasPhones ? '#25D366' : DARK_THEME.textTertiary }]}>WhatsApp</Text>
+                        <Ionicons name="logo-whatsapp" size={22} color={hasPhones ? '#25D366' : theme.textTertiary} />
+                        <Text style={[remindStyles.inviteChannelLabel, { color: hasPhones ? '#25D366' : theme.textTertiary }]}>WhatsApp</Text>
                         <Text style={remindStyles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
                       </Pressable>
                     </XStack>
@@ -2086,8 +2092,8 @@ export default function BudgetDashboardScreen() {
                 {/* sending: spinner */}
                 {remindModal.sendStatus === 'sending' && (
                   <View style={{ alignItems: 'center', paddingVertical: 32, gap: 16 }}>
-                    <ActivityIndicator size="large" color="#5A7EB0" />
-                    <Text style={{ fontSize: 15, fontWeight: '600', color: DARK_THEME.textPrimary }}>
+                    <ActivityIndicator size="large" color={theme.accentGold} />
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textPrimary }}>
                       Sending {remindModal.activeChannel === 'email' ? 'email' : remindModal.activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} reminders…
                     </Text>
                   </View>
@@ -2096,8 +2102,8 @@ export default function BudgetDashboardScreen() {
                 {/* done: results */}
                 {remindModal.sendStatus === 'done' && (
                   <>
-                    <View style={{ backgroundColor: DARK_THEME.deepNavy, borderRadius: 12, padding: 12, marginBottom: 16 }}>
-                      <Text style={{ fontSize: 13, color: DARK_THEME.textSecondary, marginBottom: 8 }}>
+                    <View style={{ backgroundColor: theme.surfaceHigh, borderRadius: 12, padding: 12, marginBottom: 16 }}>
+                      <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 8 }}>
                         {remindModal.results.filter(r => r.status === 'sent').length} sent ·{' '}
                         {remindModal.results.filter(r => r.status === 'failed').length} failed
                       </Text>
@@ -2109,7 +2115,7 @@ export default function BudgetDashboardScreen() {
                             size={18}
                             color={r.status === 'sent' ? '#10B981' : '#EF4444'}
                           />
-                          <Text style={{ flex: 1, fontSize: 13, color: DARK_THEME.textSecondary }}>
+                          <Text style={{ flex: 1, fontSize: 13, color: theme.textSecondary }}>
                             {r.recipient}{r.error ? ` — ${r.error}` : ''}
                           </Text>
                         </XStack>
@@ -2119,7 +2125,7 @@ export default function BudgetDashboardScreen() {
                       style={[remindStyles.inviteChannelBtn, { flex: 0, paddingHorizontal: 20 }]}
                       onPress={() => { setRemindModal(prev => ({ ...prev, sendStatus: 'idle', results: [], activeChannel: null })); }}
                     >
-                      <Text style={[remindStyles.inviteChannelLabel, { color: '#5A7EB0' }]}>Send via another channel</Text>
+                      <Text style={[remindStyles.inviteChannelLabel, { color: theme.accentGold }]}>Send via another channel</Text>
                     </Pressable>
                   </>
                 )}
@@ -2132,7 +2138,7 @@ export default function BudgetDashboardScreen() {
   );
 }
 
-const remindStyles = StyleSheet.create({
+const makeRemindStyles = (theme: EditorialTheme) => StyleSheet.create({
   inviteOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -2159,19 +2165,19 @@ const remindStyles = StyleSheet.create({
   inviteTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   inviteSectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     letterSpacing: 0.8,
     marginBottom: 10,
   },
   inviteChannelBtn: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.07)',
@@ -2187,19 +2193,19 @@ const remindStyles = StyleSheet.create({
   },
   inviteChannelCount: {
     fontSize: 11,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
   },
 });
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: theme.background,
   },
   header: {
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
+    borderBottomColor: theme.ghostBorder,
   },
   avatarContainer: {
     position: 'relative',
@@ -2210,14 +2216,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   avatarPlaceholder: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   onlineIndicator: {
     position: 'absolute',
@@ -2228,18 +2234,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#10B981',
     borderWidth: 2,
-    borderColor: DARK_THEME.background,
+    borderColor: theme.background,
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   notificationButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2261,7 +2267,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#F97316',
     borderWidth: 2,
-    borderColor: DARK_THEME.surfaceCard,
+    borderColor: theme.surfaceCard,
   },
   filterContainer: {
     paddingHorizontal: 20,
@@ -2278,12 +2284,12 @@ const styles = StyleSheet.create({
     paddingBottom: 180,
   },
   glassCard: {
-    backgroundColor: DARK_THEME.glassLight,
+    backgroundColor: theme.surfaceLow,
     borderRadius: 12,
     padding: 24,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: theme.ghostBorder,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -2293,7 +2299,7 @@ const styles = StyleSheet.create({
     right: -48,
     width: 160,
     height: 160,
-    backgroundColor: `${DARK_THEME.primary}4D`,
+    backgroundColor: `${theme.accentGold}4D`,
     borderRadius: 80,
     opacity: 0.3,
   },
@@ -2303,12 +2309,12 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: DARK_THEME.borderLight,
+    borderColor: theme.ghostBorder,
   },
   statusText: {
     fontSize: 10,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   progressContainer: {
     height: 12,
@@ -2335,21 +2341,21 @@ const styles = StyleSheet.create({
   },
   contributionRowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.borderLight,
+    borderBottomColor: theme.ghostBorder,
   },
   participantAvatarGradient: {
     width: 40,
     height: 40,
     borderRadius: 20,
     padding: 2,
-    backgroundColor: `${DARK_THEME.primary}50`,
+    backgroundColor: `${theme.accentGold}50`,
   },
   participantAvatar: {
     width: '100%',
     height: '100%',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: DARK_THEME.background,
+    borderColor: theme.background,
   },
   participantAvatarInitials: {
     width: 40,
@@ -2358,12 +2364,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: DARK_THEME.borderLight,
+    borderColor: theme.ghostBorder,
   },
   participantInitialsText: {
     fontSize: 14,
     fontWeight: '700',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   paymentBadge: {
     flexDirection: 'row',
@@ -2375,12 +2381,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   paidBadge: {
-    backgroundColor: `${DARK_THEME.success}1A`,
-    borderColor: `${DARK_THEME.success}33`,
+    backgroundColor: `${theme.success}1A`,
+    borderColor: `${theme.success}33`,
   },
   pendingBadge: {
-    backgroundColor: `${DARK_THEME.warning}1A`,
-    borderColor: `${DARK_THEME.warning}33`,
+    backgroundColor: `${theme.warning}1A`,
+    borderColor: `${theme.warning}33`,
   },
   paymentBadgeText: {
     fontSize: 9,
@@ -2418,7 +2424,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: DARK_THEME.borderLight,
+    borderColor: theme.ghostBorder,
   },
   processingBadge: {
     backgroundColor: `${'#F97316'}1A`,
@@ -2433,7 +2439,7 @@ const styles = StyleSheet.create({
     color: 'rgba(249, 115, 22, 0.8)',
   },
   receivedBadge: {
-    backgroundColor: `${DARK_THEME.success}1A`,
+    backgroundColor: `${theme.success}1A`,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -2448,7 +2454,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: DARK_THEME.primary,
+    backgroundColor: theme.accentGold,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
@@ -2463,31 +2469,31 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
     marginBottom: 8,
     borderRadius: 10,
-    backgroundColor: 'rgba(90, 126, 176, 0.1)',
+    backgroundColor: 'rgba(198, 167, 94, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(90, 126, 176, 0.25)',
+    borderColor: 'rgba(198, 167, 94, 0.25)',
   },
   markPaidButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: DARK_THEME.primary,
+    color: theme.accentGold,
   },
   inviteButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 14,
     padding: 14,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: theme.ghostBorder,
   },
   inviteButtonIcon: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    backgroundColor: 'rgba(198, 167, 94, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2495,23 +2501,23 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   guestRemainingInfo: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 8,
-    backgroundColor: 'rgba(90, 126, 176, 0.1)',
+    backgroundColor: 'rgba(198, 167, 94, 0.1)',
     borderRadius: 10,
     padding: 12,
     marginTop: 16,
     borderWidth: 1,
-    borderColor: 'rgba(90, 126, 176, 0.25)',
+    borderColor: 'rgba(198, 167, 94, 0.25)',
   },
   guestRemainingText: {
     flex: 1,
     fontSize: 13,
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 18,
   },
   payRemainingButton: {
@@ -2542,7 +2548,7 @@ const styles = StyleSheet.create({
   },
   payRemainingSubtitleText: {
     fontSize: 12,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     marginTop: 2,
   },
   emptyIconContainer: {
@@ -2556,11 +2562,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   budgetCategoryBar: {
-    backgroundColor: DARK_THEME.glassLight,
+    backgroundColor: theme.surfaceLow,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: theme.ghostBorder,
   },
   progressBarEmpty: {
     height: 6,
@@ -2578,7 +2584,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#5A7EB0',
+    backgroundColor: theme.accentGold,
     borderRadius: 16,
     padding: 14,
   },
@@ -2613,10 +2619,10 @@ const styles = StyleSheet.create({
   },
   eventDropdown: {
     marginTop: 6,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: theme.ghostBorder,
     overflow: 'hidden',
   },
   eventDropdownItem: {
@@ -2626,10 +2632,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
+    borderBottomColor: theme.ghostBorder,
   },
   eventDropdownItemActive: {
-    backgroundColor: 'rgba(90, 126, 176, 0.12)',
+    backgroundColor: 'rgba(198, 167, 94, 0.12)',
   },
   eventDropdownImage: {
     width: 36,
@@ -2639,19 +2645,19 @@ const styles = StyleSheet.create({
   eventDropdownText: {
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   eventDropdownTextActive: {
-    color: '#5A7EB0',
+    color: theme.accentGold,
     fontWeight: '700',
   },
   eventDropdownDate: {
     fontSize: 11,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
   },
   filterPill: {
     flexDirection: 'row',
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 25,
     padding: 4,
   },
@@ -2663,12 +2669,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   filterTabActive: {
-    backgroundColor: '#5A7EB0',
+    backgroundColor: theme.accentGold,
   },
   filterTabText: {
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   filterTabTextActive: {
     color: '#FFFFFF',
@@ -2688,7 +2694,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalSheet: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
@@ -2709,11 +2715,11 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   modalNote: {
     fontSize: 11,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     marginTop: 2,
   },
   modalCatIcon: {
@@ -2726,18 +2732,18 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   modalInput: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: theme.surfaceLow,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
@@ -2747,31 +2753,31 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: theme.surfaceLow,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
   paidByButtonActive: {
-    backgroundColor: 'rgba(90,126,176,0.2)',
-    borderColor: '#5A7EB0',
+    backgroundColor: 'rgba(198, 167, 94,0.2)',
+    borderColor: theme.accentGold,
   },
   paidByText: {
     fontSize: 13,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   paidByTextActive: {
-    color: '#5A7EB0',
+    color: theme.accentGold,
     fontWeight: '700',
   },
   submitButton: {
-    backgroundColor: '#5A7EB0',
+    backgroundColor: theme.accentGold,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: 'rgba(90,126,176,0.3)',
+    backgroundColor: 'rgba(198, 167, 94,0.3)',
   },
   submitButtonText: {
     fontSize: 15,
@@ -2790,7 +2796,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   emptyRefundBox: {
     padding: 24,
@@ -2801,7 +2807,7 @@ const styles = StyleSheet.create({
   },
   emptyRefundText: {
     fontSize: 14,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
   },
   expenseListRow: {
     flexDirection: 'row',
@@ -2818,31 +2824,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     marginBottom: 6,
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: theme.surfaceLow,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
   },
   contributorRowSelected: {
-    backgroundColor: 'rgba(90,126,176,0.12)',
-    borderColor: '#5A7EB0',
+    backgroundColor: 'rgba(198, 167, 94,0.12)',
+    borderColor: theme.accentGold,
   },
   contributorName: {
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   contributorCheck: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 1.5,
-    borderColor: DARK_THEME.borderLight,
+    borderColor: theme.ghostBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
   contributorCheckSelected: {
-    backgroundColor: '#5A7EB0',
-    borderColor: '#5A7EB0',
+    backgroundColor: theme.accentGold,
+    borderColor: theme.accentGold,
   },
   categoryAddBtn: {
     padding: 2,
@@ -2864,7 +2870,7 @@ const styles = StyleSheet.create({
   expenseSubDesc: {
     flex: 1,
     fontSize: 12,
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   expenseSubAmount: {
     fontSize: 12,
@@ -2877,13 +2883,13 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
     borderTopWidth: 1,
-    borderTopColor: DARK_THEME.borderLight,
+    borderTopColor: theme.ghostBorder,
   },
   dropdownButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: theme.surfaceLow,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -2892,15 +2898,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
   },
   dropdownButtonSelected: {
-    borderColor: '#5A7EB0',
+    borderColor: theme.accentGold,
   },
   dropdownButtonText: {
     fontSize: 14,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     flex: 1,
   },
   dropdownList: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
@@ -2914,7 +2920,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   dropdownItemSelected: {
-    backgroundColor: 'rgba(90,126,176,0.12)',
+    backgroundColor: 'rgba(198, 167, 94,0.12)',
   },
   dropdownItemBorder: {
     borderBottomWidth: 1,
@@ -2922,6 +2928,6 @@ const styles = StyleSheet.create({
   },
   dropdownItemText: {
     fontSize: 14,
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
 });
