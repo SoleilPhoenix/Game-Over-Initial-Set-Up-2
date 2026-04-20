@@ -17,9 +17,9 @@ Status per screen. "✅" = migrated to editorial primitives + verified against m
 
 - [ ] `app/event/[id]/index.tsx` — Event Summary (Mockup 0)
 - [ ] `app/create-event/index.tsx` — Wizard Step 1 (Mockups 1 & 4)
-- [ ] `app/event/[id]/participants.tsx` — Manage Invitations (Mockup 5)
-- [ ] `app/(tabs)/budget/index.tsx` — Budget (Mockup 2)
-- [ ] `app/notifications/index.tsx` + `app/(tabs)/profile/notifications.tsx` — Notifications (Mockup 3)
+- [x] `app/event/[id]/participants.tsx` — Manage Invitations (Mockup 5)
+- [x] `app/(tabs)/budget/index.tsx` — Budget (Mockup 2)
+- [x] `app/notifications/index.tsx` + `app/(tabs)/profile/notifications.tsx` — Notifications (Mockup 3)
 
 **Gate:** User review of 5 screens against PNGs → Go/No-Go for Phase B.
 
