@@ -449,7 +449,8 @@ export default function ManageInvitationsScreen() {
       case 'confirmed':
         return { icon: 'checkmark-circle' as const, color: '#C6A75E', label: t.manageInvitations.confirmed };
       case 'pending':
-        return { icon: 'time-outline' as const, color: '#F97316', label: t.manageInvitations.pending };
+        // Softer muted orange for pending
+        return { icon: 'time-outline' as const, color: 'rgba(249,115,22,0.75)', label: t.manageInvitations.pending };
       default:
         return { icon: 'ellipse-outline' as const, color: theme.textTertiary, label: t.manageInvitations.notInvited };
     }
@@ -458,7 +459,10 @@ export default function ManageInvitationsScreen() {
   const renderSlotCard = (slot: Slot) => {
     const roleBadge = getRoleBadge(slot.role);
     const statusConfig = getStatusConfig(slot.status);
-    const initial = slot.name ? slot.name.charAt(0).toUpperCase() : String(slot.index + 1);
+    // Two-letter initials (e.g. "WS" for "Wais Schmidt")
+    const initial = slot.name
+      ? slot.name.split(' ').map(w => w[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2)
+      : String(slot.index + 1);
     const isEmpty = slot.role === 'guest' && slot.isEditable && !slot.name && !slot.email;
     const needsContactInfo = (slot.role === 'organizer' && !slot.phone) || (slot.role === 'honoree' && !slot.email);
     const guestNum = slot.role === 'guest' ? slot.index + 1 : 0;
@@ -502,18 +506,13 @@ export default function ManageInvitationsScreen() {
 
           {/* Details */}
           <YStack flex={1} gap={2}>
-            <XStack alignItems="center" gap={8}>
-              <Text style={[styles.slotName, isEmpty && styles.slotNameEmpty]} numberOfLines={1}>
+            <XStack alignItems="center" gap={8} flex={1} flexWrap="nowrap">
+              <Text style={[styles.slotName, isEmpty && styles.slotNameEmpty]} numberOfLines={1} flex={1}>
                 {displayName}
               </Text>
               <View style={[styles.roleBadge, { backgroundColor: roleBadge.bg }]}>
                 <Text style={[styles.roleBadgeText, { color: roleBadge.color }]}>{roleBadge.label}</Text>
               </View>
-              {slot.role === 'honoree' && (
-                <Pressable onPress={() => setShowHonoreeInfo(true)} hitSlop={10}>
-                  <Ionicons name="information-circle-outline" size={17} color="#C6A75E" />
-                </Pressable>
-              )}
             </XStack>
 
             {/* Contact info (for filled slots) */}
@@ -546,11 +545,9 @@ export default function ManageInvitationsScreen() {
             )}
           </YStack>
 
-          {/* Status indicator — top-right */}
-          <Ionicons name={statusConfig.icon} size={20} color={statusConfig.color} />
         </XStack>
 
-        {/* ── Bottom action strip (per mockup) ── */}
+        {/* ── Bottom action strip ── */}
         {!isEmpty && (
           <XStack
             justifyContent="space-between"
@@ -561,7 +558,7 @@ export default function ManageInvitationsScreen() {
             borderTopColor={theme.ghostBorder}
           >
             <XStack gap={10} alignItems="center">
-              {/* Confirmed checkmark only */}
+              {/* Confirmed checkmark chip */}
               <View style={[
                 styles.actionChip,
                 slot.status === 'confirmed' && styles.actionChipActive,
@@ -572,8 +569,23 @@ export default function ManageInvitationsScreen() {
                   color={slot.status === 'confirmed' ? '#C6A75E' : theme.textTertiary}
                 />
               </View>
+              {/* Honoree info button — same size as checkmark chip */}
+              {slot.role === 'honoree' && (
+                <Pressable
+                  style={styles.actionChip}
+                  onPress={() => setShowHonoreeInfo(true)}
+                  hitSlop={8}
+                >
+                  <Ionicons name="information-circle-outline" size={14} color={theme.accentGold} />
+                </Pressable>
+              )}
             </XStack>
-            <Text style={styles.statusLabel}>{statusConfig.label}</Text>
+            <Text style={[
+              styles.statusLabel,
+              slot.status === 'pending' && { color: 'rgba(249,115,22,0.75)' },
+            ]}>
+              {statusConfig.label}
+            </Text>
           </XStack>
         )}
 
@@ -845,9 +857,12 @@ export default function ManageInvitationsScreen() {
             {/* Handle + centered header */}
             <View style={styles.inviteHandle} />
             <View style={{ alignItems: 'center', marginBottom: 4 }}>
-              <Text style={styles.inviteTitle}>
+              <Text style={[
+                styles.inviteTitle,
+                inviteSendStatus === 'done' && { color: theme.accentGold },
+              ]}>
                 {inviteSendStatus === 'done'
-                  ? `${activeChannel === 'email' ? 'Email' : activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} sent`
+                  ? `${activeChannel === 'email' ? 'Email' : activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} Sent`
                   : 'Invite All Guests'}
               </Text>
             </View>
@@ -915,25 +930,37 @@ export default function ManageInvitationsScreen() {
             {/* ── done: results list ── */}
             {inviteSendStatus === 'done' && (
               <>
-                <View style={{ backgroundColor: theme.surfaceHigh, borderRadius: 12, padding: 12, marginBottom: 16 }}>
-                  <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 8 }}>
-                    {inviteResults.filter(r => r.status === 'sent').length} sent ·{' '}
-                    {inviteResults.filter(r => r.status === 'failed').length} failed ·{' '}
-                    {inviteResults.filter(r => r.status === 'invalid').length} invalid
-                  </Text>
-                  {inviteResults.map((r, i) => (
-                    <View key={i} style={[styles.inviteGuestRow, { paddingVertical: 8 }]}>
-                      <Ionicons
-                        name={r.status === 'sent' ? 'checkmark-circle' : r.status === 'invalid' ? 'warning-outline' : 'close-circle'}
-                        size={18}
-                        color={r.status === 'sent' ? '#10B981' : r.status === 'invalid' ? '#F59E0B' : '#EF4444'}
-                      />
-                      <YStack flex={1} marginLeft={10}>
-                        <Text style={styles.inviteGuestName}>Guest {r.slotIndex}</Text>
-                        <Text style={styles.inviteGuestPhone}>{r.recipient}{r.error ? ` — ${r.error}` : ''}</Text>
-                      </YStack>
-                    </View>
-                  ))}
+                <Text style={{ fontSize: 13, color: theme.textTertiary, textAlign: 'center', marginBottom: 12 }}>
+                  {inviteResults.filter(r => r.status === 'sent').length} sent
+                  {inviteResults.filter(r => r.status === 'failed').length > 0
+                    ? ` · ${inviteResults.filter(r => r.status === 'failed').length} failed` : ''}
+                  {inviteResults.filter(r => r.status === 'invalid').length > 0
+                    ? ` · ${inviteResults.filter(r => r.status === 'invalid').length} invalid` : ''}
+                </Text>
+                <View style={{ backgroundColor: theme.surfaceHigh, borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+                  {inviteResults.map((r, i) => {
+                    // Resolve actual guest name from slots (fallback to "Guest N")
+                    const matchedSlot = slots.find(s => s.index === r.slotIndex);
+                    const guestName = matchedSlot?.name || `Guest ${r.slotIndex}`;
+                    const isLast = i === inviteResults.length - 1;
+                    return (
+                      <View key={i} style={[
+                        styles.inviteGuestRow,
+                        { paddingVertical: 12, paddingHorizontal: 14 },
+                        !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.ghostBorder },
+                      ]}>
+                        <Ionicons
+                          name={r.status === 'sent' ? 'checkmark-circle' : r.status === 'invalid' ? 'warning-outline' : 'close-circle'}
+                          size={20}
+                          color={r.status === 'sent' ? theme.accentGold : r.status === 'invalid' ? '#F59E0B' : '#EF4444'}
+                        />
+                        <YStack flex={1} marginLeft={12}>
+                          <Text style={[styles.inviteGuestName, { color: theme.accentGold }]}>{guestName}</Text>
+                          <Text style={styles.inviteGuestPhone}>{r.recipient}{r.error ? ` — ${r.error}` : ''}</Text>
+                        </YStack>
+                      </View>
+                    );
+                  })}
                 </View>
                 <Pressable
                   style={[styles.inviteChannelBtn, { flex: 0, paddingHorizontal: 20, marginBottom: 10 }]}
@@ -1238,7 +1265,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     justifyContent: 'flex-end',
   },
   inviteSheet: {
-    backgroundColor: theme.surfaceBright,
+    backgroundColor: theme.surfaceCard,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 18,

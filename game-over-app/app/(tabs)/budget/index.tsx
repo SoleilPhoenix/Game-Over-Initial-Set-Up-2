@@ -1062,42 +1062,47 @@ export default function BudgetDashboardScreen() {
               <View style={styles.gradientBlur} />
 
               <YStack gap="$2" style={{ position: 'relative', zIndex: 1 }}>
-                {/* Main stats — two stacked cards */}
+                {/* Main stats — two stacked cards matching mockup */}
                 {budgetStats.percentage >= 100 ? (
                   /* Fully paid */
-                  <YStack gap={10} marginBottom="$3">
-                    <XStack
-                      justifyContent="space-between"
-                      alignItems="center"
-                      padding={16}
-                      borderRadius={12}
-                      backgroundColor={`${theme.accentGold}12`}
-                      borderWidth={1}
-                      borderColor={`${theme.accentGold}33`}
-                    >
-                      <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.5} textTransform="uppercase">
-                        Total Package Paid
-                      </Text>
-                      <Text fontSize={22} fontWeight="700" color={theme.accentGold} letterSpacing={-0.5}>
-                        {formatCurrencyRounded(budgetStats.totalBudget)}
-                      </Text>
-                    </XStack>
-                    <XStack
-                      justifyContent="space-between"
-                      alignItems="center"
-                      padding={16}
-                      borderRadius={12}
-                      backgroundColor={theme.surfaceLow}
-                      borderWidth={1}
-                      borderColor={theme.ghostBorder}
-                    >
-                      <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.5} textTransform="uppercase">
-                        Amount Due
-                      </Text>
-                      <Text fontSize={22} fontWeight="700" color={theme.textTertiary} letterSpacing={-0.5}>
-                        {formatCurrencyRounded(0)}
-                      </Text>
-                    </XStack>
+                  <YStack gap={12} marginBottom="$3">
+                    {/* Card 1 — Total Package Paid */}
+                    <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: `${theme.accentGold}22` }}>
+                      <XStack justifyContent="space-between" alignItems="flex-start">
+                        <YStack flex={1}>
+                          <Text fontSize={10} fontWeight="700" color={theme.accentGold} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
+                            Total Package Paid
+                          </Text>
+                          <Text fontSize={36} fontWeight="700" color={theme.accentGold} letterSpacing={-1} style={{ marginTop: 4 }}>
+                            {formatCurrencyRounded(budgetStats.totalBudget)}
+                          </Text>
+                        </YStack>
+                        <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: theme.surfaceHigh, alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name="card-outline" size={24} color={`${theme.accentGold}60`} />
+                        </View>
+                      </XStack>
+                      <XStack alignItems="center" gap={8} style={{ marginTop: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.ghostBorder }}>
+                        <Ionicons name="checkmark-circle" size={16} color={theme.success} />
+                        <Text fontSize={13} color={theme.textSecondary}>All scheduled payments confirmed</Text>
+                      </XStack>
+                    </View>
+                    {/* Card 2 — Amount Due (left gold accent) */}
+                    <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, overflow: 'hidden', flexDirection: 'row', borderWidth: 1, borderColor: theme.ghostBorder }}>
+                      <View style={{ width: 4, backgroundColor: theme.accentGold }} />
+                      <YStack flex={1} padding={20} gap={6}>
+                        <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
+                          Amount Due
+                        </Text>
+                        <Text fontSize={36} fontWeight="700" color={theme.textPrimary} letterSpacing={-1}>
+                          {formatCurrencyRounded(0)}
+                        </Text>
+                        <View style={{ alignSelf: 'flex-start', backgroundColor: `${theme.success}1A`, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginTop: 2 }}>
+                          <Text fontSize={11} fontWeight="700" color={theme.success} letterSpacing={0.5} style={{ textTransform: 'uppercase' }}>
+                            ✓  Clear Balance
+                          </Text>
+                        </View>
+                      </YStack>
+                    </View>
                   </YStack>
                 ) : (
                   /* Deposit paid, remainder still due */
@@ -1105,51 +1110,40 @@ export default function BudgetDashboardScreen() {
                     const { deposit: fmtDeposit, due: fmtDue } = formatDepositAndDue(budgetStats.collected, budgetStats.totalBudget);
                     const isUrgent = daysUntilEvent !== null && daysUntilEvent <= 14;
                     return (
-                      <YStack gap={10} marginBottom="$3">
-                        <XStack
-                          justifyContent="space-between"
-                          alignItems="center"
-                          padding={16}
-                          borderRadius={12}
-                          backgroundColor={`${theme.accentGold}12`}
-                          borderWidth={1}
-                          borderColor={`${theme.accentGold}33`}
-                        >
-                          <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.5} textTransform="uppercase">
-                            Deposit Paid (25%)
-                          </Text>
-                          <Text fontSize={22} fontWeight="700" color={theme.accentGold} letterSpacing={-0.5}>
-                            {fmtDeposit}
-                          </Text>
-                        </XStack>
-                        <XStack
-                          justifyContent="space-between"
-                          alignItems="center"
-                          padding={16}
-                          borderRadius={12}
-                          backgroundColor={theme.surfaceLow}
-                          borderWidth={1}
-                          borderColor={isUrgent ? 'rgba(249,115,22,0.3)' : theme.ghostBorder}
-                        >
-                          <YStack gap={2}>
-                            <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.5} textTransform="uppercase">
+                      <YStack gap={12} marginBottom="$3">
+                        {/* Card 1 — Deposit Paid */}
+                        <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: `${theme.accentGold}22` }}>
+                          <XStack justifyContent="space-between" alignItems="flex-start">
+                            <YStack flex={1}>
+                              <Text fontSize={10} fontWeight="700" color={theme.accentGold} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
+                                Deposit Paid (25%)
+                              </Text>
+                              <Text fontSize={36} fontWeight="700" color={theme.accentGold} letterSpacing={-1} style={{ marginTop: 4 }}>
+                                {fmtDeposit}
+                              </Text>
+                            </YStack>
+                            <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: theme.surfaceHigh, alignItems: 'center', justifyContent: 'center' }}>
+                              <Ionicons name="card-outline" size={24} color={`${theme.accentGold}60`} />
+                            </View>
+                          </XStack>
+                        </View>
+                        {/* Card 2 — Amount Due */}
+                        <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, overflow: 'hidden', flexDirection: 'row', borderWidth: 1, borderColor: isUrgent ? 'rgba(249,115,22,0.35)' : theme.ghostBorder }}>
+                          <View style={{ width: 4, backgroundColor: isUrgent ? '#F97316' : theme.accentGold }} />
+                          <YStack flex={1} padding={20} gap={4}>
+                            <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
                               Amount Due (75%)
                             </Text>
+                            <Text fontSize={36} fontWeight="700" color={theme.textPrimary} letterSpacing={-1}>
+                              {fmtDue}
+                            </Text>
                             {daysUntilEvent !== null && daysUntilEvent > 0 && (
-                              <Text
-                                fontSize={11}
-                                fontWeight="600"
-                                color={isUrgent ? '#F97316' : theme.textTertiary}
-                                letterSpacing={0.2}
-                              >
+                              <Text fontSize={12} fontWeight="600" color={isUrgent ? '#F97316' : theme.textTertiary} letterSpacing={0.2}>
                                 {(t.budget as any).dueInDays.replace('{{count}}', String(daysUntilEvent))}
                               </Text>
                             )}
                           </YStack>
-                          <Text fontSize={22} fontWeight="700" color={theme.textPrimary} letterSpacing={-0.5}>
-                            {fmtDue}
-                          </Text>
-                        </XStack>
+                        </View>
                       </YStack>
                     );
                   })()
@@ -1221,12 +1215,11 @@ export default function BudgetDashboardScreen() {
                 )}
               </XStack>
 
-              <View style={[styles.glassCard, { paddingHorizontal: 8, paddingTop: 8, paddingBottom: 8 }]}>
-                {/* Use demo participants when no DB booking, otherwise DB participants */}
+              {/* Individual cards per participant — gap between each */}
+              <YStack gap={10}>
                 {(demoParticipants || sortedParticipants)?.map((participantRaw, index) => {
                   type DemoP = { id: string; name: string; status: 'paid' | 'pending'; amount: number };
                   const isDemo = !!demoParticipants;
-                  // Normalise to common shape
                   const name = isDemo
                     ? (participantRaw as DemoP).name
                     : (((participantRaw as any).profile?.full_name) || (participantRaw as any).profile?.email?.split('@')[0] || '—');
@@ -1235,19 +1228,14 @@ export default function BudgetDashboardScreen() {
                     : (participantRaw as any).role === 'organizer';
                   const isPaid = isDemo
                     ? (participantRaw as DemoP).status === 'paid'
-                    // Organizer is always considered paid — they covered the deposit for the whole group
                     : (participantRaw as any).payment_status === 'paid' || isOrganizerRow;
                   const isPending = !isPaid;
                   const perPersonAmount = booking?.per_person_cents || budgetStats.perPerson || 0;
                   const amountForRow = isDemo
                     ? (participantRaw as DemoP).amount
-                    // Organizer: show deposit paid (not full per-person) when balance still outstanding
                     : isOrganizerRow && budgetStats.percentage < 100
                       ? budgetStats.collected
                       : perPersonAmount;
-                  // isCurrentUser: true when this row represents the currently logged-in user.
-                  // Demo mode: index 0 is always the organizer — mark as (You) only if they ARE the organizer.
-                  // DB mode: compare user_id directly.
                   const isCurrentUser = isDemo
                     ? (participantRaw as DemoP).id === 'organizer'
                       ? selectedEvent?.created_by === user?.id
@@ -1256,72 +1244,52 @@ export default function BudgetDashboardScreen() {
                   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
                   const initials = (name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2)) || '?';
                   const key = (participantRaw as any).id as string;
+                  const pendingColor = 'rgba(249,115,22,0.75)';
 
                   return (
-                    <React.Fragment key={key}>
-                      <View
-                        style={[
-                          styles.contributionRow,
-                          (index !== ((demoParticipants || sortedParticipants)?.length || 0) - 1 || nonRegisteredInviteGuests.length > 0) && styles.contributionRowBorder,
-                        ]}
-                      >
-                        {/* Avatar — photo when available, initials fallback */}
-                        {!isDemo && ((participantRaw as any).profile?.avatar_url || (isCurrentUser && userAvatar)) ? (
-                          <View style={[styles.participantAvatarInitials, { overflow: 'hidden' }]}>
-                            <Image
-                              source={{ uri: (participantRaw as any).profile?.avatar_url || userAvatar }}
-                              style={{ width: 40, height: 40, borderRadius: 20 }}
-                            />
-                          </View>
-                        ) : (
-                          <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
-                            <Text style={styles.participantInitialsText}>{initials}</Text>
-                          </View>
-                        )}
-
-                        {/* Name + amount — flex: 1 with right margin to keep space for badge */}
-                        <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
-                          <Text
-                            style={{ fontSize: 14, fontWeight: '500', color: theme.textPrimary }}
-                            numberOfLines={1}
-                          >
-                            {name}{isCurrentUser ? ` ${t.budget.you}` : ''}
-                          </Text>
-                          <Text
-                            style={{ fontSize: 12, color: theme.textTertiary }}
-                            numberOfLines={1}
-                          >
-                            {isPending
-                              ? t.budget.pendingOwes.replace('{{amount}}', formatCurrency(amountForRow))
-                              : t.budget.contribution.replace('{{amount}}', formatCurrency(amountForRow))
-                            }
-                          </Text>
-                        </View>
-
-                        {/* Status Badge — compact, top-aligned */}
-                        <View style={[
-                          styles.paymentBadge,
-                          { flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 },
-                          isPaid ? styles.paidBadge : styles.pendingBadge,
-                        ]}>
-                          <Ionicons
-                            name={isPaid ? 'checkmark' : 'time-outline'}
-                            size={10}
-                            color={isPaid ? theme.success : '#F97316'}
+                    <View key={key} style={styles.contributionCard}>
+                      {/* Avatar */}
+                      {!isDemo && ((participantRaw as any).profile?.avatar_url || (isCurrentUser && userAvatar)) ? (
+                        <View style={[styles.participantAvatarInitials, { overflow: 'hidden' }]}>
+                          <Image
+                            source={{ uri: (participantRaw as any).profile?.avatar_url || userAvatar }}
+                            style={{ width: 40, height: 40, borderRadius: 20 }}
                           />
-                          <Text style={[
-                            styles.paymentBadgeText,
-                            { color: isPaid ? theme.success : '#F97316' }
-                          ]}>
-                            {isPaid ? t.budget.paid : t.budget.pending}
-                          </Text>
                         </View>
+                      ) : (
+                        <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
+                          <Text style={styles.participantInitialsText}>{initials}</Text>
+                        </View>
+                      )}
+
+                      {/* Name + (You) */}
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <XStack alignItems="center" gap={6}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>
+                            {name}
+                          </Text>
+                          {isCurrentUser && (
+                            <View style={{ backgroundColor: theme.surfaceHigh, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textTertiary, letterSpacing: 0.4 }}>YOU</Text>
+                            </View>
+                          )}
+                        </XStack>
                       </View>
 
-                      {/* "I've Paid" button — guest's own pending row only */}
+                      {/* Amount + status stacked on the right */}
+                      <YStack alignItems="flex-end" gap={2}>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
+                          {formatCurrency(amountForRow)}
+                        </Text>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: isPaid ? theme.success : pendingColor, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                          {isPaid ? t.budget.paid : t.budget.pending}
+                        </Text>
+                      </YStack>
+
+                      {/* "I've Paid" inline button — current user's pending row only */}
                       {isCurrentUser && isPending && !isOrganizer && !isDemo && (
                         <Pressable
-                          style={[styles.markPaidButton, markingPaidUserId === user?.id && { opacity: 0.6 }]}
+                          style={[styles.markPaidButton, { marginLeft: 8 }, markingPaidUserId === user?.id && { opacity: 0.6 }]}
                           disabled={markingPaidUserId === user?.id}
                           onPress={() => {
                             Alert.alert(
@@ -1358,40 +1326,33 @@ export default function BudgetDashboardScreen() {
                           <Text style={styles.markPaidButtonText}>I've Paid</Text>
                         </Pressable>
                       )}
-                    </React.Fragment>
+                    </View>
                   );
                 })}
 
-                {/* Non-registered invited guests (invited but not yet signed up) */}
+                {/* Non-registered invited guests */}
                 {nonRegisteredInviteGuests.map((ic, idx) => {
                   const perPerson = booking?.per_person_cents || budgetStats.perPerson || 0;
                   const avatarColor = AVATAR_COLORS[((demoParticipants || sortedParticipants)?.length || 0 + idx) % AVATAR_COLORS.length];
                   const initials = ic.name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2) || '?';
-                  const isLast = idx === nonRegisteredInviteGuests.length - 1;
                   return (
-                    <View
-                      key={`invite-${ic.id}`}
-                      style={[styles.contributionRow, !isLast && styles.contributionRowBorder]}
-                    >
+                    <View key={`invite-${ic.id}`} style={styles.contributionCard}>
                       <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
                         <Text style={styles.participantInitialsText}>{initials}</Text>
                       </View>
-                      <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '500', color: theme.textPrimary }} numberOfLines={1}>
-                          {ic.name}
-                        </Text>
-                        <Text style={{ fontSize: 12, color: theme.textTertiary }} numberOfLines={1}>
-                          {t.budget.pendingOwes.replace('{{amount}}', formatCurrency(perPerson))}
-                        </Text>
+                      <View style={{ flex: 1, marginLeft: 12 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>{ic.name}</Text>
                       </View>
-                      <View style={[styles.paymentBadge, { flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 }, styles.pendingBadge]}>
-                        <Ionicons name="time-outline" size={10} color="#F97316" />
-                        <Text style={[styles.paymentBadgeText, { color: '#F97316' }]}>{t.budget.pending}</Text>
-                      </View>
+                      <YStack alignItems="flex-end" gap={2}>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>{formatCurrency(perPerson)}</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(249,115,22,0.75)', letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                          {t.budget.pending}
+                        </Text>
+                      </YStack>
                     </View>
                   );
                 })}
-              </View>
+              </YStack>
 
               {/* Invite button — organizers only */}
               {isOrganizer && (
@@ -2335,6 +2296,15 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.ghostBorder,
   },
+  contributionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surfaceCard,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: theme.ghostBorder,
+  },
   participantAvatarGradient: {
     width: 40,
     height: 40,
@@ -2576,7 +2546,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: theme.accentGold,
+    backgroundColor: theme.surfaceHigh,
     borderRadius: 16,
     padding: 14,
   },
@@ -2588,13 +2558,14 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
   eventSelectorLabel: {
     fontSize: 10,
     fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: theme.textTertiary,
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   eventSelectorName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: theme.textPrimary,
   },
   eventSelectorDate: {
     fontSize: 12,
@@ -2661,16 +2632,16 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     alignItems: 'center',
   },
   filterTabActive: {
-    backgroundColor: theme.accentGold,
+    backgroundColor: theme.surfaceHigh,
   },
   filterTabText: {
     fontSize: 14,
     fontWeight: '500',
-    color: theme.textSecondary,
+    color: theme.textTertiary,
   },
   filterTabTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: theme.accentGold,
+    fontWeight: '700',
   },
   // ─── Modals ────────────────────────────────────
   popupOverlay: {

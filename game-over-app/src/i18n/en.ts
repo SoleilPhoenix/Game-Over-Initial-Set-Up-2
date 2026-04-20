@@ -609,10 +609,10 @@ const en = {
     quizCategories: 'Suggested question types: How did you meet? Favorite memory together, Who said it first?, Embarrassing stories, Fun facts',
     // Planning tools
     planningTools: 'Planning Tools',
-    manageInvitations: 'Manage Invitations',
+    manageInvitations: 'Invitation',
     communication: 'Chat',
     budgetTool: 'Budget',
-    packagesTool: 'Packages',
+    packagesTool: 'Package',
     // Tool subtexts
     confirmed: '{{count}}/{{total}} Confirmed',
     openChat: 'Open Chat',
