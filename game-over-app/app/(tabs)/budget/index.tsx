@@ -19,6 +19,7 @@ import { useInviteGuests } from '@/hooks/queries/useInvites';
 import { useUser } from '@/stores/authStore';
 import { useTheme } from '@/hooks/useTheme';
 import { ambientShadow, type EditorialTheme } from '@/constants/designSystem';
+import { GoldButton } from '@/components/ui/editorial';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
@@ -1061,60 +1062,95 @@ export default function BudgetDashboardScreen() {
               <View style={styles.gradientBlur} />
 
               <YStack gap="$2" style={{ position: 'relative', zIndex: 1 }}>
-                {/* Main stats — dynamic based on payment state */}
+                {/* Main stats — two stacked cards */}
                 {budgetStats.percentage >= 100 ? (
-                  /* Fully paid: Package Price left (green), Due €0 right (grey) */
-                  <XStack justifyContent="space-between" alignItems="flex-start" marginBottom="$3">
-                    <YStack gap={4}>
-                      <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.5}>
+                  /* Fully paid */
+                  <YStack gap={10} marginBottom="$3">
+                    <XStack
+                      justifyContent="space-between"
+                      alignItems="center"
+                      padding={16}
+                      borderRadius={12}
+                      backgroundColor={`${theme.accentGold}12`}
+                      borderWidth={1}
+                      borderColor={`${theme.accentGold}33`}
+                    >
+                      <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.5} textTransform="uppercase">
                         Total Package Paid
                       </Text>
-                      <Text fontSize={24} fontWeight="700" color="#10B981" letterSpacing={-0.5}>
+                      <Text fontSize={22} fontWeight="700" color={theme.accentGold} letterSpacing={-0.5}>
                         {formatCurrencyRounded(budgetStats.totalBudget)}
                       </Text>
-                    </YStack>
-                    <YStack gap={4} alignItems="flex-end">
-                      <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.3}>
-                        Due
+                    </XStack>
+                    <XStack
+                      justifyContent="space-between"
+                      alignItems="center"
+                      padding={16}
+                      borderRadius={12}
+                      backgroundColor={theme.surfaceLow}
+                      borderWidth={1}
+                      borderColor={theme.ghostBorder}
+                    >
+                      <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.5} textTransform="uppercase">
+                        Amount Due
                       </Text>
-                      <Text fontSize={24} fontWeight="700" color={theme.textTertiary} letterSpacing={-0.5}>
+                      <Text fontSize={22} fontWeight="700" color={theme.textTertiary} letterSpacing={-0.5}>
                         {formatCurrencyRounded(0)}
                       </Text>
-                    </YStack>
-                  </XStack>
+                    </XStack>
+                  </YStack>
                 ) : (
                   /* Deposit paid, remainder still due */
                   (() => {
                     const { deposit: fmtDeposit, due: fmtDue } = formatDepositAndDue(budgetStats.collected, budgetStats.totalBudget);
+                    const isUrgent = daysUntilEvent !== null && daysUntilEvent <= 14;
                     return (
-                  <XStack justifyContent="space-between" alignItems="flex-start" marginBottom="$3">
-                    <YStack gap={4}>
-                      <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.5}>
-                        Deposit (25%)
-                      </Text>
-                      <Text fontSize={24} fontWeight="700" color="#10B981" letterSpacing={-0.5}>
-                        {fmtDeposit}
-                      </Text>
-                    </YStack>
-                    <YStack gap={4} alignItems="flex-end">
-                      <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.3}>
-                        Due (75%)
-                      </Text>
-                      <Text fontSize={24} fontWeight="700" color={theme.textPrimary} letterSpacing={-0.5}>
-                        {fmtDue}
-                      </Text>
-                      {daysUntilEvent !== null && daysUntilEvent > 0 && (
-                        <Text
-                          fontSize={11}
-                          fontWeight="600"
-                          color={daysUntilEvent <= 14 ? '#F97316' : theme.textTertiary}
-                          letterSpacing={0.2}
+                      <YStack gap={10} marginBottom="$3">
+                        <XStack
+                          justifyContent="space-between"
+                          alignItems="center"
+                          padding={16}
+                          borderRadius={12}
+                          backgroundColor={`${theme.accentGold}12`}
+                          borderWidth={1}
+                          borderColor={`${theme.accentGold}33`}
                         >
-                          {(t.budget as any).dueInDays.replace('{{count}}', String(daysUntilEvent))}
-                        </Text>
-                      )}
-                    </YStack>
-                  </XStack>
+                          <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.5} textTransform="uppercase">
+                            Deposit Paid (25%)
+                          </Text>
+                          <Text fontSize={22} fontWeight="700" color={theme.accentGold} letterSpacing={-0.5}>
+                            {fmtDeposit}
+                          </Text>
+                        </XStack>
+                        <XStack
+                          justifyContent="space-between"
+                          alignItems="center"
+                          padding={16}
+                          borderRadius={12}
+                          backgroundColor={theme.surfaceLow}
+                          borderWidth={1}
+                          borderColor={isUrgent ? 'rgba(249,115,22,0.3)' : theme.ghostBorder}
+                        >
+                          <YStack gap={2}>
+                            <Text fontSize={12} fontWeight="500" color={theme.textTertiary} letterSpacing={0.5} textTransform="uppercase">
+                              Amount Due (75%)
+                            </Text>
+                            {daysUntilEvent !== null && daysUntilEvent > 0 && (
+                              <Text
+                                fontSize={11}
+                                fontWeight="600"
+                                color={isUrgent ? '#F97316' : theme.textTertiary}
+                                letterSpacing={0.2}
+                              >
+                                {(t.budget as any).dueInDays.replace('{{count}}', String(daysUntilEvent))}
+                              </Text>
+                            )}
+                          </YStack>
+                          <Text fontSize={22} fontWeight="700" color={theme.textPrimary} letterSpacing={-0.5}>
+                            {fmtDue}
+                          </Text>
+                        </XStack>
+                      </YStack>
                     );
                   })()
                 )}
@@ -1229,10 +1265,19 @@ export default function BudgetDashboardScreen() {
                           (index !== ((demoParticipants || sortedParticipants)?.length || 0) - 1 || nonRegisteredInviteGuests.length > 0) && styles.contributionRowBorder,
                         ]}
                       >
-                        {/* Avatar */}
-                        <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
-                          <Text style={styles.participantInitialsText}>{initials}</Text>
-                        </View>
+                        {/* Avatar — photo when available, initials fallback */}
+                        {!isDemo && ((participantRaw as any).profile?.avatar_url || (isCurrentUser && userAvatar)) ? (
+                          <View style={[styles.participantAvatarInitials, { overflow: 'hidden' }]}>
+                            <Image
+                              source={{ uri: (participantRaw as any).profile?.avatar_url || userAvatar }}
+                              style={{ width: 40, height: 40, borderRadius: 20 }}
+                            />
+                          </View>
+                        ) : (
+                          <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
+                            <Text style={styles.participantInitialsText}>{initials}</Text>
+                          </View>
+                        )}
 
                         {/* Name + amount — flex: 1 with right margin to keep space for badge */}
                         <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
@@ -1262,11 +1307,11 @@ export default function BudgetDashboardScreen() {
                           <Ionicons
                             name={isPaid ? 'checkmark' : 'time-outline'}
                             size={10}
-                            color={isPaid ? theme.success : theme.warning}
+                            color={isPaid ? theme.success : '#F97316'}
                           />
                           <Text style={[
                             styles.paymentBadgeText,
-                            { color: isPaid ? theme.success : theme.warning }
+                            { color: isPaid ? theme.success : '#F97316' }
                           ]}>
                             {isPaid ? t.budget.paid : t.budget.pending}
                           </Text>
@@ -1340,8 +1385,8 @@ export default function BudgetDashboardScreen() {
                         </Text>
                       </View>
                       <View style={[styles.paymentBadge, { flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 }, styles.pendingBadge]}>
-                        <Ionicons name="time-outline" size={10} color={theme.warning} />
-                        <Text style={[styles.paymentBadgeText, { color: theme.warning }]}>{t.budget.pending}</Text>
+                        <Ionicons name="time-outline" size={10} color="#F97316" />
+                        <Text style={[styles.paymentBadgeText, { color: '#F97316' }]}>{t.budget.pending}</Text>
                       </View>
                     </View>
                   );
@@ -1350,15 +1395,15 @@ export default function BudgetDashboardScreen() {
 
               {/* Invite button — organizers only */}
               {isOrganizer && (
-                <Pressable style={styles.inviteButton} onPress={handleInvite}>
-                  <View style={styles.inviteButtonIcon}>
-                    <Ionicons name="share-social-outline" size={18} color={theme.accentGold} />
-                  </View>
-                  <Text style={styles.inviteButtonText} numberOfLines={1}>
-                    Invite Guests — Email, SMS, WhatsApp
-                  </Text>
-                  <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
-                </Pressable>
+                <View style={{ marginTop: 12 }}>
+                  <GoldButton
+                    label="Share Invite — Invite Friends to Join"
+                    fullWidth
+                    size="lg"
+                    onPress={handleInvite}
+                    testID="budget-invite-button"
+                  />
+                </View>
               )}
 
             </YStack>
@@ -2332,8 +2377,8 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     borderColor: `${theme.success}33`,
   },
   pendingBadge: {
-    backgroundColor: `${theme.warning}1A`,
-    borderColor: `${theme.warning}33`,
+    backgroundColor: 'rgba(249,115,22,0.12)',
+    borderColor: 'rgba(249,115,22,0.3)',
   },
   paymentBadgeText: {
     fontSize: 9,

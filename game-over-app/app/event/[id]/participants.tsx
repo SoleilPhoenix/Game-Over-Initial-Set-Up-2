@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { ScrollView, Share, ActivityIndicator, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Modal, Alert } from 'react-native';
+import { ScrollView, Share, ActivityIndicator, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Modal, Alert, Image } from 'react-native';
 
 // ─── Phone Formatting ──────────────────────────
 /** Auto-formats German phone numbers with dash after prefix */
@@ -449,7 +449,7 @@ export default function ManageInvitationsScreen() {
       case 'confirmed':
         return { icon: 'checkmark-circle' as const, color: '#C6A75E', label: t.manageInvitations.confirmed };
       case 'pending':
-        return { icon: 'time-outline' as const, color: '#C6A75E', label: t.manageInvitations.pending };
+        return { icon: 'time-outline' as const, color: '#F97316', label: t.manageInvitations.pending };
       default:
         return { icon: 'ellipse-outline' as const, color: theme.textTertiary, label: t.manageInvitations.notInvited };
     }
@@ -465,6 +465,11 @@ export default function ManageInvitationsScreen() {
     const displayName = slot.name ||
       t.manageInvitations.guestSlot.replace('{{number}}', String(guestNum));
 
+    // Profile photo: organizer uses own profile, others use participant profile
+    const avatarUrl = slot.role === 'organizer'
+      ? (ownProfile?.avatar_url || user?.user_metadata?.avatar_url || null)
+      : (slot.participant?.profile?.avatar_url || null);
+
     return (
       <Pressable
         key={`${slot.role}-${slot.index}`}
@@ -472,17 +477,22 @@ export default function ManageInvitationsScreen() {
         onPress={!isGuest && slot.isEditable ? () => setExpandedSlot(slot.isExpanded ? null : slot.index) : undefined}
       >
         <XStack alignItems="center" gap={12}>
-          {/* Avatar with gold ring for honoree */}
+          {/* Avatar with gold ring (organizer + honoree always, others get muted ring) */}
           <View style={[
             styles.avatarRing,
-            slot.role === 'honoree' && styles.avatarRingHonoree,
+            (slot.role === 'honoree' || slot.role === 'organizer') && styles.avatarRingHonoree,
           ]}>
             <View style={[
               styles.avatar,
               slot.role === 'honoree' && styles.avatarHonoree,
               isEmpty && styles.avatarEmpty,
             ]}>
-              {slot.role === 'honoree' ? (
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={{ width: 44, height: 44, borderRadius: 22 }}
+                />
+              ) : slot.role === 'honoree' ? (
                 <Ionicons name="star" size={18} color="#C6A75E" />
               ) : (
                 <Text style={styles.avatarText}>{initial}</Text>
@@ -551,7 +561,7 @@ export default function ManageInvitationsScreen() {
             borderTopColor={theme.ghostBorder}
           >
             <XStack gap={10} alignItems="center">
-              {/* Confirmed checkmark */}
+              {/* Confirmed checkmark only */}
               <View style={[
                 styles.actionChip,
                 slot.status === 'confirmed' && styles.actionChipActive,
@@ -561,10 +571,6 @@ export default function ManageInvitationsScreen() {
                   size={14}
                   color={slot.status === 'confirmed' ? '#C6A75E' : theme.textTertiary}
                 />
-              </View>
-              {/* Chat/message bubble */}
-              <View style={styles.actionChip}>
-                <Ionicons name="chatbubble-outline" size={14} color={theme.textTertiary} />
               </View>
             </XStack>
             <Text style={styles.statusLabel}>{statusConfig.label}</Text>
@@ -758,7 +764,7 @@ export default function ManageInvitationsScreen() {
             <Text style={styles.statLabel}>{t.manageInvitations.pending}</Text>
           </View>
           <View style={[styles.statCard, { flex: 1 }]}>
-            <Text style={[styles.statNumber, { color: theme.textPrimary }]}>{totalSlots}</Text>
+            <Text style={[styles.statNumber, { color: theme.accentGold }]}>{totalSlots}</Text>
             <Text style={styles.statLabel}>Total</Text>
           </View>
         </XStack>
