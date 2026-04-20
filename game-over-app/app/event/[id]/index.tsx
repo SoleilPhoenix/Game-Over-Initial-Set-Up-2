@@ -41,7 +41,7 @@ import { loadDesiredParticipants, loadChecklist, setChecklistItem, loadInvitedCo
 const TOOL_CONFIGS = [
   { key: 'invitations', icon: 'people', iconBg: 'rgba(236, 72, 153, 0.15)', iconColor: '#EC4899', route: 'participants', isTab: false },
   { key: 'communication', icon: 'chatbubbles', iconBg: 'rgba(59, 130, 246, 0.15)', iconColor: '#3B82F6', route: '/(tabs)/chat', isTab: true, passEventId: true },
-  { key: 'budget', icon: 'wallet', iconBg: 'rgba(16, 185, 129, 0.15)', iconColor: '#10B981', route: 'budget', isTab: false },
+  { key: 'budget', icon: 'wallet', iconBg: 'rgba(198, 167, 94, 0.15)', iconColor: '#C6A75E', route: 'budget', isTab: false },
   { key: 'packages', icon: 'gift', iconBg: 'rgba(139, 92, 246, 0.15)', iconColor: '#8B5CF6', route: 'packages', isTab: false },
 ] as const;
 
@@ -297,24 +297,24 @@ export default function EventSummaryScreen() {
           <Text style={[styles.motto, { textAlign: 'center' }]}>{t.eventDetail.motto}</Text>
         </YStack>
 
-        {/* ─── Info Card (3-column per mockup) ────── */}
+        {/* ─── Info Card (3-column per mockup — Package Highlight gets more room) ── */}
         <View style={styles.infoCard}>
-          <View style={styles.infoColumn}>
-            <Ionicons name="location" size={24} color={theme.accentGold} />
+          <View style={[styles.infoColumn, styles.infoColumnNarrow]}>
+            <Ionicons name="location" size={22} color={theme.accentGold} />
             <Text style={styles.infoLabel}>{t.eventDetail.location}</Text>
             <Text style={styles.infoValue} numberOfLines={1}>{cityName}</Text>
           </View>
 
-          <View style={styles.infoColumn}>
-            <Ionicons name="calendar" size={24} color={theme.accentGold} />
+          <View style={[styles.infoColumn, styles.infoColumnNarrow]}>
+            <Ionicons name="calendar" size={22} color={theme.accentGold} />
             <Text style={styles.infoLabel}>{t.eventDetail.dates}</Text>
             <Text style={styles.infoValue} numberOfLines={1}>{dateStr}</Text>
           </View>
 
-          <View style={styles.infoColumn}>
-            <Ionicons name="trophy" size={24} color={theme.accentGold} />
+          <View style={[styles.infoColumn, styles.infoColumnWide]}>
+            <Ionicons name="trophy" size={22} color={theme.accentGold} />
             <Text style={styles.infoLabel} numberOfLines={1}>{t.eventDetail.vibe}</Text>
-            <Text style={styles.infoValue} numberOfLines={1}>{vibeText || '—'}</Text>
+            <Text style={styles.infoValue} numberOfLines={2}>{vibeText || '—'}</Text>
           </View>
         </View>
 
@@ -538,12 +538,12 @@ function ChecklistRow({
   const isDisabled = step.auto || locked;
 
   const iconBgColor = step.completed
-    ? (step.auto ? 'rgba(16, 185, 129, 0.15)' : 'rgba(198, 167, 94, 0.2)')
+    ? 'rgba(198, 167, 94, 0.2)'
     : locked
       ? 'rgba(156, 163, 175, 0.08)'
       : 'rgba(156, 163, 175, 0.12)';
   const iconColor = step.completed
-    ? (step.auto ? '#10B981' : theme.accentGold)
+    ? theme.accentGold
     : locked
       ? 'rgba(156, 163, 175, 0.4)'
       : theme.textTertiary;
@@ -577,7 +577,7 @@ function ChecklistRow({
             step.completed && rowStyles.checkboxAuto,
           ]}>
             {step.completed && (
-              <Ionicons name="checkmark" size={14} color="#10B981" />
+              <Ionicons name="checkmark" size={14} color="#C6A75E" />
             )}
           </View>
         </XStack>
@@ -624,7 +624,7 @@ const rowStyles = StyleSheet.create({
   },
   checkboxAuto: {
     backgroundColor: 'transparent',
-    borderColor: '#10B981',
+    borderColor: '#C6A75E',
   },
   checklistLabel: {
     fontSize: 14,
@@ -633,12 +633,12 @@ const rowStyles = StyleSheet.create({
   autoTag: {
     fontSize: 9,
     fontWeight: '700',
-    color: '#10B981',
+    color: '#C6A75E',
     letterSpacing: 0.5,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    backgroundColor: 'rgba(198, 167, 94, 0.15)',
     overflow: 'hidden',
   },
 });
@@ -681,12 +681,13 @@ function makeStyles(theme: EditorialTheme) {
       ...ambientShadow(theme),
     },
     infoColumn: {
-      flex: 1,
       alignItems: 'center',
       justifyContent: 'flex-start',
       gap: 6,
       paddingHorizontal: 4,
     },
+    infoColumnNarrow: { flex: 0.85 },
+    infoColumnWide: { flex: 1.3 },
     infoLabel: {
       fontSize: 10,
       fontWeight: '700',
@@ -782,12 +783,15 @@ function makeStyles(theme: EditorialTheme) {
       textAlign: 'center',
     },
 
-    // Destination Guide
+    // Destination Guide (mockup: gold-bordered card, gold headline)
     destinationCard: {
       borderRadius: RADII.lg,
       overflow: 'hidden',
-      height: 160,
+      height: 180,
       position: 'relative',
+      borderWidth: 1,
+      borderColor: theme.accentGold,
+      ...ambientShadow(theme),
     },
     destinationImage: {
       width: '100%',
@@ -795,7 +799,7 @@ function makeStyles(theme: EditorialTheme) {
     },
     destinationOverlay: {
       ...StyleSheet.absoluteFillObject,
-      backgroundColor: 'rgba(13, 27, 42, 0.55)',
+      backgroundColor: 'rgba(13, 27, 42, 0.62)',
     },
     destinationContent: {
       position: 'absolute',
@@ -806,13 +810,13 @@ function makeStyles(theme: EditorialTheme) {
     destinationLabel: {
       fontSize: 20,
       fontWeight: '700',
-      color: '#FFFFFF',
+      color: theme.accentGold,
       marginBottom: 4,
       fontFamily: TYPE_SCALE.headlineMd.fontFamily,
     },
     destinationLink: {
       fontSize: 13,
-      color: 'rgba(255,255,255,0.8)',
+      color: theme.accentGold,
       fontFamily: TYPE_SCALE.body.fontFamily,
     },
 

@@ -581,7 +581,7 @@ const en = {
     motto: "Let's make memories, not mistakes.",
     // Info card
     location: 'Location',
-    dates: 'Dates',
+    dates: 'Date',
     vibe: 'Package Highlight',
     // Progress
     stepsComplete: '{{completed}}/8 Steps Complete',
