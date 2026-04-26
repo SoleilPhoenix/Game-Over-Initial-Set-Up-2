@@ -638,7 +638,7 @@ const de: TranslationKeys = {
 
   // ─── Manage Invitations ─────────────────────────
   manageInvitations: {
-    title: 'Einladungen verwalten',
+    title: 'Einladung',
     guestSlot: 'Gast #{{number}}',
     organizer: 'ORGANISATOR',
     honoree: 'EHRENGAST',

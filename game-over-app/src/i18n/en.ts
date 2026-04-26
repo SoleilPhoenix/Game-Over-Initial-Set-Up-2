@@ -654,7 +654,7 @@ const en = {
 
   // ─── Manage Invitations ─────────────────────────
   manageInvitations: {
-    title: 'Manage Invitations',
+    title: 'Invitation',
     guestSlot: 'Guest #{{number}}',
     organizer: 'ORGANIZER',
     honoree: 'HONOREE',

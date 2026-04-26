@@ -36,6 +36,13 @@ type Event = Database['public']['Tables']['events']['Row'] & {
   city?: { name: string } | null;
 };
 
+/** Shows a profile image with graceful fallback to children when the URL fails to load. */
+function AvatarImage({ uri, style, fallback }: { uri: string; style: any; fallback: React.ReactNode }) {
+  const [errored, setErrored] = React.useState(false);
+  if (errored) return <>{fallback}</>;
+  return <Image source={{ uri }} style={style} onError={() => setErrored(true)} />;
+}
+
 // Avatar colors for participant initials
 const AVATAR_COLORS = [
   'rgba(139, 92, 246, 0.2)', // purple
@@ -906,10 +913,7 @@ export default function BudgetDashboardScreen() {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-        <LinearGradient
-          colors={[theme.surfaceHigh, theme.background]}
-          style={StyleSheet.absoluteFill}
-        />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]} />
         <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
           <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
             <XStack alignItems="center" gap={12}>
@@ -995,44 +999,44 @@ export default function BudgetDashboardScreen() {
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
-          {/* Back button (from Event Summary) or Avatar */}
-          <XStack alignItems="center" gap={12}>
-            {eventIdParam ? (
-              <Pressable
-                onPress={handleBack}
-                hitSlop={8}
-                style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
-              >
-                <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
-              </Pressable>
-            ) : (
+        {eventIdParam ? (
+          /* ── Nested screen: back ← centered title → spacer ── */
+          <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
+            <Pressable
+              onPress={handleBack}
+              hitSlop={8}
+              style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
+            </Pressable>
+            <Text style={styles.headerTitle}>Budget</Text>
+            <View style={{ width: 36 }} />
+          </XStack>
+        ) : (
+          /* ── Tab screen: avatar + title + bell ── */
+          <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
+            <XStack alignItems="center" gap={12}>
               <View style={styles.avatarContainer}>
                 {userAvatar ? (
-                  <Image
-                    source={{ uri: userAvatar }}
-                    style={styles.avatar}
-                  />
+                  <Image source={{ uri: userAvatar }} style={styles.avatar} />
                 ) : (
                   <View style={[styles.avatar, styles.avatarPlaceholder]}>
                     <Text style={styles.avatarInitial}>{userInitial}</Text>
                   </View>
                 )}
               </View>
-            )}
-            <Text style={styles.headerTitle}>Budget</Text>
+              <Text style={styles.headerTitle}>Budget</Text>
+            </XStack>
+            <Pressable
+              onPress={handleNotifications}
+              style={styles.notificationButton}
+              testID="notifications-button"
+            >
+              <Ionicons name="notifications-outline" size={24} color={theme.textPrimary} />
+              {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
+            </Pressable>
           </XStack>
-
-          {/* Notification Bell */}
-          <Pressable
-            onPress={handleNotifications}
-            style={styles.notificationButton}
-            testID="notifications-button"
-          >
-            <Ionicons name="notifications-outline" size={24} color={theme.textPrimary} />
-            {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
-          </Pressable>
-        </XStack>
+        )}
 
         {/* Category Tabs */}
         {renderCategoryTabs()}
@@ -1056,16 +1060,11 @@ export default function BudgetDashboardScreen() {
         <>
           {selectedCategory === 'package' ? (
             <>
-            {/* Total Budget Card */}
-            <View style={styles.glassCard}>
-              {/* Gradient blur effect */}
-              <View style={styles.gradientBlur} />
-
-              <YStack gap="$2" style={{ position: 'relative', zIndex: 1 }}>
-                {/* Main stats — two stacked cards matching mockup */}
+            {/* Total Budget Cards — two side-by-side standalone cards, no outer wrapper */}
+            <YStack gap={12} marginBottom={16}>
                 {budgetStats.percentage >= 100 ? (
                   /* Fully paid */
-                  <YStack gap={12} marginBottom="$3">
+                  <>
                     {/* Card 1 — Total Package Paid */}
                     <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: `${theme.accentGold}22` }}>
                       <XStack justifyContent="space-between" alignItems="flex-start">
@@ -1086,14 +1085,14 @@ export default function BudgetDashboardScreen() {
                         <Text fontSize={13} color={theme.textSecondary}>All scheduled payments confirmed</Text>
                       </XStack>
                     </View>
-                    {/* Card 2 — Amount Due (left gold accent) */}
+                    {/* Card 2 — Amount Due €0 → gray amount */}
                     <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, overflow: 'hidden', flexDirection: 'row', borderWidth: 1, borderColor: theme.ghostBorder }}>
                       <View style={{ width: 4, backgroundColor: theme.accentGold }} />
                       <YStack flex={1} padding={20} gap={6}>
                         <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
                           Amount Due
                         </Text>
-                        <Text fontSize={36} fontWeight="700" color={theme.textPrimary} letterSpacing={-1}>
+                        <Text fontSize={36} fontWeight="700" color={theme.textTertiary} letterSpacing={-1}>
                           {formatCurrencyRounded(0)}
                         </Text>
                         <View style={{ alignSelf: 'flex-start', backgroundColor: `${theme.success}1A`, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginTop: 2 }}>
@@ -1103,14 +1102,14 @@ export default function BudgetDashboardScreen() {
                         </View>
                       </YStack>
                     </View>
-                  </YStack>
+                  </>
                 ) : (
                   /* Deposit paid, remainder still due */
                   (() => {
                     const { deposit: fmtDeposit, due: fmtDue } = formatDepositAndDue(budgetStats.collected, budgetStats.totalBudget);
                     const isUrgent = daysUntilEvent !== null && daysUntilEvent <= 14;
                     return (
-                      <YStack gap={12} marginBottom="$3">
+                      <>
                         {/* Card 1 — Deposit Paid */}
                         <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: `${theme.accentGold}22` }}>
                           <XStack justifyContent="space-between" alignItems="flex-start">
@@ -1127,14 +1126,14 @@ export default function BudgetDashboardScreen() {
                             </View>
                           </XStack>
                         </View>
-                        {/* Card 2 — Amount Due */}
+                        {/* Card 2 — Amount Due non-zero → orange amount */}
                         <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, overflow: 'hidden', flexDirection: 'row', borderWidth: 1, borderColor: isUrgent ? 'rgba(249,115,22,0.35)' : theme.ghostBorder }}>
                           <View style={{ width: 4, backgroundColor: isUrgent ? '#F97316' : theme.accentGold }} />
                           <YStack flex={1} padding={20} gap={4}>
                             <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
                               Amount Due (75%)
                             </Text>
-                            <Text fontSize={36} fontWeight="700" color={theme.textPrimary} letterSpacing={-1}>
+                            <Text fontSize={36} fontWeight="700" color="#F97316" letterSpacing={-1}>
                               {fmtDue}
                             </Text>
                             {daysUntilEvent !== null && daysUntilEvent > 0 && (
@@ -1144,26 +1143,16 @@ export default function BudgetDashboardScreen() {
                             )}
                           </YStack>
                         </View>
-                      </YStack>
+                      </>
                     );
                   })()
                 )}
-
-                {/* Progress Bar: blue = paid portion, bordeaux background = remaining */}
-                <View style={styles.progressContainer}>
-                  <View
-                    style={[styles.progressBar, {
-                      width: `${budgetStats.percentage}%`,
-                      backgroundColor: theme.accentGold,
-                    }]}
-                  />
-                </View>
 
                 {/* Pay Remaining Balance — organizers only */}
                 {budgetStats.percentage < 100 && budgetStats.pending > 0 && (
                   isOrganizer ? (
                     <Pressable
-                      style={styles.payRemainingButton}
+                      style={[styles.payRemainingButton, { marginHorizontal: 0, marginBottom: 0, borderRadius: 12 }]}
                       onPress={() => {
                         if (!selectedEventId) return;
                         const packageIdForPayment = cachedBudget?.packageId || (booking as any)?.package_id;
@@ -1197,8 +1186,7 @@ export default function BudgetDashboardScreen() {
                     </View>
                   )
                 )}
-              </YStack>
-            </View>
+            </YStack>
 
             {/* Group Contributions */}
             <YStack marginBottom="$4">
@@ -1251,9 +1239,14 @@ export default function BudgetDashboardScreen() {
                       {/* Avatar */}
                       {!isDemo && ((participantRaw as any).profile?.avatar_url || (isCurrentUser && userAvatar)) ? (
                         <View style={[styles.participantAvatarInitials, { overflow: 'hidden' }]}>
-                          <Image
-                            source={{ uri: (participantRaw as any).profile?.avatar_url || userAvatar }}
+                          <AvatarImage
+                            uri={(participantRaw as any).profile?.avatar_url || userAvatar}
                             style={{ width: 40, height: 40, borderRadius: 20 }}
+                            fallback={
+                              <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
+                                <Text style={styles.participantInitialsText}>{initials}</Text>
+                              </View>
+                            }
                           />
                         </View>
                       ) : (
@@ -1281,7 +1274,7 @@ export default function BudgetDashboardScreen() {
                         <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
                           {formatCurrency(amountForRow)}
                         </Text>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: isPaid ? theme.success : pendingColor, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: isPaid ? theme.textTertiary : pendingColor, letterSpacing: 0.5, textTransform: 'uppercase' }}>
                           {isPaid ? t.budget.paid : t.budget.pending}
                         </Text>
                       </YStack>
@@ -1399,7 +1392,7 @@ export default function BudgetDashboardScreen() {
                       <Pressable style={[styles.refundRow, styles.contributionRowBorder]} onPress={() => openExpenseModal(item.key)}>
                         <XStack alignItems="center" gap="$3" flex={1}>
                           <View style={[styles.refundIcon, { backgroundColor: item.bg }]}>
-                            <Ionicons name={item.icon as any} size={18} color={item.color} />
+                            <Ionicons name={item.icon as any} size={18} color={theme.accentGold} />
                           </View>
                           <YStack>
                             <Text fontSize={14} fontWeight="500" color={theme.textPrimary}>
@@ -1429,7 +1422,7 @@ export default function BudgetDashboardScreen() {
                             hitSlop={8}
                             style={styles.categoryAddBtn}
                           >
-                            <Ionicons name="add-circle" size={22} color={item.color} />
+                            <Ionicons name="add-circle" size={22} color={theme.accentGold} />
                           </Pressable>
                         </XStack>
                       </Pressable>
@@ -2343,8 +2336,8 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     borderWidth: 1,
   },
   paidBadge: {
-    backgroundColor: `${theme.success}1A`,
-    borderColor: `${theme.success}33`,
+    backgroundColor: 'rgba(107,114,128,0.12)',
+    borderColor: 'rgba(107,114,128,0.2)',
   },
   pendingBadge: {
     backgroundColor: 'rgba(249,115,22,0.12)',

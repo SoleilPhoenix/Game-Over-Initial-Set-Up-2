@@ -50,6 +50,14 @@ function getEmailSuggestions(email: string): string[] {
   if (!afterAt) return COMMON_DOMAINS.slice(0, 5);
   return COMMON_DOMAINS.filter(d => d.startsWith(afterAt));
 }
+/** Renders a profile photo with automatic fallback to `children` on load error.
+ *  Required because React Native's <Image> silently shows blank on broken URLs. */
+function AvatarImage({ uri, style, fallback }: { uri: string; style: any; fallback: React.ReactNode }) {
+  const [errored, setErrored] = React.useState(false);
+  if (errored) return <>{fallback}</>;
+  return <Image source={{ uri }} style={style} onError={() => setErrored(true)} />;
+}
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -438,7 +446,7 @@ export default function ManageInvitationsScreen() {
       case 'organizer':
         return { label: t.manageInvitations.organizer, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
       case 'honoree':
-        return { label: t.manageInvitations.honoree, bg: 'rgba(198,167,94,0.18)', color: '#C6A75E' };
+        return { label: t.manageInvitations.honoree, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
       default:
         return { label: t.manageInvitations.guest, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
     }
@@ -447,7 +455,7 @@ export default function ManageInvitationsScreen() {
   const getStatusConfig = (status: SlotStatus) => {
     switch (status) {
       case 'confirmed':
-        return { icon: 'checkmark-circle' as const, color: '#C6A75E', label: t.manageInvitations.confirmed };
+        return { icon: 'checkmark-circle' as const, color: theme.textSecondary, label: t.manageInvitations.confirmed };
       case 'pending':
         // Softer muted orange for pending
         return { icon: 'time-outline' as const, color: 'rgba(249,115,22,0.75)', label: t.manageInvitations.pending };
@@ -492,9 +500,10 @@ export default function ManageInvitationsScreen() {
               isEmpty && styles.avatarEmpty,
             ]}>
               {avatarUrl ? (
-                <Image
-                  source={{ uri: avatarUrl }}
+                <AvatarImage
+                  uri={avatarUrl}
                   style={{ width: 44, height: 44, borderRadius: 22 }}
+                  fallback={<Text style={styles.avatarText}>{initial}</Text>}
                 />
               ) : slot.role === 'honoree' ? (
                 <Ionicons name="star" size={18} color="#C6A75E" />
@@ -566,7 +575,7 @@ export default function ManageInvitationsScreen() {
                 <Ionicons
                   name="checkmark"
                   size={14}
-                  color={slot.status === 'confirmed' ? '#C6A75E' : theme.textTertiary}
+                  color={slot.status === 'confirmed' ? theme.textSecondary : theme.textTertiary}
                 />
               </View>
               {/* Honoree info button — same size as checkmark chip */}
@@ -862,7 +871,7 @@ export default function ManageInvitationsScreen() {
                 inviteSendStatus === 'done' && { color: theme.accentGold },
               ]}>
                 {inviteSendStatus === 'done'
-                  ? `${activeChannel === 'email' ? 'Email' : activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} Sent`
+                  ? `${activeChannel === 'email' ? 'Email' : 'WhatsApp'} Sent`
                   : 'Invite All Guests'}
               </Text>
             </View>
@@ -876,34 +885,26 @@ export default function ManageInvitationsScreen() {
               </Pressable>
             )}
 
-            {/* ── idle: channel picker ── */}
+            {/* ── idle: channel picker (Email + WhatsApp only) ── */}
             {inviteSendStatus === 'idle' && (
               <>
                 <Text style={[styles.inviteSectionLabel, { textAlign: 'center', marginBottom: 16 }]}>
                   SEND FROM GAME OVER
                 </Text>
-                <XStack gap={10} marginBottom={20}>
+                <XStack gap={12} marginBottom={20}>
                   <Pressable
                     style={[styles.inviteChannelBtn, !hasEmails && styles.inviteChannelBtnDisabled]}
                     onPress={() => hasEmails && handleSendViaChannel('email')}
                   >
-                    <Ionicons name="mail-outline" size={22} color={hasEmails ? '#C6A75E' : theme.textTertiary} />
+                    <Ionicons name="mail-outline" size={24} color={hasEmails ? '#C6A75E' : theme.textTertiary} />
                     <Text style={[styles.inviteChannelLabel, { color: hasEmails ? '#C6A75E' : theme.textTertiary }]}>Email</Text>
                     <Text style={styles.inviteChannelCount}>{emailCount} guest{emailCount !== 1 ? 's' : ''}</Text>
                   </Pressable>
                   <Pressable
                     style={[styles.inviteChannelBtn, !hasPhones && styles.inviteChannelBtnDisabled]}
-                    onPress={() => hasPhones && handleSendViaChannel('sms')}
-                  >
-                    <Ionicons name="chatbubble-outline" size={22} color={hasPhones ? '#C6A75E' : theme.textTertiary} />
-                    <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#C6A75E' : theme.textTertiary }]}>SMS</Text>
-                    <Text style={styles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.inviteChannelBtn, !hasPhones && styles.inviteChannelBtnDisabled]}
                     onPress={() => hasPhones && handleSendViaChannel('whatsapp')}
                   >
-                    <Ionicons name="logo-whatsapp" size={22} color={hasPhones ? '#C6A75E' : theme.textTertiary} />
+                    <Ionicons name="logo-whatsapp" size={24} color={hasPhones ? '#C6A75E' : theme.textTertiary} />
                     <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#C6A75E' : theme.textTertiary }]}>WhatsApp</Text>
                     <Text style={styles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
                   </Pressable>
@@ -919,7 +920,7 @@ export default function ManageInvitationsScreen() {
               <View style={{ alignItems: 'center', paddingVertical: 32, gap: 16 }}>
                 <ActivityIndicator size="large" color={theme.accentGold} />
                 <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textPrimary }}>
-                  Sending {activeChannel === 'email' ? 'email' : activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} invitations…
+                  Sending {activeChannel === 'email' ? 'email' : 'WhatsApp'} invitations…
                 </Text>
                 <Text style={{ fontSize: 13, color: theme.textTertiary }}>
                   Validating and sending to {activeChannel === 'email' ? emailCount : phoneCount} guest{(activeChannel === 'email' ? emailCount : phoneCount) !== 1 ? 's' : ''}
@@ -939,9 +940,12 @@ export default function ManageInvitationsScreen() {
                 </Text>
                 <View style={{ backgroundColor: theme.surfaceHigh, borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
                   {inviteResults.map((r, i) => {
-                    // Resolve actual guest name from slots (fallback to "Guest N")
+                    // Resolve actual guest name + full contact from slots (not the potentially-masked server value)
                     const matchedSlot = slots.find(s => s.index === r.slotIndex);
                     const guestName = matchedSlot?.name || `Guest ${r.slotIndex}`;
+                    const contactInfo = activeChannel === 'email'
+                      ? (matchedSlot?.email || r.recipient)
+                      : (matchedSlot?.phone || r.recipient);
                     const isLast = i === inviteResults.length - 1;
                     return (
                       <View key={i} style={[
@@ -956,7 +960,7 @@ export default function ManageInvitationsScreen() {
                         />
                         <YStack flex={1} marginLeft={12}>
                           <Text style={[styles.inviteGuestName, { color: theme.accentGold }]}>{guestName}</Text>
-                          <Text style={styles.inviteGuestPhone}>{r.recipient}{r.error ? ` — ${r.error}` : ''}</Text>
+                          <Text style={styles.inviteGuestPhone}>{contactInfo}{r.error ? ` — ${r.error}` : ''}</Text>
                         </YStack>
                       </View>
                     );
@@ -1248,8 +1252,8 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     backgroundColor: theme.surfaceLow,
   },
   actionChipActive: {
-    borderColor: theme.accentGold,
-    backgroundColor: 'rgba(198,167,94,0.1)',
+    borderColor: theme.textSecondary,
+    backgroundColor: 'rgba(107,114,128,0.12)',
   },
   statusLabel: {
     fontSize: 11,
