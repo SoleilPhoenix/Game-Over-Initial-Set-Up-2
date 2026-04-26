@@ -1391,7 +1391,7 @@ export default function BudgetDashboardScreen() {
                       {/* Category header row — tap anywhere to open modal */}
                       <Pressable style={[styles.refundRow, styles.contributionRowBorder]} onPress={() => openExpenseModal(item.key)}>
                         <XStack alignItems="center" gap="$3" flex={1}>
-                          <View style={[styles.refundIcon, { backgroundColor: item.bg }]}>
+                          <View style={[styles.refundIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
                             <Ionicons name={item.icon as any} size={18} color={theme.accentGold} />
                           </View>
                           <YStack>
@@ -1560,8 +1560,8 @@ export default function BudgetDashboardScreen() {
                           }));
                         }}
                       >
-                        <View style={[styles.refundIcon, { backgroundColor: cat.bg }]}>
-                          <Ionicons name={cat.icon as any} size={18} color={cat.color} />
+                        <View style={[styles.refundIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+                          <Ionicons name={cat.icon as any} size={18} color={theme.accentGold} />
                         </View>
                         <Text style={styles.templateLabel}>
                           {cat.labelKey in t.budget ? (t.budget as any)[cat.labelKey] : cat.labelKey}
@@ -1592,8 +1592,8 @@ export default function BudgetDashboardScreen() {
                     return (
                       <>
                         <XStack alignItems="center" gap={12} marginBottom={20}>
-                          <View style={[styles.modalCatIcon, { backgroundColor: expCat.bg }]}>
-                            <Ionicons name={expCat.icon as any} size={22} color={expCat.color} />
+                          <View style={[styles.modalCatIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+                            <Ionicons name={expCat.icon as any} size={22} color={theme.accentGold} />
                           </View>
                           <YStack flex={1}>
                             <Text style={styles.modalTitle}>
@@ -1667,8 +1667,8 @@ export default function BudgetDashboardScreen() {
                     return (
                       <>
                         <XStack alignItems="center" gap={12} marginBottom={20}>
-                          <View style={[styles.modalCatIcon, { backgroundColor: expCat.bg }]}>
-                            <Ionicons name={expCat.icon as any} size={22} color={expCat.color} />
+                          <View style={[styles.modalCatIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+                            <Ionicons name={expCat.icon as any} size={22} color={theme.accentGold} />
                           </View>
                           <YStack flex={1}>
                             <Text style={styles.modalTitle}>
@@ -1858,8 +1858,8 @@ export default function BudgetDashboardScreen() {
                         setRefundModal(prev => ({ ...prev, templateKey: tmpl.key, description: tmpl.label }));
                       }}
                     >
-                      <View style={[styles.refundIcon, { backgroundColor: tmpl.bg }]}>
-                        <Ionicons name={tmpl.icon as any} size={18} color={tmpl.color} />
+                      <View style={[styles.refundIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+                        <Ionicons name={tmpl.icon as any} size={18} color={theme.accentGold} />
                       </View>
                       <Text style={styles.templateLabel}>{tmpl.label}</Text>
                       <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
@@ -2541,6 +2541,8 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     gap: 12,
     backgroundColor: theme.surfaceHigh,
     borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: theme.accentGold,
     padding: 14,
   },
   eventSelectorImage: {
@@ -2591,7 +2593,9 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     borderBottomColor: theme.ghostBorder,
   },
   eventDropdownItemActive: {
-    backgroundColor: 'rgba(198, 167, 94, 0.12)',
+    backgroundColor: 'rgba(198,167,94,0.12)',
+    borderWidth: 1,
+    borderColor: theme.accentGold,
   },
   eventDropdownImage: {
     width: 36,
@@ -2727,18 +2731,20 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     fontWeight: '700',
   },
   submitButton: {
-    backgroundColor: theme.accentGold,
+    backgroundColor: 'transparent',
     borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: theme.accentGold,
     paddingVertical: 14,
     alignItems: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: 'rgba(198, 167, 94,0.3)',
+    borderColor: 'rgba(198,167,94,0.3)',
   },
   submitButtonText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: theme.accentGold,
   },
   templateRow: {
     flexDirection: 'row',

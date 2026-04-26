@@ -12,7 +12,6 @@ import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useChannels, useCreateChannel } from '@/hooks/queries/useChat';
@@ -423,10 +422,10 @@ function pickIconForChannel(channelName: string, _category?: string): string {
 
 // Category config — shared between voting tab and poll info modal
 const POLL_CATEGORY_CONFIG_CONST: Record<string, { icon: string; color: string; bg: string }> = {
-  general:       { icon: 'chatbubbles',     color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.15)' },
-  accommodation: { icon: 'bed',             color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.15)' },
-  activities:    { icon: 'game-controller', color: '#F97316', bg: 'rgba(249, 115, 22, 0.15)' },
-  budget:        { icon: 'cash',            color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)' },
+  general:       { icon: 'chatbubbles',     color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+  accommodation: { icon: 'bed',             color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+  activities:    { icon: 'game-controller', color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+  budget:        { icon: 'cash',            color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
 };
 
 type CommunicationTab = 'topics' | 'voting';
@@ -810,10 +809,10 @@ export default function CommunicationScreen() {
     const POLL_CATEGORY_CONFIG = POLL_CATEGORY_CONFIG_CONST;
 
     const VOTING_CATEGORIES = [
-      { id: 'general' as const,       label: 'GENERAL',       icon: 'chatbubbles',     color: '#8B5CF6', bg: 'rgba(139,92,246,0.15)' },
-      { id: 'accommodation' as const, label: 'ACCOMMODATION',  icon: 'bed',             color: '#3B82F6', bg: 'rgba(59,130,246,0.15)' },
-      { id: 'activities' as const,    label: 'ACTIVITIES',     icon: 'game-controller', color: '#F97316', bg: 'rgba(249,115,22,0.15)' },
-      { id: 'budget' as const,        label: 'BUDGET',         icon: 'cash',            color: '#10B981', bg: 'rgba(16,185,129,0.15)' },
+      { id: 'general' as const,       label: 'GENERAL',       icon: 'chatbubbles',     color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+      { id: 'accommodation' as const, label: 'ACCOMMODATION',  icon: 'bed',             color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+      { id: 'activities' as const,    label: 'ACTIVITIES',     icon: 'game-controller', color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+      { id: 'budget' as const,        label: 'BUDGET',         icon: 'cash',            color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
     ];
 
     // Denominator: total participants minus the honoree (bachelor/bachelorette)
@@ -911,7 +910,7 @@ export default function CommunicationScreen() {
                             {totalVotes} of {denominator} voted{poll.ends_at ? ` \u00b7 Ends ${new Date(poll.ends_at).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}` : ''}
                           </Text>
                           {!userVoted && (
-                            <Text style={[styles.pollFooter, { color: '#5A7EB0' }]}>Tap option to vote</Text>
+                            <Text style={[styles.pollFooter, { color: '#C6A75E' }]}>Tap option to vote</Text>
                           )}
                         </XStack>
                       </View>
@@ -926,7 +925,7 @@ export default function CommunicationScreen() {
           style={styles.newTopicButton}
           onPress={() => handleCreatePoll('general')}
         >
-          <Ionicons name="add-circle-outline" size={24} color="#5A7EB0" />
+          <Ionicons name="add-circle-outline" size={24} color="#C6A75E" />
           <Text style={styles.newTopicText}>Create New Poll</Text>
         </Pressable>
       </>
@@ -1057,7 +1056,7 @@ export default function CommunicationScreen() {
                     </Text>
                   </YStack>
                   {isSelected && (
-                    <Ionicons name="checkmark-circle" size={20} color="#5A7EB0" />
+                    <Ionicons name="checkmark-circle" size={20} color="#C6A75E" />
                   )}
                 </Pressable>
               );
@@ -1070,23 +1069,18 @@ export default function CommunicationScreen() {
 
   const renderShareEventCard = () => (
     <Pressable style={styles.shareEventCard} onPress={handleInvite}>
-      <XStack alignItems="center" gap={10}>
-        <View style={styles.shareEventIcon}>
-          <Ionicons name="share-social-outline" size={18} color="#5A7EB0" />
-        </View>
-        <Text style={styles.shareEventTitle} numberOfLines={1} flex={1}>
-          {t.chat.shareInvite} — {t.chat.inviteFriendsToJoin}
-        </Text>
-        <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
-      </XStack>
+      <Ionicons name="share-social-outline" size={18} color="#1F2A44" />
+      <Text style={styles.shareEventTitle} numberOfLines={1}>
+        {t.chat.shareInvite} — {t.chat.inviteFriendsToJoin}
+      </Text>
     </Pressable>
   );
 
   const CHANNEL_CATEGORY_CONFIG: Record<ChannelCategory, { icon: string; color: string; bg: string }> = {
-    general:       { icon: 'chatbubbles',     color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.15)' },
-    accommodation: { icon: 'bed',             color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.15)' },
-    activities:    { icon: 'game-controller', color: '#F97316', bg: 'rgba(249, 115, 22, 0.15)' },
-    budget:        { icon: 'cash',            color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)' },
+    general:       { icon: 'chatbubbles',     color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+    accommodation: { icon: 'bed',             color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+    activities:    { icon: 'game-controller', color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+    budget:        { icon: 'cash',            color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
   };
 
   const renderChannelSection = (category: ChannelCategory, title: string) => {
@@ -1145,10 +1139,7 @@ export default function CommunicationScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Background */}
-      <LinearGradient
-        colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
-        style={StyleSheet.absoluteFill}
-      />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: DARK_THEME.background }]} />
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
@@ -1238,7 +1229,7 @@ export default function CommunicationScreen() {
               <View style={styles.channelSection}>
                 <Text style={styles.sectionTitle}>{t.chat.newTopics}</Text>
                 <Pressable style={styles.newTopicButton} onPress={handleCreateNewTopic}>
-                  <Ionicons name="add-circle-outline" size={24} color="#5A7EB0" />
+                  <Ionicons name="add-circle-outline" size={24} color="#C6A75E" />
                   <Text style={styles.newTopicText}>{t.chat.createNewTopic}</Text>
                 </Pressable>
               </View>
@@ -1255,7 +1246,7 @@ export default function CommunicationScreen() {
               <View style={styles.channelSection}>
                 <Text style={styles.sectionTitle}>{t.chat.newTopics}</Text>
                 <Pressable style={styles.newTopicButton} onPress={handleCreateNewTopic}>
-                  <Ionicons name="add-circle-outline" size={24} color="#5A7EB0" />
+                  <Ionicons name="add-circle-outline" size={24} color="#C6A75E" />
                   <Text style={styles.newTopicText}>{t.chat.createNewTopic}</Text>
                 </Pressable>
               </View>
@@ -1320,7 +1311,7 @@ export default function CommunicationScreen() {
                   }}
                   style={[styles.addOptionButton, { marginTop: 8, marginBottom: 0 }]}
                 >
-                  <Ionicons name="add-circle-outline" size={18} color="#5A7EB0" />
+                  <Ionicons name="add-circle-outline" size={18} color="#C6A75E" />
                   <Text style={styles.addOptionText}>Add Option</Text>
                 </Pressable>
               )}
@@ -1438,7 +1429,7 @@ export default function CommunicationScreen() {
                       onChangeText={setNewOptionText}
                     />
                     <Pressable
-                      style={{ backgroundColor: '#5A7EB0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 }}
+                      style={{ backgroundColor: '#C6A75E', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 }}
                       onPress={async () => {
                         const label = newOptionText.trim();
                         if (!label || !pollInfoModal) return;
@@ -1602,7 +1593,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   filterTabActive: {
-    backgroundColor: '#5A7EB0',
+    backgroundColor: '#C6A75E',
   },
   filterTabText: {
     fontSize: 14,
@@ -1617,26 +1608,23 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   shareEventCard: {
-    backgroundColor: 'rgba(45, 55, 72, 0.5)',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+    backgroundColor: '#C6A75E',
+    borderRadius: 999,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  shareEventIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 10,
+  },
+  shareEventIcon: {
+    // unused — icon rendered inline now
   },
   shareEventTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F2A44',
   },
   channelSection: {
     marginBottom: 20,
@@ -1652,7 +1640,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    backgroundColor: 'rgba(198,167,94,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1696,13 +1684,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     gap: 8,
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderWidth: 1.5,
+    borderColor: '#C6A75E',
   },
   newTopicText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#5A7EB0',
+    color: '#C6A75E',
   },
   lockedBanner: {
     flexDirection: 'row',
@@ -1741,8 +1729,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#5A7EB0',
+    backgroundColor: '#22385A',
     borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#C6A75E',
     padding: 14,
   },
   eventSelectorImage: {
@@ -1806,7 +1796,7 @@ const styles = StyleSheet.create({
     color: DARK_THEME.textSecondary,
   },
   eventDropdownTextActive: {
-    color: '#5A7EB0',
+    color: '#C6A75E',
     fontWeight: '700',
   },
   eventDropdownDate: {
@@ -1828,7 +1818,7 @@ const styles = StyleSheet.create({
   newPollButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#5A7EB0',
+    color: '#C6A75E',
   },
   pollCard: {
     backgroundColor: DARK_THEME.surfaceCard,
@@ -1871,8 +1861,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.06)',
   },
   pollOptionSelected: {
-    backgroundColor: 'rgba(90, 126, 176, 0.15)',
-    borderColor: '#5A7EB0',
+    backgroundColor: 'rgba(198,167,94,0.15)',
+    borderColor: '#C6A75E',
   },
   pollRadio: {
     width: 18,
@@ -1884,13 +1874,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pollRadioSelected: {
-    borderColor: '#5A7EB0',
+    borderColor: '#C6A75E',
   },
   pollRadioDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#5A7EB0',
+    backgroundColor: '#C6A75E',
   },
   pollOptionText: {
     fontSize: 13,
@@ -1969,7 +1959,7 @@ const styles = StyleSheet.create({
   },
   addOptionText: {
     fontSize: 14,
-    color: '#5A7EB0',
+    color: '#C6A75E',
     fontWeight: '500',
   },
   modalButton: {
@@ -1984,7 +1974,7 @@ const styles = StyleSheet.create({
     borderColor: DARK_THEME.glassBorder,
   },
   modalButtonCreate: {
-    backgroundColor: '#5A7EB0',
+    backgroundColor: '#C6A75E',
   },
   modalButtonCancelText: {
     fontSize: 14,
