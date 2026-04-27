@@ -198,10 +198,10 @@ export default function WizardStep1() {
                     pressed && { opacity: 0.88 },
                   ]}
                 >
-                  {/* Photo — anchored to bottom so city landmarks are visible */}
+                  {/* Photo — bottom-anchored + pushed up so city landmarks are centred */}
                   <Image
-                    source={getPackageImage(city.slug, 'classic')}
-                    style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: -40 }}
+                    source={getPackageImage(city.slug, 'grand')}
+                    style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: -120 }}
                     resizeMode="cover"
                   />
                   {/* Overlay */}
@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
 
   // City cards
   cityCard: {
-    height: 140,
+    height: 100,
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
