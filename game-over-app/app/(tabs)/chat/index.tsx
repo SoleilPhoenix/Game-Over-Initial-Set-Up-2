@@ -1194,9 +1194,6 @@ export default function CommunicationScreen() {
         {renderTabs()}
       </View>
 
-      {/* Event Selector */}
-      {renderEventSelector()}
-
       {/* Content — swipe left/right to switch tabs */}
       <Animated.View style={[{ flex: 1 }, swipeAnimStyle]} {...swipeHandlers}>
       <ScrollView
@@ -1212,6 +1209,8 @@ export default function CommunicationScreen() {
         }
         showsVerticalScrollIndicator={false}
       >
+        {/* Event Selector — scrolls with content */}
+        {renderEventSelector()}
         {/* Share Event Card — organizers only */}
         {selectedEvent?.created_by === user?.id && renderShareEventCard()}
 
@@ -1326,7 +1325,7 @@ export default function CommunicationScreen() {
                 <Pressable style={[styles.modalButton, styles.modalButtonCancel]} onPress={() => setPollModalVisible(false)}>
                   <Text style={styles.modalButtonCancelText}>Cancel</Text>
                 </Pressable>
-                <Pressable style={[styles.modalButton, styles.modalButtonCreate, !pollQuestion.trim() && styles.modalButtonCreateDisabled]} onPress={handleSubmitPoll}>
+                <Pressable style={[styles.modalButton, styles.modalButtonCreate, (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2) && styles.modalButtonCreateDisabled]} onPress={handleSubmitPoll}>
                   <Text style={styles.modalButtonCreateText}>Create Poll</Text>
                 </Pressable>
               </View>

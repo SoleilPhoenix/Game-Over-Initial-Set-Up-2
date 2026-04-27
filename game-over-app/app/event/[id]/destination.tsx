@@ -393,10 +393,10 @@ const TEAM_LOGO_MAP: Record<string, any> = {
 };
 
 const CATEGORY_CONFIG: Record<NonNullable<PopupCategory>, { label: string; icon: string; color: string }> = {
-  attractions: { label: 'Local Attractions', icon: 'telescope-outline', color: '#F59E0B' },
+  attractions: { label: 'Local Attractions', icon: 'compass-outline', color: '#F59E0B' },
   dining: { label: 'Dining Options', icon: 'restaurant-outline', color: '#10B981' },
-  entertainment: { label: 'Entertainment', icon: 'musical-notes-outline', color: '#8B5CF6' },
-  sports: { label: 'Sports Teams', icon: 'trophy-outline', color: '#EF4444' },
+  entertainment: { label: 'Entertainment', icon: 'color-palette-outline', color: '#8B5CF6' },
+  sports: { label: 'Sports Teams', icon: 'football-outline', color: '#EF4444' },
 };
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -521,72 +521,108 @@ export default function DestinationScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* ─── Highlights (in-app popup) ────────────── */}
+        {/* ─── Highlights ──────────────────────────── */}
         <Text style={styles.sectionTitle}>Highlights</Text>
         <View style={styles.highlightGrid}>
           {(Object.keys(CATEGORY_CONFIG) as NonNullable<PopupCategory>[]).map((cat) => {
             const cfg = CATEGORY_CONFIG[cat];
-            const count = city.places[cat].length;
             return (
               <Pressable
                 key={cat}
                 style={({ pressed }) => [styles.highlightTile, pressed && { opacity: 0.75 }]}
                 onPress={() => setPopupCategory(cat)}
               >
-                <View style={[styles.highlightTileIconWrap, { backgroundColor: `${cfg.color}22` }]}>
-                  <Ionicons name={cfg.icon as any} size={28} color={cfg.color} />
+                <View style={styles.highlightTileIconWrap}>
+                  <Ionicons name={cfg.icon as any} size={28} color="#C6A75E" />
                 </View>
                 <Text style={styles.highlightTileLabel}>{cfg.label}</Text>
-                <Text style={styles.highlightTileCount}>{count} places</Text>
               </Pressable>
             );
           })}
         </View>
 
-        {/* ─── Local Tips ──────────────────────────── */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Local Tips</Text>
-        <View style={styles.tipsCard}>
-          {/* Check Weather */}
+        {/* ─── Map Preview Card ────────────────────── */}
+        <View style={styles.mapCard}>
           <Pressable
-            style={({ pressed }) => [styles.tipRow, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [styles.mapVisual, pressed && { opacity: 0.88 }]}
+            onPress={() => openMapsForCity(city.lat, city.lon, cityName)}
+            testID="open-maps-button"
+          >
+            {/* Subtle grid lines */}
+            {[0, 25, 50, 75, 100].map(p => (
+              <View key={'h' + p} style={[styles.mapLine, { top: `${p}%` as any, left: 0, right: 0, height: 1 }]} />
+            ))}
+            {[0, 25, 50, 75, 100].map(p => (
+              <View key={'v' + p} style={[styles.mapLine, { left: `${p}%` as any, top: 0, bottom: 0, width: 1 }]} />
+            ))}
+            {/* Center pin + city label */}
+            <View style={styles.mapCenterPin}>
+              <View style={styles.mapPin}>
+                <Ionicons name="location" size={18} color="#0D1B2A" />
+              </View>
+              <Text style={styles.mapCityName}>{cityName.toUpperCase()}</Text>
+            </View>
+            {/* Open in Maps badge */}
+            <View style={styles.mapBadge}>
+              <Ionicons name="map-outline" size={11} color="#C6A75E" />
+              <Text style={styles.mapBadgeText}>Open in Maps</Text>
+            </View>
+          </Pressable>
+          {/* Weather row */}
+          <Pressable
+            style={({ pressed }) => [styles.mapWeatherRow, pressed && { opacity: 0.7 }]}
             onPress={() => openWeather(city.lat, city.lon, cityName)}
           >
-            <XStack alignItems="center" gap={10} flex={1}>
-              <View style={[styles.tipIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                <Ionicons name="partly-sunny" size={16} color="#F59E0B" />
-              </View>
-              <YStack flex={1}>
-                <Text style={styles.tipLabel}>Check local weather</Text>
-                <Text style={styles.tipUrl}>
-                  Google Weather — {cityName}
-                </Text>
-              </YStack>
-              <Ionicons name="open-outline" size={15} color={'rgba(255,255,255,0.48)'} />
-            </XStack>
-          </Pressable>
-
-          <View style={styles.tipDivider} />
-
-          {/* Transportation */}
-          <Pressable
-            style={({ pressed }) => [styles.tipRow, pressed && { opacity: 0.7 }]}
-            onPress={() => openTransportation(city.transit.url)}
-          >
-            <XStack alignItems="center" gap={10} flex={1}>
-              <View style={[styles.tipIcon, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}>
-                <Ionicons name="train" size={16} color="#3B82F6" />
-              </View>
-              <YStack flex={1}>
-                <Text style={styles.tipLabel}>Public transportation</Text>
-                <Text style={styles.tipUrl}>{city.transit.name}</Text>
-              </YStack>
-              <Ionicons name="open-outline" size={15} color={'rgba(255,255,255,0.48)'} />
-            </XStack>
+            <View style={[styles.tipIcon, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
+              <Ionicons name="partly-sunny-outline" size={16} color="#F59E0B" />
+            </View>
+            <YStack flex={1} gap={1}>
+              <Text style={styles.tipLabel}>Local Weather</Text>
+              <Text style={styles.tipUrl}>Tap to view forecast for {cityName}</Text>
+            </YStack>
+            <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.48)" />
           </Pressable>
         </View>
 
-        {/* ─── Emergency Contacts ───────────────────── */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Emergency Contacts</Text>
+        {/* ─── Local Tips ──────────────────────────── */}
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Local Tips</Text>
+
+        {/* Public transportation — own card */}
+        <Pressable
+          style={({ pressed }) => [styles.tipCard, pressed && { opacity: 0.7 }]}
+          onPress={() => openTransportation(city.transit.url)}
+        >
+          <XStack alignItems="center" gap={10} flex={1}>
+            <View style={[styles.tipIcon, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
+              <Ionicons name="train-outline" size={16} color="#3B82F6" />
+            </View>
+            <YStack flex={1}>
+              <Text style={styles.tipLabel}>Public transportation</Text>
+              <Text style={styles.tipUrl}>{city.transit.name}</Text>
+            </YStack>
+            <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.48)" />
+          </XStack>
+        </Pressable>
+
+        {/* Check local weather — own card */}
+        <Pressable
+          style={({ pressed }) => [styles.tipCard, pressed && { opacity: 0.7 }]}
+          onPress={() => openWeather(city.lat, city.lon, cityName)}
+        >
+          <XStack alignItems="center" gap={10} flex={1}>
+            <View style={[styles.tipIcon, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
+              <Ionicons name="cloudy-outline" size={16} color="#F59E0B" />
+            </View>
+            <YStack flex={1}>
+              <Text style={styles.tipLabel}>Check local weather</Text>
+              <Text style={styles.tipUrl}>7-day forecast for {cityName}</Text>
+            </YStack>
+            <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.48)" />
+          </XStack>
+        </Pressable>
+
+        {/* ─── Emergency ───────────────────────────── */}
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Emergency</Text>
         <View style={styles.emergencyCard}>
           {emergencyContacts.map((contact, i) => (
             <React.Fragment key={contact.label}>
@@ -604,16 +640,6 @@ export default function DestinationScreen() {
             </React.Fragment>
           ))}
         </View>
-
-        {/* ─── Open in Maps ────────────────────────── */}
-        <Pressable
-          style={({ pressed }) => [styles.mapsButton, pressed && { opacity: 0.8 }]}
-          onPress={() => openMapsForCity(city.lat, city.lon, cityName)}
-          testID="open-maps-button"
-        >
-          <Ionicons name="map" size={20} color="#5A7EB0" />
-          <Text style={styles.mapsButtonText}>Open in Maps</Text>
-        </Pressable>
       </ScrollView>
 
       {/* ─── In-App Places Popup ──────────────────── */}
@@ -764,23 +790,97 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   highlightTileIconWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 4,
+    marginBottom: 8,
+    backgroundColor: 'rgba(198,167,94,0.15)',
   },
   highlightTileLabel: {
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '700',
     color: '#FFFFFF',
     textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
-  highlightTileCount: {
+  // ─── Map Preview Card ────────────────────────
+  mapCard: {
+    backgroundColor: '#1A2F47',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
+    overflow: 'hidden',
+    marginTop: 16,
+  },
+  mapVisual: {
+    height: 150,
+    backgroundColor: '#0D1B2A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  mapLine: {
+    position: 'absolute',
+    backgroundColor: 'rgba(198,167,94,0.07)',
+  },
+  mapCenterPin: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  mapPin: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#C6A75E',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapCityName: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.48)',
-    textAlign: 'center',
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 2.5,
+  },
+  mapBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(13,27,42,0.85)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(198,167,94,0.3)',
+  },
+  mapBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#C6A75E',
+  },
+  mapWeatherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(230,220,200,0.1)',
+  },
+  // ─── Individual Tip Cards ────────────────────
+  tipCard: {
+    backgroundColor: '#1A2F47',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 10,
   },
   tipsCard: {
     backgroundColor: '#1A2F47',

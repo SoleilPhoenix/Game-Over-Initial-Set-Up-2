@@ -1050,9 +1050,6 @@ export default function BudgetDashboardScreen() {
         {renderCategoryTabs()}
       </View>
 
-      {/* Event Selector */}
-      {renderEventSelector()}
-
       <Animated.View style={[{ flex: 1 }, swipeAnimStyle]} {...swipeHandlers}>
       <ScrollView
         style={{ flex: 1 }}
@@ -1066,6 +1063,8 @@ export default function BudgetDashboardScreen() {
         }
       >
         <>
+          {/* Event Selector — scrolls with content */}
+          {renderEventSelector()}
           {selectedCategory === 'package' ? (
             <>
             {/* Total Budget Cards — two side-by-side standalone cards, no outer wrapper */}
