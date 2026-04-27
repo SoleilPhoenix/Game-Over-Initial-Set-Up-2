@@ -867,7 +867,7 @@ export default function CommunicationScreen() {
                     );
                     return (
                       <View key={poll.id} style={styles.pollCard}>
-                        <XStack alignItems="flex-start" gap={10} marginBottom={12}>
+                        <XStack alignItems="center" gap={10} marginBottom={12}>
                           <View style={[styles.pollCategoryIcon, { backgroundColor: cfg.bg }]}>
                             <Ionicons name={pickIconForChannel(poll.title) as any} size={18} color={cfg.color} />
                           </View>

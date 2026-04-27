@@ -2746,7 +2746,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     alignItems: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: 'rgba(198,167,94,0.35)',
+    opacity: 0.45,
   },
   submitButtonText: {
     fontSize: 15,
