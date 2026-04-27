@@ -151,31 +151,35 @@ export default function WizardStep1() {
 
           {/* ── 02 Honoree's Name ──────────────────── */}
           <SectionHeader number="02" title={t.wizard.honoreeName} />
-          <View style={styles.nameWrap}>
-            <TextInput
-              placeholder={t.wizard.honoreeNamePlaceholder}
-              placeholderTextColor="rgba(255,255,255,0.32)"
-              value={honoreeName}
-              onChangeText={setHonoreeName}
-              onFocus={() => setNameFocused(true)}
-              onBlur={() => setNameFocused(false)}
-              style={styles.nameInput}
-              testID="honoree-name-input"
-            />
-            <View style={[styles.nameUnderline, nameFocused && styles.nameUnderlineFocused]} />
-          </View>
-          <View style={[styles.nameWrap, { marginTop: 16 }]}>
-            <TextInput
-              placeholder={t.wizard.honoreeLastNamePlaceholder}
-              placeholderTextColor="rgba(255,255,255,0.32)"
-              value={honoreeLastName}
-              onChangeText={setHonoreeLastName}
-              onFocus={() => setLastFocused(true)}
-              onBlur={() => setLastFocused(false)}
-              style={styles.nameInput}
-              testID="honoree-last-name-input"
-            />
-            <View style={[styles.nameUnderline, lastFocused && styles.nameUnderlineFocused]} />
+          <View style={styles.nameRow}>
+            {/* First name */}
+            <View style={styles.nameCol}>
+              <TextInput
+                placeholder={t.wizard.honoreeNamePlaceholder}
+                placeholderTextColor="rgba(255,255,255,0.32)"
+                value={honoreeName}
+                onChangeText={setHonoreeName}
+                onFocus={() => setNameFocused(true)}
+                onBlur={() => setNameFocused(false)}
+                style={styles.nameInput}
+                testID="honoree-name-input"
+              />
+              <View style={[styles.nameUnderline, nameFocused && styles.nameUnderlineFocused]} />
+            </View>
+            {/* Last name */}
+            <View style={styles.nameCol}>
+              <TextInput
+                placeholder={t.wizard.honoreeLastNamePlaceholder}
+                placeholderTextColor="rgba(255,255,255,0.32)"
+                value={honoreeLastName}
+                onChangeText={setHonoreeLastName}
+                onFocus={() => setLastFocused(true)}
+                onBlur={() => setLastFocused(false)}
+                style={styles.nameInput}
+                testID="honoree-last-name-input"
+              />
+              <View style={[styles.nameUnderline, lastFocused && styles.nameUnderlineFocused]} />
+            </View>
           </View>
 
           {/* ── 03 City ────────────────────────────── */}
@@ -194,10 +198,10 @@ export default function WizardStep1() {
                     pressed && { opacity: 0.88 },
                   ]}
                 >
-                  {/* Photo */}
+                  {/* Photo — anchored to bottom so city landmarks are visible */}
                   <Image
                     source={getPackageImage(city.slug, 'classic')}
-                    style={StyleSheet.absoluteFillObject}
+                    style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: -40 }}
                     resizeMode="cover"
                   />
                   {/* Overlay */}
@@ -368,9 +372,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // Honoree name
-  nameWrap: {
-    marginBottom: 0,
+  // Honoree name — side-by-side row
+  nameRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  nameCol: {
+    flex: 1,
   },
   nameInput: {
     color: '#FFFFFF',

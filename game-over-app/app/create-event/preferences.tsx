@@ -48,7 +48,7 @@ export default function WizardStep2() {
   };
 
   return (
-    <YStack flex={1} backgroundColor="$background">
+    <YStack flex={1} backgroundColor="#0D1B2A">
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
         {/* H1: Energy Level */}
         <GlassPanel icon="flash" title={t.wizard.h1Title.replace('{{name}}', name)} testID="panel-h1">

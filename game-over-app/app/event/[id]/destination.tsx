@@ -479,7 +479,7 @@ export default function DestinationScreen() {
     },
     {
       label: 'Nearest Hospital',
-      icon: 'hospital-outline',
+      icon: 'fitness-outline',
       iconColor: '#9CA3AF',
       iconBg: 'rgba(156, 163, 175, 0.15)',
       number: 'In Maps',
@@ -497,30 +497,35 @@ export default function DestinationScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ─── Hero Header ─────────────────────────── */}
-      <View style={styles.heroContainer}>
-        <KenBurnsImage source={resolveImageSource(heroImage)} style={StyleSheet.absoluteFillObject} />
-        <View style={styles.heroOverlay} />
-        <Pressable
-          style={[styles.backButton, { top: insets.top + 8 }]}
-          onPress={() => router.back()}
-          hitSlop={8}
-          testID="back-button"
-        >
-          <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
-        </Pressable>
-        <View style={styles.heroContent}>
-          <Text style={styles.heroSupertitle}>DESTINATION GUIDE</Text>
-          <Text style={styles.heroTitle}>{cityName}</Text>
-          <Text style={styles.heroSubtitle}>{cityTagline}</Text>
-        </View>
-      </View>
+      {/* Back button — fixed overlay so it stays visible while hero scrolls */}
+      <Pressable
+        style={[styles.backButton, { top: insets.top + 8 }]}
+        onPress={() => router.back()}
+        hitSlop={8}
+        testID="back-button"
+      >
+        <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+      </Pressable>
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* ─── Hero — scrolls with content ─────────── */}
+        <View style={styles.heroContainer}>
+          <KenBurnsImage source={resolveImageSource(heroImage)} style={StyleSheet.absoluteFillObject} />
+          <View style={styles.heroOverlay} />
+          <View style={styles.heroContent}>
+            <Text style={styles.heroSupertitle}>DESTINATION GUIDE</Text>
+            <Text style={styles.heroTitle}>{cityName}</Text>
+            <Text style={styles.heroSubtitle}>{cityTagline}</Text>
+          </View>
+        </View>
+
+        {/* ─── Section content ─────────────────────── */}
+        <View style={{ padding: 16 }}>
+
         {/* ─── Highlights ──────────────────────────── */}
         <Text style={styles.sectionTitle}>Highlights</Text>
         <View style={styles.highlightGrid}>
@@ -607,13 +612,32 @@ export default function DestinationScreen() {
             onPress={() => openMapsForCity(city.lat, city.lon, cityName)}
             testID="open-maps-button"
           >
-            {/* Subtle grid lines */}
-            {[0, 25, 50, 75, 100].map(p => (
-              <View key={'h' + p} style={[styles.mapLine, { top: `${p}%` as any, left: 0, right: 0, height: 1 }]} />
-            ))}
-            {[0, 25, 50, 75, 100].map(p => (
-              <View key={'v' + p} style={[styles.mapLine, { left: `${p}%` as any, top: 0, bottom: 0, width: 1 }]} />
-            ))}
+            {/* ── Schematic street grid ── */}
+            {/* Horizontal roads */}
+            <View style={[styles.mapRoad, { top: '18%', left: 0, right: 0, height: 2 }]} />
+            <View style={[styles.mapRoadMain, { top: '40%', left: 0, right: 0, height: 5 }]} />
+            <View style={[styles.mapRoad, { top: '58%', left: 0, right: 0, height: 2 }]} />
+            <View style={[styles.mapRoad, { top: '76%', left: 0, right: 0, height: 2 }]} />
+            <View style={[styles.mapRoad, { top: '88%', left: 0, right: 0, height: 1 }]} />
+            {/* Vertical roads */}
+            <View style={[styles.mapRoad, { left: '12%', top: 0, bottom: 0, width: 2 }]} />
+            <View style={[styles.mapRoadMain, { left: '32%', top: 0, bottom: 0, width: 5 }]} />
+            <View style={[styles.mapRoad, { left: '55%', top: 0, bottom: 0, width: 2 }]} />
+            <View style={[styles.mapRoadMain, { left: '72%', top: 0, bottom: 0, width: 4 }]} />
+            <View style={[styles.mapRoad, { left: '88%', top: 0, bottom: 0, width: 2 }]} />
+            {/* Diagonal accent */}
+            <View style={[styles.mapRoad, { left: '12%', top: '18%', width: '20%', height: 2, transform: [{ rotate: '35deg' }] }]} />
+            {/* City blocks */}
+            <View style={[styles.mapBlock, { top: '20%', left: '14%', width: '16%', height: '18%' }]} />
+            <View style={[styles.mapBlock, { top: '20%', left: '34%', width: '19%', height: '18%' }]} />
+            <View style={[styles.mapBlock, { top: '20%', left: '57%', width: '13%', height: '18%' }]} />
+            <View style={[styles.mapBlock, { top: '20%', left: '74%', width: '14%', height: '18%' }]} />
+            <View style={[styles.mapBlock, { top: '60%', left: '14%', width: '16%', height: '14%' }]} />
+            <View style={[styles.mapBlock, { top: '60%', left: '34%', width: '19%', height: '14%' }]} />
+            <View style={[styles.mapBlock, { top: '60%', left: '57%', width: '13%', height: '14%' }]} />
+            <View style={[styles.mapBlock, { top: '60%', left: '74%', width: '14%', height: '14%' }]} />
+            <View style={[styles.mapBlock, { top: '78%', left: '14%', width: '16%', height: '8%' }]} />
+            <View style={[styles.mapBlock, { top: '78%', left: '57%', width: '13%', height: '8%' }]} />
             {/* Center pin + city label */}
             <View style={styles.mapCenterPin}>
               <View style={styles.mapPin}>
@@ -628,6 +652,8 @@ export default function DestinationScreen() {
             </View>
           </Pressable>
         </View>
+
+        </View>{/* end section content wrapper */}
       </ScrollView>
 
       {/* ─── In-App Places Popup ──────────────────── */}
@@ -817,6 +843,21 @@ const styles = StyleSheet.create({
   mapLine: {
     position: 'absolute',
     backgroundColor: 'rgba(198,167,94,0.07)',
+  },
+  mapRoad: {
+    position: 'absolute',
+    backgroundColor: 'rgba(198,167,94,0.18)',
+  },
+  mapRoadMain: {
+    position: 'absolute',
+    backgroundColor: 'rgba(198,167,94,0.28)',
+  },
+  mapBlock: {
+    position: 'absolute',
+    backgroundColor: 'rgba(198,167,94,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(198,167,94,0.1)',
+    borderRadius: 2,
   },
   mapCenterPin: {
     alignItems: 'center',
