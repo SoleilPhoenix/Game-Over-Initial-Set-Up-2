@@ -915,8 +915,8 @@ export default function BudgetDashboardScreen() {
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
         <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]} />
         <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-          <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
-            <XStack alignItems="center" gap={12}>
+          <XStack alignItems="center" paddingHorizontal={20}>
+            <View style={{ width: 44 }}>
               <View style={styles.avatarContainer}>
                 {userAvatar ? (
                   <Image source={{ uri: userAvatar }} style={styles.avatar} />
@@ -926,16 +926,20 @@ export default function BudgetDashboardScreen() {
                   </View>
                 )}
               </View>
+            </View>
+            <View style={{ flex: 1, alignItems: 'center' }}>
               <Text style={styles.headerTitle}>Budget</Text>
-            </XStack>
-            <Pressable
-              onPress={handleNotifications}
-              style={styles.notificationButton}
-              testID="notifications-button"
-            >
-              <Ionicons name="notifications-outline" size={24} color={theme.textPrimary} />
-              {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
-            </Pressable>
+            </View>
+            <View style={{ width: 44, alignItems: 'flex-end' }}>
+              <Pressable
+                onPress={handleNotifications}
+                style={styles.notificationButton}
+                testID="notifications-button"
+              >
+                <Ionicons name="notifications-outline" size={24} color={theme.textPrimary} />
+                {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
+              </Pressable>
+            </View>
           </XStack>
           {renderCategoryTabs()}
         </View>
@@ -992,10 +996,7 @@ export default function BudgetDashboardScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Background */}
-      <LinearGradient
-        colors={[theme.surfaceHigh, theme.background]}
-        style={StyleSheet.absoluteFill}
-      />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]} />
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
@@ -1013,9 +1014,10 @@ export default function BudgetDashboardScreen() {
             <View style={{ width: 36 }} />
           </XStack>
         ) : (
-          /* ── Tab screen: avatar + title + bell ── */
-          <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
-            <XStack alignItems="center" gap={12}>
+          /* ── Tab screen: avatar | centered title | bell ── */
+          <XStack alignItems="center" paddingHorizontal={20}>
+            {/* Left: avatar */}
+            <View style={{ width: 44 }}>
               <View style={styles.avatarContainer}>
                 {userAvatar ? (
                   <Image source={{ uri: userAvatar }} style={styles.avatar} />
@@ -1025,16 +1027,22 @@ export default function BudgetDashboardScreen() {
                   </View>
                 )}
               </View>
+            </View>
+            {/* Center: title */}
+            <View style={{ flex: 1, alignItems: 'center' }}>
               <Text style={styles.headerTitle}>Budget</Text>
-            </XStack>
-            <Pressable
-              onPress={handleNotifications}
-              style={styles.notificationButton}
-              testID="notifications-button"
-            >
-              <Ionicons name="notifications-outline" size={24} color={theme.textPrimary} />
-              {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
-            </Pressable>
+            </View>
+            {/* Right: bell */}
+            <View style={{ width: 44, alignItems: 'flex-end' }}>
+              <Pressable
+                onPress={handleNotifications}
+                style={styles.notificationButton}
+                testID="notifications-button"
+              >
+                <Ionicons name="notifications-outline" size={24} color={theme.textPrimary} />
+                {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
+              </Pressable>
+            </View>
           </XStack>
         )}
 
@@ -2661,7 +2669,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     paddingTop: 12,
     paddingBottom: 16,
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: theme.ghostBorder,
     maxHeight: '85%',
   },
   modalDragHandle: {
@@ -2731,20 +2739,18 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     fontWeight: '700',
   },
   submitButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: theme.accentGold,
     borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: theme.accentGold,
     paddingVertical: 14,
     alignItems: 'center',
   },
   submitButtonDisabled: {
-    borderColor: 'rgba(198,167,94,0.3)',
+    backgroundColor: 'rgba(198,167,94,0.35)',
   },
   submitButtonText: {
     fontSize: 15,
     fontWeight: '700',
-    color: theme.accentGold,
+    color: '#FFFFFF',
   },
   templateRow: {
     flexDirection: 'row',

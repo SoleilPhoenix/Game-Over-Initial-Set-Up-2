@@ -1143,9 +1143,9 @@ export default function CommunicationScreen() {
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
-          {/* Back button (when opened from Event Summary) or Avatar */}
-          <XStack alignItems="center" gap={12}>
+        <XStack alignItems="center" paddingHorizontal={20}>
+          {/* Left: back button or avatar */}
+          <View style={{ width: 44 }}>
             {eventIdParam ? (
               <Pressable
                 onPress={() => router.back()}
@@ -1170,18 +1170,24 @@ export default function CommunicationScreen() {
                 )}
               </View>
             )}
-            <Text style={styles.headerTitle}>{t.chat.headerTitle}</Text>
-          </XStack>
+          </View>
 
-          {/* Notification Bell */}
-          <Pressable
-            onPress={handleNotifications}
-            style={styles.notificationButton}
-            testID="notifications-button"
-          >
-            <Ionicons name="notifications-outline" size={24} color={'#FFFFFF'} />
-            {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
-          </Pressable>
+          {/* Center: title */}
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={styles.headerTitle}>{t.chat.headerTitle}</Text>
+          </View>
+
+          {/* Right: notification bell */}
+          <View style={{ width: 44, alignItems: 'flex-end' }}>
+            <Pressable
+              onPress={handleNotifications}
+              style={styles.notificationButton}
+              testID="notifications-button"
+            >
+              <Ionicons name="notifications-outline" size={24} color={'#FFFFFF'} />
+              {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
+            </Pressable>
+          </View>
         </XStack>
 
         {/* Tabs */}
