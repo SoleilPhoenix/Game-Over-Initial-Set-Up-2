@@ -1177,17 +1177,8 @@ export default function CommunicationScreen() {
             <Text style={styles.headerTitle}>{t.chat.headerTitle}</Text>
           </View>
 
-          {/* Right: notification bell */}
-          <View style={{ width: 44, alignItems: 'flex-end' }}>
-            <Pressable
-              onPress={handleNotifications}
-              style={styles.notificationButton}
-              testID="notifications-button"
-            >
-              <Ionicons name="notifications-outline" size={24} color={'#FFFFFF'} />
-              {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
-            </Pressable>
-          </View>
+          {/* Right: spacer to keep title centred */}
+          <View style={{ width: 44 }} />
         </XStack>
 
         {/* Tabs */}
@@ -1727,8 +1718,9 @@ const styles = StyleSheet.create({
   },
   // Event Selector — Prominent blue card with city image
   eventSelectorWrapper: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    marginBottom: 20,
     zIndex: 10,
   },
   eventSelectorCard: {

@@ -2539,8 +2539,9 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
   },
   // Event Selector
   eventSelectorWrapper: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    marginBottom: 16,
     zIndex: 10,
   },
   eventSelectorCard: {

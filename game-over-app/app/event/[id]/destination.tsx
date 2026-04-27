@@ -443,10 +443,10 @@ export default function DestinationScreen() {
   const city = CITY_DATA[citySlug] || FALLBACK_CITY;
   const cityTagline = city.tagline[language as 'en' | 'de'] ?? city.tagline.en;
 
-  // German emergency contacts — same for all cities
+  // Emergency contacts — same for all cities
   const emergencyContacts = [
     {
-      label: 'Notruf (Emergency)',
+      label: 'Emergency',
       icon: 'shield',
       iconColor: '#EF4444',
       iconBg: 'rgba(239, 68, 68, 0.15)',
@@ -454,7 +454,7 @@ export default function DestinationScreen() {
       onPress: () => Linking.openURL('tel:112'),
     },
     {
-      label: 'Polizei (Police)',
+      label: 'Police',
       icon: 'shield-checkmark',
       iconColor: '#3B82F6',
       iconBg: 'rgba(59, 130, 246, 0.15)',
@@ -470,7 +470,7 @@ export default function DestinationScreen() {
       onPress: () => Linking.openURL(`tel:${city.taxi.number.replace(/\s/g, '')}`),
     },
     {
-      label: 'Ärztlicher Bereitschaftsdienst',
+      label: 'Medical Service',
       icon: 'medkit',
       iconColor: '#10B981',
       iconBg: 'rgba(16, 185, 129, 0.15)',
@@ -478,8 +478,8 @@ export default function DestinationScreen() {
       onPress: () => Linking.openURL('tel:116117'),
     },
     {
-      label: 'Nächstes Krankenhaus',
-      icon: 'add-circle',
+      label: 'Nearest Hospital',
+      icon: 'navigate-outline',
       iconColor: '#9CA3AF',
       iconBg: 'rgba(156, 163, 175, 0.15)',
       number: 'In Maps',
@@ -541,8 +541,67 @@ export default function DestinationScreen() {
           })}
         </View>
 
+        {/* ─── Local Tips ──────────────────────────── */}
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Local Tips</Text>
+
+        {/* Public transportation — own card */}
+        <Pressable
+          style={({ pressed }) => [styles.tipCard, pressed && { opacity: 0.7 }]}
+          onPress={() => openTransportation(city.transit.url)}
+        >
+          <XStack alignItems="center" gap={10} flex={1}>
+            <View style={[styles.tipIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+              <Ionicons name="train-outline" size={16} color="#C6A75E" />
+            </View>
+            <YStack flex={1}>
+              <Text style={styles.tipLabel}>Public transportation</Text>
+              <Text style={styles.tipUrl}>{city.transit.name}</Text>
+            </YStack>
+            <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.48)" />
+          </XStack>
+        </Pressable>
+
+        {/* Check local weather — own card */}
+        <Pressable
+          style={({ pressed }) => [styles.tipCard, pressed && { opacity: 0.7 }]}
+          onPress={() => openWeather(city.lat, city.lon, cityName)}
+        >
+          <XStack alignItems="center" gap={10} flex={1}>
+            <View style={[styles.tipIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+              <Ionicons name="sunny-outline" size={16} color="#C6A75E" />
+            </View>
+            <YStack flex={1}>
+              <Text style={styles.tipLabel}>Check local weather</Text>
+              <Text style={styles.tipUrl}>7-day forecast for {cityName}</Text>
+            </YStack>
+            <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.48)" />
+          </XStack>
+        </Pressable>
+
+        {/* ─── Emergency ───────────────────────────── */}
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Emergency</Text>
+        <View style={styles.emergencyCard}>
+          {emergencyContacts.map((contact, i) => (
+            <React.Fragment key={contact.label}>
+              {i > 0 && <View style={styles.tipDivider} />}
+              <Pressable
+                style={({ pressed }) => [styles.emergencyRow, pressed && { opacity: 0.7 }]}
+                onPress={contact.onPress}
+              >
+                <View style={[styles.emergencyIcon, { backgroundColor: contact.iconBg }]}>
+                  <Ionicons name={contact.icon as any} size={16} color={contact.iconColor} />
+                </View>
+                <Text style={styles.emergencyLabel} flex={1}>{contact.label}</Text>
+                <View style={[styles.emergencyBadge, { backgroundColor: contact.iconBg }]}>
+                  <Text style={[styles.emergencyNumber, { color: contact.iconColor }]}>{contact.number}</Text>
+                </View>
+              </Pressable>
+            </React.Fragment>
+          ))}
+        </View>
+
         {/* ─── Map Preview Card ────────────────────── */}
-        <View style={styles.mapCard}>
+        <View style={[styles.mapCard, { marginTop: 24 }]}>
           <Pressable
             style={({ pressed }) => [styles.mapVisual, pressed && { opacity: 0.88 }]}
             onPress={() => openMapsForCity(city.lat, city.lon, cityName)}
@@ -568,77 +627,6 @@ export default function DestinationScreen() {
               <Text style={styles.mapBadgeText}>Open in Maps</Text>
             </View>
           </Pressable>
-          {/* Weather row */}
-          <Pressable
-            style={({ pressed }) => [styles.mapWeatherRow, pressed && { opacity: 0.7 }]}
-            onPress={() => openWeather(city.lat, city.lon, cityName)}
-          >
-            <View style={[styles.tipIcon, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
-              <Ionicons name="partly-sunny-outline" size={16} color="#F59E0B" />
-            </View>
-            <YStack flex={1} gap={1}>
-              <Text style={styles.tipLabel}>Local Weather</Text>
-              <Text style={styles.tipUrl}>Tap to view forecast for {cityName}</Text>
-            </YStack>
-            <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.48)" />
-          </Pressable>
-        </View>
-
-        {/* ─── Local Tips ──────────────────────────── */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Local Tips</Text>
-
-        {/* Public transportation — own card */}
-        <Pressable
-          style={({ pressed }) => [styles.tipCard, pressed && { opacity: 0.7 }]}
-          onPress={() => openTransportation(city.transit.url)}
-        >
-          <XStack alignItems="center" gap={10} flex={1}>
-            <View style={[styles.tipIcon, { backgroundColor: 'rgba(59,130,246,0.15)' }]}>
-              <Ionicons name="train-outline" size={16} color="#3B82F6" />
-            </View>
-            <YStack flex={1}>
-              <Text style={styles.tipLabel}>Public transportation</Text>
-              <Text style={styles.tipUrl}>{city.transit.name}</Text>
-            </YStack>
-            <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.48)" />
-          </XStack>
-        </Pressable>
-
-        {/* Check local weather — own card */}
-        <Pressable
-          style={({ pressed }) => [styles.tipCard, pressed && { opacity: 0.7 }]}
-          onPress={() => openWeather(city.lat, city.lon, cityName)}
-        >
-          <XStack alignItems="center" gap={10} flex={1}>
-            <View style={[styles.tipIcon, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
-              <Ionicons name="cloudy-outline" size={16} color="#F59E0B" />
-            </View>
-            <YStack flex={1}>
-              <Text style={styles.tipLabel}>Check local weather</Text>
-              <Text style={styles.tipUrl}>7-day forecast for {cityName}</Text>
-            </YStack>
-            <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.48)" />
-          </XStack>
-        </Pressable>
-
-        {/* ─── Emergency ───────────────────────────── */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Emergency</Text>
-        <View style={styles.emergencyCard}>
-          {emergencyContacts.map((contact, i) => (
-            <React.Fragment key={contact.label}>
-              {i > 0 && <View style={styles.tipDivider} />}
-              <Pressable
-                style={({ pressed }) => [styles.emergencyRow, pressed && { opacity: 0.7 }]}
-                onPress={contact.onPress}
-              >
-                <View style={[styles.emergencyIcon, { backgroundColor: contact.iconBg }]}>
-                  <Ionicons name={contact.icon as any} size={16} color={contact.iconColor} />
-                </View>
-                <Text style={styles.emergencyLabel} flex={1}>{contact.label}</Text>
-                <Text style={[styles.emergencyNumber, { color: contact.iconColor }]}>{contact.number}</Text>
-              </Pressable>
-            </React.Fragment>
-          ))}
         </View>
       </ScrollView>
 
@@ -655,8 +643,8 @@ export default function DestinationScreen() {
               <View style={styles.popupHandle} />
               {/* Header */}
               <XStack alignItems="center" gap={10} marginBottom={16}>
-                <View style={[styles.popupIconCircle, { backgroundColor: `${popupConfig.color}22` }]}>
-                  <Ionicons name={popupConfig.icon as any} size={20} color={popupConfig.color} />
+                <View style={[styles.popupIconCircle, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+                  <Ionicons name={popupConfig.icon as any} size={20} color="#C6A75E" />
                 </View>
                 <YStack flex={1}>
                   <Text style={styles.popupTitle}>{popupConfig.label}</Text>
@@ -673,8 +661,8 @@ export default function DestinationScreen() {
                 <View key={i} style={styles.placeRow}>
                   <XStack alignItems="flex-start" gap={12}>
                     <YStack alignItems="center" gap={4}>
-                      <View style={[styles.placeNumber, { backgroundColor: `${popupConfig.color}22` }]}>
-                        <Text style={[styles.placeNumberText, { color: popupConfig.color }]}>{i + 1}</Text>
+                      <View style={[styles.placeNumber, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+                        <Text style={[styles.placeNumberText, { color: '#C6A75E' }]}>{i + 1}</Text>
                       </View>
                       {popupCategory === 'sports' && (() => {
                         const logo = TEAM_LOGO_MAP[place.name];
@@ -940,8 +928,16 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255,255,255,0.72)',
   },
+  emergencyBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 64,
+  },
   emergencyNumber: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
   },
   mapsButton: {
