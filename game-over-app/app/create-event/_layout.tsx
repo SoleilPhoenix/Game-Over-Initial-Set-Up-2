@@ -102,31 +102,30 @@ export default function CreateEventLayout() {
 
   return (
     <View style={[styles.root, { backgroundColor: '#0D1B2A' }]}>
-      {/* ── Editorial wizard header ─────────────────── */}
-      <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
-        {/* Back button row */}
-        <View style={styles.navRow}>
+      {/* ── Header — same slim pattern as Event Summary ─ */}
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
+        <View style={styles.headerRow}>
+          {/* Back */}
           <Pressable
             onPress={handleBack}
             hitSlop={12}
-            style={styles.backBtn}
+            style={styles.headerSide}
             testID="wizard-back-button"
           >
-            <Ionicons name="arrow-back" size={20} color="rgba(255,255,255,0.55)" />
+            <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
           </Pressable>
-          {/* Step counter */}
-          <Text style={styles.stepCounter}>
-            STEP {currentStep} OF {STEPS.length}
-          </Text>
-          {/* Spacer mirrors back button width */}
-          <View style={styles.backBtn} />
+
+          {/* Center: step counter + label */}
+          <View style={styles.headerCenter}>
+            <Text style={styles.stepCounter}>
+              STEP {currentStep} OF {STEPS.length}
+            </Text>
+            <Text style={styles.heading}>{currentStepLabel}</Text>
+          </View>
+
+          {/* Right spacer — mirrors back button */}
+          <View style={styles.headerSide} />
         </View>
-
-        {/* Serif heading */}
-        <Text style={styles.heading}>{currentStepLabel}</Text>
-
-        {/* Gold divider */}
-        <View style={styles.goldDivider} />
       </View>
 
       {/* ── Screen content ──────────────────────────── */}
@@ -145,44 +144,40 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingHorizontal: 20,
-    paddingBottom: 10,
+    paddingBottom: 12,
     backgroundColor: '#0D1B2A',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(230,220,200,0.15)',
     zIndex: 10,
   },
-  navRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 6,
+    paddingHorizontal: 16,
   },
-  backBtn: {
-    width: 30,
-    height: 30,
+  headerSide: {
+    width: 36,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepCounter: {
+  headerCenter: {
     flex: 1,
-    textAlign: 'center',
+    alignItems: 'center',
+    gap: 2,
+  },
+  stepCounter: {
     color: '#C6A75E',
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 2.5,
     fontFamily: 'Inter_600SemiBold',
+    textTransform: 'uppercase',
   },
   heading: {
-    textAlign: 'center',
     color: '#FFFFFF',
-    fontSize: 24,
+    fontSize: 17,
+    fontWeight: '600',
     fontFamily: 'Fraunces_600SemiBold',
-    lineHeight: 30,
-    marginBottom: 8,
-  },
-  goldDivider: {
-    alignSelf: 'center',
-    width: 32,
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: '#C6A75E',
+    textAlign: 'center',
   },
 });
