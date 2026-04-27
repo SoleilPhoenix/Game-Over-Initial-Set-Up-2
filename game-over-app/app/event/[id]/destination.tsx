@@ -479,7 +479,7 @@ export default function DestinationScreen() {
     },
     {
       label: 'Nearest Hospital',
-      icon: 'navigate-outline',
+      icon: 'hospital-outline',
       iconColor: '#9CA3AF',
       iconBg: 'rgba(156, 163, 175, 0.15)',
       number: 'In Maps',
@@ -732,6 +732,7 @@ const styles = StyleSheet.create({
     bottom: 20,
     left: 16,
     right: 16,
+    alignItems: 'center',
   },
   heroSupertitle: {
     fontSize: 11,
@@ -740,6 +741,7 @@ const styles = StyleSheet.create({
     color: '#C6A75E',
     marginBottom: 6,
     fontFamily: 'Inter_600SemiBold',
+    textAlign: 'center',
   },
   heroTitle: {
     fontSize: 36,
@@ -747,12 +749,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     lineHeight: 42,
     fontFamily: 'Fraunces_600SemiBold',
+    textAlign: 'center',
   },
   heroSubtitle: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.75)',
     marginTop: 4,
     fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
   },
   sectionTitle: {
     fontSize: 20,
