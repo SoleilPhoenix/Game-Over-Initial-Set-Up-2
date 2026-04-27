@@ -13,7 +13,7 @@ import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { useTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
+
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 
 // ─── German City Data ─────────────────────────────────────────────────────────
@@ -432,8 +432,8 @@ export default function DestinationScreen() {
 
   if (isLoading || !event) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: DARK_THEME.background }}>
-        <Spinner size="large" color={DARK_THEME.primary} />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0D1B2A' }}>
+        <Spinner size="large" color={'#C6A75E'} />
       </View>
     );
   }
@@ -523,18 +523,21 @@ export default function DestinationScreen() {
       >
         {/* ─── Highlights (in-app popup) ────────────── */}
         <Text style={styles.sectionTitle}>Highlights</Text>
-        <View style={styles.highlightRow}>
+        <View style={styles.highlightGrid}>
           {(Object.keys(CATEGORY_CONFIG) as NonNullable<PopupCategory>[]).map((cat) => {
             const cfg = CATEGORY_CONFIG[cat];
+            const count = city.places[cat].length;
             return (
               <Pressable
                 key={cat}
-                style={({ pressed }) => [styles.highlightChip, pressed && { opacity: 0.75 }]}
+                style={({ pressed }) => [styles.highlightTile, pressed && { opacity: 0.75 }]}
                 onPress={() => setPopupCategory(cat)}
               >
-                <Ionicons name={cfg.icon as any} size={14} color={cfg.color} />
-                <Text style={styles.highlightText}>{cfg.label}</Text>
-                <Ionicons name="chevron-forward" size={12} color={DARK_THEME.textTertiary} />
+                <View style={[styles.highlightTileIconWrap, { backgroundColor: `${cfg.color}22` }]}>
+                  <Ionicons name={cfg.icon as any} size={28} color={cfg.color} />
+                </View>
+                <Text style={styles.highlightTileLabel}>{cfg.label}</Text>
+                <Text style={styles.highlightTileCount}>{count} places</Text>
               </Pressable>
             );
           })}
@@ -558,7 +561,7 @@ export default function DestinationScreen() {
                   Google Weather — {cityName}
                 </Text>
               </YStack>
-              <Ionicons name="open-outline" size={15} color={DARK_THEME.textTertiary} />
+              <Ionicons name="open-outline" size={15} color={'rgba(255,255,255,0.48)'} />
             </XStack>
           </Pressable>
 
@@ -577,7 +580,7 @@ export default function DestinationScreen() {
                 <Text style={styles.tipLabel}>Public transportation</Text>
                 <Text style={styles.tipUrl}>{city.transit.name}</Text>
               </YStack>
-              <Ionicons name="open-outline" size={15} color={DARK_THEME.textTertiary} />
+              <Ionicons name="open-outline" size={15} color={'rgba(255,255,255,0.48)'} />
             </XStack>
           </Pressable>
         </View>
@@ -634,7 +637,7 @@ export default function DestinationScreen() {
                   <Text style={styles.popupSubtitle}>{cityName} — Top picks</Text>
                 </YStack>
                 <Pressable onPress={() => setPopupCategory(null)} hitSlop={8}>
-                  <Ionicons name="close-circle" size={24} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="close-circle" size={24} color={'rgba(255,255,255,0.48)'} />
                 </Pressable>
               </XStack>
             </View>
@@ -690,10 +693,10 @@ export default function DestinationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
   },
   heroContainer: {
-    height: 240,
+    height: 300,
     position: 'relative',
   },
   heroOverlay: {
@@ -719,53 +722,71 @@ const styles = StyleSheet.create({
   heroSupertitle: {
     fontSize: 11,
     fontWeight: '600',
-    letterSpacing: 1.5,
-    color: 'rgba(255,255,255,0.75)',
-    marginBottom: 4,
+    letterSpacing: 2,
+    color: '#C6A75E',
+    marginBottom: 6,
+    fontFamily: 'Inter_600SemiBold',
   },
   heroTitle: {
-    fontSize: 32,
-    fontWeight: '800',
+    fontSize: 36,
+    fontWeight: '600',
     color: '#FFFFFF',
-    lineHeight: 36,
+    lineHeight: 42,
+    fontFamily: 'Fraunces_600SemiBold',
   },
   heroSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.75)',
+    marginTop: 4,
+    fontFamily: 'Inter_400Regular',
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
     marginBottom: 12,
+    fontFamily: 'Fraunces_600SemiBold',
   },
-  highlightRow: {
+  highlightGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 10,
+  },
+  highlightTile: {
+    width: '48%',
+    backgroundColor: '#1A2F47',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    alignItems: 'center',
     gap: 8,
   },
-  highlightChip: {
-    flexDirection: 'row',
+  highlightTileIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: DARK_THEME.surfaceCard,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    justifyContent: 'center',
+    marginBottom: 4,
   },
-  highlightText: {
+  highlightTileLabel: {
     fontSize: 13,
-    fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+  },
+  highlightTileCount: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.48)',
+    textAlign: 'center',
   },
   tipsCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
     overflow: 'hidden',
   },
   tipRow: {
@@ -782,11 +803,11 @@ const styles = StyleSheet.create({
   tipLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   tipUrl: {
     fontSize: 12,
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
     marginTop: 1,
   },
   tipDivider: {
@@ -795,10 +816,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 14,
   },
   emergencyCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
     overflow: 'hidden',
   },
   emergencyRow: {
@@ -817,7 +838,7 @@ const styles = StyleSheet.create({
   },
   emergencyLabel: {
     fontSize: 13,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   emergencyNumber: {
     fontSize: 15,
@@ -829,16 +850,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     marginTop: 16,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
     paddingVertical: 16,
   },
   mapsButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#5A7EB0',
+    color: '#C6A75E',
   },
   // ─── Popup styles ────────────────────────────
   popupOverlay: {
@@ -849,14 +870,14 @@ const styles = StyleSheet.create({
     // pointerEvents="box-none" applied inline so touches pass through to children
   },
   popupSheet: {
-    backgroundColor: '#1E2329',
+    backgroundColor: '#1A2F47',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 16,
     paddingTop: 12,
     maxHeight: '90%',
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   popupHandle: {
     width: 40,
@@ -876,11 +897,11 @@ const styles = StyleSheet.create({
   popupTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   popupSubtitle: {
     fontSize: 12,
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
     marginTop: 1,
   },
   placeRow: {
@@ -901,19 +922,19 @@ const styles = StyleSheet.create({
   placeName: {
     fontSize: 14,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   placeType: {
     fontSize: 11,
     fontWeight: '600',
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 1,
   },
   placeDescription: {
     fontSize: 13,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
     lineHeight: 18,
     marginTop: 3,
   },

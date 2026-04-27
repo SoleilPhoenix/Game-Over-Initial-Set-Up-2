@@ -1326,7 +1326,7 @@ export default function CommunicationScreen() {
                 <Pressable style={[styles.modalButton, styles.modalButtonCancel]} onPress={() => setPollModalVisible(false)}>
                   <Text style={styles.modalButtonCancelText}>Cancel</Text>
                 </Pressable>
-                <Pressable style={[styles.modalButton, styles.modalButtonCreate]} onPress={handleSubmitPoll}>
+                <Pressable style={[styles.modalButton, styles.modalButtonCreate, !pollQuestion.trim() && styles.modalButtonCreateDisabled]} onPress={handleSubmitPoll}>
                   <Text style={styles.modalButtonCreateText}>Create Poll</Text>
                 </Pressable>
               </View>
@@ -1497,7 +1497,7 @@ export default function CommunicationScreen() {
                 >
                   <Text style={styles.modalButtonCancelText}>{getTranslation().common.cancel}</Text>
                 </Pressable>
-                <Pressable style={[styles.modalButton, styles.modalButtonCreate]} onPress={handleChannelCreate}>
+                <Pressable style={[styles.modalButton, styles.modalButtonCreate, !channelInputValue.trim() && styles.modalButtonCreateDisabled]} onPress={handleChannelCreate}>
                   <Text style={styles.modalButtonCreateText}>{getTranslation().chat.create}</Text>
                 </Pressable>
               </View>
@@ -1982,6 +1982,9 @@ const styles = StyleSheet.create({
   },
   modalButtonCreate: {
     backgroundColor: '#C6A75E',
+  },
+  modalButtonCreateDisabled: {
+    opacity: 0.45,
   },
   modalButtonCancelText: {
     fontSize: 14,
