@@ -2191,9 +2191,10 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     borderColor: theme.background,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600',
     color: theme.textPrimary,
+    fontFamily: 'Inter_500Medium',
   },
   notificationButton: {
     width: 44,

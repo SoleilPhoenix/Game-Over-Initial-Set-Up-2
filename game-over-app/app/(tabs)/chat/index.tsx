@@ -1549,9 +1549,10 @@ const styles = StyleSheet.create({
     borderColor: '#0D1B2A',
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: 'Inter_500Medium',
   },
   notificationButton: {
     width: 44,
@@ -1599,16 +1600,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   filterTabActive: {
-    backgroundColor: '#C6A75E',
+    backgroundColor: '#22385A',
   },
   filterTabText: {
     fontSize: 14,
     fontWeight: '500',
-    color: 'rgba(255,255,255,0.72)',
+    color: 'rgba(255,255,255,0.48)',
   },
   filterTabTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: '#C6A75E',
+    fontWeight: '700',
   },
   scrollContent: {
     padding: 20,
