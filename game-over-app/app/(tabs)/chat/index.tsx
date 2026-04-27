@@ -799,7 +799,7 @@ export default function CommunicationScreen() {
     if (bookedEvents.length === 0) {
       return (
         <View style={styles.lockedBanner}>
-          <Ionicons name="lock-closed-outline" size={18} color={DARK_THEME.textSecondary} />
+          <Ionicons name="lock-closed-outline" size={18} color={'rgba(255,255,255,0.72)'} />
           <Text style={styles.lockedBannerText}>{t.chat.bookToUnlock}</Text>
         </View>
       );
@@ -880,7 +880,7 @@ export default function CommunicationScreen() {
                             </Text>
                           </View>
                           <Pressable onPress={() => setPollInfoModal(poll)} hitSlop={8}>
-                            <Ionicons name="information-circle-outline" size={20} color={DARK_THEME.textTertiary} />
+                            <Ionicons name="information-circle-outline" size={20} color={'rgba(255,255,255,0.48)'} />
                           </Pressable>
                         </XStack>
                         <YStack gap={8} marginBottom={12}>
@@ -1005,7 +1005,7 @@ export default function CommunicationScreen() {
               <Ionicons
                 name={eventSelectorOpen ? 'chevron-up' : 'chevron-down'}
                 size={18}
-                color={DARK_THEME.textPrimary}
+                color={'#FFFFFF'}
               />
             </View>
           )}
@@ -1139,7 +1139,7 @@ export default function CommunicationScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Background */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: DARK_THEME.background }]} />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0D1B2A' }]} />
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
@@ -1152,7 +1152,7 @@ export default function CommunicationScreen() {
                 hitSlop={8}
                 style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
               >
-                <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+                <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
               </Pressable>
             ) : (
               <View style={styles.avatarContainer}>
@@ -1179,7 +1179,7 @@ export default function CommunicationScreen() {
             style={styles.notificationButton}
             testID="notifications-button"
           >
-            <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
+            <Ionicons name="notifications-outline" size={24} color={'#FFFFFF'} />
             {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
           </Pressable>
         </XStack>
@@ -1200,8 +1200,8 @@ export default function CommunicationScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor={DARK_THEME.primary}
-            colors={[DARK_THEME.primary]}
+            tintColor={'#C6A75E'}
+            colors={['#C6A75E']}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -1215,7 +1215,7 @@ export default function CommunicationScreen() {
             /* No event booked - show grayed out channels with overlay message */
             <>
             <View style={styles.lockedBanner}>
-              <Ionicons name="lock-closed-outline" size={18} color={DARK_THEME.textSecondary} />
+              <Ionicons name="lock-closed-outline" size={18} color={'rgba(255,255,255,0.72)'} />
               <Text style={styles.lockedBannerText}>
                 {t.chat.bookToUnlock}
               </Text>
@@ -1271,7 +1271,7 @@ export default function CommunicationScreen() {
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
                 <Text style={styles.modalTitle}>New Poll</Text>
                 <Pressable onPress={() => setPollModalVisible(false)} hitSlop={10}>
-                  <Ionicons name="close" size={22} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="close" size={22} color={'rgba(255,255,255,0.48)'} />
                 </Pressable>
               </XStack>
               <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -1281,7 +1281,7 @@ export default function CommunicationScreen() {
                   value={pollQuestion}
                   onChangeText={setPollQuestion}
                   placeholder="What should we decide?"
-                  placeholderTextColor={DARK_THEME.textTertiary}
+                  placeholderTextColor={'rgba(255,255,255,0.48)'}
                   multiline={false}
                 />
                 <Text style={styles.modalLabel}>Options</Text>
@@ -1297,7 +1297,7 @@ export default function CommunicationScreen() {
                       setPollOptions(updated);
                     }}
                     placeholder={`Option ${i + 1}`}
-                    placeholderTextColor={DARK_THEME.textTertiary}
+                    placeholderTextColor={'rgba(255,255,255,0.48)'}
                   />
                 ))}
               </ScrollView>
@@ -1341,7 +1341,7 @@ export default function CommunicationScreen() {
               <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
                 <Text style={styles.modalTitle}>Poll Info</Text>
                 <Pressable onPress={() => setPollInfoModal(null)} hitSlop={8}>
-                  <Ionicons name="close" size={22} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="close" size={22} color={'rgba(255,255,255,0.48)'} />
                 </Pressable>
               </XStack>
               <ScrollView ref={pollInfoScrollRef} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -1393,9 +1393,9 @@ export default function CommunicationScreen() {
                             key={opt.id}
                             style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}
                           >
-                            <View style={{ flex: 1, backgroundColor: DARK_THEME.surfaceCard, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
-                              <Text style={{ color: DARK_THEME.textPrimary, fontSize: 14 }}>{opt.label}</Text>
-                              <Text style={{ color: DARK_THEME.textTertiary, fontSize: 11, marginTop: 2 }}>{opt.vote_count ?? 0} vote{(opt.vote_count ?? 0) !== 1 ? 's' : ''}</Text>
+                            <View style={{ flex: 1, backgroundColor: '#1A2F47', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+                              <Text style={{ color: '#FFFFFF', fontSize: 14 }}>{opt.label}</Text>
+                              <Text style={{ color: 'rgba(255,255,255,0.48)', fontSize: 11, marginTop: 2 }}>{opt.vote_count ?? 0} vote{(opt.vote_count ?? 0) !== 1 ? 's' : ''}</Text>
                             </View>
                             {pollInfoModal.created_by === user?.id && (
                               <Pressable
@@ -1424,7 +1424,7 @@ export default function CommunicationScreen() {
                     <TextInput
                       style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
                       placeholder="New option…"
-                      placeholderTextColor={DARK_THEME.textTertiary}
+                      placeholderTextColor={'rgba(255,255,255,0.48)'}
                       value={newOptionText}
                       onChangeText={setNewOptionText}
                     />
@@ -1470,7 +1470,7 @@ export default function CommunicationScreen() {
               <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
                 <Text style={styles.modalTitle}>{(t.chat as any).newChatLabel}</Text>
                 <Pressable onPress={() => setChannelInputModal({ visible: false, category: null })} hitSlop={8}>
-                  <Ionicons name="close" size={22} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="close" size={22} color={'rgba(255,255,255,0.48)'} />
                 </Pressable>
               </XStack>
               <TextInput
@@ -1479,7 +1479,7 @@ export default function CommunicationScreen() {
                 onChangeText={setChannelInputValue}
                 autoCapitalize="sentences"
                 placeholder={(getTranslation().chat as any).newChannelMessage}
-                placeholderTextColor={DARK_THEME.textTertiary}
+                placeholderTextColor={'rgba(255,255,255,0.48)'}
                 returnKeyType="done"
                 onSubmitEditing={handleChannelCreate}
                 style={styles.modalInput}
@@ -1506,12 +1506,12 @@ export default function CommunicationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
   },
   header: {
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
+    borderBottomColor: 'rgba(230,220,200,0.15)',
   },
   avatarContainer: {
     position: 'relative',
@@ -1522,14 +1522,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   avatarPlaceholder: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   onlineIndicator: {
     position: 'absolute',
@@ -1540,18 +1540,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#10B981',
     borderWidth: 2,
-    borderColor: DARK_THEME.background,
+    borderColor: '#0D1B2A',
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   notificationButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1564,7 +1564,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#F97316',
     borderWidth: 2,
-    borderColor: DARK_THEME.surfaceCard,
+    borderColor: '#1A2F47',
   },
   notificationDot: {
     position: 'absolute',
@@ -1581,7 +1581,7 @@ const styles = StyleSheet.create({
   },
   filterPill: {
     flexDirection: 'row',
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 25,
     padding: 4,
   },
@@ -1598,7 +1598,7 @@ const styles = StyleSheet.create({
   filterTabText: {
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   filterTabTextActive: {
     color: '#FFFFFF',
@@ -1632,7 +1632,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
     letterSpacing: 0.8,
     marginBottom: 10,
   },
@@ -1645,42 +1645,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emptyChannelBox: {
-    backgroundColor: 'rgba(45, 55, 72, 0.3)',
+    backgroundColor: 'rgba(26,47,71,0.4)',
     borderRadius: 10,
     paddingVertical: 24,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(230,220,200,0.12)',
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyChannelText: {
     fontSize: 13,
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
   },
   channelItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 10,
     paddingVertical: 12,
     paddingHorizontal: 14,
     gap: 10,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   channelName: {
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     flex: 1,
   },
   newTopicButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 12,
     padding: 16,
     gap: 8,
@@ -1696,25 +1696,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(45, 55, 72, 0.5)',
+    backgroundColor: 'rgba(26,47,71,0.5)',
     borderRadius: 12,
     paddingVertical: 12,
     paddingHorizontal: 16,
     marginBottom: 16,
     gap: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   lockedBannerText: {
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   emptyIconContainer: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: 'rgba(45, 55, 72, 0.3)',
+    backgroundColor: 'rgba(26,47,71,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 16,
@@ -1767,10 +1767,10 @@ const styles = StyleSheet.create({
   },
   eventDropdown: {
     marginTop: 6,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
     overflow: 'hidden',
   },
   eventDropdownItem: {
@@ -1780,10 +1780,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
+    borderBottomColor: 'rgba(230,220,200,0.15)',
   },
   eventDropdownItemActive: {
-    backgroundColor: 'rgba(90, 126, 176, 0.12)',
+    backgroundColor: 'rgba(198,167,94,0.12)',
   },
   eventDropdownImage: {
     width: 36,
@@ -1793,7 +1793,7 @@ const styles = StyleSheet.create({
   eventDropdownText: {
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   eventDropdownTextActive: {
     color: '#C6A75E',
@@ -1801,7 +1801,7 @@ const styles = StyleSheet.create({
   },
   eventDropdownDate: {
     fontSize: 11,
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
   },
   channelIconWrap: {
     width: 32,
@@ -1821,11 +1821,11 @@ const styles = StyleSheet.create({
     color: '#C6A75E',
   },
   pollCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   pollCategoryIcon: {
     width: 40,
@@ -1837,7 +1837,7 @@ const styles = StyleSheet.create({
   pollTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   pollStatusBadge: {
     borderRadius: 6,
@@ -1869,7 +1869,7 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: DARK_THEME.textTertiary,
+    borderColor: 'rgba(255,255,255,0.48)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1885,16 +1885,16 @@ const styles = StyleSheet.create({
   pollOptionText: {
     fontSize: 13,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   pollPct: {
     fontSize: 13,
     fontWeight: '700',
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
   },
   pollFooter: {
     fontSize: 11,
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
   },
   popupOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1903,14 +1903,14 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   modalSheet: {
-    backgroundColor: '#1E2329',
+    backgroundColor: '#1A2F47',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
     paddingTop: 0,
     paddingBottom: 16,
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(230,220,200,0.15)',
     maxHeight: '82%',
   },
   modalHandleArea: {
@@ -1929,26 +1929,26 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   modalLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     marginBottom: 8,
     marginTop: 12,
   },
   modalInput: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 14,
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
     marginBottom: 8,
   },
   addOptionButton: {
@@ -1969,9 +1969,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalButtonCancel: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   modalButtonCreate: {
     backgroundColor: '#C6A75E',
@@ -1979,7 +1979,7 @@ const styles = StyleSheet.create({
   modalButtonCancelText: {
     fontSize: 14,
     fontWeight: '600',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   modalButtonCreateText: {
     fontSize: 14,
