@@ -51,8 +51,8 @@ export default function WizardStep3() {
   };
 
   return (
-    <YStack flex={1} backgroundColor="$background">
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+    <YStack flex={1} backgroundColor="#0D1B2A">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 120 }}>
         {/* G1: Average Age */}
         <GlassPanel icon="people-circle" title={t.wizard.g1Title} testID="panel-g1">
           <OptionBlockGroup testID="g1-options">

@@ -14,7 +14,6 @@ import { useMatchedPackages } from '@/hooks/queries/usePackages';
 import { useCreateEvent } from '@/hooks/queries/useEvents';
 import { Button } from '@/components/ui/Button';
 import { WizardFooter } from '@/components/ui/WizardFooter';
-import { DARK_THEME } from '@/constants/theme';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { LinearGradient } from 'expo-linear-gradient';
 import { setDesiredParticipants, setBudgetInfo } from '@/lib/participantCountCache';
@@ -106,7 +105,7 @@ function PackageSelectionCard({
         <YStack position="absolute" top={16} left={16} gap="$1.5">
           {isBestMatch && (
             <XStack
-              backgroundColor={DARK_THEME.primary}
+              backgroundColor="#C6A75E"
               paddingHorizontal={12}
               paddingVertical={6}
               borderRadius={20}
@@ -114,8 +113,8 @@ function PackageSelectionCard({
               alignItems="center"
               alignSelf="flex-start"
             >
-              <Ionicons name="sparkles" size={12} color="white" />
-              <Text color="white" fontSize={11} fontWeight="600">
+              <Ionicons name="sparkles" size={12} color="#0D1B2A" />
+              <Text color="#0D1B2A" fontSize={11} fontWeight="700">
                 Recommendation based on preferences
               </Text>
             </XStack>
@@ -171,7 +170,7 @@ function PackageSelectionCard({
         <YStack gap="$2">
           {features.map((feature: string, i: number) => (
             <XStack key={i} alignItems="center" gap="$2">
-              <Ionicons name="checkmark-circle" size={16} color={DARK_THEME.primary} />
+              <Ionicons name="checkmark-circle" size={16} color="#C6A75E" />
               <Text fontSize={14} color="rgba(255,255,255,0.9)">{feature}</Text>
             </XStack>
           ))}
@@ -220,7 +219,7 @@ function PackageSelectionCard({
       borderRadius={16}
       overflow="hidden"
       borderWidth={(isBestMatch || isSelected) ? 2 : 0}
-      borderColor={isSelected ? '#47B881' : isBestMatch ? DARK_THEME.primary : 'transparent'}
+      borderColor={isSelected ? '#4ADE80' : isBestMatch ? '#C6A75E' : 'transparent'}
       pressStyle={{ scale: 0.99 }}
       onPress={() => onSelect(pkg.id)}
       testID={`package-card-${index}`}
@@ -416,9 +415,9 @@ export default function WizardStep4() {
   const hasFallbackData = !!(dbPackages && dbPackages.length > 0) || CITY_UUID_TO_SLUG[cityId ?? ''] !== undefined;
   if (isLoading && !hasFallbackData) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
-        <Spinner size="large" color="$primary" />
-        <Text marginTop="$4" color="$textSecondary">
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="#0D1B2A">
+        <Spinner size="large" color="#C6A75E" />
+        <Text marginTop="$4" color="rgba(255,255,255,0.72)">
           Finding perfect packages for you...
         </Text>
       </YStack>
@@ -426,28 +425,30 @@ export default function WizardStep4() {
   }
 
   return (
-    <YStack flex={1} backgroundColor="$background">
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+    <YStack flex={1} backgroundColor="#0D1B2A">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 120 }}>
         {/* Title */}
-        <Text fontSize="$6" fontWeight="800" color="$textPrimary" marginBottom="$1">
+        <Text fontSize={22} fontWeight="700" color="#FFFFFF" marginBottom="$1" fontFamily="Fraunces_600SemiBold">
           Choose Your Experience
         </Text>
-        <Text fontSize="$2" color="rgba(255, 255, 255, 0.7)" marginBottom="$5">
+        <Text fontSize={14} color="rgba(255,255,255,0.55)" marginBottom="$5" fontFamily="Inter_400Regular">
           Select a tier that fits your group's vibe.
         </Text>
 
         {/* Pricing Toggle */}
         <XStack
-          backgroundColor="rgba(45, 55, 72, 0.6)"
-          borderRadius="$full"
+          backgroundColor="#1A2F47"
+          borderRadius={999}
+          borderWidth={1}
+          borderColor="rgba(230,220,200,0.15)"
           padding={4}
           marginBottom="$5"
         >
           <XStack
             flex={1}
             height={40}
-            borderRadius="$full"
-            backgroundColor={pricingMode === 'per_person' ? DARK_THEME.primary : 'transparent'}
+            borderRadius={999}
+            backgroundColor={pricingMode === 'per_person' ? '#C6A75E' : 'transparent'}
             alignItems="center"
             justifyContent="center"
             pressStyle={{ opacity: 0.8 }}
@@ -455,9 +456,10 @@ export default function WizardStep4() {
             testID="pricing-per-person"
           >
             <Text
-              fontWeight="600"
-              fontSize={14}
-              color={pricingMode === 'per_person' ? 'white' : '$textSecondary'}
+              fontWeight="700"
+              fontSize={13}
+              color={pricingMode === 'per_person' ? '#0D1B2A' : 'rgba(255,255,255,0.55)'}
+              fontFamily="Inter_600SemiBold"
             >
               Per Person
             </Text>
@@ -465,8 +467,8 @@ export default function WizardStep4() {
           <XStack
             flex={1}
             height={40}
-            borderRadius="$full"
-            backgroundColor={pricingMode === 'total_group' ? DARK_THEME.primary : 'transparent'}
+            borderRadius={999}
+            backgroundColor={pricingMode === 'total_group' ? '#C6A75E' : 'transparent'}
             alignItems="center"
             justifyContent="center"
             pressStyle={{ opacity: 0.8 }}
@@ -474,9 +476,10 @@ export default function WizardStep4() {
             testID="pricing-total-group"
           >
             <Text
-              fontWeight="600"
-              fontSize={14}
-              color={pricingMode === 'total_group' ? 'white' : '$textSecondary'}
+              fontWeight="700"
+              fontSize={13}
+              color={pricingMode === 'total_group' ? '#0D1B2A' : 'rgba(255,255,255,0.55)'}
+              fontFamily="Inter_600SemiBold"
             >
               Total Group
             </Text>
