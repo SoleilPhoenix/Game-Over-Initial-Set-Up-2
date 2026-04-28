@@ -11,7 +11,6 @@ import { YStack, XStack, Text, View } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
 
 const LAST_UPDATED = '2026-02-09';
 
@@ -23,10 +22,10 @@ interface SectionData {
 function Section({ title, children }: { title: string; children: string }) {
   return (
     <YStack gap="$2" marginBottom="$5">
-      <Text fontSize={16} fontWeight="700" color={DARK_THEME.textPrimary}>
+      <Text fontSize={16} fontWeight="700" color={'#FFFFFF'}>
         {title}
       </Text>
-      <Text fontSize={13} color={DARK_THEME.textSecondary} lineHeight={20}>
+      <Text fontSize={13} color={'rgba(255,255,255,0.72)'} lineHeight={20}>
         {children}
       </Text>
     </YStack>
@@ -150,7 +149,7 @@ export default function TermsScreen() {
   const lastUpdatedLabel = LAST_UPDATED_LABEL[language] ?? LAST_UPDATED_LABEL.en;
 
   return (
-    <View flex={1} backgroundColor={DARK_THEME.background}>
+    <View flex={1} backgroundColor={'#0D1B2A'}>
       {/* Header */}
       <XStack
         paddingTop={insets.top}
@@ -158,18 +157,18 @@ export default function TermsScreen() {
         paddingBottom="$3"
         alignItems="center"
         justifyContent="space-between"
-        backgroundColor={DARK_THEME.surface}
+        backgroundColor={'#12253A'}
         borderBottomWidth={1}
-        borderBottomColor={DARK_THEME.border}
+        borderBottomColor={'rgba(230,220,200,0.15)'}
       >
         <Pressable
           onPress={() => router.back()}
           style={styles.headerButton}
           testID="terms-back"
         >
-          <Ionicons name="chevron-back" size={24} color={DARK_THEME.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={'#FFFFFF'} />
         </Pressable>
-        <Text fontSize={17} fontWeight="600" color={DARK_THEME.textPrimary}>
+        <Text fontSize={17} fontWeight="600" color={'#FFFFFF'}>
           {t.support.termsOfService}
         </Text>
         <View width={40} />
@@ -184,7 +183,7 @@ export default function TermsScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <Text fontSize={11} color={DARK_THEME.textTertiary} marginBottom="$4">
+        <Text fontSize={11} color={'rgba(255,255,255,0.48)'} marginBottom="$4">
           {lastUpdatedLabel}: {LAST_UPDATED}
         </Text>
 

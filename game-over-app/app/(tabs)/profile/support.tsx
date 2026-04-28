@@ -11,7 +11,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
 
 // Crisp Chat — native module, not available in Expo Go
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
@@ -65,7 +64,7 @@ function FAQAccordion({ item }: { item: FAQItem }) {
           <Text
             fontSize={14}
             fontWeight="600"
-            color={DARK_THEME.textPrimary}
+            color={'#FFFFFF'}
             flex={1}
           >
             {item.question}
@@ -74,13 +73,13 @@ function FAQAccordion({ item }: { item: FAQItem }) {
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
           size={20}
-          color={DARK_THEME.textSecondary}
+          color={'rgba(255,255,255,0.72)'}
         />
       </XStack>
       {expanded && (
         <Text
           fontSize={13}
-          color={DARK_THEME.textSecondary}
+          color={'rgba(255,255,255,0.72)'}
           lineHeight={20}
           marginTop={12}
           marginLeft={44}
@@ -110,7 +109,7 @@ export default function SupportScreen() {
   };
 
   return (
-    <View flex={1} backgroundColor={DARK_THEME.background}>
+    <View flex={1} backgroundColor={'#0D1B2A'}>
       {/* Header */}
       <XStack
         paddingTop={insets.top}
@@ -118,18 +117,18 @@ export default function SupportScreen() {
         paddingBottom="$3"
         alignItems="center"
         justifyContent="space-between"
-        backgroundColor={DARK_THEME.surface}
+        backgroundColor={'#12253A'}
         borderBottomWidth={1}
-        borderBottomColor={DARK_THEME.border}
+        borderBottomColor={'rgba(230,220,200,0.15)'}
       >
         <Pressable
           onPress={() => router.back()}
           style={styles.headerButton}
           testID="support-back"
         >
-          <Ionicons name="chevron-back" size={24} color={DARK_THEME.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={'#FFFFFF'} />
         </Pressable>
-        <Text fontSize={17} fontWeight="600" color={DARK_THEME.textPrimary}>
+        <Text fontSize={17} fontWeight="600" color={'#FFFFFF'}>
           {t.support.title}
         </Text>
         <View width={40} />
@@ -149,7 +148,7 @@ export default function SupportScreen() {
             <Text
               fontSize={11}
               fontWeight="600"
-              color={DARK_THEME.textSecondary}
+              color={'rgba(255,255,255,0.72)'}
               textTransform="uppercase"
               letterSpacing={1}
               marginLeft="$1"
@@ -173,14 +172,14 @@ export default function SupportScreen() {
                   <Ionicons name="mail" size={22} color="#60A5FA" />
                 </View>
                 <YStack flex={1}>
-                  <Text fontSize={15} fontWeight="600" color={DARK_THEME.textPrimary}>
+                  <Text fontSize={15} fontWeight="600" color={'#FFFFFF'}>
                     {t.support.emailSupport}
                   </Text>
-                  <Text fontSize={12} color={DARK_THEME.textSecondary}>
+                  <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
                     support@game-over.app
                   </Text>
                 </YStack>
-                <Ionicons name="open-outline" size={18} color={DARK_THEME.textSecondary} />
+                <Ionicons name="open-outline" size={18} color={'rgba(255,255,255,0.72)'} />
               </XStack>
             </Pressable>
 
@@ -202,14 +201,14 @@ export default function SupportScreen() {
                   <Ionicons name="chatbubbles" size={22} color="#34D399" />
                 </View>
                 <YStack flex={1}>
-                  <Text fontSize={15} fontWeight="600" color={DARK_THEME.textPrimary}>
+                  <Text fontSize={15} fontWeight="600" color={'#FFFFFF'}>
                     {t.support.liveChat}
                   </Text>
-                  <Text fontSize={12} color={DARK_THEME.textSecondary}>
+                  <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
                     {t.support.liveChatSubtitle}
                   </Text>
                 </YStack>
-                <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textSecondary} />
+                <Ionicons name="chevron-forward" size={18} color={'rgba(255,255,255,0.72)'} />
               </XStack>
             </Pressable>}
 
@@ -222,7 +221,7 @@ export default function SupportScreen() {
               alignItems="center"
             >
               <Ionicons name="time-outline" size={16} color="#34D399" />
-              <Text fontSize={12} color={DARK_THEME.textSecondary} flex={1}>
+              <Text fontSize={12} color={'rgba(255,255,255,0.72)'} flex={1}>
                 {t.support.responseTime}
               </Text>
             </XStack>
@@ -233,7 +232,7 @@ export default function SupportScreen() {
             <Text
               fontSize={11}
               fontWeight="600"
-              color={DARK_THEME.textSecondary}
+              color={'rgba(255,255,255,0.72)'}
               textTransform="uppercase"
               letterSpacing={1}
               marginLeft="$1"
@@ -255,7 +254,7 @@ export default function SupportScreen() {
             <Text
               fontSize={11}
               fontWeight="600"
-              color={DARK_THEME.textSecondary}
+              color={'rgba(255,255,255,0.72)'}
               textTransform="uppercase"
               letterSpacing={1}
               marginLeft="$1"
@@ -265,22 +264,22 @@ export default function SupportScreen() {
             <View style={styles.legalCard}>
               <Pressable style={styles.legalItem} onPress={() => router.push('/profile/terms' as LegalRoute)} testID="legal-terms">
                 <XStack alignItems="center" justifyContent="space-between">
-                  <Text fontSize={14} color={DARK_THEME.textPrimary}>{t.support.termsOfService}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textSecondary} />
+                  <Text fontSize={14} color={'#FFFFFF'}>{t.support.termsOfService}</Text>
+                  <Ionicons name="chevron-forward" size={18} color={'rgba(255,255,255,0.72)'} />
                 </XStack>
               </Pressable>
               <View style={styles.faqSeparator} />
               <Pressable style={styles.legalItem} onPress={() => router.push('/profile/privacy' as LegalRoute)} testID="legal-privacy">
                 <XStack alignItems="center" justifyContent="space-between">
-                  <Text fontSize={14} color={DARK_THEME.textPrimary}>{t.support.privacyPolicy}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textSecondary} />
+                  <Text fontSize={14} color={'#FFFFFF'}>{t.support.privacyPolicy}</Text>
+                  <Ionicons name="chevron-forward" size={18} color={'rgba(255,255,255,0.72)'} />
                 </XStack>
               </Pressable>
               <View style={styles.faqSeparator} />
               <Pressable style={styles.legalItem} onPress={() => router.push('/profile/impressum' as LegalRoute)} testID="legal-impressum">
                 <XStack alignItems="center" justifyContent="space-between">
-                  <Text fontSize={14} color={DARK_THEME.textPrimary}>{t.support.impressum}</Text>
-                  <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textSecondary} />
+                  <Text fontSize={14} color={'#FFFFFF'}>{t.support.impressum}</Text>
+                  <Ionicons name="chevron-forward" size={18} color={'rgba(255,255,255,0.72)'} />
                 </XStack>
               </Pressable>
             </View>
@@ -299,17 +298,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   contactCard: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: '#12253A',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: 'rgba(230,220,200,0.15)',
     padding: 16,
   },
   faqCard: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: '#12253A',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: 'rgba(230,220,200,0.15)',
     overflow: 'hidden',
   },
   faqItem: {
@@ -317,14 +316,14 @@ const styles = StyleSheet.create({
   },
   faqSeparator: {
     height: 1,
-    backgroundColor: DARK_THEME.border,
+    backgroundColor: 'rgba(230,220,200,0.15)',
     marginLeft: 16,
   },
   legalCard: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: '#12253A',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: 'rgba(230,220,200,0.15)',
     overflow: 'hidden',
   },
   legalItem: {

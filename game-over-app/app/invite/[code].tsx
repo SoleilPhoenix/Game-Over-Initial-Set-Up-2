@@ -29,7 +29,6 @@ import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { DARK_THEME } from '@/constants/theme';
 
 // ─── Types ───────────────────────────────────────────────────
 type WizardStep = 'preview' | 'signup' | 'profile';
@@ -325,7 +324,7 @@ export default function InviteWizardScreen() {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center"
         backgroundColor="$background" paddingHorizontal="$6" gap="$4">
-        <Ionicons name="link-outline" size={48} color={DARK_THEME.textTertiary} />
+        <Ionicons name="link-outline" size={48} color={'rgba(255,255,255,0.48)'} />
         <Text fontSize={18} fontWeight="700" color="$textPrimary" textAlign="center">
           This invite link is no longer valid
         </Text>
@@ -349,7 +348,7 @@ export default function InviteWizardScreen() {
             style={StyleSheet.absoluteFillObject}
           />
           <LinearGradient
-            colors={['transparent', DARK_THEME.background]}
+            colors={['transparent', '#0D1B2A']}
             style={[StyleSheet.absoluteFillObject, { top: '40%' }]}
           />
           <View style={{ position: 'absolute', bottom: 24, left: 24, right: 24 }}>
@@ -366,7 +365,7 @@ export default function InviteWizardScreen() {
           <YStack gap="$4">
             <YStack gap="$2">
               <XStack gap="$2" alignItems="center">
-                <Ionicons name="person-circle-outline" size={18} color={DARK_THEME.textTertiary} />
+                <Ionicons name="person-circle-outline" size={18} color={'rgba(255,255,255,0.48)'} />
                 <Text fontSize={14} color="$textTertiary">
                   Invited by <Text fontWeight="700" color="$textPrimary">{preview.organizerName}</Text>
                 </Text>
@@ -403,7 +402,7 @@ export default function InviteWizardScreen() {
         <YStack flex={1} backgroundColor="$background" paddingTop={insets.top}>
           <XStack paddingHorizontal="$5" paddingVertical="$3" alignItems="center" gap="$3">
             <Pressable onPress={() => setStep('preview')}>
-              <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+              <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
             </Pressable>
             <YStack flex={1}>
               <Text fontSize={11} color="$textTertiary">Joining: {preview.eventName}</Text>
@@ -513,9 +512,9 @@ export default function InviteWizardScreen() {
               style={{ alignItems: 'center', paddingVertical: 12 }}
               testID="login-instead-link"
             >
-              <Text fontSize={13} color={DARK_THEME.textTertiary}>
+              <Text fontSize={13} color={'rgba(255,255,255,0.48)'}>
                 Already have an account?{' '}
-                <Text color={DARK_THEME.primary} textDecorationLine="underline">
+                <Text color={'#C6A75E'} textDecorationLine="underline">
                   Log in instead →
                 </Text>
               </Text>
@@ -533,7 +532,7 @@ export default function InviteWizardScreen() {
         <XStack paddingHorizontal="$5" paddingVertical="$3" alignItems="center" gap="$3">
           {!signupCompleted && (
             <Pressable onPress={() => setStep('signup')}>
-              <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+              <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
             </Pressable>
           )}
           {signupCompleted && <View style={{ width: 24 }} />}
@@ -551,11 +550,11 @@ export default function InviteWizardScreen() {
               ) : (
                 <View style={{
                   width: 88, height: 88, borderRadius: 44,
-                  backgroundColor: DARK_THEME.surfaceCard,
+                  backgroundColor: '#1A2F47',
                   alignItems: 'center', justifyContent: 'center',
-                  borderWidth: 2, borderColor: DARK_THEME.glassBorder,
+                  borderWidth: 2, borderColor: 'rgba(230,220,200,0.15)',
                 }}>
-                  <Ionicons name="camera-outline" size={28} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="camera-outline" size={28} color={'rgba(255,255,255,0.48)'} />
                 </View>
               )}
             </Pressable>
@@ -602,7 +601,7 @@ export default function InviteWizardScreen() {
 
 const styles = StyleSheet.create({
   webBanner: {
-    backgroundColor: '#5A7EB0',
+    backgroundColor: '#C6A75E',
     paddingVertical: 12,
     paddingHorizontal: 20,
   },
