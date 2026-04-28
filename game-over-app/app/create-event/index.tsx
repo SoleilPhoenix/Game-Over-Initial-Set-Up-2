@@ -406,7 +406,7 @@ const styles = StyleSheet.create({
 
   // City cards
   cityCard: {
-    height: 110,
+    height: 150,
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,

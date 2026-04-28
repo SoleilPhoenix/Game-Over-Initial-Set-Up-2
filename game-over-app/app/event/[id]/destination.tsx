@@ -419,13 +419,13 @@ function CityMapBackground({ citySlug }: { citySlug: string }) {
   const src = CITY_MAP_IMAGES[citySlug];
   if (!src) return null;
   return (
-    // Inset by 20px on each side so the city silhouette floats with breathing
-    // room — gives the "zoomed-out overview" feel instead of a tight crop.
-    <View style={[StyleSheet.absoluteFillObject, { padding: 20 }]} pointerEvents="none">
+    // cover mode fills the card so no white margins remain —
+    // the map naturally centers on the city silhouette.
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
       <Image
         source={src}
-        style={{ flex: 1, opacity: 0.28 }}
-        resizeMode="contain"
+        style={{ width: '100%', height: '100%', opacity: 0.32 }}
+        resizeMode="cover"
       />
     </View>
   );
@@ -514,7 +514,7 @@ export default function DestinationScreen() {
       icon: 'add-circle',
       iconImage: HOSPITAL_ICON,
       iconColor: '#EF4444',
-      iconBg: 'transparent',
+      iconBg: 'rgba(239,68,68,0.15)',
       number: 'In Maps',
       onPress: () => openHospitalSearch(city.lat, city.lon, cityName),
     },
@@ -633,8 +633,8 @@ export default function DestinationScreen() {
                   {(contact as any).iconImage ? (
                     <Image
                       source={(contact as any).iconImage}
-                      style={{ width: 32, height: 32, borderRadius: 16 }}
-                      resizeMode="cover"
+                      style={{ width: 22, height: 22, borderRadius: 11 }}
+                      resizeMode="contain"
                     />
                   ) : (
                     <Ionicons name={contact.icon as any} size={16} color={contact.iconColor} />
@@ -822,8 +822,8 @@ const styles = StyleSheet.create({
     width: '48%',
     backgroundColor: '#1A2F47',
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(230,220,200,0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(198,167,94,0.45)',
     paddingVertical: 20,
     paddingHorizontal: 12,
     alignItems: 'center',
@@ -850,8 +850,8 @@ const styles = StyleSheet.create({
   mapCard: {
     backgroundColor: '#1A2F47',
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(230,220,200,0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(198,167,94,0.45)',
     overflow: 'hidden',
     marginTop: 16,
   },
@@ -931,8 +931,8 @@ const styles = StyleSheet.create({
   tipCard: {
     backgroundColor: '#1A2F47',
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(230,220,200,0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(198,167,94,0.45)',
     paddingHorizontal: 14,
     paddingVertical: 14,
     marginBottom: 10,
@@ -940,8 +940,8 @@ const styles = StyleSheet.create({
   tipsCard: {
     backgroundColor: '#1A2F47',
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(230,220,200,0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(198,167,94,0.45)',
     overflow: 'hidden',
   },
   tipRow: {
@@ -973,8 +973,8 @@ const styles = StyleSheet.create({
   emergencyCard: {
     backgroundColor: '#1A2F47',
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(230,220,200,0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(198,167,94,0.45)',
     overflow: 'hidden',
   },
   emergencyRow: {
