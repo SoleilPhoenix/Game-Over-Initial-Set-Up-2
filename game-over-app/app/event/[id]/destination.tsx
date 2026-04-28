@@ -399,6 +399,86 @@ const CATEGORY_CONFIG: Record<NonNullable<PopupCategory>, { label: string; icon:
   sports: { label: 'Sports Teams', icon: 'football-outline', color: '#EF4444' },
 };
 
+// ─── City schematic map backgrounds ──────────────────────────────────────────
+// B&W cartographic shapes at ~30 % opacity — one per city, matching the
+// geography of the reference maps (Hamburg: Alster + Elbe harbour,
+// Hannover: city-silhouette + Maschsee, Berlin: districts + Spree + Tiergarten)
+function CityMapBackground({ citySlug }: { citySlug: string }) {
+  const water  = 'rgba(190,210,230,';  // desaturated blue-gray — waterways
+  const block  = 'rgba(200,205,215,';  // light gray — land / district fill
+  const road   = 'rgba(255,255,255,';  // near-white — roads / borders
+
+  if (citySlug === 'hamburg') {
+    return (
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        {/* Außenalster — large oval upper-right */}
+        <View style={{ position:'absolute', top:'6%', right:'16%', width:'26%', height:'42%', borderRadius:999, backgroundColor:`${water}0.28)` }} />
+        {/* Binnenalster — smaller oval just below center */}
+        <View style={{ position:'absolute', top:'36%', right:'28%', width:'13%', height:'20%', borderRadius:999, backgroundColor:`${water}0.28)` }} />
+        {/* Elbe river — wide band across the bottom */}
+        <View style={{ position:'absolute', bottom:'2%', left:0, right:0, height:'24%', backgroundColor:`${water}0.22)` }} />
+        {/* Speicherstadt / HafenCity island */}
+        <View style={{ position:'absolute', bottom:'26%', left:'26%', width:'22%', height:'10%', borderRadius:5, backgroundColor:`${block}0.14)` }} />
+        {/* Main arterial E–W */}
+        <View style={{ position:'absolute', top:'50%', left:0, right:0, height:2.5, backgroundColor:`${road}0.18)` }} />
+        <View style={{ position:'absolute', top:'28%', left:0, right:0, height:1.5, backgroundColor:`${road}0.11)` }} />
+        <View style={{ position:'absolute', top:'68%', left:0, right:0, height:1.5, backgroundColor:`${road}0.11)` }} />
+        {/* Main arterial N–S */}
+        <View style={{ position:'absolute', top:0, bottom:0, left:'38%', width:2, backgroundColor:`${road}0.15)` }} />
+        <View style={{ position:'absolute', top:0, bottom:0, left:'60%', width:1.5, backgroundColor:`${road}0.10)` }} />
+      </View>
+    );
+  }
+
+  if (citySlug === 'hannover') {
+    return (
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        {/* City outline — slightly squashed circle (silhouette shape) */}
+        <View style={{ position:'absolute', top:'4%', left:'6%', right:'6%', bottom:'4%', borderRadius:75, borderWidth:2, borderColor:`${road}0.22)`, backgroundColor:`${block}0.10)` }} />
+        {/* Maschsee — elongated oval at bottom-center */}
+        <View style={{ position:'absolute', bottom:'16%', left:'34%', width:'30%', height:'26%', borderRadius:40, backgroundColor:`${water}0.28)` }} />
+        {/* Herrenhäuser Gärten — rectangle top-left */}
+        <View style={{ position:'absolute', top:'10%', left:'9%', width:'24%', height:'20%', borderRadius:5, borderWidth:1.5, borderColor:`${road}0.18)`, backgroundColor:`${block}0.07)` }} />
+        {/* Eilenriede urban forest — top-right */}
+        <View style={{ position:'absolute', top:'8%', right:'10%', width:'22%', height:'28%', borderRadius:8, backgroundColor:`${block}0.08)` }} />
+        {/* Main E–W */}
+        <View style={{ position:'absolute', top:'42%', left:0, right:0, height:2.5, backgroundColor:`${road}0.18)` }} />
+        <View style={{ position:'absolute', top:'22%', left:'14%', right:'14%', height:1.5, backgroundColor:`${road}0.12)` }} />
+        {/* Main N–S */}
+        <View style={{ position:'absolute', top:0, bottom:0, left:'44%', width:2, backgroundColor:`${road}0.15)` }} />
+        {/* Diagonal ring road hint */}
+        <View style={{ position:'absolute', top:'18%', left:'18%', width:'58%', height:1.5, transform:[{rotate:'28deg'}], backgroundColor:`${road}0.10)` }} />
+        <View style={{ position:'absolute', top:'18%', left:'24%', width:'45%', height:1.5, transform:[{rotate:'-28deg'}], backgroundColor:`${road}0.10)` }} />
+      </View>
+    );
+  }
+
+  if (citySlug === 'berlin') {
+    return (
+      <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+        {/* City boundary — irregular blob (wider than tall) */}
+        <View style={{ position:'absolute', top:'5%', left:'2%', right:'5%', bottom:'5%', borderRadius:55, borderWidth:2, borderColor:`${road}0.20)`, backgroundColor:`${block}0.12)` }} />
+        {/* Tiergarten park — rectangle west of center */}
+        <View style={{ position:'absolute', top:'36%', left:'18%', width:'26%', height:'24%', borderRadius:6, backgroundColor:`${block}0.18)` }} />
+        {/* Spree river — diagonal band through center */}
+        <View style={{ position:'absolute', top:'44%', left:'28%', width:'58%', height:'8%', borderRadius:4, transform:[{rotate:'-7deg'}], backgroundColor:`${water}0.24)` }} />
+        {/* Müggelsee — oval bottom-right */}
+        <View style={{ position:'absolute', bottom:'10%', right:'8%', width:'20%', height:'16%', borderRadius:999, backgroundColor:`${water}0.22)` }} />
+        {/* District grid */}
+        <View style={{ position:'absolute', top:'34%', left:0, right:0, height:1.5, backgroundColor:`${road}0.12)` }} />
+        <View style={{ position:'absolute', top:'58%', left:0, right:0, height:1.5, backgroundColor:`${road}0.12)` }} />
+        <View style={{ position:'absolute', top:0, bottom:0, left:'34%', width:1.5, backgroundColor:`${road}0.12)` }} />
+        <View style={{ position:'absolute', top:0, bottom:0, left:'62%', width:1.5, backgroundColor:`${road}0.12)` }} />
+        {/* Main arterials */}
+        <View style={{ position:'absolute', top:'46%', left:0, right:0, height:3, backgroundColor:`${road}0.18)` }} />
+        <View style={{ position:'absolute', top:0, bottom:0, left:'46%', width:2.5, backgroundColor:`${road}0.16)` }} />
+      </View>
+    );
+  }
+
+  return null;
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function DestinationScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -479,9 +559,9 @@ export default function DestinationScreen() {
     },
     {
       label: 'Nearest Hospital',
-      icon: 'fitness-outline',
-      iconColor: '#9CA3AF',
-      iconBg: 'rgba(156, 163, 175, 0.15)',
+      icon: 'bed-outline',
+      iconColor: '#EF4444',
+      iconBg: 'rgba(239, 68, 68, 0.12)',
       number: 'In Maps',
       onPress: () => openHospitalSearch(city.lat, city.lon, cityName),
     },
@@ -583,8 +663,8 @@ export default function DestinationScreen() {
           </XStack>
         </Pressable>
 
-        {/* ─── Emergency ───────────────────────────── */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Emergency</Text>
+        {/* ─── Important Numbers ───────────────────── */}
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Important Numbers</Text>
         <View style={styles.emergencyCard}>
           {emergencyContacts.map((contact, i) => (
             <React.Fragment key={contact.label}>
@@ -612,32 +692,8 @@ export default function DestinationScreen() {
             onPress={() => openMapsForCity(city.lat, city.lon, cityName)}
             testID="open-maps-button"
           >
-            {/* ── Schematic street grid ── */}
-            {/* Horizontal roads */}
-            <View style={[styles.mapRoad, { top: '18%', left: 0, right: 0, height: 2 }]} />
-            <View style={[styles.mapRoadMain, { top: '40%', left: 0, right: 0, height: 5 }]} />
-            <View style={[styles.mapRoad, { top: '58%', left: 0, right: 0, height: 2 }]} />
-            <View style={[styles.mapRoad, { top: '76%', left: 0, right: 0, height: 2 }]} />
-            <View style={[styles.mapRoad, { top: '88%', left: 0, right: 0, height: 1 }]} />
-            {/* Vertical roads */}
-            <View style={[styles.mapRoad, { left: '12%', top: 0, bottom: 0, width: 2 }]} />
-            <View style={[styles.mapRoadMain, { left: '32%', top: 0, bottom: 0, width: 5 }]} />
-            <View style={[styles.mapRoad, { left: '55%', top: 0, bottom: 0, width: 2 }]} />
-            <View style={[styles.mapRoadMain, { left: '72%', top: 0, bottom: 0, width: 4 }]} />
-            <View style={[styles.mapRoad, { left: '88%', top: 0, bottom: 0, width: 2 }]} />
-            {/* Diagonal accent */}
-            <View style={[styles.mapRoad, { left: '12%', top: '18%', width: '20%', height: 2, transform: [{ rotate: '35deg' }] }]} />
-            {/* City blocks */}
-            <View style={[styles.mapBlock, { top: '20%', left: '14%', width: '16%', height: '18%' }]} />
-            <View style={[styles.mapBlock, { top: '20%', left: '34%', width: '19%', height: '18%' }]} />
-            <View style={[styles.mapBlock, { top: '20%', left: '57%', width: '13%', height: '18%' }]} />
-            <View style={[styles.mapBlock, { top: '20%', left: '74%', width: '14%', height: '18%' }]} />
-            <View style={[styles.mapBlock, { top: '60%', left: '14%', width: '16%', height: '14%' }]} />
-            <View style={[styles.mapBlock, { top: '60%', left: '34%', width: '19%', height: '14%' }]} />
-            <View style={[styles.mapBlock, { top: '60%', left: '57%', width: '13%', height: '14%' }]} />
-            <View style={[styles.mapBlock, { top: '60%', left: '74%', width: '14%', height: '14%' }]} />
-            <View style={[styles.mapBlock, { top: '78%', left: '14%', width: '16%', height: '8%' }]} />
-            <View style={[styles.mapBlock, { top: '78%', left: '57%', width: '13%', height: '8%' }]} />
+            {/* ── City-specific schematic map (B&W @ 30 % opacity) ── */}
+            <CityMapBackground citySlug={citySlug} />
             {/* Center pin + city label */}
             <View style={styles.mapCenterPin}>
               <View style={styles.mapPin}>
@@ -976,16 +1032,16 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.72)',
   },
   emergencyBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    width: 100,
+    paddingVertical: 6,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 64,
   },
   emergencyNumber: {
     fontSize: 13,
     fontWeight: '700',
+    textAlign: 'center',
   },
   mapsButton: {
     flexDirection: 'row',
