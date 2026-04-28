@@ -130,7 +130,7 @@ export default function SignupScreen() {
           style={StyleSheet.absoluteFill}
         />
         <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
-          <Ionicons name="mail-open-outline" size={64} color={'#C6A75E'Light} style={{ alignSelf: 'center', marginBottom: 24 }} />
+          <Ionicons name="mail-open-outline" size={64} color={'#E8DCC8'} style={{ alignSelf: 'center', marginBottom: 24 }} />
           <Text style={[styles.title, { textAlign: 'center' }]} accessibilityRole="header">
             Check your email
           </Text>
@@ -603,7 +603,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   showHideText: {
-    color: '#C6A75E'Light,
+    color: '#E8DCC8',
     fontSize: 14,
     fontWeight: '600' as const,
     paddingLeft: 8,
@@ -646,7 +646,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   termsLink: {
-    color: '#C6A75E'Light,
+    color: '#E8DCC8',
   },
   loginLink: {
     flexDirection: 'row',
@@ -659,7 +659,7 @@ const styles = StyleSheet.create({
   },
   loginLinkText: {
     fontSize: 14,
-    color: '#C6A75E'Light,
+    color: '#E8DCC8',
     fontWeight: '700',
   },
 });
