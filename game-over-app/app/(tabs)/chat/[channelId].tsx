@@ -21,7 +21,6 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { MessageBubble, MessageInput } from '@/components/chat';
 import { colors } from '@/constants/colors';
-import { DARK_THEME } from '@/constants/theme';
 import { useTranslation, getTranslation } from '@/i18n';
 import type { MessageWithAuthor } from '@/repositories/messages';
 
@@ -309,7 +308,7 @@ export default function ChatChannelScreen() {
 
   // Use the icon passed from the Topics list, fall back to category default
   const headerIcon = (channelIconParam ?? getCategoryIcon(channelDisplayCategory)) as keyof typeof Ionicons.glyphMap;
-  const headerColor = CATEGORY_COLORS[channelDisplayCategory ?? 'general'] ?? '#5A7EB0';
+  const headerColor = CATEGORY_COLORS[channelDisplayCategory ?? 'general'] ?? '#C6A75E';
   const headerBg = `${headerColor}26`; // 15% opacity
 
   // Remove full-screen loading - show UI immediately with loading states

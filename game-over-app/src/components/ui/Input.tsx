@@ -6,7 +6,6 @@
 import React, { useState, forwardRef } from 'react';
 import { TextInput } from 'react-native';
 import { styled, Input as TamaguiInput, YStack, XStack, Text, GetProps } from 'tamagui';
-import { DARK_THEME } from '@/constants/theme';
 
 const StyledInputContainer = styled(XStack, {
   name: 'InputContainer',
@@ -64,7 +63,7 @@ const StyledLabel = styled(Text, {
   variants: {
     focused: {
       true: {
-        color: DARK_THEME.primaryLight,
+        color: '#E8DCC8',
       },
     },
     error: {
@@ -177,7 +176,7 @@ export const Input = forwardRef<TextInput, InputProps>(
               pressStyle={{ opacity: 0.7 }}
               testID={`${testID}-toggle-password`}
             >
-              <Text color={DARK_THEME.primaryLight} fontWeight="600" fontSize="$2">
+              <Text color={'#E8DCC8'} fontWeight="600" fontSize="$2">
                 {showPassword ? 'Hide' : 'Show'}
               </Text>
             </XStack>

@@ -12,10 +12,10 @@ import type { PollWithOptions } from '@/repositories/polls';
 
 // Dark theme colors
 const DARK_THEME = {
-  backgroundDark: '#15181D',
+  backgroundDark: '#0D1B2A',
   surfaceDark: '#1E2329',
-  surfaceCard: '#23272F',
-  primary: '#5A7EB0',
+  surfaceCard: '#1A2F47',
+  primary: '#C6A75E',
   border: 'rgba(255, 255, 255, 0.05)',
   textPrimary: '#FFFFFF',
   textSecondary: '#9CA3AF',
@@ -54,8 +54,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
   draft: {
     label: 'Draft',
     color: '#9CA3AF',
-    bgColor: DARK_THEME.surfaceDark,
-    borderColor: DARK_THEME.border,
+    bgColor: '#1A2F47',
+    borderColor: 'rgba(230,220,200,0.15)',
   },
 };
 
@@ -100,7 +100,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
 
   return (
     <YStack
-      backgroundColor={DARK_THEME.surfaceCard}
+      backgroundColor={'#1A2F47'}
       borderRadius={16}
       padding="$5"
       gap="$3"
@@ -122,11 +122,11 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
             <Ionicons name={categoryConfig.icon} size={20} color={categoryConfig.color} />
           </YStack>
           <YStack flex={1}>
-            <Text fontSize={16} fontWeight="600" color={DARK_THEME.textPrimary} testID="poll-title">
+            <Text fontSize={16} fontWeight="600" color={'#FFFFFF'} testID="poll-title">
               {poll.title}
             </Text>
             {poll.description && (
-              <Text fontSize={11} color={DARK_THEME.textTertiary}>
+              <Text fontSize={11} color={'rgba(255,255,255,0.48)'}>
                 {poll.description}
               </Text>
             )}
@@ -153,10 +153,10 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
           alignItems="center"
           justifyContent="center"
         >
-          <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" maxWidth={200}>
+          <Text fontSize={12} color={'rgba(255,255,255,0.48)'} textAlign="center" maxWidth={200}>
             This poll is currently in draft mode. Options are being finalized.
           </Text>
-          <Text fontSize={12} color={DARK_THEME.primary} fontWeight="700" marginTop="$2">
+          <Text fontSize={12} color={'#C6A75E'} fontWeight="700" marginTop="$2">
             Add Suggestion
           </Text>
         </YStack>
@@ -218,7 +218,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
                       <Text
                         fontSize={14}
                         fontWeight={isUserVote || isWinner ? '500' : '400'}
-                        color={isUserVote ? DARK_THEME.textPrimary : showResults ? 'rgba(209, 213, 219, 1)' : DARK_THEME.textPrimary}
+                        color={isUserVote ? '#FFFFFF' : showResults ? 'rgba(209, 213, 219, 1)' : '#FFFFFF'}
                       >
                         {option.label}
                       </Text>
@@ -249,7 +249,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
                         <Text
                           fontSize={12}
                           fontWeight="700"
-                          color={isUserVote ? DARK_THEME.primary : DARK_THEME.textTertiary}
+                          color={isUserVote ? '#C6A75E' : 'rgba(255,255,255,0.48)'}
                           testID={isUserVote ? `poll-vote-count-${option.id}` : `poll-percentage-${option.id}`}
                         >
                           {isUserVote ? `${option.vote_count} votes` : `${percentage}%`}
@@ -269,9 +269,9 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
             marginTop="$1"
             paddingTop="$2"
             borderTopWidth={1}
-            borderTopColor={DARK_THEME.border}
+            borderTopColor={'rgba(230,220,200,0.15)'}
           >
-            <Text fontSize={10} color={DARK_THEME.textTertiary} fontWeight="500" testID="poll-vote-count">
+            <Text fontSize={10} color={'rgba(255,255,255,0.48)'} fontWeight="500" testID="poll-vote-count">
               {poll.total_votes} vote{poll.total_votes !== 1 ? 's' : ''} cast
               {poll.ends_at && ` • Ends in ${formatDeadline()}`}
             </Text>
@@ -284,7 +284,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
                 </Text>
               </XStack>
             ) : canVote ? (
-              <Text fontSize={10} color={DARK_THEME.primary} fontWeight="500">
+              <Text fontSize={10} color={'#C6A75E'} fontWeight="500">
                 Tap option to vote
               </Text>
             ) : null}
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   optionSelected: {
-    borderColor: DARK_THEME.primary,
+    borderColor: '#C6A75E',
     borderWidth: 1,
   },
   optionPressed: {
@@ -344,8 +344,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   radioSelected: {
-    backgroundColor: DARK_THEME.primary,
-    borderColor: DARK_THEME.primary,
+    backgroundColor: '#C6A75E',
+    borderColor: '#C6A75E',
   },
   avatarStack: {
     flexDirection: 'row',
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#23272F',
+    borderColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },

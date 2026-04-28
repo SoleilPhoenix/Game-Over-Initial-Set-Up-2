@@ -63,7 +63,7 @@ async function getDefaultCalendarId(): Promise<string | null> {
     try {
       return await Calendar.createCalendarAsync({
         title: 'Game Over Events',
-        color: '#5A7EB0',
+        color: '#C6A75E',
         entityType: Calendar.EntityTypes.EVENT,
         source: { isLocalAccount: true, name: 'Game Over', type: Calendar.SourceType.LOCAL },
         name: 'Game Over',

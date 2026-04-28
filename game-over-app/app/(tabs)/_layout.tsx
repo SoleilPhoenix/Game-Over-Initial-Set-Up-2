@@ -12,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { DARK_THEME } from '@/constants/theme';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useTranslation, getTranslation } from '@/i18n';
@@ -40,19 +39,19 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   const config = iconMap[name] || { active: 'calendar', inactive: 'calendar-outline' };
   const label = labelMap[name] || name;
   const iconName = focused ? config.active : config.inactive;
-  const activeColor = DARK_THEME.primaryLight; // #7A9BC4 — passes WCAG AA (5.6:1)
+  const activeColor = '#E8DCC8'; // #7A9BC4 — passes WCAG AA (5.6:1)
 
   return (
     <View style={styles.iconContainer}>
       <Ionicons
         name={iconName}
         size={22}
-        color={focused ? activeColor : DARK_THEME.textSecondary}
+        color={focused ? activeColor : 'rgba(255,255,255,0.72)'}
       />
       <Text
         style={[
           styles.tabLabel,
-          { color: focused ? activeColor : DARK_THEME.textSecondary }
+          { color: focused ? activeColor : 'rgba(255,255,255,0.72)' }
         ]}
       >
         {label}
@@ -130,7 +129,7 @@ function FABButton() {
       accessibilityHint="Opens the event creation wizard"
     >
       <LinearGradient
-        colors={['#5A7EB0', '#4A6E9F']}
+        colors={['#C6A75E', '#4A6E9F']}
         style={styles.fabGradient}
       >
         <Ionicons name="add" size={32} color="#FFFFFF" />
@@ -237,7 +236,7 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         sceneStyle: {
-          backgroundColor: DARK_THEME.background,
+          backgroundColor: '#0D1B2A',
         },
       }}
     >
@@ -303,7 +302,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
     marginHorizontal: 16,
     marginBottom: Platform.OS === 'android' ? 8 : 0,
     zIndex: 2, // Above background
@@ -347,7 +346,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    shadowColor: '#5A7EB0',
+    shadowColor: '#C6A75E',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -365,6 +364,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: DARK_THEME.background,
+    borderColor: '#0D1B2A',
   },
 });

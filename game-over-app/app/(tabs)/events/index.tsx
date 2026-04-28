@@ -34,7 +34,6 @@ import { useUser } from '@/stores/authStore';
 import { useWizardStore, type DraftSnapshot } from '@/stores/wizardStore';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
 import { useTranslation, getTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
 import { getCurrentPhaseLabel } from '@/utils/planningProgress';
 import type { BudgetInfo } from '@/lib/participantCountCache';
 import { useUrgentPayment } from '@/hooks/useUrgentPayment';
@@ -130,7 +129,7 @@ const getProgressConfig = (
         nextStepNum,
         nextStepLabel,
         percentage,
-        color: DARK_THEME.primary,
+        color: '#C6A75E',
         icon: 'ellipse',
         isBooked: true,
         completedSteps: completed,
@@ -471,7 +470,7 @@ export default function EventsScreen() {
           key={i}
           style={[
             styles.segment,
-            { backgroundColor: i < completedSteps ? color : DARK_THEME.deepNavy },
+            { backgroundColor: i < completedSteps ? color : '#1A2F47' },
             i === 0 && styles.segmentFirst,
             i === 7 && styles.segmentLast,
           ]}
@@ -548,7 +547,7 @@ export default function EventsScreen() {
               const count = budgetInfos[item.id]?.totalParticipants ?? participantCounts[item.id] ?? item.participant_count;
               return count > 0 ? (
                 <XStack alignItems="center" gap={6} marginTop={4}>
-                  <Ionicons name="people-outline" size={14} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="people-outline" size={14} color={'rgba(255,255,255,0.48)'} />
                   <Text style={styles.dateText}>
                     {count} {t.events.participantsLabel || 'participants'}
                   </Text>
@@ -558,7 +557,7 @@ export default function EventsScreen() {
 
             {/* Date */}
             <XStack alignItems="center" gap={6} marginTop={4}>
-              <Ionicons name="calendar-outline" size={14} color={DARK_THEME.textTertiary} />
+              <Ionicons name="calendar-outline" size={14} color={'rgba(255,255,255,0.48)'} />
               <Text style={styles.dateText}>{dateRange}</Text>
             </XStack>
 
@@ -632,7 +631,7 @@ export default function EventsScreen() {
       testID="start-new-plan-button"
     >
       <View style={styles.startNewPlanIcon}>
-        <Ionicons name="add" size={24} color={DARK_THEME.textTertiary} />
+        <Ionicons name="add" size={24} color={'rgba(255,255,255,0.48)'} />
       </View>
       <Text style={styles.startNewPlanText}>{t.events.startNewPlan}</Text>
     </Pressable>
@@ -659,8 +658,8 @@ export default function EventsScreen() {
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor={DARK_THEME.primary}
-            colors={[DARK_THEME.primary]}
+            tintColor={'#C6A75E'}
+            colors={['#C6A75E']}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -668,18 +667,18 @@ export default function EventsScreen() {
           <YStack justifyContent="center" alignItems="center" width="100%" paddingHorizontal={0}>
             <View style={styles.emptyIconContainer}>
               <LinearGradient
-                colors={[`${DARK_THEME.primary}30`, `${DARK_THEME.primary}10`]}
+                colors={['rgba(198,167,94,0.19)', 'rgba(198,167,94,0.06)']}
                 style={styles.emptyIconGradient}
               >
                 <Text fontSize={56}>{emptyEmoji}</Text>
               </LinearGradient>
             </View>
-            <Text fontSize={24} fontWeight="800" color={DARK_THEME.textPrimary} marginBottom={8}>
+            <Text fontSize={24} fontWeight="800" color={'#FFFFFF'} marginBottom={8}>
               {emptyTitle}
             </Text>
             <Text
               fontSize={16}
-              color={DARK_THEME.textSecondary}
+              color={'rgba(255,255,255,0.72)'}
               textAlign="center"
               marginBottom={24}
               maxWidth={280}
@@ -813,7 +812,7 @@ export default function EventsScreen() {
                 {subtitle}
               </Text>
             </YStack>
-            <Ionicons name="chevron-forward" size={20} color={DARK_THEME.textTertiary} />
+            <Ionicons name="chevron-forward" size={20} color={'rgba(255,255,255,0.48)'} />
           </XStack>
 
           <View style={styles.progressSection}>
@@ -880,7 +879,7 @@ export default function EventsScreen() {
 
       {/* Background */}
       <LinearGradient
-        colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
+        colors={['#1A2F47', '#0D1B2A']}
         style={StyleSheet.absoluteFill}
       />
 
@@ -907,7 +906,7 @@ export default function EventsScreen() {
             style={styles.notificationButton}
             testID="notifications-button"
           >
-            <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
+            <Ionicons name="notifications-outline" size={24} color={'#FFFFFF'} />
             {hasUnseenUrgency && (
               <View style={styles.notificationUrgentDot} />
             )}
@@ -948,8 +947,8 @@ export default function EventsScreen() {
               <RefreshControl
                 refreshing={isRefreshing}
                 onRefresh={handleRefresh}
-                tintColor={DARK_THEME.primary}
-                colors={[DARK_THEME.primary]}
+                tintColor={'#C6A75E'}
+                colors={['#C6A75E']}
               />
             }
             showsVerticalScrollIndicator={false}
@@ -971,8 +970,8 @@ export default function EventsScreen() {
               <RefreshControl
                 refreshing={isRefreshing}
                 onRefresh={handleRefresh}
-                tintColor={DARK_THEME.primary}
-                colors={[DARK_THEME.primary]}
+                tintColor={'#C6A75E'}
+                colors={['#C6A75E']}
               />
             }
             showsVerticalScrollIndicator={false}
@@ -1002,12 +1001,12 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
   },
   header: {
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
+    borderBottomColor: 'rgba(230,220,200,0.15)',
   },
   avatarContainer: {
     position: 'relative',
@@ -1018,14 +1017,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   avatarPlaceholder: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   onlineIndicator: {
     position: 'absolute',
@@ -1036,18 +1035,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#10B981',
     borderWidth: 2,
-    borderColor: DARK_THEME.background,
+    borderColor: '#0D1B2A',
   },
   headerTitle: {
     fontSize: 22,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   notificationButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1066,7 +1065,7 @@ const styles = StyleSheet.create({
   },
   filterPill: {
     flexDirection: 'row',
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 25,
     padding: 4,
   },
@@ -1078,24 +1077,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   filterTabActive: {
-    backgroundColor: '#5A7EB0',
+    backgroundColor: '#C6A75E',
   },
   filterTabText: {
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   filterTabTextActive: {
     color: '#FFFFFF',
     fontWeight: '600',
   },
   eventCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   eventCardPressed: {
     opacity: 0.9,
@@ -1114,7 +1113,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#F97316',
     borderWidth: 1.5,
-    borderColor: DARK_THEME.surfaceCard,
+    borderColor: '#1A2F47',
   },
   thumbnailContainer: {
     width: 100,
@@ -1127,20 +1126,20 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   thumbnailPlaceholder: {
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
   eventTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     flex: 1,
     marginRight: 8,
   },
   dateText: {
     fontSize: 14,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   roleBadge: {
     paddingHorizontal: 10,
@@ -1156,12 +1155,12 @@ const styles = StyleSheet.create({
   roleBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: DARK_THEME.primary,
+    color: '#C6A75E',
     letterSpacing: 0.5,
   },
   statusText: {
     fontSize: 13,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   paymentBadge: {
     backgroundColor: 'rgba(90, 126, 176, 0.15)',
@@ -1172,13 +1171,13 @@ const styles = StyleSheet.create({
   paymentBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#5A7EB0',
+    color: '#C6A75E',
   },
   progressSection: {
     marginTop: 14,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: DARK_THEME.glassBorder,
+    borderTopColor: 'rgba(230,220,200,0.15)',
   },
   progressLabel: {
     fontSize: 13,
@@ -1190,7 +1189,7 @@ const styles = StyleSheet.create({
   },
   progressBarBackground: {
     height: 6,
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: '#1A2F47',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -1209,12 +1208,12 @@ const styles = StyleSheet.create({
   draftSectionLine: {
     flex: 1,
     height: 1,
-    backgroundColor: DARK_THEME.glassBorder,
+    backgroundColor: 'rgba(230,220,200,0.15)',
   },
   draftSectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -1229,25 +1228,25 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: DARK_THEME.primary,
+    borderColor: '#C6A75E',
     backgroundColor: 'rgba(90, 126, 176, 0.08)',
   },
   startNewPlanButtonPressed: {
     opacity: 0.7,
-    backgroundColor: DARK_THEME.glass,
+    backgroundColor: 'rgba(26,47,71,0.8)',
   },
   startNewPlanIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
   startNewPlanText: {
     fontSize: 16,
     fontWeight: '500',
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
   },
   emptyIconContainer: {
     marginBottom: 24,

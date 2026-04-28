@@ -6,7 +6,6 @@
 
 import React from 'react';
 import { YStack, XStack, Text } from 'tamagui';
-import { DARK_THEME } from '@/constants/theme';
 import { IconCircle } from './IconCircle';
 
 export interface GlassPanelProps {

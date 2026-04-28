@@ -15,7 +15,7 @@ type Notification = Database['public']['Tables']['notifications']['Row'];
 
 // Dark theme colors
 const DARK_THEME = {
-  backgroundDark: '#15181D',
+  backgroundDark: '#0D1B2A',
   secondary: '#2D3748',
   glassCard: 'rgba(45, 55, 72, 0.7)',
   glassOverlay: 'rgba(255, 255, 255, 0.05)',
@@ -258,14 +258,14 @@ export function NotificationItem({
             <Text
               fontSize={14}
               fontWeight="600"
-              color={DARK_THEME.textPrimary}
+              color={'#FFFFFF'}
               numberOfLines={1}
               flex={1}
               marginRight="$2"
             >
               {notification.title}
             </Text>
-            <Text fontSize={10} color={DARK_THEME.textTertiary} fontWeight="500">
+            <Text fontSize={10} color={'rgba(255,255,255,0.48)'} fontWeight="500">
               {notification.created_at && formatTime(notification.created_at)}
             </Text>
           </XStack>
@@ -273,7 +273,7 @@ export function NotificationItem({
           {notification.body && (
             <Text
               fontSize={12}
-              color={DARK_THEME.textSecondary}
+              color={'rgba(255,255,255,0.72)'}
               numberOfLines={2}
               lineHeight={18}
             >
@@ -318,13 +318,13 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: DARK_THEME.glassCard,
+    backgroundColor: 'rgba(26,47,71,0.8)',
     borderRadius: 12,
     padding: 16,
     marginHorizontal: 16,
     marginVertical: 8,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   glassOverlay: {
     position: 'absolute',
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: '50%',
-    backgroundColor: DARK_THEME.glassOverlay,
+    backgroundColor: 'rgba(13,27,42,0.7)',
   },
   warningBorder: {
     borderLeftWidth: 3,

@@ -27,7 +27,6 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
-import { DARK_THEME } from '@/constants/theme';
 import { preloadPackageImages } from '@/constants/packageImages';
 import { preloadSportLogos, preloadShareImages } from '@/constants/sportLogos';
 import { initBudgetCache } from '@/lib/participantCountCache';
@@ -127,9 +126,9 @@ function RootLayoutNav() {
 
   if (!isInitialized || isLoading || !fontsLoaded) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={DARK_THEME.background}>
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={'#0D1B2A'}>
         <LinearGradient
-          colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
+          colors={['#1A2F47', '#0D1B2A']}
           style={StyleSheet.absoluteFill}
         />
         {/* Game Over Logo */}
@@ -139,7 +138,7 @@ function RootLayoutNav() {
           resizeMode="contain"
         />
         {/* Loading Spinner below logo */}
-        <Spinner size="large" color={DARK_THEME.primary} style={{ marginTop: 24 }} />
+        <Spinner size="large" color={'#C6A75E'} style={{ marginTop: 24 }} />
       </YStack>
     );
   }

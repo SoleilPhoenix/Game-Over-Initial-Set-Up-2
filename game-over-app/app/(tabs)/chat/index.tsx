@@ -16,7 +16,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useChannels, useCreateChannel } from '@/hooks/queries/useChat';
 import { usePolls, useCreatePoll, useVote, useDeletePoll, useAddPollOption, useDeletePollOption } from '@/hooks/queries/usePolls';
-import { DARK_THEME } from '@/constants/theme';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { useUser } from '@/stores/authStore';

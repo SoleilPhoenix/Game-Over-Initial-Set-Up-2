@@ -7,7 +7,6 @@
 import React from 'react';
 import { XStack, YStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
-import { DARK_THEME } from '@/constants/theme';
 
 export interface OptionBlockProps {
   label: string;
