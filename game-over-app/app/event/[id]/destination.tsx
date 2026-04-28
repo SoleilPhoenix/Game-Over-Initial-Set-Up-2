@@ -399,6 +399,9 @@ const CATEGORY_CONFIG: Record<NonNullable<PopupCategory>, { label: string; icon:
   sports: { label: 'Sports Teams', icon: 'football-outline', color: '#EF4444' },
 };
 
+// ─── Custom icon assets ───────────────────────────────────────────────────────
+const HOSPITAL_ICON = require('../../../src/constants/hospital-icon.jpeg');
+
 // ─── City map image assets ────────────────────────────────────────────────────
 const CITY_MAP_IMAGES: Record<string, any> = {
   hamburg:  require('../../../src/constants/City_Maps/Hamburg.jpg'),
@@ -416,12 +419,15 @@ function CityMapBackground({ citySlug }: { citySlug: string }) {
   const src = CITY_MAP_IMAGES[citySlug];
   if (!src) return null;
   return (
-    <Image
-      source={src}
-      style={{ ...StyleSheet.absoluteFillObject, opacity: 0.30 }}
-      resizeMode="contain"
-      pointerEvents="none"
-    />
+    // Inset by 20px on each side so the city silhouette floats with breathing
+    // room — gives the "zoomed-out overview" feel instead of a tight crop.
+    <View style={[StyleSheet.absoluteFillObject, { padding: 20 }]} pointerEvents="none">
+      <Image
+        source={src}
+        style={{ flex: 1, opacity: 0.28 }}
+        resizeMode="contain"
+      />
+    </View>
   );
 }
 
@@ -506,8 +512,9 @@ export default function DestinationScreen() {
     {
       label: 'Nearest Hospital',
       icon: 'add-circle',
+      iconImage: HOSPITAL_ICON,
       iconColor: '#EF4444',
-      iconBg: 'rgba(239, 68, 68, 0.15)',
+      iconBg: 'transparent',
       number: 'In Maps',
       onPress: () => openHospitalSearch(city.lat, city.lon, cityName),
     },
@@ -618,8 +625,20 @@ export default function DestinationScreen() {
                 style={({ pressed }) => [styles.emergencyRow, pressed && { opacity: 0.7 }]}
                 onPress={contact.onPress}
               >
-                <View style={[styles.emergencyIcon, { backgroundColor: contact.iconBg }]}>
-                  <Ionicons name={contact.icon as any} size={16} color={contact.iconColor} />
+                <View style={[
+                  styles.emergencyIcon,
+                  { backgroundColor: contact.iconBg },
+                  (contact as any).iconImage && { overflow: 'hidden', padding: 0 },
+                ]}>
+                  {(contact as any).iconImage ? (
+                    <Image
+                      source={(contact as any).iconImage}
+                      style={{ width: 32, height: 32, borderRadius: 16 }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Ionicons name={contact.icon as any} size={16} color={contact.iconColor} />
+                  )}
                 </View>
                 <Text style={styles.emergencyLabel} flex={1}>{contact.label}</Text>
                 <View style={[styles.emergencyBadge, { backgroundColor: contact.iconBg }]}>
