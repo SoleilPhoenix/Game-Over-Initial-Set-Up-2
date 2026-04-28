@@ -13,7 +13,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBookingFlow } from '@/hooks/useBookingFlow';
 import { useWizardStore } from '@/stores/wizardStore';
 import { Button } from '@/components/ui/Button';
-import { DARK_THEME } from '@/constants/theme';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { useTranslation } from '@/i18n';
 
@@ -28,8 +27,8 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
-    backgroundColor: DARK_THEME.background,
+    borderColor: 'rgba(230,220,200,0.15)',
+    backgroundColor: '#0D1B2A',
     marginBottom: 8,
   },
   payOptionLast: {
@@ -131,8 +130,8 @@ export default function BookingSummaryScreen() {
   // For draft mode, we don't need event data — just package + pricing
   if (isLoading || !pkg || !pricing) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
-        <Spinner size="large" color="$primary" />
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="#0D1B2A">
+        <Spinner size="large" color="#C6A75E" />
       </YStack>
     );
   }
@@ -193,14 +192,14 @@ export default function BookingSummaryScreen() {
   const depositCents = depositEuros * 100;
 
   return (
-    <YStack flex={1} backgroundColor={DARK_THEME.background}>
+    <YStack flex={1} backgroundColor={'#0D1B2A'}>
       {/* Header */}
       <XStack
         paddingTop={insets.top}
         paddingHorizontal="$4"
         paddingBottom="$2"
         alignItems="center"
-        backgroundColor={DARK_THEME.background}
+        backgroundColor={'#0D1B2A'}
       >
         <XStack
           width={40}
@@ -223,23 +222,23 @@ export default function BookingSummaryScreen() {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 100 }}>
         {/* Selected Package Card */}
         <YStack
-          backgroundColor={DARK_THEME.surfaceCard}
+          backgroundColor={'#1A2F47'}
           borderRadius={16}
           padding="$4"
           marginBottom="$5"
           borderWidth={1}
-          borderColor={DARK_THEME.glassBorder}
+          borderColor={'rgba(230,220,200,0.15)'}
           testID="package-summary-card"
         >
           <XStack gap="$3" alignItems="center">
             <YStack flex={1}>
-              <Text fontSize={11} fontWeight="700" color={DARK_THEME.primary} textTransform="uppercase" letterSpacing={1} marginBottom={4}>
+              <Text fontSize={11} fontWeight="700" color={'#C6A75E'} textTransform="uppercase" letterSpacing={1} marginBottom={4}>
                 {t.booking.selectedPackageLabel}
               </Text>
               <Text fontSize={20} fontWeight="800" color="white">
                 {tierLabel}
               </Text>
-              <Text fontSize={13} color={DARK_THEME.textSecondary} marginTop={4}>
+              <Text fontSize={13} color={'rgba(255,255,255,0.72)'} marginTop={4}>
                 {[cityName, eventDateStr, t.booking.guests.replace('{{count}}', String(guestCount))].filter(Boolean).join(' \u2022 ')}
               </Text>
             </YStack>
@@ -254,20 +253,20 @@ export default function BookingSummaryScreen() {
         </YStack>
 
         {/* Cost Breakdown */}
-        <Text fontSize={11} fontWeight="700" color={DARK_THEME.textSecondary} textTransform="uppercase" letterSpacing={1} marginBottom="$2" marginLeft="$1">
+        <Text fontSize={11} fontWeight="700" color={'rgba(255,255,255,0.72)'} textTransform="uppercase" letterSpacing={1} marginBottom="$2" marginLeft="$1">
           Cost Breakdown
         </Text>
         <YStack
-          backgroundColor={DARK_THEME.surfaceCard}
+          backgroundColor={'#1A2F47'}
           borderRadius={16}
           padding="$4"
           marginBottom="$5"
           borderWidth={1}
-          borderColor={DARK_THEME.glassBorder}
+          borderColor={'rgba(230,220,200,0.15)'}
           testID="cost-breakdown-card"
         >
           <XStack justifyContent="space-between" marginBottom="$3">
-            <Text fontSize={14} color={DARK_THEME.textSecondary}>Package Base</Text>
+            <Text fontSize={14} color={'rgba(255,255,255,0.72)'}>Package Base</Text>
             <Text fontSize={14} fontWeight="600" color="white">
               {formatPriceWhole(Math.round(pricing.packagePriceCents / 100))}
             </Text>
@@ -275,12 +274,12 @@ export default function BookingSummaryScreen() {
 
           <XStack justifyContent="space-between" marginBottom="$3">
             <XStack gap="$1" alignItems="center">
-              <Text fontSize={14} color={DARK_THEME.textSecondary}>{t.booking.serviceFee}</Text>
+              <Text fontSize={14} color={'rgba(255,255,255,0.72)'}>{t.booking.serviceFee}</Text>
               <Pressable
                 onPress={() => Alert.alert(t.booking.serviceFee, '10% of the package base price, minimum €50.')}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Ionicons name="information-circle-outline" size={14} color={DARK_THEME.textTertiary} />
+                <Ionicons name="information-circle-outline" size={14} color={'rgba(255,255,255,0.48)'} />
               </Pressable>
             </XStack>
             <Text fontSize={14} fontWeight="600" color="white">
@@ -288,19 +287,19 @@ export default function BookingSummaryScreen() {
             </Text>
           </XStack>
 
-          <YStack height={1} backgroundColor={DARK_THEME.glassBorder} marginVertical="$2" />
+          <YStack height={1} backgroundColor={'rgba(230,220,200,0.15)'} marginVertical="$2" />
 
           <XStack justifyContent="space-between">
-            <Text fontSize={15} fontWeight="600" color={DARK_THEME.textSecondary}>{t.booking.totalGroupCost}</Text>
-            <Text fontSize={16} fontWeight="800" color={DARK_THEME.primary}>
+            <Text fontSize={15} fontWeight="600" color={'rgba(255,255,255,0.72)'}>{t.booking.totalGroupCost}</Text>
+            <Text fontSize={16} fontWeight="800" color={'#C6A75E'}>
               {formatPriceWhole(totalEuros)}
             </Text>
           </XStack>
 
-          <YStack height={1} backgroundColor={DARK_THEME.glassBorder} marginVertical="$3" />
+          <YStack height={1} backgroundColor={'rgba(230,220,200,0.15)'} marginVertical="$3" />
 
           {/* Payment Option Selector */}
-          <Text fontSize={11} fontWeight="700" color={DARK_THEME.textSecondary} textTransform="uppercase" letterSpacing={0.8} marginBottom="$3">
+          <Text fontSize={11} fontWeight="700" color={'rgba(255,255,255,0.72)'} textTransform="uppercase" letterSpacing={0.8} marginBottom="$3">
             {(t.booking as any).payOptionTitle}
           </Text>
 
@@ -313,8 +312,8 @@ export default function BookingSummaryScreen() {
               <YStack
                 width={20} height={20} borderRadius={10} marginTop={3}
                 borderWidth={2}
-                borderColor={paymentOption === 'deposit' ? '#47B881' : DARK_THEME.border}
-                backgroundColor={paymentOption === 'deposit' ? '#47B881' : 'transparent'}
+                borderColor={paymentOption === 'deposit' ? '#4ADE80' : 'rgba(230,220,200,0.15)'}
+                backgroundColor={paymentOption === 'deposit' ? '#4ADE80' : 'transparent'}
                 alignItems="center" justifyContent="center"
               >
                 {paymentOption === 'deposit' && (
@@ -324,15 +323,15 @@ export default function BookingSummaryScreen() {
               <YStack flex={1} gap={4}>
                 {/* Title row: label left, amount right */}
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'deposit' ? '#47B881' : DARK_THEME.textPrimary}>
+                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'deposit' ? '#4ADE80' : '#FFFFFF'}>
                     {(t.booking as any).payOptionDeposit}
                   </Text>
-                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'deposit' ? '#47B881' : DARK_THEME.textPrimary}>
+                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'deposit' ? '#4ADE80' : '#FFFFFF'}>
                     {formatPriceWhole(depositEuros)}
                   </Text>
                 </XStack>
                 {/* Secondary: remaining due date */}
-                <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                <Text fontSize={12} color={'rgba(255,255,255,0.48)'}>
                   {formatPriceWhole(remainingEuros)} due 14 days before event
                 </Text>
               </YStack>
@@ -348,8 +347,8 @@ export default function BookingSummaryScreen() {
               <YStack
                 width={20} height={20} borderRadius={10} marginTop={3}
                 borderWidth={2}
-                borderColor={paymentOption === 'full' ? '#47B881' : DARK_THEME.border}
-                backgroundColor={paymentOption === 'full' ? '#47B881' : 'transparent'}
+                borderColor={paymentOption === 'full' ? '#4ADE80' : 'rgba(230,220,200,0.15)'}
+                backgroundColor={paymentOption === 'full' ? '#4ADE80' : 'transparent'}
                 alignItems="center" justifyContent="center"
               >
                 {paymentOption === 'full' && (
@@ -359,15 +358,15 @@ export default function BookingSummaryScreen() {
               <YStack flex={1} gap={4}>
                 {/* Title row: label left, amount right */}
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? '#47B881' : DARK_THEME.textPrimary}>
+                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? '#4ADE80' : '#FFFFFF'}>
                     {(t.booking as any).payOptionFull}
                   </Text>
-                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? '#47B881' : DARK_THEME.textPrimary}>
+                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? '#4ADE80' : '#FFFFFF'}>
                     {formatPriceWhole(totalEuros)}
                   </Text>
                 </XStack>
                 {/* Secondary: one combined sentence */}
-                <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                <Text fontSize={12} color={'rgba(255,255,255,0.48)'}>
                   No further payments and reminders
                 </Text>
               </YStack>
@@ -377,12 +376,12 @@ export default function BookingSummaryScreen() {
 
         {/* Exclude Honoree */}
         <YStack
-          backgroundColor={DARK_THEME.surfaceCard}
+          backgroundColor={'#1A2F47'}
           borderRadius={16}
           padding="$4"
           marginBottom="$5"
           borderWidth={1}
-          borderColor={DARK_THEME.glassBorder}
+          borderColor={'rgba(230,220,200,0.15)'}
           testID="exclude-honoree-card"
         >
           <XStack justifyContent="space-between" alignItems="center">
@@ -390,14 +389,14 @@ export default function BookingSummaryScreen() {
               <Text fontSize={15} fontWeight="600" color="white">
                 {t.booking.excludeHonoreeLabel}
               </Text>
-              <Text fontSize={13} color={DARK_THEME.textSecondary}>
+              <Text fontSize={13} color={'rgba(255,255,255,0.72)'}>
                 {t.booking.honoreePays.replace('{{amount}}', formatPrice(honoreePaysCents))}
               </Text>
             </YStack>
             <Switch
               checked={excludeHonoree}
               onCheckedChange={setExcludeHonoree}
-              backgroundColor={excludeHonoree ? DARK_THEME.primary : DARK_THEME.glassBorder}
+              backgroundColor={excludeHonoree ? '#C6A75E' : 'rgba(230,220,200,0.15)'}
               testID="exclude-honoree-toggle"
             >
               <Switch.Thumb animation="quick" backgroundColor="white" />
@@ -407,27 +406,27 @@ export default function BookingSummaryScreen() {
 
         {/* Cost Per Person Highlight */}
         <YStack
-          backgroundColor={DARK_THEME.surfaceCard}
+          backgroundColor={'#1A2F47'}
           borderRadius={16}
           padding="$4"
           marginBottom="$5"
           borderWidth={1}
-          borderColor={DARK_THEME.glassBorder}
+          borderColor={'rgba(230,220,200,0.15)'}
           testID="per-person-card"
         >
           <YStack>
-            <Text fontSize={11} fontWeight="700" color={DARK_THEME.textSecondary} textTransform="uppercase" letterSpacing={1}>
+            <Text fontSize={11} fontWeight="700" color={'rgba(255,255,255,0.72)'} textTransform="uppercase" letterSpacing={1}>
               {t.booking.costPerPersonLabel.replace('{{count}}', String(pricing.payingParticipantCount))}
             </Text>
             <XStack alignItems="baseline" gap="$2" marginTop="$2">
-              <Text fontSize={36} fontWeight="800" color={DARK_THEME.primary}>
+              <Text fontSize={36} fontWeight="800" color={'#C6A75E'}>
                 {formatPrice(pricing.perPersonCents)}
               </Text>
-              <Text fontSize={14} color={DARK_THEME.textSecondary}>{t.booking.slashPerson}</Text>
+              <Text fontSize={14} color={'rgba(255,255,255,0.72)'}>{t.booking.slashPerson}</Text>
             </XStack>
             <XStack alignItems="center" gap="$1" marginTop="$1">
-              <Ionicons name="checkmark-circle" size={14} color="#47B881" />
-              <Text fontSize={12} fontWeight="600" color="#47B881">
+              <Ionicons name="checkmark-circle" size={14} color="#4ADE80" />
+              <Text fontSize={12} fontWeight="600" color="#4ADE80">
                 {t.booking.includesTaxes}
               </Text>
             </XStack>
@@ -437,23 +436,23 @@ export default function BookingSummaryScreen() {
         {/* Stripe Security */}
         <XStack
           padding="$3"
-          backgroundColor={DARK_THEME.surfaceCard}
+          backgroundColor={'#1A2F47'}
           borderRadius={12}
           gap="$2"
           alignItems="center"
           justifyContent="center"
           marginBottom="$4"
           borderWidth={1}
-          borderColor={DARK_THEME.glassBorder}
+          borderColor={'rgba(230,220,200,0.15)'}
         >
-          <Ionicons name="lock-closed" size={16} color={DARK_THEME.textTertiary} />
-          <Text fontSize={13} color={DARK_THEME.textSecondary}>
+          <Ionicons name="lock-closed" size={16} color={'rgba(255,255,255,0.48)'} />
+          <Text fontSize={13} color={'rgba(255,255,255,0.72)'}>
             {t.booking.securePaymentStripe}
           </Text>
         </XStack>
 
         {/* Cancellation Policy */}
-        <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" lineHeight={18} paddingHorizontal="$2">
+        <Text fontSize={12} color={'rgba(255,255,255,0.48)'} textAlign="center" lineHeight={18} paddingHorizontal="$2">
           {t.booking.cancellationSummary.replace('{{deposit}}', formatPriceWhole(depositEuros))}
         </Text>
       </ScrollView>
@@ -466,9 +465,9 @@ export default function BookingSummaryScreen() {
         right={0}
         padding="$4"
         paddingBottom={insets.bottom + 8}
-        backgroundColor={DARK_THEME.surface}
+        backgroundColor="#12253A"
         borderTopWidth={1}
-        borderTopColor={DARK_THEME.glassBorder}
+        borderTopColor={'rgba(230,220,200,0.15)'}
       >
         <Button
           flex={1}

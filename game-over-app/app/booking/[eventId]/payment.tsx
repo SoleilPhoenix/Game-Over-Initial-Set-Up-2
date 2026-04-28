@@ -453,7 +453,7 @@ export default function PaymentScreen() {
                   alignItems="center"
                   gap="$3"
                 >
-                  <Ionicons name="card" size={24} color="#5A7EB0" />
+                  <Ionicons name="card" size={24} color="#C6A75E" />
                   <YStack flex={1}>
                     <Text fontWeight="600" color="$textPrimary">
                       {t.booking.creditOrDebit}
@@ -462,7 +462,7 @@ export default function PaymentScreen() {
                       {t.booking.visaMastercard}
                     </Text>
                   </YStack>
-                  <Ionicons name="checkmark-circle" size={24} color="#5A7EB0" />
+                  <Ionicons name="checkmark-circle" size={24} color="#C6A75E" />
                 </XStack>
 
                 {/* Apple Pay — Coming Soon */}
@@ -526,7 +526,7 @@ export default function PaymentScreen() {
                   alignItems="center"
                   justifyContent="center"
                 >
-                  <Ionicons name="gift" size={24} color="#5A7EB0" />
+                  <Ionicons name="gift" size={24} color="#C6A75E" />
                 </YStack>
                 <YStack flex={1}>
                   <Text fontWeight="600" color="$textPrimary">
@@ -560,7 +560,7 @@ export default function PaymentScreen() {
               gap="$2"
               alignItems="center"
             >
-              <Ionicons name="lock-closed" size={18} color="#47B881" />
+              <Ionicons name="lock-closed" size={18} color="#4ADE80" />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
                 {t.booking.secureEncryption}
               </Text>

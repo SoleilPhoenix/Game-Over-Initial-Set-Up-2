@@ -268,7 +268,7 @@ export default function BookingConfirmationScreen() {
                   <Ionicons
                     name={copied ? 'checkmark-circle' : 'copy-outline'}
                     size={18}
-                    color={copied ? '#47B881' : '#5A7EB0'}
+                    color={copied ? '#4ADE80' : '#C6A75E'}
                   />
                 </XStack>
               </Pressable>
@@ -322,19 +322,19 @@ export default function BookingConfirmationScreen() {
               {t.booking.whatsNext}
             </Text>
             <XStack gap="$2" alignItems="flex-start">
-              <Ionicons name="mail-outline" size={18} color="#5A7EB0" style={{ marginTop: 2 }} />
+              <Ionicons name="mail-outline" size={18} color="#C6A75E" style={{ marginTop: 2 }} />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
                 {t.booking.confirmationEmail}
               </Text>
             </XStack>
             <XStack gap="$2" alignItems="flex-start">
-              <Ionicons name="people-outline" size={18} color="#5A7EB0" style={{ marginTop: 2 }} />
+              <Ionicons name="people-outline" size={18} color="#C6A75E" style={{ marginTop: 2 }} />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
                 {t.booking.inviteGuests}
               </Text>
             </XStack>
             <XStack gap="$2" alignItems="flex-start">
-              <Ionicons name="chatbubbles-outline" size={18} color="#5A7EB0" style={{ marginTop: 2 }} />
+              <Ionicons name="chatbubbles-outline" size={18} color="#C6A75E" style={{ marginTop: 2 }} />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
                 {t.booking.useGroupChat}
               </Text>
@@ -359,7 +359,7 @@ export default function BookingConfirmationScreen() {
           testID="add-to-calendar-button"
         >
           <XStack gap="$2" alignItems="center">
-            <Ionicons name="calendar-outline" size={20} color="#5A7EB0" />
+            <Ionicons name="calendar-outline" size={20} color="#C6A75E" />
             <Text color="$primary" fontWeight="600">
               {t.booking.addToCalendar}
             </Text>

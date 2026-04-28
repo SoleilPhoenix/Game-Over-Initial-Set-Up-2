@@ -14,7 +14,6 @@ import { usePackage } from '@/hooks/queries/usePackages';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useFavoritesStore } from '@/stores/favoritesStore';
 import { Button } from '@/components/ui/Button';
-import { DARK_THEME } from '@/constants/theme';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { useTranslation } from '@/i18n';
 import { assemblePackages } from '@/utils/packageAssembly';
@@ -156,7 +155,7 @@ function HighlightCard({ icon, label, sub }: { icon: string; label: string; sub:
         alignItems="center"
         justifyContent="center"
       >
-        <Ionicons name={icon as any} size={20} color={DARK_THEME.primary} />
+        <Ionicons name={icon as any} size={20} color={'#C6A75E'} />
       </YStack>
       <Text fontSize={13} fontWeight="600" color="$textPrimary" textAlign="center">
         {label}
@@ -180,7 +179,7 @@ function IncludeItem({ icon, title, sub }: { icon: string; title: string; sub: s
         justifyContent="center"
         marginTop={2}
       >
-        <Ionicons name={icon as any} size={18} color={DARK_THEME.primary} />
+        <Ionicons name={icon as any} size={18} color={'#C6A75E'} />
       </YStack>
       <YStack flex={1}>
         <Text fontSize={15} fontWeight="600" color="$textPrimary">{title}</Text>
@@ -326,7 +325,7 @@ export default function PackageDetailsScreen() {
   if (!pkg) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background" padding="$6">
-        <Ionicons name="alert-circle-outline" size={48} color={DARK_THEME.primary} />
+        <Ionicons name="alert-circle-outline" size={48} color={'#C6A75E'} />
         <Text fontSize="$4" fontWeight="600" color="$textPrimary" marginTop="$3">
           {t.packageDetail.packageNotFound}
         </Text>
@@ -376,7 +375,7 @@ export default function PackageDetailsScreen() {
           style={{ height: 350 }}
         >
           <LinearGradient
-            colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(21,24,29,0.9)', DARK_THEME.background]}
+            colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(21,24,29,0.9)', '#0D1B2A']}
             locations={[0, 0.3, 0.7, 1]}
             style={{ flex: 1 }}
           >
@@ -483,7 +482,7 @@ export default function PackageDetailsScreen() {
               </XStack>
             </YStack>
             <YStack alignItems="flex-end">
-              <Text fontSize={22} fontWeight="800" color={DARK_THEME.primary}>
+              <Text fontSize={22} fontWeight="800" color={'#C6A75E'}>
                 {formatPrice(totalGroupCents)}
               </Text>
               <Text fontSize={12} color="$textTertiary">{t.packageDetail.totalPeople.replace('{{count}}', String(participantCount))}</Text>
@@ -501,7 +500,7 @@ export default function PackageDetailsScreen() {
           {highlights.length > 0 && (
             <YStack marginBottom="$4">
               <XStack alignItems="center" gap="$2" marginBottom="$3">
-                <Ionicons name="diamond" size={16} color={DARK_THEME.primary} />
+                <Ionicons name="diamond" size={16} color={'#C6A75E'} />
                 <Text fontSize={13} fontWeight="700" color="$textPrimary" textTransform="uppercase" letterSpacing={1}>
                   {t.packageDetail.premiumHighlights}
                 </Text>
