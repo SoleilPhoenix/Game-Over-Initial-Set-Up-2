@@ -34,6 +34,13 @@ const AVAILABLE_CITIES = [
   { id: '550e8400-e29b-41d4-a716-446655440103', name: 'Hannover', slug: 'hannover' },
 ];
 
+// City emblem images — landmark panoramics, one per city
+const CITY_EMBLEMS: Record<string, any> = {
+  berlin:   require('../../src/constants/City_Emblems/Berlin.jpeg'),
+  hamburg:  require('../../src/constants/City_Emblems/Hamburg.jpeg'),
+  hannover: require('../../src/constants/City_Emblems/Hannover.jpeg'),
+};
+
 function formatDateISO(date: Date): string {
   return date.toISOString().split('T')[0];
 }
@@ -184,7 +191,7 @@ export default function WizardStep1() {
 
           {/* ── 03 City ────────────────────────────── */}
           <SectionHeader number="03" title={t.wizard.city} />
-          <View testID="city-options" style={{ gap: 12 }}>
+          <View testID="city-options" style={{ gap: 16 }}>
             {AVAILABLE_CITIES.map(city => {
               const selected = cityId === city.id;
               return (
@@ -198,10 +205,10 @@ export default function WizardStep1() {
                     pressed && { opacity: 0.88 },
                   ]}
                 >
-                  {/* Photo — bottom-anchored + pushed up so city landmarks are centred */}
+                  {/* City emblem — full panoramic landmark image, cover-fills the card */}
                   <Image
-                    source={getPackageImage(city.slug, 'grand')}
-                    style={{ position: 'absolute', left: 0, right: 0, bottom: 0, top: -120 }}
+                    source={CITY_EMBLEMS[city.slug]}
+                    style={StyleSheet.absoluteFillObject}
                     resizeMode="cover"
                   />
                   {/* Overlay */}
@@ -399,7 +406,7 @@ const styles = StyleSheet.create({
 
   // City cards
   cityCard: {
-    height: 100,
+    height: 110,
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
