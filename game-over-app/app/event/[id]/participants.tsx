@@ -3,7 +3,7 @@
  * Shows ALL participant slots: organizer (pre-filled), guests (editable), honoree (pre-filled).
  * Organizer can fill in guest contact details and send invitations.
  *
- * Phase A-3: swaps DARK_THEME.* → useTheme tokens, unifies primary accents to gold.
+ * Phase A-3: swaps editorial tokens, unifies primary accents to gold.
  * Semantic colors (role badges blue/amber, status green/red) intentionally preserved.
  */
 
