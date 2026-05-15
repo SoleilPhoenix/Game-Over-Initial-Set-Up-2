@@ -88,10 +88,10 @@ const customTokens = createTokens({
   ...defaultTokens,
   color: {
     ...defaultTokens.color,
-    // Primary colors - Unified active blue across all screens
-    primary: '#5A7EB0',
-    primaryLight: '#7A9BC4',
-    primaryDark: '#456A9C',
+    // Primary colors - Champagne Gold (editorial redesign)
+    primary: '#C6A75E',
+    primaryLight: '#E8DCC8',
+    primaryDark: '#8A7338',
 
     // Semantic colors
     success: '#22C55E',

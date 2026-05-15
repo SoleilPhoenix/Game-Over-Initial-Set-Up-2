@@ -179,6 +179,7 @@ const en = {
   wizard: {
     // Layout / header
     stepOf: 'Step {{current}} of {{total}}',
+    draftOptions: 'Draft Options',
     saveDraftTitle: 'Save Draft?',
     saveDraftMessage: 'Do you want to save your progress?',
     discard: 'Discard',

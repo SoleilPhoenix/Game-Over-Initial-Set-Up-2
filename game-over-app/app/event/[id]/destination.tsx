@@ -707,9 +707,6 @@ export default function DestinationScreen() {
                 <View key={i} style={styles.placeRow}>
                   <XStack alignItems="flex-start" gap={12}>
                     <YStack alignItems="center" gap={4}>
-                      <View style={[styles.placeNumber, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
-                        <Text style={[styles.placeNumberText, { color: '#C6A75E' }]}>{i + 1}</Text>
-                      </View>
                       {popupCategory === 'sports' && (() => {
                         const logo = TEAM_LOGO_MAP[place.name];
                         const badge = TEAM_BADGE_CONFIG[place.name];
@@ -796,7 +793,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     lineHeight: 42,
-    fontFamily: 'Fraunces_600SemiBold',
+    fontFamily: 'Inter_600SemiBold',
     textAlign: 'center',
   },
   heroSubtitle: {
@@ -811,7 +808,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     marginBottom: 12,
-    fontFamily: 'Fraunces_600SemiBold',
+    fontFamily: 'Inter_600SemiBold',
   },
   highlightGrid: {
     flexDirection: 'row',

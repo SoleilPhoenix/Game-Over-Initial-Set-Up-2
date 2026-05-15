@@ -5,7 +5,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Alert, View, Text, Pressable, StyleSheet } from 'react-native';
+import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -32,6 +33,9 @@ export default function CreateEventLayout() {
 
   const { deleteDraft, activeDraftId, saveDraft, hasDraft, partyType, goToStep } =
     useWizardStore();
+
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [backConfirmVisible, setBackConfirmVisible] = useState(false);
 
   useWizardAutoSave(true);
 
@@ -69,24 +73,7 @@ export default function CreateEventLayout() {
     if (currentStepIndex === 0) {
       const state = useWizardStore.getState();
       if (state.hasDraft()) {
-        const tr = getTranslation();
-        Alert.alert(tr.wizard.saveDraftTitle, tr.wizard.saveDraftMessage, [
-          {
-            text: tr.wizard.discard,
-            style: 'destructive',
-            onPress: () => {
-              if (activeDraftId) deleteDraft(activeDraftId);
-              goToEventsTab();
-            },
-          },
-          {
-            text: tr.wizard.saveExit,
-            onPress: () => {
-              saveDraft();
-              goToEventsTab();
-            },
-          },
-        ]);
+        setBackConfirmVisible(true);
       } else {
         router.back();
       }
@@ -123,18 +110,127 @@ export default function CreateEventLayout() {
             <Text style={styles.heading}>{currentStepLabel}</Text>
           </View>
 
-          {/* Right spacer — mirrors back button */}
-          <View style={styles.headerSide} />
+          {/* Right: three-dots menu */}
+          <Pressable
+            onPress={() => setMenuVisible(true)}
+            hitSlop={12}
+            style={styles.headerSide}
+            testID="wizard-menu-button"
+          >
+            <Text style={styles.menuDots}>⋯</Text>
+          </Pressable>
         </View>
       </View>
 
       {/* ── Screen content ──────────────────────────── */}
-      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+      <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right', contentStyle: { backgroundColor: '#0D1B2A' } }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="preferences" />
         <Stack.Screen name="participants" />
-        <Stack.Screen name="packages" />
+        <Stack.Screen name="packages" options={{ gestureEnabled: false }} />
       </Stack>
+
+      {/* ── Draft Options modal ─────────────────────── */}
+      <Modal visible={menuVisible} transparent animationType="fade" onRequestClose={() => setMenuVisible(false)}>
+        <Pressable style={styles.menuOverlay} onPress={() => setMenuVisible(false)}>
+          <Pressable onPress={() => {}} style={styles.menuCard}>
+            <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+            {/* Gold title */}
+            <Text style={styles.menuTitle}>{getTranslation().wizard.draftOptions ?? 'Draft Options'}</Text>
+            <View style={styles.menuDivider} />
+
+            {/* Save Draft */}
+            <Pressable
+              style={({ pressed }) => [styles.menuAction, pressed && { opacity: 0.7 }]}
+              onPress={() => {
+                setMenuVisible(false);
+                const store = useWizardStore.getState();
+                store.saveDraft();
+                goToEventsTab();
+              }}
+            >
+              <Ionicons name="bookmark-outline" size={18} color="#C6A75E" style={styles.menuActionIcon} />
+              <Text style={styles.menuActionText}>{getTranslation().wizard.saveExit ?? 'Save Draft'}</Text>
+            </Pressable>
+
+            <View style={styles.menuDivider} />
+
+            {/* Delete Draft */}
+            <Pressable
+              style={({ pressed }) => [styles.menuAction, pressed && { opacity: 0.7 }]}
+              onPress={() => {
+                setMenuVisible(false);
+                if (activeDraftId) useWizardStore.getState().deleteDraft(activeDraftId);
+                goToEventsTab();
+              }}
+            >
+              <Ionicons name="trash-outline" size={18} color="#E8836B" style={styles.menuActionIcon} />
+              <Text style={[styles.menuActionText, { color: '#E8836B' }]}>{getTranslation().wizard.discard ?? 'Delete Draft'}</Text>
+            </Pressable>
+
+            <View style={styles.menuDivider} />
+
+            {/* Continue */}
+            <Pressable
+              style={({ pressed }) => [styles.menuAction, pressed && { opacity: 0.7 }]}
+              onPress={() => setMenuVisible(false)}
+            >
+              <Ionicons name="arrow-forward-outline" size={18} color="rgba(255,255,255,0.55)" style={styles.menuActionIcon} />
+              <Text style={[styles.menuActionText, { color: 'rgba(255,255,255,0.55)' }]}>{getTranslation().wizard.cancel ?? 'Continue'}</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* ── Back / Leave confirmation modal ─────────── */}
+      <Modal visible={backConfirmVisible} transparent animationType="fade" onRequestClose={() => setBackConfirmVisible(false)}>
+        <Pressable style={styles.menuOverlay} onPress={() => setBackConfirmVisible(false)}>
+          <Pressable onPress={() => {}} style={styles.menuCard}>
+            <BlurView intensity={25} tint="dark" style={StyleSheet.absoluteFillObject} />
+            <Text style={styles.menuTitle}>{getTranslation().wizard.saveDraftTitle ?? 'Leave Wizard?'}</Text>
+            <View style={styles.menuDivider} />
+
+            {/* Save & Exit */}
+            <Pressable
+              style={({ pressed }) => [styles.menuAction, pressed && { opacity: 0.7 }]}
+              onPress={() => {
+                setBackConfirmVisible(false);
+                saveDraft();
+                goToEventsTab();
+              }}
+            >
+              <Ionicons name="bookmark-outline" size={18} color="#C6A75E" style={styles.menuActionIcon} />
+              <Text style={styles.menuActionText}>{getTranslation().wizard.saveExit ?? 'Save Draft'}</Text>
+            </Pressable>
+
+            <View style={styles.menuDivider} />
+
+            {/* Discard */}
+            <Pressable
+              style={({ pressed }) => [styles.menuAction, pressed && { opacity: 0.7 }]}
+              onPress={() => {
+                setBackConfirmVisible(false);
+                if (activeDraftId) deleteDraft(activeDraftId);
+                goToEventsTab();
+              }}
+            >
+              <Ionicons name="trash-outline" size={18} color="#E8836B" style={styles.menuActionIcon} />
+              <Text style={[styles.menuActionText, { color: '#E8836B' }]}>{getTranslation().wizard.discard ?? 'Discard Draft'}</Text>
+            </Pressable>
+
+            <View style={styles.menuDivider} />
+
+            {/* Stay */}
+            <Pressable
+              style={({ pressed }) => [styles.menuAction, pressed && { opacity: 0.7 }]}
+              onPress={() => setBackConfirmVisible(false)}
+            >
+              <Ionicons name="arrow-back-outline" size={18} color="rgba(255,255,255,0.55)" style={styles.menuActionIcon} />
+              <Text style={[styles.menuActionText, { color: 'rgba(255,255,255,0.55)' }]}>{getTranslation().wizard.cancel ?? 'Keep Editing'}</Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -173,11 +269,63 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_600SemiBold',
     textTransform: 'uppercase',
   },
+  menuDots: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '400',
+    letterSpacing: 2,
+    lineHeight: 28,
+  },
   heading: {
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: '600',
-    fontFamily: 'Fraunces_600SemiBold',
+    fontFamily: 'Inter_600SemiBold',
     textAlign: 'center',
+  },
+  menuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  menuCard: {
+    width: '100%',
+    borderRadius: 20,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(198,167,94,0.35)',
+  },
+  menuTitle: {
+    color: '#C6A75E',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    textAlign: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    fontFamily: 'Inter_600SemiBold',
+  },
+  menuDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(198,167,94,0.25)',
+  },
+  menuAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+  },
+  menuActionIcon: {
+    marginRight: 12,
+  },
+  menuActionText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#C6A75E',
+    fontFamily: 'Inter_500Medium',
   },
 });

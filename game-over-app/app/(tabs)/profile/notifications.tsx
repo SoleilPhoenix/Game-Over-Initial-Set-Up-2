@@ -178,8 +178,8 @@ export default function NotificationsScreen() {
               >
                 <XStack flex={1} alignItems="center" gap="$3" marginRight="$3">
                   <View width={36} height={36} borderRadius={18}
-                    backgroundColor="rgba(96, 165, 250, 0.2)" alignItems="center" justifyContent="center">
-                    <Ionicons name="notifications" size={18} color="#60A5FA" />
+                    backgroundColor="rgba(198, 167, 94, 0.2)" alignItems="center" justifyContent="center">
+                    <Ionicons name="notifications" size={18} color="#C6A75E" />
                   </View>
                   <YStack flex={1}>
                     <Text fontSize={14} fontWeight="500" color={theme.textPrimary}>
@@ -245,8 +245,8 @@ export default function NotificationsScreen() {
               >
                 <XStack flex={1} alignItems="center" gap="$3" marginRight="$3">
                   <View width={36} height={36} borderRadius={18}
-                    backgroundColor="rgba(52, 211, 153, 0.2)" alignItems="center" justifyContent="center">
-                    <Ionicons name="mail" size={18} color="#34D399" />
+                    backgroundColor="rgba(198, 167, 94, 0.2)" alignItems="center" justifyContent="center">
+                    <Ionicons name="mail" size={18} color="#C6A75E" />
                   </View>
                   <YStack flex={1}>
                     <Text fontSize={14} fontWeight="500" color={theme.textPrimary}>

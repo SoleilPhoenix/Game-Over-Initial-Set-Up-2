@@ -283,13 +283,13 @@ export default function EditProfileScreen() {
               >
                 {isSaving ? (
                   <XStack gap="$2" alignItems="center">
-                    <Spinner size="small" color="white" />
-                    <Text color="white" fontWeight="600" fontSize={16}>
+                    <Spinner size="small" color="#0D1B2A" />
+                    <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
                       Saving...
                     </Text>
                   </XStack>
                 ) : (
-                  <Text color="white" fontWeight="600" fontSize={16}>
+                  <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
                     Save Changes
                   </Text>
                 )}

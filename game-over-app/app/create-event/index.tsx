@@ -4,18 +4,22 @@
  * full-width city photo cards. All existing logic is preserved.
  */
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
+  Keyboard,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   TextInput,
-  Image,
   View,
   Text,
   StyleSheet,
+  useWindowDimensions,
 } from 'react-native';
+import { Image as ExpoImage } from 'expo-image';
+import { ValidationToast } from '@/components/ui/ValidationToast';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
@@ -34,11 +38,18 @@ const AVAILABLE_CITIES = [
   { id: '550e8400-e29b-41d4-a716-446655440103', name: 'Hannover', slug: 'hannover' },
 ];
 
-// City emblem images — landmark panoramics, one per city
-const CITY_EMBLEMS: Record<string, any> = {
-  berlin:   require('../../src/constants/City_Emblems/Berlin.jpeg'),
-  hamburg:  require('../../src/constants/City_Emblems/Hamburg.jpeg'),
-  hannover: require('../../src/constants/City_Emblems/Hannover.jpeg'),
+// City images — remote URLs from the editorial mockup (Google AIDA public CDN)
+const CITY_IMAGES: Record<string, { uri: string }> = {
+  berlin:   { uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCgxrBdU89o7tvs4bDaRAoZ-O17Q3OVFE4farMy0fH5SlaYIsEJhYLARABvDAp5v5bj1yDeHe-hDLsRWO-hyzn3jnGhsKHUFI3Dnmv0inwIM-q0SE_ByxNrBpFYFN-gGoaqJFVpDKHKtw96uXscYZSIuWWt6sT0C6YUB1a5T_DmDmIff-xRRwEE6jYi6nn9L5I5ENWJ-lBC5oF6rsDHEAWyZ9NFea_XXSMkKS7y0sYPMfwV-Kwp63wBOGPltOvhfNkxfzCeJMefVGM' },
+  hamburg:  { uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDvMThvPgYuPWon4r9vgnmTIK70E3Uza34T9HJ9dJEppKCScHbP5LS19cNDIUEVs1qyxt-AVndCAGqyXiH9nhM5f1hajnS5ZP6o-PHW6YWFIt6K7R7ShsEXXrIQRGzZepxdUxRT5HS4vOoCheuZzP_QYRx_uDwhKDsNF3F7CCa8OEfczhig4RFDNeGsyZUXRjnl8OnxudOux-Uzgb3LnFPK0U_k-v81zQqb9QlqzTpVekslV6xdqgy8vqQxupWkQWil1R1OHSpOKaI' },
+  hannover: { uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDzEdsj_W_mR7eoyIne9RZKZrGjMdPUGDe_McnhQpCn-fGFjoQKr54W4jaaupyB9t1pC4rIlftsEJybzPbdLfM6rqq8Keflsza4VJcwy2QWufu1icps4vEKMaCj2sCIrdPsnr1ZEUxdloElO77CsFfxjOCze_cjKj2yuuJXSostuYnru0-9ZQ1hr3B4l_MBZyfGJMoynwcOKL7WrVPQ4EuEFn0YfhkAzqh6p6_ZQDJYpCntO0Apr3vdPuHfml5zLLi_vykTllgY4Yc' },
+};
+
+// Focal-point offsets so each city photo shows its most interesting area
+const CITY_CONTENT_POSITION: Record<string, { left: string; top: string }> = {
+  berlin:   { left: '75%', top: '25%' },  // right + up
+  hamburg:  { left: '50%', top: '20%' },  // centre + up
+  hannover: { left: '70%', top: '65%' },  // right + down
 };
 
 function formatDateISO(date: Date): string {
@@ -64,11 +75,17 @@ export default function WizardStep1() {
   const router = useRouter();
   const { t } = useTranslation();
   const { theme, resolvedMode } = useTheme();
+  const { width: screenWidth } = useWindowDimensions();
+  // 2-col grid: screen minus container padding (20×2) minus gap between columns (10)
+  const cityCardWidth = (screenWidth - 40 - 10) / 2;
+
+  const scrollRef = useRef<ScrollView>(null);
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate]     = useState<Date>(new Date());
   const [nameFocused, setNameFocused]       = useState(false);
   const [lastFocused, setLastFocused]       = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[] | null>(null);
 
   const {
     partyType,
@@ -92,6 +109,15 @@ export default function WizardStep1() {
     if (canProceed) router.push('/create-event/preferences');
   };
 
+  const handleNextDisabled = () => {
+    const missing: string[] = [];
+    if (!partyType) missing.push('Party type (01)');
+    if (!honoreeName.trim()) missing.push("Honoree's name (02)");
+    if (!cityId) missing.push('City (03)');
+    if (!startDate) missing.push('Date (05)');
+    if (missing.length > 0) setValidationErrors(missing);
+  };
+
   const handleDateChange = (_event: any, date?: Date) => {
     if (Platform.OS === 'android') setShowDatePicker(false);
     if (date) {
@@ -112,6 +138,7 @@ export default function WizardStep1() {
         keyboardVerticalOffset={Platform.OS === 'ios' ? 160 : 0}
       >
         <ScrollView
+          ref={scrollRef}
           style={{ flex: 1 }}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
@@ -191,7 +218,7 @@ export default function WizardStep1() {
 
           {/* ── 03 City ────────────────────────────── */}
           <SectionHeader number="03" title={t.wizard.city} />
-          <View testID="city-options" style={{ gap: 16 }}>
+          <View testID="city-options" style={styles.cityGrid}>
             {AVAILABLE_CITIES.map(city => {
               const selected = cityId === city.id;
               return (
@@ -201,32 +228,52 @@ export default function WizardStep1() {
                   onPress={() => setCityId(city.id)}
                   style={({ pressed }) => [
                     styles.cityCard,
+                    { width: cityCardWidth },
                     selected && styles.cityCardSelected,
                     pressed && { opacity: 0.88 },
                   ]}
                 >
-                  {/* City emblem — full panoramic landmark image, cover-fills the card */}
-                  <Image
-                    source={CITY_EMBLEMS[city.slug]}
+                  {/* City photo */}
+                  <ExpoImage
+                    source={CITY_IMAGES[city.slug]}
                     style={StyleSheet.absoluteFillObject}
-                    resizeMode="cover"
+                    contentFit="cover"
+                    contentPosition={CITY_CONTENT_POSITION[city.slug] ?? { left: '50%', top: '50%' }}
+                    cachePolicy="memory-disk"
                   />
-                  {/* Overlay */}
+                  {/* Desaturating overlay — heavy for unselected, light for selected */}
                   <View style={[
-                    styles.cityOverlay,
-                    selected && styles.cityOverlaySelected,
+                    StyleSheet.absoluteFillObject,
+                    selected ? styles.cityOverlaySelected : styles.cityOverlayUnselected,
                   ]} />
-                  {/* City name — centred */}
+                  {/* Bottom gradient for name legibility */}
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.70)']}
+                    locations={[0.25, 1]}
+                    style={StyleSheet.absoluteFillObject}
+                  />
+                  {/* City name — bottom-left */}
                   <Text style={styles.cityName}>{city.name}</Text>
-                  {/* Star badge for selected */}
+                  {/* Checkmark when selected */}
                   {selected && (
-                    <View style={styles.cityStarBadge}>
-                      <Ionicons name="star" size={14} color="#C6A75E" />
+                    <View style={styles.cityCheckBadge}>
+                      <Ionicons name="checkmark-circle" size={22} color="#C6A75E" />
                     </View>
                   )}
                 </Pressable>
               );
             })}
+
+            {/* 4th card — Coming Soon placeholder */}
+            <View style={[styles.cityCard, styles.cityCardComingSoon, { width: cityCardWidth }]}>
+              <LinearGradient
+                colors={['#12253A', '#0D1B2A']}
+                style={StyleSheet.absoluteFillObject}
+              />
+              <Ionicons name="location-outline" size={28} color="rgba(198,167,94,0.35)" />
+              <Text style={styles.comingSoonTitle}>More Cities</Text>
+              <Text style={styles.comingSoonSub}>Coming Soon</Text>
+            </View>
           </View>
 
           {/* ── 04 Participants ────────────────────── */}
@@ -261,7 +308,11 @@ export default function WizardStep1() {
           {/* ── 05 Date ────────────────────────────── */}
           <SectionHeader number="05" title={t.wizard.dateLabel} />
           <Pressable
-            onPress={() => setShowDatePicker(true)}
+            onPress={() => {
+              Keyboard.dismiss();
+              setShowDatePicker(true);
+              setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
+            }}
             style={styles.dateTrigger}
             testID="panel-date"
           >
@@ -295,10 +346,14 @@ export default function WizardStep1() {
         </ScrollView>
       </KeyboardAvoidingView>
 
+      {validationErrors && (
+        <ValidationToast fields={validationErrors} onDismiss={() => setValidationErrors(null)} />
+      )}
       {/* Footer */}
       <WizardFooter
         showBack={false}
         onNext={handleNext}
+        onNextDisabledPress={handleNextDisabled}
         nextLabel={`${t.wizard.nextStep} →`}
         nextDisabled={!canProceed}
       />
@@ -337,7 +392,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#FFFFFF',
-    fontFamily: 'Fraunces_600SemiBold',
+    fontFamily: 'Inter_600SemiBold',
   },
 
   // Party type
@@ -347,7 +402,7 @@ const styles = StyleSheet.create({
   },
   partyCard: {
     flex: 1,
-    aspectRatio: 1,
+    height: 100,
     backgroundColor: '#1A2F47',
     borderRadius: 16,
     borderWidth: 1,
@@ -355,7 +410,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    paddingVertical: 20,
+    paddingVertical: 12,
   },
   partyCardSelected: {
     backgroundColor: '#22385A',
@@ -404,45 +459,67 @@ const styles = StyleSheet.create({
     backgroundColor: '#C6A75E',
   },
 
-  // City cards
+  // City grid (2-column)
+  cityGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
   cityCard: {
-    height: 150,
+    aspectRatio: 1,
     borderRadius: 16,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(230,220,200,0.15)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(230,220,200,0.12)',
+    justifyContent: 'flex-end',
+    padding: 12,
   },
   cityCardSelected: {
     borderWidth: 2,
     borderColor: '#C6A75E',
   },
-  cityOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(13,27,42,0.48)',
+  cityCardComingSoon: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderStyle: 'dashed',
+    borderColor: 'rgba(198,167,94,0.25)',
   },
   cityOverlaySelected: {
-    backgroundColor: 'rgba(13,27,42,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  cityOverlayUnselected: {
+    backgroundColor: 'rgba(13,27,42,0.65)',
   },
   cityName: {
     color: '#FFFFFF',
-    fontSize: 20,
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: 0.5,
-    fontFamily: 'Fraunces_600SemiBold',
-    textAlign: 'center',
+    fontFamily: 'Inter_600SemiBold',
+    textShadowColor: 'rgba(0,0,0,0.7)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
-  cityStarBadge: {
+  cityCheckBadge: {
     position: 'absolute',
-    bottom: 10,
-    right: 12,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(198,167,94,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    top: 10,
+    right: 10,
+  },
+  comingSoonTitle: {
+    color: 'rgba(198,167,94,0.55)',
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'Inter_600SemiBold',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  comingSoonSub: {
+    color: 'rgba(255,255,255,0.28)',
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    textAlign: 'center',
   },
 
   // Participants

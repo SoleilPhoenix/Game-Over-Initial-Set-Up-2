@@ -1055,7 +1055,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     borderColor: theme.ghostBorder,
   },
   avatarText: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '700',
     color: theme.textPrimary,
   },

@@ -182,7 +182,7 @@ export default function BookingConfirmationScreen() {
               width={80}
               height={80}
               borderRadius={40}
-              backgroundColor="rgba(71, 184, 129, 0.2)"
+              backgroundColor="rgba(198,167,94,0.20)"
               alignItems="center"
               justifyContent="center"
               marginBottom="$4"
@@ -191,11 +191,11 @@ export default function BookingConfirmationScreen() {
                 width={56}
                 height={56}
                 borderRadius={28}
-                backgroundColor="$success"
+                backgroundColor="#C6A75E"
                 alignItems="center"
                 justifyContent="center"
               >
-                <Ionicons name="checkmark" size={32} color="white" />
+                <Ionicons name="checkmark" size={32} color="#0D1B2A" />
               </YStack>
             </YStack>
 

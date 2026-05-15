@@ -35,12 +35,12 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   payOptionActive: {
-    borderColor: 'rgba(71, 184, 129, 0.4)',
-    backgroundColor: 'rgba(71, 184, 129, 0.07)',
+    borderColor: 'rgba(249,115,22,0.45)',
+    backgroundColor: 'rgba(249,115,22,0.08)',
   },
   payOptionActiveFull: {
-    borderColor: 'rgba(71, 184, 129, 0.4)',
-    backgroundColor: 'rgba(71, 184, 129, 0.07)',
+    borderColor: 'rgba(249,115,22,0.45)',
+    backgroundColor: 'rgba(249,115,22,0.08)',
   },
 });
 
@@ -213,7 +213,7 @@ export default function BookingSummaryScreen() {
         >
           <Ionicons name="chevron-back" size={24} color="white" />
         </XStack>
-        <Text flex={1} fontSize={17} fontWeight="700" color="white" textAlign="center">
+        <Text flex={1} fontSize={18} fontWeight="700" color="white" textAlign="center" fontFamily="Inter_600SemiBold">
           {t.booking.paymentSummary}
         </Text>
         <YStack width={40} />
@@ -290,7 +290,7 @@ export default function BookingSummaryScreen() {
           <YStack height={1} backgroundColor={'rgba(230,220,200,0.15)'} marginVertical="$2" />
 
           <XStack justifyContent="space-between">
-            <Text fontSize={15} fontWeight="600" color={'rgba(255,255,255,0.72)'}>{t.booking.totalGroupCost}</Text>
+            <Text fontSize={15} fontWeight="600" color="white">{t.booking.totalGroupCost}</Text>
             <Text fontSize={16} fontWeight="800" color={'#C6A75E'}>
               {formatPriceWhole(totalEuros)}
             </Text>
@@ -299,7 +299,7 @@ export default function BookingSummaryScreen() {
           <YStack height={1} backgroundColor={'rgba(230,220,200,0.15)'} marginVertical="$3" />
 
           {/* Payment Option Selector */}
-          <Text fontSize={11} fontWeight="700" color={'rgba(255,255,255,0.72)'} textTransform="uppercase" letterSpacing={0.8} marginBottom="$3">
+          <Text fontSize={11} fontWeight="700" color="white" textTransform="uppercase" letterSpacing={0.8} marginBottom="$3">
             {(t.booking as any).payOptionTitle}
           </Text>
 
@@ -312,8 +312,8 @@ export default function BookingSummaryScreen() {
               <YStack
                 width={20} height={20} borderRadius={10} marginTop={3}
                 borderWidth={2}
-                borderColor={paymentOption === 'deposit' ? '#4ADE80' : 'rgba(230,220,200,0.15)'}
-                backgroundColor={paymentOption === 'deposit' ? '#4ADE80' : 'transparent'}
+                borderColor={paymentOption === 'deposit' ? '#F97316' : 'rgba(230,220,200,0.15)'}
+                backgroundColor={paymentOption === 'deposit' ? '#F97316' : 'transparent'}
                 alignItems="center" justifyContent="center"
               >
                 {paymentOption === 'deposit' && (
@@ -323,10 +323,10 @@ export default function BookingSummaryScreen() {
               <YStack flex={1} gap={4}>
                 {/* Title row: label left, amount right */}
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'deposit' ? '#4ADE80' : '#FFFFFF'}>
+                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'deposit' ? '#F97316' : '#FFFFFF'}>
                     {(t.booking as any).payOptionDeposit}
                   </Text>
-                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'deposit' ? '#4ADE80' : '#FFFFFF'}>
+                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'deposit' ? '#F97316' : '#FFFFFF'}>
                     {formatPriceWhole(depositEuros)}
                   </Text>
                 </XStack>
@@ -347,8 +347,8 @@ export default function BookingSummaryScreen() {
               <YStack
                 width={20} height={20} borderRadius={10} marginTop={3}
                 borderWidth={2}
-                borderColor={paymentOption === 'full' ? '#4ADE80' : 'rgba(230,220,200,0.15)'}
-                backgroundColor={paymentOption === 'full' ? '#4ADE80' : 'transparent'}
+                borderColor={paymentOption === 'full' ? '#F97316' : 'rgba(230,220,200,0.15)'}
+                backgroundColor={paymentOption === 'full' ? '#F97316' : 'transparent'}
                 alignItems="center" justifyContent="center"
               >
                 {paymentOption === 'full' && (
@@ -358,10 +358,10 @@ export default function BookingSummaryScreen() {
               <YStack flex={1} gap={4}>
                 {/* Title row: label left, amount right */}
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? '#4ADE80' : '#FFFFFF'}>
+                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? '#F97316' : '#FFFFFF'}>
                     {(t.booking as any).payOptionFull}
                   </Text>
-                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? '#4ADE80' : '#FFFFFF'}>
+                  <Text fontSize={15} fontWeight="700" color={paymentOption === 'full' ? '#F97316' : '#FFFFFF'}>
                     {formatPriceWhole(totalEuros)}
                   </Text>
                 </XStack>
@@ -415,7 +415,7 @@ export default function BookingSummaryScreen() {
           testID="per-person-card"
         >
           <YStack>
-            <Text fontSize={11} fontWeight="700" color={'rgba(255,255,255,0.72)'} textTransform="uppercase" letterSpacing={1}>
+            <Text fontSize={11} fontWeight="700" color="white" textTransform="uppercase" letterSpacing={1}>
               {t.booking.costPerPersonLabel.replace('{{count}}', String(pricing.payingParticipantCount))}
             </Text>
             <XStack alignItems="baseline" gap="$2" marginTop="$2">
@@ -425,8 +425,8 @@ export default function BookingSummaryScreen() {
               <Text fontSize={14} color={'rgba(255,255,255,0.72)'}>{t.booking.slashPerson}</Text>
             </XStack>
             <XStack alignItems="center" gap="$1" marginTop="$1">
-              <Ionicons name="checkmark-circle" size={14} color="#4ADE80" />
-              <Text fontSize={12} fontWeight="600" color="#4ADE80">
+              <Ionicons name="checkmark-circle" size={14} color="rgba(255,255,255,0.55)" />
+              <Text fontSize={12} fontWeight="600" color="rgba(255,255,255,0.72)">
                 {t.booking.includesTaxes}
               </Text>
             </XStack>
@@ -445,8 +445,8 @@ export default function BookingSummaryScreen() {
           borderWidth={1}
           borderColor={'rgba(230,220,200,0.15)'}
         >
-          <Ionicons name="lock-closed" size={16} color={'rgba(255,255,255,0.48)'} />
-          <Text fontSize={13} color={'rgba(255,255,255,0.72)'}>
+          <Ionicons name="lock-closed" size={16} color={'rgba(255,255,255,0.72)'} />
+          <Text fontSize={13} color="white">
             {t.booking.securePaymentStripe}
           </Text>
         </XStack>
@@ -475,12 +475,12 @@ export default function BookingSummaryScreen() {
           testID="proceed-to-payment-button"
         >
           <XStack alignItems="center" gap="$2">
-            <Text fontSize={16} fontWeight="700" color="white">
+            <Text fontSize={16} fontWeight="700" color="#0D1B2A">
               {paymentOption === 'full'
                 ? (t.booking as any).payFullButtonLabel.replace('{{amount}}', formatPriceWhole(totalEuros))
                 : t.booking.proceedToPaymentDeposit.replace('{{deposit}}', formatPriceWhole(depositEuros))}
             </Text>
-            <Ionicons name="arrow-forward" size={18} color="white" />
+            <Ionicons name="arrow-forward" size={18} color="#0D1B2A" />
           </XStack>
         </Button>
       </XStack>

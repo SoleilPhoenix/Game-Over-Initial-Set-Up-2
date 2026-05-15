@@ -175,6 +175,7 @@ const de: TranslationKeys = {
   // ─── Create Event Wizard ───────────────────────
   wizard: {
     stepOf: 'Schritt {{current}} von {{total}}',
+    draftOptions: 'Entwurf-Optionen',
     saveDraftTitle: 'Entwurf speichern?',
     saveDraftMessage: 'Möchtest du deinen Fortschritt speichern?',
     discard: 'Verwerfen',

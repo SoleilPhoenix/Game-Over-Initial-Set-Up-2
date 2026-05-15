@@ -4,8 +4,9 @@
  * H4: Enjoyment Type, H5: Indoor/Outdoor, H6: Evening Style
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { ScrollView } from 'react-native';
+import { ValidationToast } from '@/components/ui/ValidationToast';
 import { useRouter } from 'expo-router';
 import { YStack } from 'tamagui';
 import { useWizardStore } from '@/stores/wizardStore';
@@ -36,11 +37,23 @@ export default function WizardStep2() {
 
   const name = honoreeName || 'the honoree';
   const canProceed = isStepValid(2);
+  const [validationErrors, setValidationErrors] = useState<string[] | null>(null);
 
   const handleNext = () => {
     if (canProceed) {
       router.push('/create-event/participants');
     }
+  };
+
+  const handleNextDisabled = () => {
+    const missing: string[] = [];
+    if (!energyLevel) missing.push('Energy level (H1)');
+    if (!spotlightComfort) missing.push('Spotlight comfort (H2)');
+    if (!competitionStyle) missing.push('Competition style (H3)');
+    if (!enjoymentType) missing.push('Enjoyment type (H4)');
+    if (!indoorOutdoor) missing.push('Indoor/outdoor (H5)');
+    if (!eveningStyle) missing.push('Evening style (H6)');
+    if (missing.length > 0) setValidationErrors(missing);
   };
 
   const handleBack = () => {
@@ -107,9 +120,13 @@ export default function WizardStep2() {
       </ScrollView>
 
       {/* Footer */}
+      {validationErrors && (
+        <ValidationToast fields={validationErrors} onDismiss={() => setValidationErrors(null)} />
+      )}
       <WizardFooter
         onBack={handleBack}
         onNext={handleNext}
+        onNextDisabledPress={handleNextDisabled}
         nextLabel={`${t.wizard.nextStep} \u2192`}
         nextDisabled={!canProceed}
       />

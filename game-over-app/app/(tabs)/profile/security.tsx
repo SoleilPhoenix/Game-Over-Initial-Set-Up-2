@@ -270,25 +270,25 @@ export default function SecurityScreen() {
               </Text>
               <YStack gap="$1">
                 <XStack alignItems="center" gap="$2">
-                  <Ionicons name="checkmark-circle" size={14} color={'#4ADE80'} />
+                  <Ionicons name="checkmark-circle" size={14} color={'#C6A75E'} />
                   <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
                     At least 8 characters
                   </Text>
                 </XStack>
                 <XStack alignItems="center" gap="$2">
-                  <Ionicons name="checkmark-circle" size={14} color={'#4ADE80'} />
+                  <Ionicons name="checkmark-circle" size={14} color={'#C6A75E'} />
                   <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
                     One uppercase letter
                   </Text>
                 </XStack>
                 <XStack alignItems="center" gap="$2">
-                  <Ionicons name="checkmark-circle" size={14} color={'#4ADE80'} />
+                  <Ionicons name="checkmark-circle" size={14} color={'#C6A75E'} />
                   <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
                     One lowercase letter
                   </Text>
                 </XStack>
                 <XStack alignItems="center" gap="$2">
-                  <Ionicons name="checkmark-circle" size={14} color={'#4ADE80'} />
+                  <Ionicons name="checkmark-circle" size={14} color={'#C6A75E'} />
                   <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
                     One number
                   </Text>
@@ -305,13 +305,13 @@ export default function SecurityScreen() {
             >
               {isSubmitting ? (
                 <XStack gap="$2" alignItems="center">
-                  <Spinner size="small" color="white" />
-                  <Text color="white" fontWeight="600" fontSize={16}>
+                  <Spinner size="small" color="#0D1B2A" />
+                  <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
                     Updating...
                   </Text>
                 </XStack>
               ) : (
-                <Text color="white" fontWeight="600" fontSize={16}>
+                <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
                   Update Password
                 </Text>
               )}
@@ -350,11 +350,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   requirementsBox: {
-    backgroundColor: 'rgba(52, 211, 153, 0.1)',
+    backgroundColor: 'rgba(198, 167, 94, 0.1)',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.2)',
+    borderColor: 'rgba(198, 167, 94, 0.2)',
   },
   saveButton: {
     backgroundColor: '#C6A75E',

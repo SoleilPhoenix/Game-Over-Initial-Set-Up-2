@@ -282,10 +282,13 @@ export default function EventsScreen() {
   // Also hide events still in the wizard booking flow (created but not yet paid)
   const filteredEvents = useMemo(() => {
     if (!deduplicatedEvents) return [];
-    // Hide events still going through wizard → booking flow
-    const visible = wizardCreatedEventId
-      ? deduplicatedEvents.filter((e) => e.id !== wizardCreatedEventId)
-      : deduplicatedEvents;
+    // Hide events still in draft status (pre-created by wizard, not yet booked)
+    // and events actively being processed through the booking flow
+    const visible = deduplicatedEvents.filter((e) => {
+      if (e.status === 'draft') return false;
+      if (wizardCreatedEventId && e.id === wizardCreatedEventId) return false;
+      return true;
+    });
     let filtered: EventWithDetails[];
     switch (activeFilter) {
       case 'organizing':
@@ -331,7 +334,13 @@ export default function EventsScreen() {
     const existingEventIds = new Set(events.map(e => e.id));
 
     const filtered = userDrafts.filter(d => {
-      if (d.createdEventId && existingEventIds.has(d.createdEventId)) return false;
+      // Only suppress draft if the created event has progressed past draft status
+      // (planning/booked/completed). A 'draft' DB event is just a pre-created placeholder
+      // and the wizard draft is still the canonical source.
+      if (d.createdEventId && existingEventIds.has(d.createdEventId)) {
+        const dbEvent = events.find(e => e.id === d.createdEventId);
+        if (dbEvent && dbEvent.status !== 'draft') return false;
+      }
       if (d.honoreeName && existingHonoreeNames.has(d.honoreeName.toLowerCase())) return false;
       return true;
     });
@@ -652,7 +661,7 @@ export default function EventsScreen() {
           justifyContent: 'center',
           alignItems: 'center',
           padding: 24,
-          paddingBottom: insets.bottom + 180,
+          paddingBottom: insets.bottom + 120,
         }}
         refreshControl={
           <RefreshControl
@@ -877,30 +886,32 @@ export default function EventsScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Background */}
-      <LinearGradient
-        colors={['#1A2F47', '#0D1B2A']}
-        style={StyleSheet.absoluteFill}
-      />
-
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
-          {/* Avatar and Title */}
-          <XStack alignItems="center" gap={12}>
-            <View style={styles.avatarContainer}>
-              {userAvatar ? (
-                <Image source={{ uri: userAvatar }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Text style={styles.avatarInitial}>{userInitial}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.headerTitle}>{t.events.title}</Text>
-          </XStack>
+        <XStack alignItems="center" paddingHorizontal={20}>
+          {/* Left: Avatar — tap to go to Profile */}
+          <Pressable
+            onPress={() => router.push('/(tabs)/profile')}
+            style={styles.avatarContainer}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Go to profile"
+          >
+            {userAvatar ? (
+              <Image source={{ uri: userAvatar }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarInitial}>{userInitial}</Text>
+              </View>
+            )}
+          </Pressable>
 
-          {/* Notification Bell */}
+          {/* Centre: Title */}
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={styles.headerTitle}>{t.events.title}</Text>
+          </View>
+
+          {/* Right: Notification Bell */}
           <Pressable
             onPress={handleNotifications}
             style={styles.notificationButton}
@@ -941,7 +952,7 @@ export default function EventsScreen() {
             keyExtractor={keyExtractor}
             contentContainerStyle={{
               padding: 16,
-              paddingBottom: insets.bottom + 180
+              paddingBottom: insets.bottom + 120
             }}
             refreshControl={
               <RefreshControl
@@ -964,7 +975,7 @@ export default function EventsScreen() {
             renderItem={null}
             contentContainerStyle={{
               padding: 16,
-              paddingBottom: insets.bottom + 180,
+              paddingBottom: insets.bottom + 120,
             }}
             refreshControl={
               <RefreshControl
@@ -1038,14 +1049,15 @@ const styles = StyleSheet.create({
     borderColor: '#0D1B2A',
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 17,
+    fontWeight: '600',
     color: '#FFFFFF',
+    fontFamily: 'Inter_500Medium',
   },
   notificationButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1066,27 +1078,31 @@ const styles = StyleSheet.create({
   filterPill: {
     flexDirection: 'row',
     backgroundColor: '#1A2F47',
-    borderRadius: 25,
+    borderRadius: 999,
     padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   filterTab: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    height: 40,
+    borderRadius: 999,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   filterTabActive: {
-    backgroundColor: '#C6A75E',
+    backgroundColor: '#22385A',
   },
   filterTabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.72)',
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.55)',
+    fontFamily: 'Inter_600SemiBold',
   },
   filterTabTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: '#C6A75E',
+    fontWeight: '700',
+    fontFamily: 'Inter_600SemiBold',
   },
   eventCard: {
     backgroundColor: '#1A2F47',

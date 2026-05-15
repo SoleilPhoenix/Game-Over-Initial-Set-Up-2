@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { Alert, ScrollView, Pressable, StyleSheet, View, Modal, Share, Linking } from 'react-native';
+import { Alert, ScrollView, Pressable, StyleSheet, View, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -22,6 +22,7 @@ import { useTranslation } from '@/i18n';
 import { useTheme } from '@/hooks/useTheme';
 import { SPACING, RADII, TYPE_SCALE, ambientShadow, type EditorialTheme } from '@/constants/designSystem';
 import { SerifHeading, GoldButton } from '@/components/ui/editorial';
+import { ShareModal } from '@/components/ui/ShareModal';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import {
   calculatePlanningSteps,
@@ -46,14 +47,6 @@ const TOOL_CONFIGS = [
 ] as const;
 
 // ─── Social Share Platforms ──────────────────────────
-const SHARE_PLATFORMS = [
-  { id: 'whatsapp',  label: 'WhatsApp',  icon: 'logo-whatsapp',  color: '#25D366', bg: 'rgba(37,211,102,0.15)' },
-  { id: 'instagram', label: 'Instagram', icon: 'logo-instagram', color: '#E1306C', bg: 'rgba(225,48,108,0.15)' },
-  { id: 'tiktok',   label: 'TikTok',    icon: 'logo-tiktok',    color: '#FFFFFF', bg: 'rgba(255,255,255,0.1)' },
-  { id: 'snapchat', label: 'Snapchat',  icon: 'camera-outline', color: '#FFFC00', bg: 'rgba(255,252,0,0.15)' },
-  { id: 'facebook', label: 'Facebook',  icon: 'logo-facebook',  color: '#1877F2', bg: 'rgba(24,119,242,0.15)' },
-  { id: 'twitter',  label: 'Twitter',   icon: 'logo-twitter',   color: '#1DA1F2', bg: 'rgba(29,161,242,0.15)' },
-] as const;
 
 export default function EventSummaryScreen() {
   const { id, firstVisit, role: roleParam } = useLocalSearchParams<{ id: string; firstVisit?: string; role?: string }>();
@@ -97,29 +90,6 @@ export default function EventSummaryScreen() {
   // ─── Social share modal state ───────────────────
   const [shareModalVisible, setShareModalVisible] = useState(false);
   const [shareInviteCode, setShareInviteCode] = useState<string | null>(null);
-
-  const handleShareViaPlatform = async (platform: string) => {
-    const url = `https://game-over.app/invite/${shareInviteCode ?? id}`;
-    const message = `Join ${eventTitle} on Game Over: ${url}`;
-    try {
-      switch (platform) {
-        case 'whatsapp':
-          await Linking.openURL(`whatsapp://send?text=${encodeURIComponent(message)}`);
-          break;
-        case 'twitter':
-          await Linking.openURL(`https://twitter.com/intent/tweet?text=${encodeURIComponent(message)}`);
-          break;
-        case 'facebook':
-          await Linking.openURL(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`);
-          break;
-        default:
-          await Share.share({ message, url });
-      }
-    } catch {
-      await Share.share({ message, url }).catch(() => {});
-    }
-    setShareModalVisible(false);
-  };
 
   useEffect(() => {
     if (!isGuest || !firstVisit || !currentUserId || !id) return;
@@ -552,66 +522,12 @@ export default function EventSummaryScreen() {
         </View>
       </Modal>
 
-      {/* ─── Social Share Modal ── */}
-      <Modal
+      <ShareModal
         visible={shareModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShareModalVisible(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' }}>
-          <Pressable style={{ flex: 1 }} onPress={() => setShareModalVisible(false)} />
-          <View style={{
-            backgroundColor: theme.surfaceCard,
-            borderTopLeftRadius: 24,
-            borderTopRightRadius: 24,
-            paddingHorizontal: 20,
-            paddingTop: 16,
-            paddingBottom: 36,
-            borderTopWidth: 1,
-            borderColor: theme.ghostBorder,
-          }}>
-            {/* Handle */}
-            <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: theme.ghostBorder, alignSelf: 'center', marginBottom: 20 }} />
-            {/* Title */}
-            <Text style={{ fontSize: 17, fontWeight: '700', color: theme.accentGold, textAlign: 'center', marginBottom: 8, fontFamily: 'Fraunces_600SemiBold' }}>
-              Share Event
-            </Text>
-            <Text style={{ fontSize: 13, color: theme.textTertiary, textAlign: 'center', marginBottom: 28 }}>
-              Invite friends via your favourite platform
-            </Text>
-            {/* Platform grid — 3 × 2 */}
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14, justifyContent: 'center', marginBottom: 16 }}>
-              {SHARE_PLATFORMS.map(p => (
-                <Pressable
-                  key={p.id}
-                  onPress={() => handleShareViaPlatform(p.id)}
-                  style={({ pressed }) => ({
-                    alignItems: 'center',
-                    gap: 8,
-                    width: 80,
-                    opacity: pressed ? 0.75 : 1,
-                  })}
-                >
-                  <View style={{
-                    width: 60,
-                    height: 60,
-                    borderRadius: 18,
-                    backgroundColor: p.bg,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderWidth: 1,
-                    borderColor: theme.ghostBorder,
-                  }}>
-                    <Ionicons name={p.icon as any} size={28} color={p.color} />
-                  </View>
-                  <Text style={{ fontSize: 11, color: theme.textSecondary, fontWeight: '500' }}>{p.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </View>
-      </Modal>
+        onClose={() => setShareModalVisible(false)}
+        eventId={shareInviteCode ?? id}
+        eventTitle={eventTitle}
+      />
     </View>
   );
 }

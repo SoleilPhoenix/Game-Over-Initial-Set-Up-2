@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Animated, PanResponder, ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { Animated, PanResponder, ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar, Alert, TextInput, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadDesiredParticipants } from '@/lib/participantCountCache';
@@ -12,6 +12,7 @@ import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
+import { ShareModal } from '@/components/ui/ShareModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useChannels, useCreateChannel } from '@/hooks/queries/useChat';
@@ -687,10 +688,11 @@ export default function CommunicationScreen() {
     }
   };
 
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+
   const handleInvite = () => {
-    // Navigate to dedicated Share screen if a real event is selected
     if (selectedEventId) {
-      router.push(`/event/${selectedEventId}/share`);
+      setShareModalVisible(true);
     } else {
       Alert.alert('Kein Event ausgewählt', 'Wähle zuerst ein Event aus, um es zu teilen.');
     }
@@ -974,7 +976,7 @@ export default function CommunicationScreen() {
     return (
       <View style={styles.eventSelectorWrapper}>
         <Pressable
-          style={styles.eventSelectorCard}
+          style={[styles.eventSelectorCard, !eventIdParam && { borderColor: '#C6A75E', borderWidth: 1.5 }]}
           onPress={() => !eventIdParam && bookedEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
           testID="event-selector"
         >
@@ -1154,7 +1156,13 @@ export default function CommunicationScreen() {
                 <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
               </Pressable>
             ) : (
-              <View style={styles.avatarContainer}>
+              <Pressable
+                onPress={() => router.push('/(tabs)/profile')}
+                style={styles.avatarContainer}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Go to profile"
+              >
                 {userAvatar ? (
                   <ExpoImage
                     source={{ uri: userAvatar }}
@@ -1167,7 +1175,7 @@ export default function CommunicationScreen() {
                     <Text style={styles.avatarInitial}>{userInitial}</Text>
                   </View>
                 )}
-              </View>
+              </Pressable>
             )}
           </View>
 
@@ -1494,6 +1502,12 @@ export default function CommunicationScreen() {
           </KeyboardAvoidingView>
         </View>
       )}
+
+      <ShareModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        eventId={selectedEventId}
+      />
     </View>
   );
 }
@@ -1578,35 +1592,39 @@ const styles = StyleSheet.create({
   filterPill: {
     flexDirection: 'row',
     backgroundColor: '#1A2F47',
-    borderRadius: 25,
+    borderRadius: 999,
     padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   filterTab: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    height: 40,
+    borderRadius: 999,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   filterTabActive: {
     backgroundColor: '#22385A',
   },
   filterTabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.48)',
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.55)',
+    fontFamily: 'Inter_600SemiBold',
   },
   filterTabTextActive: {
     color: '#C6A75E',
     fontWeight: '700',
+    fontFamily: 'Inter_600SemiBold',
   },
   scrollContent: {
-    padding: 20,
+    padding: 16,
   },
   shareEventCard: {
     backgroundColor: '#C6A75E',
     borderRadius: 999,
-    paddingVertical: 16,
+    paddingVertical: 12,
     paddingHorizontal: 24,
     marginBottom: 20,
     flexDirection: 'row',
@@ -1728,8 +1746,8 @@ const styles = StyleSheet.create({
     gap: 12,
     backgroundColor: '#22385A',
     borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#C6A75E',
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
     padding: 14,
   },
   eventSelectorImage: {

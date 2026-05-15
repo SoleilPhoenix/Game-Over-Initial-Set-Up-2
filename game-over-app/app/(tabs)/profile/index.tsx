@@ -186,11 +186,12 @@ export default function ProfileScreen() {
       >
         {/* Header Title */}
         <Text
-          fontSize={24}
-          fontWeight="700"
+          fontSize={17}
+          fontWeight="600"
           color={'#FFFFFF'}
           textAlign="center"
           marginBottom="$6"
+          fontFamily="Inter_500Medium"
         >
           {t.profile.title}
         </Text>
@@ -267,8 +268,8 @@ export default function ProfileScreen() {
           <MenuSection title={t.profile.notifications}>
             <MenuItem
               icon="notifications"
-              iconColor="#60A5FA"
-              iconBgColor="rgba(96, 165, 250, 0.2)"
+              iconColor="#C6A75E"
+              iconBgColor="rgba(198, 167, 94, 0.2)"
               label={t.profile.notificationPreferences}
               onPress={() => router.push('/profile/notifications')}
               testID="menu-notifications"
@@ -327,8 +328,8 @@ export default function ProfileScreen() {
           <MenuSection title={t.profile.account}>
             <MenuItem
               icon="person"
-              iconColor="#A78BFA"
-              iconBgColor="rgba(167, 139, 250, 0.2)"
+              iconColor="#C6A75E"
+              iconBgColor="rgba(198, 167, 94, 0.2)"
               label={t.profile.editProfile}
               onPress={() => router.push('/profile/edit')}
               testID="menu-edit-profile"
@@ -336,8 +337,8 @@ export default function ProfileScreen() {
             <View style={styles.separator} />
             <MenuItem
               icon="lock-closed"
-              iconColor="#34D399"
-              iconBgColor="rgba(52, 211, 153, 0.2)"
+              iconColor="#C6A75E"
+              iconBgColor="rgba(198, 167, 94, 0.2)"
               label={t.profile.passwordSecurity}
               onPress={() => router.push('/profile/security')}
               testID="menu-security"
@@ -345,8 +346,8 @@ export default function ProfileScreen() {
             <View style={styles.separator} />
             <MenuItem
               icon="language"
-              iconColor="#FB923C"
-              iconBgColor="rgba(251, 146, 60, 0.2)"
+              iconColor="#C6A75E"
+              iconBgColor="rgba(198, 167, 94, 0.2)"
               label={t.profile.language}
               value={LANGUAGE_LABELS[language]}
               onPress={handleLanguagePress}
@@ -366,9 +367,9 @@ export default function ProfileScreen() {
             />
             <View style={styles.separator} />
             <MenuItem
-              icon="help-circle"
-              iconColor="#9CA3AF"
-              iconBgColor="rgba(156, 163, 175, 0.2)"
+              icon="chatbubble-ellipses"
+              iconColor="#C6A75E"
+              iconBgColor="rgba(198, 167, 94, 0.2)"
               label={t.profile.supportFAQ}
               onPress={() => router.push('/profile/support')}
               testID="menu-support"

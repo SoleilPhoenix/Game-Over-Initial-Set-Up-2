@@ -145,13 +145,13 @@ export const SPACING = {
 
 /**
  * Font family names — must match names loaded in useEditorialFonts.ts.
- * Fraunces = editorial serif (Display), Inter = neutral sans (Body/Label).
+ * Inter is used throughout — display, heading, body, and label.
  */
 export const FONTS = {
-  display:       'Fraunces_600SemiBold',
-  displayItalic: 'Fraunces_600SemiBold_Italic',
-  heading:       'Fraunces_500Medium',
-  headingItalic: 'Fraunces_500Medium_Italic',
+  display:       'Inter_600SemiBold',
+  displayItalic: 'Inter_600SemiBold',
+  heading:       'Inter_600SemiBold',
+  headingItalic: 'Inter_600SemiBold',
   body:          'Inter_400Regular',
   bodyMedium:    'Inter_500Medium',
   label:         'Inter_600SemiBold',

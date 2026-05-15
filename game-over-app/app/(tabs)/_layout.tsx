@@ -39,19 +39,20 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   const config = iconMap[name] || { active: 'calendar', inactive: 'calendar-outline' };
   const label = labelMap[name] || name;
   const iconName = focused ? config.active : config.inactive;
-  const activeColor = '#E8DCC8'; // #7A9BC4 — passes WCAG AA (5.6:1)
+  const activeColor = '#C6A75E'; // Champagne Gold
+  const inactiveColor = 'rgba(255,255,255,0.40)';
 
   return (
     <View style={styles.iconContainer}>
       <Ionicons
         name={iconName}
         size={22}
-        color={focused ? activeColor : 'rgba(255,255,255,0.72)'}
+        color={focused ? activeColor : inactiveColor}
       />
       <Text
         style={[
           styles.tabLabel,
-          { color: focused ? activeColor : 'rgba(255,255,255,0.72)' }
+          { color: focused ? activeColor : inactiveColor }
         ]}
       >
         {label}
@@ -291,8 +292,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 120, // Cover more area
-    backgroundColor: 'rgba(21, 24, 29, 0.85)', // 85% opacity (between 30-50% transparency = 50-70% opacity)
+    height: 88, // Matches actual tab-bar visual height (buttons ~50px + safe-area ~34px + 4px buffer)
+    backgroundColor: 'rgba(21, 24, 29, 0.85)', // 85% opacity
     zIndex: 1,
   },
   tabBarBlur: {

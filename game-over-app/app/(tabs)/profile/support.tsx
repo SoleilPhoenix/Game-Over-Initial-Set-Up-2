@@ -31,14 +31,14 @@ interface FAQItem {
 }
 
 const FAQ_ICONS: { icon: string; iconColor: string }[] = [
-  { icon: 'information-circle', iconColor: '#60A5FA' },
-  { icon: 'add-circle', iconColor: '#34D399' },
-  { icon: 'gift', iconColor: '#A78BFA' },
-  { icon: 'card', iconColor: '#FB923C' },
-  { icon: 'close-circle', iconColor: '#F87171' },
-  { icon: 'people', iconColor: '#60A5FA' },
-  { icon: 'location', iconColor: '#34D399' },
-  { icon: 'lock-closed', iconColor: '#47B881' },
+  { icon: 'information-circle', iconColor: '#C6A75E' },
+  { icon: 'add-circle', iconColor: '#C6A75E' },
+  { icon: 'gift', iconColor: '#C6A75E' },
+  { icon: 'card', iconColor: '#C6A75E' },
+  { icon: 'close-circle', iconColor: '#C6A75E' },
+  { icon: 'people', iconColor: '#C6A75E' },
+  { icon: 'location', iconColor: '#C6A75E' },
+  { icon: 'lock-closed', iconColor: '#C6A75E' },
 ];
 
 function FAQAccordion({ item }: { item: FAQItem }) {
@@ -165,11 +165,11 @@ export default function SupportScreen() {
                   width={44}
                   height={44}
                   borderRadius={22}
-                  backgroundColor="rgba(96, 165, 250, 0.2)"
+                  backgroundColor="rgba(198,167,94,0.15)"
                   alignItems="center"
                   justifyContent="center"
                 >
-                  <Ionicons name="mail" size={22} color="#60A5FA" />
+                  <Ionicons name="mail" size={22} color="#C6A75E" />
                 </View>
                 <YStack flex={1}>
                   <Text fontSize={15} fontWeight="600" color={'#FFFFFF'}>
@@ -215,12 +215,12 @@ export default function SupportScreen() {
             {/* Response time info */}
             <XStack
               padding="$3"
-              backgroundColor="rgba(52, 211, 153, 0.1)"
+              backgroundColor="rgba(198,167,94,0.10)"
               borderRadius={12}
               gap="$2"
               alignItems="center"
             >
-              <Ionicons name="time-outline" size={16} color="#34D399" />
+              <Ionicons name="time-outline" size={16} color="#C6A75E" />
               <Text fontSize={12} color={'rgba(255,255,255,0.72)'} flex={1}>
                 {t.support.responseTime}
               </Text>

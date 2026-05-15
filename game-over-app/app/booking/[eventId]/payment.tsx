@@ -335,14 +335,14 @@ export default function PaymentScreen() {
   const isProcessing = paymentStep !== 'ready' || isPaymentLoading;
 
   return (
-    <YStack flex={1} backgroundColor="$background">
+    <YStack flex={1} backgroundColor="#0D1B2A">
       {/* Header */}
       <XStack
         paddingTop={insets.top}
         paddingHorizontal="$4"
         paddingBottom="$2"
         alignItems="center"
-        backgroundColor="$background"
+        backgroundColor="#0D1B2A"
       >
         <XStack
           width={40}
@@ -357,7 +357,7 @@ export default function PaymentScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </XStack>
-        <Text flex={1} fontSize="$5" fontWeight="700" color="$textPrimary" textAlign="center">
+        <Text flex={1} fontSize={18} fontWeight="700" color="$textPrimary" textAlign="center" fontFamily="Inter_600SemiBold">
           {t.booking.paymentTitle}
         </Text>
         <YStack width={40} />
@@ -411,7 +411,7 @@ export default function PaymentScreen() {
         ) : (
           <YStack width="100%" gap="$4">
             {/* Amount Card */}
-            <Card testID="payment-amount-card">
+            <Card testID="payment-amount-card" backgroundColor="#12253A" borderColor="rgba(230,220,200,0.15)" borderWidth={1}>
               <YStack alignItems="center" gap="$2">
                 <Text fontSize="$2" color="$textSecondary">
                   {paramAmountCents > 0 ? 'Remaining Balance' : isFullPayment ? t.booking.totalAmount : t.booking.depositLabel}
@@ -438,7 +438,7 @@ export default function PaymentScreen() {
             </Card>
 
             {/* Payment Method */}
-            <Card testID="payment-method-card">
+            <Card testID="payment-method-card" backgroundColor="#12253A" borderColor="rgba(230,220,200,0.15)" borderWidth={1}>
               <YStack gap="$3">
                 <Text fontSize="$4" fontWeight="700" color="$textPrimary">
                   {t.booking.paymentMethod}
@@ -468,7 +468,7 @@ export default function PaymentScreen() {
                 {/* Apple Pay — Coming Soon */}
                 <XStack
                   padding="$3"
-                  backgroundColor="$backgroundHover"
+                  backgroundColor="#1A2F47"
                   borderRadius="$lg"
                   alignItems="center"
                   gap="$3"
@@ -484,13 +484,13 @@ export default function PaymentScreen() {
                 {/* Google Pay — Coming Soon */}
                 <XStack
                   padding="$3"
-                  backgroundColor="$backgroundHover"
+                  backgroundColor="#1A2F47"
                   borderRadius="$lg"
                   alignItems="center"
                   gap="$3"
                   opacity={0.45}
                 >
-                  <Ionicons name="logo-google" size={22} color="white" />
+                  <Ionicons name="logo-google" size={22} color="#4285F4" />
                   <YStack flex={1}>
                     <Text fontSize="$3" fontWeight="600" color="$textPrimary">Google Pay</Text>
                     <Text fontSize="$1" color="$textSecondary">Coming Soon</Text>
@@ -500,7 +500,7 @@ export default function PaymentScreen() {
                 {/* PayPal — Coming Soon */}
                 <XStack
                   padding="$3"
-                  backgroundColor="$backgroundHover"
+                  backgroundColor="#1A2F47"
                   borderRadius="$lg"
                   alignItems="center"
                   gap="$3"
@@ -516,13 +516,13 @@ export default function PaymentScreen() {
             </Card>
 
             {/* Package Summary */}
-            <Card testID="package-summary-card">
+            <Card testID="package-summary-card" backgroundColor="#12253A" borderColor="rgba(230,220,200,0.15)" borderWidth={1}>
               <XStack gap="$3" alignItems="center">
                 <YStack
                   width={48}
                   height={48}
                   borderRadius="$md"
-                  backgroundColor="rgba(90, 126, 176, 0.1)"
+                  backgroundColor="rgba(198, 167, 94, 0.1)"
                   alignItems="center"
                   justifyContent="center"
                 >
@@ -555,12 +555,12 @@ export default function PaymentScreen() {
             {/* Security Notice */}
             <XStack
               padding="$3"
-              backgroundColor="rgba(71, 184, 129, 0.1)"
+              backgroundColor="rgba(249, 115, 22, 0.1)"
               borderRadius="$lg"
               gap="$2"
               alignItems="center"
             >
-              <Ionicons name="lock-closed" size={18} color="#4ADE80" />
+              <Ionicons name="lock-closed" size={18} color="#F97316" />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
                 {t.booking.secureEncryption}
               </Text>
@@ -592,7 +592,7 @@ export default function PaymentScreen() {
           right={0}
           padding="$4"
           paddingBottom={insets.bottom + 8}
-          backgroundColor="$surface"
+          backgroundColor="#12253A"
           borderTopWidth={1}
           borderTopColor="$borderColor"
         >
@@ -601,11 +601,13 @@ export default function PaymentScreen() {
             onPress={handlePayment}
             testID="pay-now-button"
           >
-            {paramAmountCents > 0
-              ? t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(amountDue))
-              : isFullPayment
-                ? ((t.booking as any).payFullButtonLabel?.replace('{{amount}}', formatPrice(amountDue)) || t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(amountDue)))
-                : t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(depositCents))}
+            <Text color="#0D1B2A" fontWeight="700" fontSize="$3">
+              {paramAmountCents > 0
+                ? t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(amountDue))
+                : isFullPayment
+                  ? ((t.booking as any).payFullButtonLabel?.replace('{{amount}}', formatPrice(amountDue)) || t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(amountDue)))
+                  : t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(depositCents))}
+            </Text>
           </Button>
         </XStack>
       )}

@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export interface WizardFooterProps {
   onBack?: () => void;
   onNext: () => void;
+  onNextDisabledPress?: () => void;
   nextLabel?: string;
   nextDisabled?: boolean;
   nextLoading?: boolean;
@@ -23,6 +24,7 @@ export interface WizardFooterProps {
 export function WizardFooter({
   onBack,
   onNext,
+  onNextDisabledPress,
   nextLabel = 'Next Step',
   nextDisabled = false,
   nextLoading = false,
@@ -59,7 +61,7 @@ export function WizardFooter({
 
       {/* Primary — gold border + gold text */}
       <Pressable
-        onPress={nextDisabled ? undefined : onNext}
+        onPress={nextDisabled ? onNextDisabledPress : onNext}
         style={({ pressed }) => [
           styles.nextBtn,
           nextDisabled && styles.nextBtnDisabled,

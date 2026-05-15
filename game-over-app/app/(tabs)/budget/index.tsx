@@ -20,6 +20,7 @@ import { useUser } from '@/stores/authStore';
 import { useTheme } from '@/hooks/useTheme';
 import { ambientShadow, type EditorialTheme } from '@/constants/designSystem';
 import { GoldButton } from '@/components/ui/editorial';
+import { ShareModal } from '@/components/ui/ShareModal';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
@@ -135,6 +136,7 @@ function SwipeableRefundRow({
   );
 }
 
+
 export default function BudgetDashboardScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -150,6 +152,7 @@ export default function BudgetDashboardScreen() {
   const user = useUser();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(eventIdParam || null);
   const [markingPaidUserId, setMarkingPaidUserId] = useState<string | null>(null);
+  const [manualRefreshing, setManualRefreshing] = useState(false);
   // Derived: is the current user the organizer of the selected event?
   // Used to hide organizer-only actions (Pay Remaining Balance, Invite Guests, Remind All).
   const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
@@ -159,6 +162,8 @@ export default function BudgetDashboardScreen() {
   const [cachedGuests, setCachedGuests] = useState<Record<number, GuestDetail>>({});
   const { t } = useTranslation();
   const setTabBarHidden = useTabBarStore((s) => s.setHidden);
+
+  const [shareModalVisible, setShareModalVisible] = useState(false);
 
   // Remind-all channel picker modal
   const [remindModal, setRemindModal] = useState<{
@@ -348,8 +353,13 @@ export default function BudgetDashboardScreen() {
   const userInitial = userName.charAt(0).toUpperCase();
 
   // Define handlers before early return
-  const handleRefresh = useCallback(() => {
-    refetchEvents();
+  const handleRefresh = useCallback(async () => {
+    setManualRefreshing(true);
+    try {
+      await refetchEvents();
+    } finally {
+      setManualRefreshing(false);
+    }
   }, [refetchEvents]);
 
   const handleNotifications = () => {
@@ -515,15 +525,14 @@ export default function BudgetDashboardScreen() {
     return { deposit: fmt(depositEuros), due: fmt(dueEuros) };
   };
 
-  // Navigate to share/invite screen
   const handleInvite = useCallback(() => {
     const effectiveEventId = selectedEventId || eventIdParam;
     if (effectiveEventId) {
-      router.push(`/event/${effectiveEventId}/share`);
+      setShareModalVisible(true);
     } else {
       Alert.alert(t.budget.noEventSelected, t.budget.noEventSelectedMsg);
     }
-  }, [selectedEventId, eventIdParam, router]);
+  }, [selectedEventId, eventIdParam]);
 
   // Remind All — opens channel picker modal (same UX as Manage Invitations)
   const handleRemindAll = useCallback(() => {
@@ -792,7 +801,7 @@ export default function BudgetDashboardScreen() {
     return (
       <View style={styles.eventSelectorWrapper}>
         <Pressable
-          style={styles.eventSelectorCard}
+          style={[styles.eventSelectorCard, !eventIdParam && { borderColor: theme.accentGold, borderWidth: 1.5 }]}
           onPress={() => !eventIdParam && bookedEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
           testID="budget-event-selector"
         >
@@ -908,8 +917,18 @@ export default function BudgetDashboardScreen() {
     </View>
   );
 
-  // Empty state - show if no booked events OR still loading (prevents flash of $0 budget UI)
-  if (eventsLoading || !hasBookedEvents) {
+  // While events are loading with no cached data, show a minimal blank screen (no jarring "no budget" flash)
+  if (eventsLoading && !hasBookedEvents) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]} />
+      </View>
+    );
+  }
+
+  // Empty state - show only when confirmed no booked events
+  if (!hasBookedEvents) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -917,7 +936,13 @@ export default function BudgetDashboardScreen() {
         <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
           <XStack alignItems="center" paddingHorizontal={20}>
             <View style={{ width: 44 }}>
-              <View style={styles.avatarContainer}>
+              <Pressable
+                onPress={() => router.push('/(tabs)/profile')}
+                style={styles.avatarContainer}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Go to profile"
+              >
                 {userAvatar ? (
                   <Image source={{ uri: userAvatar }} style={styles.avatar} />
                 ) : (
@@ -925,21 +950,12 @@ export default function BudgetDashboardScreen() {
                     <Text style={styles.avatarInitial}>{userInitial}</Text>
                   </View>
                 )}
-              </View>
+              </Pressable>
             </View>
             <View style={{ flex: 1, alignItems: 'center' }}>
               <Text style={styles.headerTitle}>Budget</Text>
             </View>
-            <View style={{ width: 44, alignItems: 'flex-end' }}>
-              <Pressable
-                onPress={handleNotifications}
-                style={styles.notificationButton}
-                testID="notifications-button"
-              >
-                <Ionicons name="notifications-outline" size={24} color={theme.textPrimary} />
-                {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
-              </Pressable>
-            </View>
+            <View style={{ width: 44 }} />
           </XStack>
           {renderCategoryTabs()}
         </View>
@@ -955,7 +971,7 @@ export default function BudgetDashboardScreen() {
           }}
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching}
+              refreshing={manualRefreshing}
               onRefresh={handleRefresh}
               tintColor={theme.accentGold}
               colors={[theme.accentGold]}
@@ -1014,11 +1030,17 @@ export default function BudgetDashboardScreen() {
             <View style={{ width: 36 }} />
           </XStack>
         ) : (
-          /* ── Tab screen: avatar | centered title | bell ── */
+          /* ── Tab screen: avatar | centered title | spacer ── */
           <XStack alignItems="center" paddingHorizontal={20}>
-            {/* Left: avatar */}
+            {/* Left: avatar — tap to go to Profile */}
             <View style={{ width: 44 }}>
-              <View style={styles.avatarContainer}>
+              <Pressable
+                onPress={() => router.push('/(tabs)/profile')}
+                style={styles.avatarContainer}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Go to profile"
+              >
                 {userAvatar ? (
                   <Image source={{ uri: userAvatar }} style={styles.avatar} />
                 ) : (
@@ -1026,23 +1048,14 @@ export default function BudgetDashboardScreen() {
                     <Text style={styles.avatarInitial}>{userInitial}</Text>
                   </View>
                 )}
-              </View>
+              </Pressable>
             </View>
             {/* Center: title */}
             <View style={{ flex: 1, alignItems: 'center' }}>
               <Text style={styles.headerTitle}>Budget</Text>
             </View>
-            {/* Right: bell */}
-            <View style={{ width: 44, alignItems: 'flex-end' }}>
-              <Pressable
-                onPress={handleNotifications}
-                style={styles.notificationButton}
-                testID="notifications-button"
-              >
-                <Ionicons name="notifications-outline" size={24} color={theme.textPrimary} />
-                {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
-              </Pressable>
-            </View>
+            {/* Right: spacer to keep title centred */}
+            <View style={{ width: 44 }} />
           </XStack>
         )}
 
@@ -1056,7 +1069,7 @@ export default function BudgetDashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
+            refreshing={manualRefreshing}
             onRefresh={handleRefresh}
             tintColor={theme.accentGold}
           />
@@ -1065,6 +1078,18 @@ export default function BudgetDashboardScreen() {
         <>
           {/* Event Selector — scrolls with content */}
           {renderEventSelector()}
+          {/* Share Invite — organizers only, between event card and budget stats */}
+          {isOrganizer && (
+            <View style={{ marginBottom: 16 }}>
+              <GoldButton
+                label="Share Invite — Invite Friends to Join"
+                fullWidth
+                size="md"
+                onPress={handleInvite}
+                testID="budget-invite-button"
+              />
+            </View>
+          )}
           {selectedCategory === 'package' ? (
             <>
             {/* Total Budget Cards — two side-by-side standalone cards, no outer wrapper */}
@@ -1353,19 +1378,6 @@ export default function BudgetDashboardScreen() {
                   );
                 })}
               </YStack>
-
-              {/* Invite button — organizers only */}
-              {isOrganizer && (
-                <View style={{ marginTop: 12 }}>
-                  <GoldButton
-                    label="Share Invite — Invite Friends to Join"
-                    fullWidth
-                    size="lg"
-                    onPress={handleInvite}
-                    testID="budget-invite-button"
-                  />
-                </View>
-              )}
 
             </YStack>
             </>
@@ -2087,6 +2099,13 @@ export default function BudgetDashboardScreen() {
           </Modal>
         );
       })()}
+
+      <ShareModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        eventId={selectedEventId || eventIdParam}
+        eventTitle={selectedEventName}
+      />
     </View>
   );
 }
@@ -2551,7 +2570,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     backgroundColor: theme.surfaceHigh,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: theme.accentGold,
+    borderColor: theme.ghostBorder,
     padding: 14,
   },
   eventSelectorImage: {
@@ -2626,28 +2645,32 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
   },
   filterPill: {
     flexDirection: 'row',
-    backgroundColor: theme.surfaceCard,
-    borderRadius: 25,
+    backgroundColor: '#1A2F47',
+    borderRadius: 999,
     padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   filterTab: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    height: 40,
+    borderRadius: 999,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   filterTabActive: {
-    backgroundColor: theme.surfaceHigh,
+    backgroundColor: '#22385A',
   },
   filterTabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.textTertiary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.55)',
+    fontFamily: 'Inter_600SemiBold',
   },
   filterTabTextActive: {
-    color: theme.accentGold,
+    color: '#C6A75E',
     fontWeight: '700',
+    fontFamily: 'Inter_600SemiBold',
   },
   // ─── Modals ────────────────────────────────────
   popupOverlay: {

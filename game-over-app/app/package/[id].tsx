@@ -189,8 +189,8 @@ function IncludeItem({ icon, title, sub }: { icon: string; title: string; sub: s
   );
 }
 
-function ReviewCard({ initials, color, name, rating, text }: {
-  initials: string; color: string; name: string; rating: number; text: string;
+function ReviewCard({ initials, name, rating, text }: {
+  initials: string; color?: string; name: string; rating: number; text: string;
 }) {
   return (
     <YStack marginBottom="$5">
@@ -199,11 +199,13 @@ function ReviewCard({ initials, color, name, rating, text }: {
           width={40}
           height={40}
           borderRadius="$full"
-          backgroundColor={color}
+          backgroundColor="rgba(198,167,94,0.18)"
+          borderWidth={1}
+          borderColor="#C6A75E"
           alignItems="center"
           justifyContent="center"
         >
-          <Text fontSize={14} fontWeight="700" color="white">{initials}</Text>
+          <Text fontSize={14} fontWeight="700" color="#C6A75E">{initials}</Text>
         </YStack>
         <YStack flex={1}>
           <Text fontSize={14} fontWeight="600" color="$textPrimary">{name}</Text>
@@ -399,7 +401,7 @@ export default function PackageDetailsScreen() {
               >
                 <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
               </XStack>
-              <Text fontSize="$4" fontWeight="600" color="white">{t.packageDetail.title}</Text>
+              <Text fontSize="$4" fontWeight="700" color="#FFFFFF">{t.packageDetail.title}</Text>
               <XStack
                 width={40}
                 height={40}
@@ -440,15 +442,15 @@ export default function PackageDetailsScreen() {
                 position="absolute"
                 bottom={100}
                 left={20}
-                backgroundColor="rgba(34, 197, 94, 0.9)"
+                backgroundColor="rgba(232,220,200,0.90)"
                 paddingHorizontal={14}
                 paddingVertical={6}
                 borderRadius={20}
                 gap="$1.5"
                 alignItems="center"
               >
-                <Ionicons name="sparkles" size={14} color="white" />
-                <Text color="white" fontSize={12} fontWeight="600">{t.packageDetail.recommendationBadge}</Text>
+                <Ionicons name="sparkles" size={14} color="#0D1B2A" />
+                <Text color="#0D1B2A" fontSize={12} fontWeight="700">{t.packageDetail.recommendationBadge}</Text>
               </XStack>
             )}
           </LinearGradient>
@@ -541,7 +543,7 @@ export default function PackageDetailsScreen() {
                 }}
                 testID="book-now-button"
               >
-                {t.packageDetail.selectThisPackage}
+                <Text color="#0D1B2A" fontWeight="700" fontSize="$4">{t.packageDetail.selectThisPackage}</Text>
               </Button>
             </YStack>
           )}
