@@ -192,7 +192,7 @@ function IncludeItem({ icon, title, sub, time, location }: { icon: string; title
         <Text fontSize={13} color="$textTertiary">{sub}</Text>
         {location ? (
           <XStack alignItems="center" gap={4} marginTop={2}>
-            <Ionicons name="location-outline" size={11} color={DARK_THEME.textTertiary} />
+            <Ionicons name="location-outline" size={11} color="rgba(255,255,255,0.48)" />
             <Text fontSize={11} color="$textTertiary">{location}</Text>
           </XStack>
         ) : null}
@@ -208,7 +208,7 @@ function IncludeItem({ icon, title, sub, time, location }: { icon: string; title
           marginTop={2}
           minWidth={56}
         >
-          <Text fontSize={13} fontWeight="700" color={DARK_THEME.primary} fontVariant={['tabular-nums']}>
+          <Text fontSize={13} fontWeight="700" color="#C6A75E" fontVariant={['tabular-nums']}>
             {time}
           </Text>
         </YStack>

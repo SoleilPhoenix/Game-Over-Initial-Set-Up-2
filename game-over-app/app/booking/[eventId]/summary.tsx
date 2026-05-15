@@ -213,7 +213,7 @@ export default function BookingSummaryScreen() {
         >
           <Ionicons name="chevron-back" size={24} color="white" />
         </XStack>
-        <Text flex={1} fontSize={18} fontWeight="700" color="white" textAlign="center" fontFamily="Inter_600SemiBold">
+        <Text flex={1} fontSize={18} fontWeight="700" color="white" textAlign="center" style={{ fontFamily: 'Inter_600SemiBold' }}>
           {t.booking.paymentSummary}
         </Text>
         <YStack width={40} />

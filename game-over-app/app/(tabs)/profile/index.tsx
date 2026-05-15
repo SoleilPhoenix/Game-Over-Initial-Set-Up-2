@@ -191,7 +191,7 @@ export default function ProfileScreen() {
           color={'#FFFFFF'}
           textAlign="center"
           marginBottom="$6"
-          fontFamily="Inter_500Medium"
+          style={{ fontFamily: 'Inter_500Medium' }}
         >
           {t.profile.title}
         </Text>

@@ -357,7 +357,7 @@ export default function PaymentScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </XStack>
-        <Text flex={1} fontSize={18} fontWeight="700" color="$textPrimary" textAlign="center" fontFamily="Inter_600SemiBold">
+        <Text flex={1} fontSize={18} fontWeight="700" color="$textPrimary" textAlign="center" style={{ fontFamily: 'Inter_600SemiBold' }}>
           {t.booking.paymentTitle}
         </Text>
         <YStack width={40} />
