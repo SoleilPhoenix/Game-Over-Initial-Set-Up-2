@@ -113,6 +113,30 @@ export default function InviteWizardScreen() {
           Alert.alert('Error', result.error || 'Could not join event.');
           return;
         }
+
+        // Notify organizer that the guest joined (non-blocking)
+        void (async () => {
+          try {
+            if (!result.eventId) return;
+            const { data: eventData } = await supabase
+              .from('events')
+              .select('created_by')
+              .eq('id', result.eventId)
+              .single();
+            if (!eventData?.created_by) return;
+            const guestName = currentUser.user_metadata?.full_name || currentUser.email || 'A guest';
+            await supabase.from('notifications').insert({
+              event_id: result.eventId,
+              title: 'Guest Joined',
+              body: `${guestName} has joined your event.`,
+              type: 'guest_joined',
+              user_id: eventData.created_by,
+            });
+          } catch {
+            // Non-blocking — ignore notification errors
+          }
+        })();
+
         router.replace(`/event/${result.eventId}?firstVisit=1`);
       } catch {
         Alert.alert('Error', 'Failed to join event. Please try again.');
@@ -284,7 +308,7 @@ export default function InviteWizardScreen() {
           .upload(path, blob, { upsert: true });
         if (!uploadError) {
           const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-          avatarUrl = urlData.publicUrl;
+          avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
         }
       }
 
@@ -295,6 +319,13 @@ export default function InviteWizardScreen() {
       setIsSubmitting(false);
     }
   };
+
+  // ── Web: auto-open app deep link when page loads in browser ──
+  useEffect(() => {
+    if (Platform.OS === 'web' && code) {
+      Linking.openURL(`gameover://invite/${code}`).catch(() => {});
+    }
+  }, [code]);
 
   // ── Web: "Open in App" banner — shown only in browser, not in native app ──
   const WebAppBanner = Platform.OS === 'web' ? (
