@@ -4,6 +4,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Game Over',
   slug: 'game-over-app',
+  owner: 'soleil_phoenix',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -85,12 +86,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       {
         merchantIdentifier: 'merchant.app.gameover',
         enableGooglePay: true,
-      },
-    ],
-    [
-      'react-native-crisp-chat-sdk',
-      {
-        websiteId: '403b436b-3ea7-4b76-8d8d-3f860ed63468',
       },
     ],
     [
