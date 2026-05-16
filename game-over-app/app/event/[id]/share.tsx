@@ -385,7 +385,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(90,126,176,0.18)',
+    backgroundColor: 'rgba(198,167,94,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -404,7 +404,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 8,
-    backgroundColor: 'rgba(90,126,176,0.15)',
+    backgroundColor: 'rgba(198,167,94,0.15)',
   },
   copyButtonText: {
     fontSize: 13,

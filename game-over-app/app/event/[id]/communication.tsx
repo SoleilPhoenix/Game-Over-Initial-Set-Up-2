@@ -176,7 +176,7 @@ export default function CommunicationCenterScreen() {
           width={48}
           height={48}
           borderRadius="$lg"
-          backgroundColor="#1E2329"
+          backgroundColor="#12253A"
           alignItems="center"
           justifyContent="center"
           borderWidth={1}
@@ -528,7 +528,7 @@ export default function CommunicationCenterScreen() {
       <YStack paddingHorizontal="$4" paddingVertical="$4" backgroundColor="#0D1B2A">
         <XStack
           height={48}
-          backgroundColor="#1E2329"
+          backgroundColor="#12253A"
           borderRadius="$xl"
           padding={4}
         >

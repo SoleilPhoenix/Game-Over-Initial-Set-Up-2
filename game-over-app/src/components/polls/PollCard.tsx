@@ -13,7 +13,7 @@ import type { PollWithOptions } from '@/repositories/polls';
 // Dark theme colors
 const DARK_THEME = {
   backgroundDark: '#0D1B2A',
-  surfaceDark: '#1E2329',
+  surfaceDark: '#12253A',
   surfaceCard: '#1A2F47',
   primary: '#C6A75E',
   border: 'rgba(255, 255, 255, 0.05)',
@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     borderRadius: 12,
-    backgroundColor: '#1E2329',
+    backgroundColor: '#12253A',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
     paddingHorizontal: 16,

@@ -2117,7 +2117,7 @@ const makeRemindStyles = (theme: EditorialTheme) => StyleSheet.create({
     justifyContent: 'flex-end',
   },
   inviteSheet: {
-    backgroundColor: '#1E2329',
+    backgroundColor: '#12253A',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 18,
@@ -2304,7 +2304,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#60A5FA',
+    backgroundColor: '#C6A75E',
   },
   contributionRow: {
     flexDirection: 'row',

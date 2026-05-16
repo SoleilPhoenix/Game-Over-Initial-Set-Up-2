@@ -273,7 +273,7 @@ export default function WelcomeScreen() {
                   testID="get-started-button"
                 >
                   <Text style={styles.primaryButtonText}>{t.auth.getStarted}</Text>
-                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                  <Ionicons name="arrow-forward" size={18} color="#0D1B2A" />
                 </Pressable>
 
                 {/* Invite Code Section — inside glass card */}

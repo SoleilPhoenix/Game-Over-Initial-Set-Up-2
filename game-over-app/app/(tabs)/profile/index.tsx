@@ -207,7 +207,7 @@ export default function ProfileScreen() {
           >
             <View style={styles.avatarContainer}>
               <LinearGradient
-                colors={['#C6A75E', '#60A5FA']}
+                colors={['#C6A75E', '#8A7338']}
                 style={styles.avatarGradient}
               >
                 <View style={styles.avatarInner}>

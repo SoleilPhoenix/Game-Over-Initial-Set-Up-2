@@ -346,6 +346,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderStyle: 'dashed',
     borderColor: '#C6A75E',
-    backgroundColor: 'rgba(90, 126, 176, 0.08)',
+    backgroundColor: 'rgba(198, 167, 94, 0.08)',
   },
 });

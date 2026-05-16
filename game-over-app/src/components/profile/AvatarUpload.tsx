@@ -152,7 +152,7 @@ export function AvatarUpload({
       accessibilityState={{ disabled: isUploading }}
     >
       <LinearGradient
-        colors={[THEME.primary, '#60A5FA']}
+        colors={[THEME.primary, '#8A7338']}
         style={[styles.gradient, { width: size, height: size, borderRadius: size / 2 }]}
       >
         <View

@@ -33,7 +33,7 @@ const StyledBadge = styled(XStack, {
         backgroundColor: '$backgroundHover',
       },
       primary: {
-        backgroundColor: 'rgba(90, 126, 176, 0.15)',
+        backgroundColor: 'rgba(198, 167, 94, 0.15)',
       },
       bestMatch: {
         backgroundColor: 'rgba(255, 215, 0, 0.2)',

@@ -188,7 +188,7 @@ export default function PollsScreen() {
               width={80}
               height={80}
               borderRadius="$full"
-              backgroundColor="rgba(90, 126, 176, 0.08)"
+              backgroundColor="rgba(198, 167, 94, 0.08)"
               alignItems="center"
               justifyContent="center"
               marginBottom="$4"

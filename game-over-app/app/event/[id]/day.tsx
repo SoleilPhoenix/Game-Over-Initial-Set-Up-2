@@ -146,7 +146,7 @@ export default function EventDayScreen() {
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}>
         {/* Hero card */}
         <LinearGradient
-          colors={['#5A7EB0', '#3B5A85']}
+          colors={['#C6A75E', '#8A7338']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={styles.heroCard}
         >
