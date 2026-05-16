@@ -76,7 +76,7 @@ module.exports = {
     },
     'ios.sim.ci': {
       device: 'simulator.headless',
-      app: 'ios.release',
+      app: 'ios.debug',
     },
     'android.att.debug': {
       device: 'attached',
@@ -96,7 +96,7 @@ module.exports = {
     },
     'android.emu.ci': {
       device: 'emulator',
-      app: 'android.release',
+      app: 'android.debug',
     },
   },
 };
