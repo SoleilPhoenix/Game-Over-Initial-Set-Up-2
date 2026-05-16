@@ -2,7 +2,7 @@
  * Event Summary Screen — Editorial re-skin (content-preserving).
  * ALL logic / hooks / data flow kept 1:1 — only styling switches to
  * the editorial design tokens via useTheme(). Text containers use
- * editorial primitives (SerifHeading, SectionLabel, GoldButton).
+ * editorial primitives (DisplayHeading, SectionLabel, GoldButton).
  */
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
@@ -21,7 +21,7 @@ import { useCreateInvite } from '@/hooks/queries/useInvites';
 import { useTranslation } from '@/i18n';
 import { useTheme } from '@/hooks/useTheme';
 import { SPACING, RADII, TYPE_SCALE, ambientShadow, type EditorialTheme } from '@/constants/designSystem';
-import { SerifHeading, GoldButton } from '@/components/ui/editorial';
+import { DisplayHeading, GoldButton } from '@/components/ui/editorial';
 import { ShareModal } from '@/components/ui/ShareModal';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import {
@@ -298,9 +298,9 @@ export default function EventSummaryScreen() {
       >
         {/* ─── Title + Motto (centered per mockup) ──── */}
         <YStack alignItems="center" marginTop={8} marginBottom={24}>
-          <SerifHeading variant="displayMd" style={{ textAlign: 'center', marginBottom: 6 }}>
+          <DisplayHeading variant="displayMd" style={{ textAlign: 'center', marginBottom: 6 }}>
             {eventTitle}
-          </SerifHeading>
+          </DisplayHeading>
           <Text style={[styles.motto, { textAlign: 'center' }]}>{t.eventDetail.motto}</Text>
         </YStack>
 
@@ -348,9 +348,9 @@ export default function EventSummaryScreen() {
         )}
 
         {/* ─── Planning Tools 2×2 Grid (mockup: titles only) ── */}
-        <SerifHeading variant="headlineMd" style={{ marginBottom: 16 }}>
+        <DisplayHeading variant="headlineMd" style={{ marginBottom: 16 }}>
           {t.eventDetail.planningTools}
-        </SerifHeading>
+        </DisplayHeading>
         <View style={styles.toolsGrid}>
           {TOOL_CONFIGS.map((tool) => {
             const toolLabel = t.eventDetail[
@@ -399,7 +399,7 @@ export default function EventSummaryScreen() {
         {isBooked && planningSteps.length > 0 && (
           <View style={[styles.progressCard, { marginTop: 8 }]}>
             <XStack justifyContent="space-between" alignItems="center" marginBottom={14}>
-              <SerifHeading variant="headlineMd">{t.eventDetail.planningProgress}</SerifHeading>
+              <DisplayHeading variant="headlineMd">{t.eventDetail.planningProgress}</DisplayHeading>
               <Text style={styles.progressCount}>
                 {t.eventDetail.stepsComplete.replace('{{completed}}', String(completedCount))}
               </Text>
@@ -442,7 +442,7 @@ export default function EventSummaryScreen() {
 
         {/* ─── Destination Guide ─────────────────── */}
         <View style={{ marginTop: 20 }}>
-          <SerifHeading variant="headlineMd" style={{ marginBottom: 12 }}>{t.eventDetail.destinationGuide}</SerifHeading>
+          <DisplayHeading variant="headlineMd" style={{ marginBottom: 12 }}>{t.eventDetail.destinationGuide}</DisplayHeading>
           <Pressable
             style={({ pressed }) => [styles.destinationCard, pressed && { opacity: 0.9 }]}
             onPress={() => router.push(`/event/${id}/destination`)}
@@ -494,9 +494,9 @@ export default function EventSummaryScreen() {
             borderWidth: StyleSheet.hairlineWidth, borderColor: theme.accentGold,
           }}>
             <Text style={{ fontSize: 20 }}>💰</Text>
-            <SerifHeading variant="headlineMd" style={{ marginTop: 8 }}>
+            <DisplayHeading variant="headlineMd" style={{ marginTop: 8 }}>
               Your Contribution
-            </SerifHeading>
+            </DisplayHeading>
             {contributionCents > 0 && (
               <Text style={{ fontSize: 32, fontWeight: '900', color: theme.accentGold, marginTop: 4 }}>
                 €{Math.round(contributionCents / 100)}

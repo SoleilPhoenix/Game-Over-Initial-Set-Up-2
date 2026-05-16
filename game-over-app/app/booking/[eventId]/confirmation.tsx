@@ -316,7 +316,7 @@ export default function BookingConfirmationScreen() {
         </Card>
 
         {/* Next Steps */}
-        <Card width="100%" marginHorizontal="$4" paddingHorizontal={16} backgroundColor="rgba(90, 126, 176, 0.1)" borderWidth={0}>
+        <Card width="100%" marginHorizontal="$4" paddingHorizontal={16} backgroundColor="rgba(198, 167, 94, 0.1)" borderWidth={0}>
           <YStack gap="$3">
             <Text fontSize="$4" fontWeight="700" color="$primary" textAlign="center">
               {t.booking.whatsNext}

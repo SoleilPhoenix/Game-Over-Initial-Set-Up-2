@@ -4,7 +4,7 @@
  */
 
 export { EditorialCard, type EditorialCardProps } from './EditorialCard';
-export { SerifHeading, type SerifHeadingProps, type SerifVariant } from './SerifHeading';
+export { DisplayHeading, type DisplayHeadingProps, type DisplayHeadingVariant } from './DisplayHeading';
 export { GoldButton, type GoldButtonProps, type GoldButtonVariant, type GoldButtonSize } from './GoldButton';
 export { GoldChip, type GoldChipProps, type GoldChipTone } from './GoldChip';
 export { GoldDivider, type GoldDividerProps } from './GoldDivider';

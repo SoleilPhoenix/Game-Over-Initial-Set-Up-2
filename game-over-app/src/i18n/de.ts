@@ -60,6 +60,7 @@ const de: TranslationKeys = {
     languageTitle: 'Sprache',
     languageSubtitle: 'Wähle deine bevorzugte Sprache',
     moreLangSoon: 'Weitere Sprachen folgen bald',
+    appearance: 'Darstellung',
     wellnessSupport: 'Wellness & Support',
     relationshipHealthCenter: 'Beziehungs-Gesundheitszentrum',
     supportFAQ: 'Support & FAQ',

@@ -345,35 +345,36 @@ Standard components in `src/components/ui/`:
 - `SocialButton` - OAuth provider buttons
 
 **Component Color Guidelines:**
-- Never use `colors.light.*` values in components
-- Always use `DARK_THEME.*` or Tamagui tokens (`$background`, `$textPrimary`)
-- For loading states, use dark backgrounds immediately (no white flash)
+- Never use `colors.light.*` values directly — go through the theme hook
+- Always use `useTheme()` semantic tokens (`theme.background`, `theme.textPrimary`, …) or Tamagui semantic tokens (`$background`, `$textPrimary`)
+- For loading states, render the surface colour immediately (no white flash)
 
-### Dark Theme Design System
-**Game Over is a dark-mode-only app.** The theme is enforced in `app/_layout.tsx`:
-```typescript
-// Force dark theme - Game Over is a dark-mode-only app
-const colorScheme = 'dark';
-```
+### Editorial Design System ("Ethereal Architect")
+The app uses an **editorial dual-theme** system — Midnight Navy + Champagne Gold as the default dark theme, plus a warm off-white light variant. Both themes are intentional and user-toggleable from `Profile → Appearance`.
 
-Consistent dark glassmorphic theme defined in `src/constants/theme.ts`:
-```typescript
-const DARK_THEME = {
-  background: '#15181D',
-  surface: '#1E2329',
-  surfaceCard: '#23272F',
-  deepNavy: '#2D3748',
-  primary: '#5A7EB0',           // unified muted navy — replaces old #258CF4
-  glassCard: 'rgba(45, 55, 72, 0.6)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#D1D5DB',
-  textTertiary: '#9CA3AF',
-};
-```
+**Token contract** lives in `src/constants/designSystem.ts`:
+- `EDITORIAL_DARK` and `EDITORIAL_LIGHT` expose the **same semantic keys** (`background`, `surfaceCard`, `primary`, `textPrimary`, `accentGold`, …) — TypeScript enforces parity via the `EditorialTokens` type.
+- `RADII`, `SPACING`, `FONTS`, `TYPE_SCALE` are mode-agnostic constants.
+- `ambientShadow(theme)` and `primaryGradient(theme)` are helper functions that resolve the active palette.
 
-**Primary Color:** `#5A7EB0` (muted navy) — used for all active elements, buttons, icons, highlights. Old value `#258CF4` is deprecated; do not use it.
+**Theme plumbing:**
+- `src/stores/themeStore.ts` — Zustand store with `mode: 'dark' | 'light' | 'system'`, persisted via AsyncStorage.
+- `src/hooks/useTheme.ts` — central read access. Resolves `'system'` mode via React Native's `useColorScheme()` **only when** the user explicitly selected system-follow. **This is the one place `useColorScheme()` is allowed.** Components must read `theme.*` from this hook, never hardcode hex values.
+- `app/(tabs)/profile/appearance.tsx` — the user-facing toggle.
+- `tamagui.config.ts` — `dark` and `light` Tamagui themes mirror the same palette so `$tokens` and `useTheme()` stay in sync.
 
-**IMPORTANT:** Never use `useColorScheme()` or respect system color scheme settings. The app must always render in dark mode.
+**Primary palette:**
+| | Dark (default) | Light |
+|---|---|---|
+| `background` | `#0D1B2A` Midnight Navy | `#FFFFFF` |
+| `surfaceCard` | `#1A2F47` | `#FBF9F4` warm cream |
+| `primary` | `#C6A75E` Champagne Gold | `#1F2A44` Navy |
+| `accentGold` | `#C6A75E` (same both modes) | `#C6A75E` |
+| `textPrimary` | `#FFFFFF` | `#1F2A44` |
+
+**Deprecated values — do not use:** `#15181D`, `#1E2329`, `#23272F`, `#258CF4`, `#5A7EB0`, `rgba(90, 126, 176, …)`. These come from the pre-redesign theme and the muted-navy primary that preceded the editorial redesign.
+
+**Legacy constants:** `src/constants/theme.ts` still exports `DARK_THEME` for older components that haven't been migrated yet. New code should consume `useTheme()` instead. Old `DARK_THEME` keys have been remapped internally onto the editorial palette so screens that still reference them won't show stale colours.
 
 UI reference designs in `UI_and_UX/` folder.
 

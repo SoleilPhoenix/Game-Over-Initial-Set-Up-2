@@ -130,7 +130,7 @@ function FABButton() {
       accessibilityHint="Opens the event creation wizard"
     >
       <LinearGradient
-        colors={['#C6A75E', '#4A6E9F']}
+        colors={['#C6A75E', '#8A7338']}
         style={styles.fabGradient}
       >
         <Ionicons name="add" size={32} color="#FFFFFF" />
@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 88, // Matches actual tab-bar visual height (buttons ~50px + safe-area ~34px + 4px buffer)
-    backgroundColor: 'rgba(21, 24, 29, 0.85)', // 85% opacity
+    backgroundColor: 'rgba(13, 27, 42, 0.85)', // Editorial Midnight Navy @ 85% — matches sceneStyle
     zIndex: 1,
   },
   tabBarBlur: {

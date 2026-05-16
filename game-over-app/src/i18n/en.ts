@@ -62,6 +62,7 @@ const en = {
     languageTitle: 'Language',
     languageSubtitle: 'Choose your preferred language',
     moreLangSoon: 'More languages coming soon',
+    appearance: 'Appearance',
     wellnessSupport: 'Wellness & Support',
     relationshipHealthCenter: 'Relationship Health Center',
     supportFAQ: 'Support & FAQ',

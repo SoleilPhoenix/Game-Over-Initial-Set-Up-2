@@ -1,16 +1,13 @@
 /**
- * useEditorialFonts — loads Fraunces (editorial serif) + Inter (functional sans)
- * via @expo-google-fonts. Returns a `fontsLoaded` flag for splash-screen gating.
+ * useEditorialFonts — loads Inter (functional sans) via @expo-google-fonts.
+ * Returns a `fontsLoaded` flag for splash-screen gating.
+ *
+ * NOTE: Fraunces was removed in the editorial redesign. The design system
+ * uses Inter only — see designSystem.ts FONTS tokens.
  */
 
 import {
-  useFonts as useFraunces,
-  Fraunces_500Medium,
-  Fraunces_500Medium_Italic,
-  Fraunces_600SemiBold,
-  Fraunces_600SemiBold_Italic,
-} from '@expo-google-fonts/fraunces';
-import {
+  useFonts,
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
@@ -18,11 +15,7 @@ import {
 } from '@expo-google-fonts/inter';
 
 export function useEditorialFonts(): { fontsLoaded: boolean } {
-  const [fontsLoaded] = useFraunces({
-    Fraunces_500Medium,
-    Fraunces_500Medium_Italic,
-    Fraunces_600SemiBold,
-    Fraunces_600SemiBold_Italic,
+  const [fontsLoaded] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,

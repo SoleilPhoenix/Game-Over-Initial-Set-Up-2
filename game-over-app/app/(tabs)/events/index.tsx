@@ -516,7 +516,7 @@ export default function EventsScreen() {
         {role === 'guest' && (
           <View style={{
             position: 'absolute', top: 8, right: 8,
-            backgroundColor: 'rgba(90,126,176,0.85)',
+            backgroundColor: 'rgba(198,167,94,0.85)',
             borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
             zIndex: 1,
           }}>
@@ -1179,7 +1179,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.72)',
   },
   paymentBadge: {
-    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    backgroundColor: 'rgba(198, 167, 94, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
@@ -1245,7 +1245,7 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: '#C6A75E',
-    backgroundColor: 'rgba(90, 126, 176, 0.08)',
+    backgroundColor: 'rgba(198, 167, 94, 0.08)',
   },
   startNewPlanButtonPressed: {
     opacity: 0.7,

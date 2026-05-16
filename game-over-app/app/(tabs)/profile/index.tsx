@@ -353,6 +353,15 @@ export default function ProfileScreen() {
               onPress={handleLanguagePress}
               testID="menu-language"
             />
+            <View style={styles.separator} />
+            <MenuItem
+              icon="contrast-outline"
+              iconColor="#C6A75E"
+              iconBgColor="rgba(198, 167, 94, 0.2)"
+              label={t.profile.appearance ?? 'Appearance'}
+              onPress={() => router.push('/profile/appearance')}
+              testID="menu-appearance"
+            />
           </MenuSection>
 
           {/* Wellness & Support Section */}

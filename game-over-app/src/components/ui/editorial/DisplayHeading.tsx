@@ -1,6 +1,9 @@
 /**
- * SerifHeading — Fraunces editorial display type.
+ * DisplayHeading — Inter-based editorial display type.
  * Consumes TYPE_SCALE presets so sizes stay consistent across screens.
+ *
+ * Was previously called SerifHeading when the design used Fraunces.
+ * The redesign moved to Inter-only — name kept clear of typeface family.
  */
 
 import React from 'react';
@@ -8,22 +11,22 @@ import { Text, TextProps, StyleProp, TextStyle } from 'react-native';
 import { useTheme } from '@/hooks/useTheme';
 import { TYPE_SCALE, FONTS } from '@/constants/designSystem';
 
-export type SerifVariant =
+export type DisplayHeadingVariant =
   | 'displayLg'
   | 'displayMd'
   | 'displaySm'
   | 'headlineLg'
   | 'headlineMd';
 
-export interface SerifHeadingProps extends TextProps {
-  variant?: SerifVariant;
+export interface DisplayHeadingProps extends TextProps {
+  variant?: DisplayHeadingVariant;
   italic?: boolean;
   color?: 'primary' | 'secondary' | 'gold' | 'inherit';
   align?: 'left' | 'center' | 'right';
   style?: StyleProp<TextStyle>;
 }
 
-export function SerifHeading({
+export function DisplayHeading({
   variant = 'displayMd',
   italic = false,
   color = 'primary',
@@ -31,7 +34,7 @@ export function SerifHeading({
   style,
   children,
   ...rest
-}: SerifHeadingProps) {
+}: DisplayHeadingProps) {
   const { theme } = useTheme();
 
   const textColor =

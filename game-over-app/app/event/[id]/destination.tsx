@@ -400,7 +400,7 @@ const CATEGORY_CONFIG: Record<NonNullable<PopupCategory>, { label: string; icon:
 };
 
 // ─── Custom icon assets ───────────────────────────────────────────────────────
-const HOSPITAL_ICON = require('../../../src/constants/hospital-icon.jpeg');
+const HOSPITAL_ICON = require('../../../src/constants/emergency-icon.jpeg');
 
 // ─── City map image assets ────────────────────────────────────────────────────
 const CITY_MAP_IMAGES: Record<string, any> = {

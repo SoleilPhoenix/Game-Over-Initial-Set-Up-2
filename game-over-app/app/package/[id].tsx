@@ -157,7 +157,7 @@ function HighlightCard({ icon, label, sub }: { icon: string; label: string; sub:
         width={40}
         height={40}
         borderRadius="$full"
-        backgroundColor="rgba(90, 126, 176, 0.15)"
+        backgroundColor="rgba(198, 167, 94, 0.15)"
         alignItems="center"
         justifyContent="center"
       >
@@ -180,7 +180,7 @@ function IncludeItem({ icon, title, sub, time, location }: { icon: string; title
         width={36}
         height={36}
         borderRadius="$full"
-        backgroundColor="rgba(90, 126, 176, 0.15)"
+        backgroundColor="rgba(198, 167, 94, 0.15)"
         alignItems="center"
         justifyContent="center"
         marginTop={2}
@@ -199,7 +199,7 @@ function IncludeItem({ icon, title, sub, time, location }: { icon: string; title
       </YStack>
       {time ? (
         <YStack
-          backgroundColor="rgba(90, 126, 176, 0.18)"
+          backgroundColor="rgba(198, 167, 94, 0.18)"
           paddingHorizontal={10}
           paddingVertical={6}
           borderRadius={8}
