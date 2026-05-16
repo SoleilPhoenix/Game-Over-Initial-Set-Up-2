@@ -8,6 +8,10 @@ on:
 
 env:
   NODE_VERSION: '20'
+  # iOS xcode build phase + Android Gradle plugin both invoke sentry-cli
+  # to upload source maps. CI has no Sentry org/project that matches —
+  # disable the upload step globally to keep release builds passing.
+  SENTRY_DISABLE_AUTO_UPLOAD: 'true'
 
 defaults:
   run:
