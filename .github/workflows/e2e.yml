@@ -44,7 +44,10 @@ jobs:
         run: npx expo prebuild --platform ios --no-install
 
       - name: Install CocoaPods
-        run: cd ios && pod install --repo-update
+        run: |
+          cd ios
+          rm -f Podfile.lock
+          pod install --repo-update
 
       - name: Build app for Detox
         run: npx detox build --configuration ios.sim.ci
