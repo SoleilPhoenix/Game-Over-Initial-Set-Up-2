@@ -105,6 +105,14 @@ jobs:
       - name: Prebuild Android
         run: npx expo prebuild --platform android --no-install
 
+      - name: Bump Gradle daemon heap (reanimated APK packaging needs 4 GB)
+        run: |
+          # expo prebuild writes -Xmx2048m which is too small for the reanimated
+          # androidTest APK zipflinger packaging. GRADLE_OPTS at the workflow
+          # level only affects the launcher VM — the daemon reads gradle.properties.
+          sed -i 's/-Xmx2048m/-Xmx4096m/g' android/gradle.properties
+          grep org.gradle.jvmargs android/gradle.properties
+
       - name: Build app for Detox
         run: npx detox build --configuration android.emu.ci
 
