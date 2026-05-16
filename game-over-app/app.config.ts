@@ -93,6 +93,28 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // (reading 'match')" in sentryMetroSerializer. The JS-side Sentry library
     // still loads and reports crashes — we just lose automatic source-map
     // upload. Re-enable when bumping to Expo SDK 55+ + sentry-react-native v8.
+    [
+      'expo-build-properties',
+      {
+        android: {
+          // Detox androidTest builds hit "2 files found with path 'lib/.../libfbjni.so'"
+          // because react-native-gesture-handler bundles fbjni and so does the React
+          // Native AAR. pickFirst tells Gradle to take whichever it sees first.
+          packagingOptions: {
+            pickFirst: [
+              'lib/arm64-v8a/libfbjni.so',
+              'lib/armeabi-v7a/libfbjni.so',
+              'lib/x86/libfbjni.so',
+              'lib/x86_64/libfbjni.so',
+              'lib/arm64-v8a/libc++_shared.so',
+              'lib/armeabi-v7a/libc++_shared.so',
+              'lib/x86/libc++_shared.so',
+              'lib/x86_64/libc++_shared.so',
+            ],
+          },
+        },
+      },
+    ],
   ],
   experiments: {
     typedRoutes: false,
