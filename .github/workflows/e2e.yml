@@ -21,6 +21,11 @@ env:
   # overflows Gradle's default 2 GB heap during zipflinger ZIP construction.
   # 4 GB gives generous headroom on the GH 7 GB Linux runner.
   GRADLE_OPTS: '-Xmx4096m -XX:MaxMetaspaceSize=512m'
+  # Debug builds normally skip the React Native "Bundle JS" Xcode build phase
+  # because the app expects a live Metro packager on localhost:8081. In headless
+  # CI there's no packager, so the app boots to a redbox "No script URL provided".
+  # FORCE_BUNDLING=1 makes the build script bundle the JS into the app anyway.
+  FORCE_BUNDLING: '1'
 
 jobs:
   ios:
