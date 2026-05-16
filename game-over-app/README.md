@@ -44,6 +44,39 @@ Plus two external integrations on the PR view:
 
 CI builds in this repo are **Debug builds for verification only** — they prove the code compiles. They do not produce installable artifacts. For TestFlight / Play Store builds, use EAS (see below).
 
+### Optional workflows
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| **E2E Tests (Detox)** [`e2e.yml`] | Manual (Actions tab) + every push to `main` | Runs Detox tests on iOS Simulator (macOS runner) and Android Emulator (Ubuntu + KVM). ~30 min iOS, ~25 min Android. Failure artifacts uploaded for 7 days. Skipped on PRs to save macOS minutes. |
+| **EAS Preview Build** [`eas-preview.yml`] | Manual only | Triggers `eas build --profile preview` for internal testing (install link sent via EAS). |
+| **Release** [`release.yml`] | Git tag matching `v*.*.*` | `v1.0.0` → builds production + submits to App Store / Play Store + creates GitHub Release. `v1.0.0-rc.1` → builds only (no store submission). |
+
+---
+
+## Cutting a release
+
+The full pipeline (build → submit → GitHub release) runs from a single tag push:
+
+```bash
+# Final release — builds + submits to both stores + creates GitHub Release
+git tag v1.0.0
+git push origin v1.0.0
+
+# Release candidate — builds only, NO store submission
+git tag v1.0.0-rc.1
+git push origin v1.0.0-rc.1
+```
+
+The convention: any tag containing `-` is treated as a pre-release. `eas submit` only runs for clean semver tags like `v1.0.0`, `v2.3.4`.
+
+Prerequisites:
+- `EXPO_TOKEN` set as GitHub repo secret (Settings → Secrets → Actions)
+- EAS project secrets configured (see below)
+- Apple Developer + Google Play credentials configured in `eas.json`
+
+If you want to build/submit manually without tagging, see the EAS section below.
+
 ---
 
 ## EAS builds (App Store / Play Store)
