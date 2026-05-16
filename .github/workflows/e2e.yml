@@ -11,6 +11,13 @@ defaults:
   run:
     working-directory: game-over-app
 
+# Disable Sentry source-map upload for E2E builds.
+# Release builds normally upload source maps to Sentry, but CI runs without
+# Sentry credentials — the auto-upload step then crashes on undefined env
+# vars (see @sentry/react-native utils.ts:75 ‟Cannot read … 'match'‟).
+env:
+  SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+
 jobs:
   ios:
     name: E2E iOS (sim.ci)
