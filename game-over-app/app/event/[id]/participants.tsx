@@ -1,11 +1,14 @@
 /**
- * Manage Invitations Screen — Redesigned
+ * Manage Invitations Screen — Editorial re-skin (content-preserving).
  * Shows ALL participant slots: organizer (pre-filled), guests (editable), honoree (pre-filled).
  * Organizer can fill in guest contact details and send invitations.
+ *
+ * Phase A-3: swaps editorial tokens, unifies primary accents to gold.
+ * Semantic colors (role badges blue/amber, status green/red) intentionally preserved.
  */
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { ScrollView, Share, ActivityIndicator, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Modal, Alert } from 'react-native';
+import { ScrollView, Share, ActivityIndicator, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Modal, Alert, Image } from 'react-native';
 
 // ─── Phone Formatting ──────────────────────────
 /** Auto-formats German phone numbers with dash after prefix */
@@ -47,6 +50,14 @@ function getEmailSuggestions(email: string): string[] {
   if (!afterAt) return COMMON_DOMAINS.slice(0, 5);
   return COMMON_DOMAINS.filter(d => d.startsWith(afterAt));
 }
+/** Renders a profile photo with automatic fallback to `children` on load error.
+ *  Required because React Native's <Image> silently shows blank on broken URLs. */
+function AvatarImage({ uri, style, fallback }: { uri: string; style: any; fallback: React.ReactNode }) {
+  const [errored, setErrored] = React.useState(false);
+  if (errored) return <>{fallback}</>;
+  return <Image source={{ uri }} style={style} onError={() => setErrored(true)} />;
+}
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
@@ -60,8 +71,10 @@ import { useInviteGuests } from '@/hooks/queries/useInvites';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { useUser } from '@/stores/authStore';
 import { useTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { ambientShadow, type EditorialTheme } from '@/constants/designSystem';
 import { Button } from '@/components/ui/Button';
+import { GoldButton } from '@/components/ui/editorial';
 import type { ParticipantWithProfile } from '@/repositories';
 import { loadDesiredParticipants, loadBudgetInfo, loadGuestDetails, saveGuestDetails, setInvitedCount, type GuestDetail } from '@/lib/participantCountCache';
 import { supabase } from '@/lib/supabase/client';
@@ -88,6 +101,8 @@ export default function ManageInvitationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const user = useUser();
 
   const queryClient = useQueryClient();
@@ -429,34 +444,43 @@ export default function ManageInvitationsScreen() {
   const getRoleBadge = (role: SlotRole) => {
     switch (role) {
       case 'organizer':
-        return { label: t.manageInvitations.organizer, bg: 'rgba(59, 130, 246, 0.2)', color: '#3B82F6' };
+        return { label: t.manageInvitations.organizer, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
       case 'honoree':
-        return { label: t.manageInvitations.honoree, bg: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B' };
+        return { label: t.manageInvitations.honoree, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
       default:
-        return { label: t.manageInvitations.guest, bg: 'rgba(107, 114, 128, 0.2)', color: DARK_THEME.textSecondary };
+        return { label: t.manageInvitations.guest, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
     }
   };
 
   const getStatusConfig = (status: SlotStatus) => {
     switch (status) {
       case 'confirmed':
-        return { icon: 'checkmark-circle' as const, color: '#10B981', label: t.manageInvitations.confirmed };
+        return { icon: 'checkmark-circle' as const, color: theme.textSecondary, label: t.manageInvitations.confirmed };
       case 'pending':
-        return { icon: 'time-outline' as const, color: '#F59E0B', label: t.manageInvitations.pending };
+        // Softer muted orange for pending
+        return { icon: 'time-outline' as const, color: 'rgba(249,115,22,0.75)', label: t.manageInvitations.pending };
       default:
-        return { icon: 'ellipse-outline' as const, color: DARK_THEME.textTertiary, label: t.manageInvitations.notInvited };
+        return { icon: 'ellipse-outline' as const, color: theme.textTertiary, label: t.manageInvitations.notInvited };
     }
   };
 
   const renderSlotCard = (slot: Slot) => {
     const roleBadge = getRoleBadge(slot.role);
     const statusConfig = getStatusConfig(slot.status);
-    const initial = slot.name ? slot.name.charAt(0).toUpperCase() : String(slot.index + 1);
+    // Two-letter initials (e.g. "WS" for "Wais Schmidt")
+    const initial = slot.name
+      ? slot.name.split(' ').map(w => w[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2)
+      : String(slot.index + 1);
     const isEmpty = slot.role === 'guest' && slot.isEditable && !slot.name && !slot.email;
     const needsContactInfo = (slot.role === 'organizer' && !slot.phone) || (slot.role === 'honoree' && !slot.email);
     const guestNum = slot.role === 'guest' ? slot.index + 1 : 0;
     const displayName = slot.name ||
       t.manageInvitations.guestSlot.replace('{{number}}', String(guestNum));
+
+    // Profile photo: organizer uses own profile, others use participant profile
+    const avatarUrl = slot.role === 'organizer'
+      ? (ownProfile?.avatar_url || user?.user_metadata?.avatar_url || null)
+      : (slot.participant?.profile?.avatar_url || null);
 
     return (
       <Pressable
@@ -465,34 +489,39 @@ export default function ManageInvitationsScreen() {
         onPress={!isGuest && slot.isEditable ? () => setExpandedSlot(slot.isExpanded ? null : slot.index) : undefined}
       >
         <XStack alignItems="center" gap={12}>
-          {/* Avatar / Number */}
+          {/* Avatar with gold ring (organizer + honoree always, others get muted ring) */}
           <View style={[
-            styles.avatar,
-            slot.role === 'organizer' && styles.avatarOrganizer,
-            slot.role === 'honoree' && styles.avatarHonoree,
-            isEmpty && styles.avatarEmpty,
+            styles.avatarRing,
+            (slot.role === 'honoree' || slot.role === 'organizer') && styles.avatarRingHonoree,
           ]}>
-            {slot.role === 'honoree' ? (
-              <Ionicons name="star" size={18} color="#F59E0B" />
-            ) : (
-              <Text style={styles.avatarText}>{initial}</Text>
-            )}
+            <View style={[
+              styles.avatar,
+              slot.role === 'honoree' && styles.avatarHonoree,
+              isEmpty && styles.avatarEmpty,
+            ]}>
+              {avatarUrl ? (
+                <AvatarImage
+                  uri={avatarUrl}
+                  style={{ width: 44, height: 44, borderRadius: 22 }}
+                  fallback={<Text style={styles.avatarText}>{initial}</Text>}
+                />
+              ) : slot.role === 'honoree' ? (
+                <Ionicons name="star" size={18} color="#C6A75E" />
+              ) : (
+                <Text style={styles.avatarText}>{initial}</Text>
+              )}
+            </View>
           </View>
 
           {/* Details */}
           <YStack flex={1} gap={2}>
-            <XStack alignItems="center" gap={8}>
-              <Text style={[styles.slotName, isEmpty && styles.slotNameEmpty]} numberOfLines={1}>
+            <XStack alignItems="center" gap={8} flex={1} flexWrap="nowrap">
+              <Text style={[styles.slotName, isEmpty && styles.slotNameEmpty]} numberOfLines={1} flex={1}>
                 {displayName}
               </Text>
               <View style={[styles.roleBadge, { backgroundColor: roleBadge.bg }]}>
                 <Text style={[styles.roleBadgeText, { color: roleBadge.color }]}>{roleBadge.label}</Text>
               </View>
-              {slot.role === 'honoree' && (
-                <Pressable onPress={() => setShowHonoreeInfo(true)} hitSlop={10}>
-                  <Ionicons name="information-circle-outline" size={17} color="#F59E0B" />
-                </Pressable>
-              )}
             </XStack>
 
             {/* Contact info (for filled slots) */}
@@ -500,13 +529,13 @@ export default function ManageInvitationsScreen() {
               <YStack gap={2} marginTop={2}>
                 {slot.email ? (
                   <XStack alignItems="center" gap={6}>
-                    <Ionicons name="mail-outline" size={12} color={DARK_THEME.textTertiary} />
+                    <Ionicons name="mail-outline" size={12} color={theme.textTertiary} />
                     <Text style={styles.detailText} numberOfLines={1}>{slot.email}</Text>
                   </XStack>
                 ) : null}
                 {slot.phone ? (
                   <XStack alignItems="center" gap={6}>
-                    <Ionicons name="call-outline" size={12} color={DARK_THEME.textTertiary} />
+                    <Ionicons name="call-outline" size={12} color={theme.textTertiary} />
                     <Text style={styles.detailText} numberOfLines={1}>{slot.phone}</Text>
                   </XStack>
                 ) : null}
@@ -525,22 +554,60 @@ export default function ManageInvitationsScreen() {
             )}
           </YStack>
 
-          {/* Status indicator */}
-          <XStack alignItems="center" gap={4}>
-            <Ionicons name={statusConfig.icon} size={16} color={statusConfig.color} />
-          </XStack>
         </XStack>
+
+        {/* ── Bottom action strip ── */}
+        {!isEmpty && (
+          <XStack
+            justifyContent="space-between"
+            alignItems="center"
+            marginTop={10}
+            paddingTop={10}
+            borderTopWidth={StyleSheet.hairlineWidth}
+            borderTopColor={theme.ghostBorder}
+          >
+            <XStack gap={10} alignItems="center">
+              {/* Confirmed checkmark chip */}
+              <View style={[
+                styles.actionChip,
+                slot.status === 'confirmed' && styles.actionChipActive,
+              ]}>
+                <Ionicons
+                  name="checkmark"
+                  size={14}
+                  color={slot.status === 'confirmed' ? theme.textSecondary : theme.textTertiary}
+                />
+              </View>
+              {/* Honoree info button — same size as checkmark chip */}
+              {slot.role === 'honoree' && (
+                <Pressable
+                  style={styles.actionChip}
+                  onPress={() => setShowHonoreeInfo(true)}
+                  hitSlop={8}
+                >
+                  <Ionicons name="information-circle-outline" size={14} color={theme.accentGold} />
+                </Pressable>
+              )}
+            </XStack>
+            <Text style={[
+              styles.statusLabel,
+              slot.status === 'pending' && { color: 'rgba(249,115,22,0.75)' },
+            ]}>
+              {statusConfig.label}
+            </Text>
+          </XStack>
+        )}
 
         {/* Expanded edit form */}
         {slot.isEditable && slot.isExpanded && (
-          <YStack gap={10} marginTop={14} paddingTop={14} borderTopWidth={1} borderTopColor={DARK_THEME.glassBorder}>
+          <YStack gap={10} marginTop={14} paddingTop={14} borderTopWidth={1} borderTopColor={theme.ghostBorder}>
             {/* Organizer: only phone field */}
             {slot.role === 'organizer' && (
               <View style={styles.inputContainer}>
                 <TextInput
                   style={styles.input}
                   placeholder={t.manageInvitations.phone}
-                  placeholderTextColor={DARK_THEME.textTertiary}
+                  placeholderTextColor={theme.textTertiary}
                   value={guestDetails[-1]?.phone || ''}
                   onChangeText={(v) => updateGuestDetail(-1, 'phone', v)}
                   keyboardType="phone-pad"
@@ -555,7 +622,7 @@ export default function ManageInvitationsScreen() {
                     <TextInput
                       style={styles.input}
                       placeholder={t.manageInvitations.email}
-                      placeholderTextColor={DARK_THEME.textTertiary}
+                      placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.email || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'email', v)}
                       onFocus={() => handleEmailFocus(slot.index, guestDetails[slot.index]?.email || '')}
@@ -572,7 +639,7 @@ export default function ManageInvitationsScreen() {
                           style={styles.suggestionItem}
                           onPress={() => selectEmailSuggestion(slot.index, domain)}
                         >
-                          <Ionicons name="mail-outline" size={13} color={DARK_THEME.textTertiary} />
+                          <Ionicons name="mail-outline" size={13} color={theme.textTertiary} />
                           <Text style={styles.suggestionText}>{domain}</Text>
                         </Pressable>
                       ))}
@@ -583,7 +650,7 @@ export default function ManageInvitationsScreen() {
                   <TextInput
                     style={styles.input}
                     placeholder={t.manageInvitations.phone}
-                    placeholderTextColor={DARK_THEME.textTertiary}
+                    placeholderTextColor={theme.textTertiary}
                     value={guestDetails[slot.index]?.phone || ''}
                     onChangeText={(v) => updateGuestDetail(slot.index, 'phone', v)}
                     keyboardType="phone-pad"
@@ -599,7 +666,7 @@ export default function ManageInvitationsScreen() {
                     <TextInput
                       style={styles.input}
                       placeholder={t.manageInvitations.firstName}
-                      placeholderTextColor={DARK_THEME.textTertiary}
+                      placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.firstName || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'firstName', v)}
                       autoCapitalize="words"
@@ -609,7 +676,7 @@ export default function ManageInvitationsScreen() {
                     <TextInput
                       style={styles.input}
                       placeholder={t.manageInvitations.lastName}
-                      placeholderTextColor={DARK_THEME.textTertiary}
+                      placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.lastName || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'lastName', v)}
                       autoCapitalize="words"
@@ -621,7 +688,7 @@ export default function ManageInvitationsScreen() {
                     <TextInput
                       style={styles.input}
                       placeholder={t.manageInvitations.email}
-                      placeholderTextColor={DARK_THEME.textTertiary}
+                      placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.email || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'email', v)}
                       onFocus={() => handleEmailFocus(slot.index, guestDetails[slot.index]?.email || '')}
@@ -638,7 +705,7 @@ export default function ManageInvitationsScreen() {
                           style={styles.suggestionItem}
                           onPress={() => selectEmailSuggestion(slot.index, domain)}
                         >
-                          <Ionicons name="mail-outline" size={13} color={DARK_THEME.textTertiary} />
+                          <Ionicons name="mail-outline" size={13} color={theme.textTertiary} />
                           <Text style={styles.suggestionText}>{domain}</Text>
                         </Pressable>
                       ))}
@@ -649,7 +716,7 @@ export default function ManageInvitationsScreen() {
                   <TextInput
                     style={styles.input}
                     placeholder={t.manageInvitations.phone}
-                    placeholderTextColor={DARK_THEME.textTertiary}
+                    placeholderTextColor={theme.textTertiary}
                     value={guestDetails[slot.index]?.phone || ''}
                     onChangeText={(v) => updateGuestDetail(slot.index, 'phone', v)}
                     keyboardType="phone-pad"
@@ -663,7 +730,7 @@ export default function ManageInvitationsScreen() {
               style={styles.confirmButton}
               onPress={() => setExpandedSlot(null)}
             >
-              <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+              <Ionicons name="checkmark-circle" size={18} color={theme.textOnPrimary} />
               <Text style={styles.confirmButtonText}>Confirm</Text>
             </Pressable>
           </YStack>
@@ -676,7 +743,7 @@ export default function ManageInvitationsScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <YStack flex={1} justifyContent="center" alignItems="center">
-          <Spinner size="large" color={DARK_THEME.primary} />
+          <Spinner size="large" color={theme.accentGold} />
         </YStack>
       </View>
     );
@@ -693,7 +760,7 @@ export default function ManageInvitationsScreen() {
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={16}>
           <Pressable onPress={() => router.back()} hitSlop={8} testID="back-button">
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>{t.manageInvitations.title}</Text>
           <View style={{ width: 24 }} />
@@ -710,44 +777,46 @@ export default function ManageInvitationsScreen() {
         {/* Stats Row */}
         <XStack gap={12} marginBottom={20}>
           <View style={[styles.statCard, { flex: 1 }]}>
-            <Text style={[styles.statNumber, { color: '#10B981' }]}>{confirmedCount}</Text>
+            <Text style={[styles.statNumber, { color: theme.accentGold }]}>{confirmedCount}</Text>
             <Text style={styles.statLabel}>{t.manageInvitations.confirmed}</Text>
           </View>
           <View style={[styles.statCard, { flex: 1 }]}>
-            <Text style={[styles.statNumber, { color: '#F59E0B' }]}>{pendingCount}</Text>
+            <Text style={[styles.statNumber, { color: theme.accentGold }]}>{pendingCount}</Text>
             <Text style={styles.statLabel}>{t.manageInvitations.pending}</Text>
           </View>
           <View style={[styles.statCard, { flex: 1 }]}>
-            <Text style={[styles.statNumber, { color: DARK_THEME.textPrimary }]}>{totalSlots}</Text>
+            <Text style={[styles.statNumber, { color: theme.accentGold }]}>{totalSlots}</Text>
             <Text style={styles.statLabel}>Total</Text>
           </View>
         </XStack>
 
-        {/* Slots info */}
-        <XStack alignItems="center" justifyContent="space-between" marginBottom={12}>
-          <Text style={styles.sectionTitle}>
-            {t.manageInvitations.slots
-              .replace('{{filled}}', String(filledCount))
-              .replace('{{total}}', String(totalSlots))}
-          </Text>
-        </XStack>
+        {/* Slots info — STATUS chip */}
+        <View style={styles.statusChipRow}>
+          <Text style={styles.statusChipLabel}>STATUS</Text>
+          <View style={styles.statusChip}>
+            <Text style={styles.statusChipText}>
+              {t.manageInvitations.slots
+                .replace('{{filled}}', String(filledCount))
+                .replace('{{total}}', String(totalSlots))}
+            </Text>
+          </View>
+        </View>
 
         {/* Slot Cards */}
         {slots.map((slot) => renderSlotCard(slot))}
       </ScrollView>
 
-      {/* Invite All Footer — organizers only */}
+      {/* Invite All Footer — organizers only, edge-to-edge */}
       {!isGuest && (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Button
-            flex={1}
+        <View style={[styles.footer, { paddingBottom: insets.bottom }]}>
+          <GoldButton
+            label={inviteLoading ? 'Sending…' : t.manageInvitations.inviteAll}
+            fullWidth
+            size="lg"
+            leftIcon={<Ionicons name="paper-plane-outline" size={20} color="#1A2F47" />}
             onPress={handleInviteAll}
-            loading={inviteLoading}
-            icon={<Ionicons name="paper-plane-outline" size={20} color="white" />}
             testID="invite-all-button"
-          >
-            {t.manageInvitations.inviteAll}
-          </Button>
+          />
         </View>
       )}
 
@@ -758,7 +827,7 @@ export default function ManageInvitationsScreen() {
             <View style={styles.infoHandle} />
             <XStack gap={12} alignItems="center" marginBottom={14}>
               <View style={styles.infoIconCircle}>
-                <Ionicons name="notifications" size={20} color="#F59E0B" />
+                <Ionicons name="notifications" size={20} color="#C6A75E" />
               </View>
               <YStack flex={1}>
                 <Text style={styles.infoTitle}>
@@ -766,7 +835,7 @@ export default function ManageInvitationsScreen() {
                 </Text>
               </YStack>
               <Pressable onPress={() => setShowHonoreeInfo(false)} hitSlop={8}>
-                <Ionicons name="close-circle" size={22} color={DARK_THEME.textTertiary} />
+                <Ionicons name="close-circle" size={22} color={theme.textTertiary} />
               </Pressable>
             </XStack>
             <Text style={styles.infoBody}>
@@ -774,7 +843,7 @@ export default function ManageInvitationsScreen() {
                 .replace('{{time}}', (t.manageInvitations as any).honoreeNotificationTime)}
             </Text>
             <XStack alignItems="center" gap={6} marginTop={12} style={styles.infoPrivacyRow}>
-              <Ionicons name="eye-off-outline" size={14} color="#10B981" />
+              <Ionicons name="eye-off-outline" size={14} color="#C6A75E" />
               <Text style={styles.infoPrivacyText}>
                 {(t.manageInvitations as any).honoreePrivacyNote}
               </Text>
@@ -794,53 +863,54 @@ export default function ManageInvitationsScreen() {
         <View style={styles.inviteOverlay}>
           <Pressable style={{ flex: 1 }} onPress={() => setInviteModalVisible(false)} />
           <View style={styles.inviteSheet} accessibilityViewIsModal={true}>
-            {/* Header */}
+            {/* Handle + centered header */}
             <View style={styles.inviteHandle} />
-            <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
-              <Text style={styles.inviteTitle}>
+            <View style={{ alignItems: 'center', marginBottom: 4 }}>
+              <Text style={[
+                styles.inviteTitle,
+                inviteSendStatus === 'done' && { color: theme.accentGold },
+              ]}>
                 {inviteSendStatus === 'done'
-                  ? `${activeChannel === 'email' ? 'Email' : activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} sent`
+                  ? `${activeChannel === 'email' ? 'Email' : 'WhatsApp'} Sent`
                   : 'Invite All Guests'}
               </Text>
-              {inviteSendStatus !== 'sending' && (
-                <Pressable onPress={() => setInviteModalVisible(false)} hitSlop={10}>
-                  <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
-                </Pressable>
-              )}
-            </XStack>
+            </View>
+            {inviteSendStatus !== 'sending' && (
+              <Pressable
+                style={{ position: 'absolute', top: 20, right: 16 }}
+                onPress={() => setInviteModalVisible(false)}
+                hitSlop={10}
+              >
+                <Ionicons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            )}
 
-            {/* ── idle: channel picker ── */}
+            {/* ── idle: channel picker (Email + WhatsApp only) ── */}
             {inviteSendStatus === 'idle' && (
               <>
-                <Text style={styles.inviteSectionLabel}>SEND FROM GAME OVER</Text>
-                <XStack gap={10} marginBottom={20}>
+                <Text style={[styles.inviteSectionLabel, { textAlign: 'center', marginBottom: 16 }]}>
+                  SEND FROM GAME OVER
+                </Text>
+                <XStack gap={12} marginBottom={20}>
                   <Pressable
                     style={[styles.inviteChannelBtn, !hasEmails && styles.inviteChannelBtnDisabled]}
                     onPress={() => hasEmails && handleSendViaChannel('email')}
                   >
-                    <Ionicons name="mail-outline" size={22} color={hasEmails ? '#3B82F6' : DARK_THEME.textTertiary} />
-                    <Text style={[styles.inviteChannelLabel, { color: hasEmails ? '#3B82F6' : DARK_THEME.textTertiary }]}>Email</Text>
+                    <Ionicons name="mail-outline" size={24} color={hasEmails ? '#C6A75E' : theme.textTertiary} />
+                    <Text style={[styles.inviteChannelLabel, { color: hasEmails ? '#C6A75E' : theme.textTertiary }]}>Email</Text>
                     <Text style={styles.inviteChannelCount}>{emailCount} guest{emailCount !== 1 ? 's' : ''}</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.inviteChannelBtn, !hasPhones && styles.inviteChannelBtnDisabled]}
-                    onPress={() => hasPhones && handleSendViaChannel('sms')}
-                  >
-                    <Ionicons name="chatbubble-outline" size={22} color={hasPhones ? '#10B981' : DARK_THEME.textTertiary} />
-                    <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#10B981' : DARK_THEME.textTertiary }]}>SMS</Text>
-                    <Text style={styles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
                   </Pressable>
                   <Pressable
                     style={[styles.inviteChannelBtn, !hasPhones && styles.inviteChannelBtnDisabled]}
                     onPress={() => hasPhones && handleSendViaChannel('whatsapp')}
                   >
-                    <Ionicons name="logo-whatsapp" size={22} color={hasPhones ? '#25D366' : DARK_THEME.textTertiary} />
-                    <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#25D366' : DARK_THEME.textTertiary }]}>WhatsApp</Text>
+                    <Ionicons name="logo-whatsapp" size={24} color={hasPhones ? '#C6A75E' : theme.textTertiary} />
+                    <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#C6A75E' : theme.textTertiary }]}>WhatsApp</Text>
                     <Text style={styles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
                   </Pressable>
                 </XStack>
                 <Pressable style={{ alignItems: 'center', paddingVertical: 8 }} onPress={handleShareFallback}>
-                  <Text style={{ fontSize: 13, color: DARK_THEME.textTertiary }}>Or share invite link via other apps →</Text>
+                  <Text style={{ fontSize: 13, color: theme.textTertiary }}>Or share invite link via other apps →</Text>
                 </Pressable>
               </>
             )}
@@ -848,11 +918,11 @@ export default function ManageInvitationsScreen() {
             {/* ── sending: spinner ── */}
             {inviteSendStatus === 'sending' && (
               <View style={{ alignItems: 'center', paddingVertical: 32, gap: 16 }}>
-                <ActivityIndicator size="large" color="#5A7EB0" />
-                <Text style={{ fontSize: 15, fontWeight: '600', color: DARK_THEME.textPrimary }}>
-                  Sending {activeChannel === 'email' ? 'email' : activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} invitations…
+                <ActivityIndicator size="large" color={theme.accentGold} />
+                <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textPrimary }}>
+                  Sending {activeChannel === 'email' ? 'email' : 'WhatsApp'} invitations…
                 </Text>
-                <Text style={{ fontSize: 13, color: DARK_THEME.textTertiary }}>
+                <Text style={{ fontSize: 13, color: theme.textTertiary }}>
                   Validating and sending to {activeChannel === 'email' ? emailCount : phoneCount} guest{(activeChannel === 'email' ? emailCount : phoneCount) !== 1 ? 's' : ''}
                 </Text>
               </View>
@@ -861,31 +931,46 @@ export default function ManageInvitationsScreen() {
             {/* ── done: results list ── */}
             {inviteSendStatus === 'done' && (
               <>
-                <View style={{ backgroundColor: DARK_THEME.deepNavy, borderRadius: 12, padding: 12, marginBottom: 16 }}>
-                  <Text style={{ fontSize: 13, color: DARK_THEME.textSecondary, marginBottom: 8 }}>
-                    {inviteResults.filter(r => r.status === 'sent').length} sent ·{' '}
-                    {inviteResults.filter(r => r.status === 'failed').length} failed ·{' '}
-                    {inviteResults.filter(r => r.status === 'invalid').length} invalid
-                  </Text>
-                  {inviteResults.map((r, i) => (
-                    <View key={i} style={[styles.inviteGuestRow, { paddingVertical: 8 }]}>
-                      <Ionicons
-                        name={r.status === 'sent' ? 'checkmark-circle' : r.status === 'invalid' ? 'warning-outline' : 'close-circle'}
-                        size={18}
-                        color={r.status === 'sent' ? '#10B981' : r.status === 'invalid' ? '#F59E0B' : '#EF4444'}
-                      />
-                      <YStack flex={1} marginLeft={10}>
-                        <Text style={styles.inviteGuestName}>Guest {r.slotIndex}</Text>
-                        <Text style={styles.inviteGuestPhone}>{r.recipient}{r.error ? ` — ${r.error}` : ''}</Text>
-                      </YStack>
-                    </View>
-                  ))}
+                <Text style={{ fontSize: 13, color: theme.textTertiary, textAlign: 'center', marginBottom: 12 }}>
+                  {inviteResults.filter(r => r.status === 'sent').length} sent
+                  {inviteResults.filter(r => r.status === 'failed').length > 0
+                    ? ` · ${inviteResults.filter(r => r.status === 'failed').length} failed` : ''}
+                  {inviteResults.filter(r => r.status === 'invalid').length > 0
+                    ? ` · ${inviteResults.filter(r => r.status === 'invalid').length} invalid` : ''}
+                </Text>
+                <View style={{ backgroundColor: theme.surfaceHigh, borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+                  {inviteResults.map((r, i) => {
+                    // Resolve actual guest name + full contact from slots (not the potentially-masked server value)
+                    const matchedSlot = slots.find(s => s.index === r.slotIndex);
+                    const guestName = matchedSlot?.name || `Guest ${r.slotIndex}`;
+                    const contactInfo = activeChannel === 'email'
+                      ? (matchedSlot?.email || r.recipient)
+                      : (matchedSlot?.phone || r.recipient);
+                    const isLast = i === inviteResults.length - 1;
+                    return (
+                      <View key={i} style={[
+                        styles.inviteGuestRow,
+                        { paddingVertical: 12, paddingHorizontal: 14 },
+                        !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.ghostBorder },
+                      ]}>
+                        <Ionicons
+                          name={r.status === 'sent' ? 'checkmark-circle' : r.status === 'invalid' ? 'warning-outline' : 'close-circle'}
+                          size={20}
+                          color={r.status === 'sent' ? theme.accentGold : r.status === 'invalid' ? '#F59E0B' : '#EF4444'}
+                        />
+                        <YStack flex={1} marginLeft={12}>
+                          <Text style={[styles.inviteGuestName, { color: theme.accentGold }]}>{guestName}</Text>
+                          <Text style={styles.inviteGuestPhone}>{contactInfo}{r.error ? ` — ${r.error}` : ''}</Text>
+                        </YStack>
+                      </View>
+                    );
+                  })}
                 </View>
                 <Pressable
                   style={[styles.inviteChannelBtn, { flex: 0, paddingHorizontal: 20, marginBottom: 10 }]}
                   onPress={() => { setInviteSendStatus('idle'); setInviteResults([]); setActiveChannel(null); }}
                 >
-                  <Text style={[styles.inviteChannelLabel, { color: '#5A7EB0' }]}>Send another channel</Text>
+                  <Text style={[styles.inviteChannelLabel, { color: theme.accentGold }]}>Send another channel</Text>
                 </Pressable>
               </>
             )}
@@ -896,29 +981,31 @@ export default function ManageInvitationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+/** Style factory — consumes theme tokens, memoized per render in component. */
+const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: theme.background,
   },
   header: {
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
+    borderBottomColor: theme.ghostBorder,
   },
   headerTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   statCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: theme.ghostBorder,
     padding: 14,
     alignItems: 'center',
     gap: 4,
+    ...ambientShadow(theme),
   },
   statNumber: {
     fontSize: 24,
@@ -927,31 +1014,31 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   slotCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: theme.ghostBorder,
     padding: 14,
     marginBottom: 10,
   },
   slotCardEmpty: {
     borderStyle: 'dashed',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(35, 39, 47, 0.5)',
+    borderColor: theme.ghostBorder,
+    backgroundColor: theme.surfaceLow,
   },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: theme.surfaceHigh,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -959,27 +1046,27 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(59, 130, 246, 0.2)',
   },
   avatarHonoree: {
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    backgroundColor: 'rgba(198, 167, 94, 0.18)',
   },
   avatarEmpty: {
-    backgroundColor: 'rgba(45, 55, 72, 0.4)',
+    backgroundColor: theme.surfaceLow,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: theme.ghostBorder,
   },
   avatarText: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   slotName: {
     fontSize: 15,
     fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
     flex: 1,
   },
   slotNameEmpty: {
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     fontStyle: 'italic',
   },
   roleBadge: {
@@ -994,23 +1081,23 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 12,
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
     flex: 1,
   },
   fillHint: {
     fontSize: 12,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     fontStyle: 'italic',
     marginTop: 2,
   },
   inputContainer: {
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: theme.surfaceHigh,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: theme.ghostBorder,
   },
   input: {
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
     fontSize: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -1019,7 +1106,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#5A7EB0',
+    backgroundColor: theme.accentGold,
     borderRadius: 10,
     paddingVertical: 10,
     gap: 6,
@@ -1028,7 +1115,7 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: theme.textOnPrimary,
   },
   infoOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1037,19 +1124,19 @@ const styles = StyleSheet.create({
     zIndex: 200,
   },
   infoSheet: {
-    backgroundColor: '#1E2329',
+    backgroundColor: theme.surfaceBright,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     paddingHorizontal: 18,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: theme.ghostBorder,
   },
   infoHandle: {
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: theme.ghostBorder,
     alignSelf: 'center',
     marginBottom: 18,
   },
@@ -1064,11 +1151,11 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#F59E0B',
+    color: '#C6A75E',
   },
   infoBody: {
     fontSize: 14,
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 20,
   },
   infoPrivacyRow: {
@@ -1079,15 +1166,15 @@ const styles = StyleSheet.create({
   },
   infoPrivacyText: {
     fontSize: 13,
-    color: '#10B981',
+    color: '#C6A75E',
     fontWeight: '500',
     flex: 1,
   },
   suggestionBox: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: theme.surfaceLow,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: theme.ghostBorder,
     marginTop: 4,
     overflow: 'hidden',
   },
@@ -1098,22 +1185,82 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: theme.ghostBorder,
   },
   suggestionText: {
     fontSize: 13,
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 16,
-    backgroundColor: DARK_THEME.surface,
-    borderTopWidth: 1,
-    borderTopColor: DARK_THEME.glassBorder,
-    flexDirection: 'row',
+    // No background/border — GoldButton is the visual element
+  },
+  // ─── Status chip (above participant list) ───
+  statusChipRow: {
+    marginBottom: 14,
+    gap: 6,
+  },
+  statusChipLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+    color: theme.textTertiary,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  statusChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: theme.surfaceCard,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.accentGold,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  statusChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.accentGold,
+  },
+  // ─── Avatar ring ───────────────────────────
+  avatarRing: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: theme.ghostBorder,
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarRingHonoree: {
+    borderColor: theme.accentGold,
+    borderWidth: 2,
+  },
+  // ─── Bottom action strip ───────────────────
+  actionChip: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.ghostBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.surfaceLow,
+  },
+  actionChipActive: {
+    borderColor: theme.textSecondary,
+    backgroundColor: 'rgba(107,114,128,0.12)',
+  },
+  statusLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   // ─── Invite Modal ───
   inviteOverlay: {
@@ -1122,55 +1269,55 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   inviteSheet: {
-    backgroundColor: '#1E2329',
+    backgroundColor: theme.surfaceCard,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 18,
     paddingTop: 12,
     paddingBottom: 32,
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: theme.ghostBorder,
   },
   inviteHandle: {
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: theme.ghostBorder,
     alignSelf: 'center',
     marginBottom: 16,
   },
   inviteTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   invitePreview: {
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: theme.surfaceHigh,
     borderRadius: 12,
     padding: 12,
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: theme.ghostBorder,
   },
   invitePreviewText: {
     fontSize: 13,
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 20,
   },
   inviteSectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     letterSpacing: 0.8,
     marginBottom: 10,
   },
   inviteChannelBtn: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: theme.ghostBorder,
     paddingVertical: 14,
     gap: 4,
   },
@@ -1183,37 +1330,37 @@ const styles = StyleSheet.create({
   },
   inviteChannelCount: {
     fontSize: 11,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
   },
   inviteGuestRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: theme.ghostBorder,
     gap: 10,
   },
   inviteGuestAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: theme.surfaceHigh,
     alignItems: 'center',
     justifyContent: 'center',
   },
   inviteGuestInitial: {
     fontSize: 14,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   inviteGuestName: {
     fontSize: 14,
     fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   inviteGuestPhone: {
     fontSize: 12,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     marginTop: 1,
   },
   inviteWABtn: {

@@ -22,7 +22,8 @@ import {
 import { NotificationItem } from '@/components/notifications';
 import { useTranslation } from '@/i18n';
 import { useUrgentPayment } from '@/hooks/useUrgentPayment';
-import { DARK_THEME } from '@/constants/theme';
+import { useTheme } from '@/hooks/useTheme';
+import { type EditorialTheme } from '@/constants/designSystem';
 import { useParticipants, participantKeys } from '@/hooks/queries/useParticipants';
 import { useUser } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
@@ -32,6 +33,8 @@ type Notification = Database['public']['Tables']['notifications']['Row'];
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const user = useUser();
@@ -169,7 +172,7 @@ export default function NotificationsScreen() {
       <Text
         fontSize={12}
         fontWeight="700"
-        color={DARK_THEME.textTertiary}
+        color={theme.textTertiary}
         textTransform="uppercase"
         letterSpacing={1}
       >
@@ -188,8 +191,8 @@ export default function NotificationsScreen() {
 
   if (isLoading) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={DARK_THEME.background}>
-        <Spinner size="large" color={DARK_THEME.primary} />
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={theme.background}>
+        <Spinner size="large" color={theme.accentGold} />
       </YStack>
     );
   }
@@ -199,28 +202,28 @@ export default function NotificationsScreen() {
   const hasAnyContent = hasNotifications || organizerUrgentEvents.length > 0 || isGuestContribution || !!guestPaidRecentEvent || guestPayConfirmed;
 
   return (
-    <YStack flex={1} backgroundColor={DARK_THEME.background} testID="notifications-screen">
+    <YStack flex={1} backgroundColor={theme.background} testID="notifications-screen">
       {/* Header */}
       <XStack
         paddingTop={insets.top + 16}
         paddingHorizontal="$4"
         paddingBottom="$2"
         alignItems="center"
-        backgroundColor={DARK_THEME.glass}
+        backgroundColor={theme.surfaceLow}
       >
         <Pressable
           style={styles.backButton}
           onPress={() => router.back()}
           testID="back-button"
         >
-          <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text
           flex={1}
           textAlign="center"
           fontSize={18}
           fontWeight="700"
-          color={DARK_THEME.textPrimary}
+          color={theme.textPrimary}
           letterSpacing={-0.3}
         >
           {t.notifications.title}
@@ -233,7 +236,7 @@ export default function NotificationsScreen() {
           <Ionicons
             name="checkmark-done"
             size={24}
-            color={unreadCount && unreadCount > 0 ? DARK_THEME.textPrimary : DARK_THEME.textTertiary}
+            color={unreadCount && unreadCount > 0 ? theme.textPrimary : theme.textTertiary}
           />
         </Pressable>
       </XStack>
@@ -254,7 +257,7 @@ export default function NotificationsScreen() {
                   <Text
                     fontSize={12}
                     fontWeight="700"
-                    color={DARK_THEME.textTertiary}
+                    color={theme.textTertiary}
                     style={{ textTransform: 'uppercase', letterSpacing: 1 }}
                   >
                     {t.notifications.today}
@@ -272,13 +275,13 @@ export default function NotificationsScreen() {
                         <Text style={{ fontSize: 14, fontWeight: '700', color: '#34D399' }}>
                           Contribution Confirmed
                         </Text>
-                        <Text style={{ fontSize: 12, color: DARK_THEME.textSecondary }} numberOfLines={1}>
+                        <Text style={{ fontSize: 12, color: theme.textSecondary }} numberOfLines={1}>
                           {guestPaidRecentEvent?.title || (guestPaidRecentEvent?.honoree_name ? `${guestPaidRecentEvent.honoree_name}'s Event` : 'Your Event')}
                         </Text>
                       </YStack>
                       <Ionicons name="checkmark-circle" size={20} color="#34D399" />
                     </XStack>
-                    <Text style={{ fontSize: 13, color: DARK_THEME.textSecondary, lineHeight: 20, marginTop: 10 }}>
+                    <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 20, marginTop: 10 }}>
                       Your payment has been confirmed. The organizer has been notified.
                     </Text>
                   </View>
@@ -295,7 +298,7 @@ export default function NotificationsScreen() {
                         <Text style={{ fontSize: 14, fontWeight: '700', color: '#F97316' }}>
                           Contribution Due
                         </Text>
-                        <Text style={{ fontSize: 12, color: DARK_THEME.textSecondary }} numberOfLines={1}>
+                        <Text style={{ fontSize: 12, color: theme.textSecondary }} numberOfLines={1}>
                           {guestUrgentEvent.title || `${guestUrgentEvent.honoree_name}'s Event`}
                         </Text>
                       </YStack>
@@ -303,9 +306,9 @@ export default function NotificationsScreen() {
                         <Text style={styles.urgencyBadgeText}>URGENT</Text>
                       </View>
                     </XStack>
-                    <Text style={{ fontSize: 13, color: DARK_THEME.textSecondary, lineHeight: 20, marginBottom: 12 }}>
+                    <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 20, marginBottom: 12 }}>
                       Please transfer your share to{' '}
-                      <Text style={{ color: DARK_THEME.textPrimary, fontWeight: '600' }}>{organizerName}</Text>.
+                      <Text style={{ color: theme.textPrimary, fontWeight: '600' }}>{organizerName}</Text>.
                       {' '}Payment is due 14 days before the event.
                     </Text>
                     {guestPayConfirmed ? (
@@ -351,7 +354,7 @@ export default function NotificationsScreen() {
                         {info.isPaid ? (
                           // Paid: event name prominent on top, status label below
                           <>
-                            <Text fontSize={14} fontWeight="700" color={DARK_THEME.textPrimary} numberOfLines={1}>
+                            <Text fontSize={14} fontWeight="700" color={theme.textPrimary} numberOfLines={1}>
                               {info.event.title || `${info.event.honoree_name}'s Party`}
                               {` · ${
                                 info.daysLeft === 0
@@ -361,7 +364,7 @@ export default function NotificationsScreen() {
                                   : `${info.daysLeft} days left`
                               }`}
                             </Text>
-                            <Text fontSize={12} color={DARK_THEME.textSecondary}>
+                            <Text fontSize={12} color={theme.textSecondary}>
                               Payment Complete
                             </Text>
                           </>
@@ -371,7 +374,7 @@ export default function NotificationsScreen() {
                             <Text fontSize={14} fontWeight="700" color="#F97316">
                               Payment Outstanding
                             </Text>
-                            <Text fontSize={12} color={DARK_THEME.textSecondary} numberOfLines={1}>
+                            <Text fontSize={12} color={theme.textSecondary} numberOfLines={1}>
                               {info.event.title || `${info.event.honoree_name}'s Party`}
                               {` · ${
                                 info.daysLeft === 0
@@ -402,7 +405,7 @@ export default function NotificationsScreen() {
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={refetch}
-              tintColor={DARK_THEME.primary}
+              tintColor={theme.accentGold}
             />
           }
           onEndReached={handleLoadMore}
@@ -410,7 +413,7 @@ export default function NotificationsScreen() {
           ListFooterComponent={
             isFetchingNextPage ? (
               <YStack padding="$4" alignItems="center">
-                <Spinner size="small" color={DARK_THEME.primary} />
+                <Spinner size="small" color={theme.accentGold} />
               </YStack>
             ) : (
               <YStack height={100} />
@@ -432,10 +435,10 @@ export default function NotificationsScreen() {
           >
             <Ionicons name="checkmark-done" size={40} color="#34D399" />
           </YStack>
-          <Text fontSize={16} fontWeight="600" color={DARK_THEME.textPrimary} marginBottom="$2">
+          <Text fontSize={16} fontWeight="600" color={theme.textPrimary} marginBottom="$2">
             {t.notifications.allCaughtUp}
           </Text>
-          <Text fontSize={13} color={DARK_THEME.textTertiary} textAlign="center">
+          <Text fontSize={13} color={theme.textTertiary} textAlign="center">
             {t.notifications.noNewNotifications}
           </Text>
         </YStack>
@@ -444,7 +447,7 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
   backButton: {
     width: 48,
     height: 48,
@@ -512,7 +515,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: DARK_THEME.primary,
+    backgroundColor: theme.accentGold,
     borderRadius: 12,
     paddingVertical: 12,
   },

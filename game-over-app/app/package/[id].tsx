@@ -18,7 +18,6 @@ import { useWizardStore } from '@/stores/wizardStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useFavoritesStore } from '@/stores/favoritesStore';
 import { Button } from '@/components/ui/Button';
-import { DARK_THEME } from '@/constants/theme';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { useTranslation } from '@/i18n';
 import { assemblePackages } from '@/utils/packageAssembly';
@@ -158,11 +157,11 @@ function HighlightCard({ icon, label, sub }: { icon: string; label: string; sub:
         width={40}
         height={40}
         borderRadius="$full"
-        backgroundColor="rgba(90, 126, 176, 0.15)"
+        backgroundColor="rgba(198, 167, 94, 0.15)"
         alignItems="center"
         justifyContent="center"
       >
-        <Ionicons name={icon as any} size={20} color={DARK_THEME.primary} />
+        <Ionicons name={icon as any} size={20} color={'#C6A75E'} />
       </YStack>
       <Text fontSize={13} fontWeight="600" color="$textPrimary" textAlign="center">
         {label}
@@ -181,26 +180,26 @@ function IncludeItem({ icon, title, sub, time, location }: { icon: string; title
         width={36}
         height={36}
         borderRadius="$full"
-        backgroundColor="rgba(90, 126, 176, 0.15)"
+        backgroundColor="rgba(198, 167, 94, 0.15)"
         alignItems="center"
         justifyContent="center"
         marginTop={2}
       >
-        <Ionicons name={icon as any} size={18} color={DARK_THEME.primary} />
+        <Ionicons name={icon as any} size={18} color={'#C6A75E'} />
       </YStack>
       <YStack flex={1}>
         <Text fontSize={15} fontWeight="600" color="$textPrimary">{title}</Text>
         <Text fontSize={13} color="$textTertiary">{sub}</Text>
         {location ? (
           <XStack alignItems="center" gap={4} marginTop={2}>
-            <Ionicons name="location-outline" size={11} color={DARK_THEME.textTertiary} />
+            <Ionicons name="location-outline" size={11} color="rgba(255,255,255,0.48)" />
             <Text fontSize={11} color="$textTertiary">{location}</Text>
           </XStack>
         ) : null}
       </YStack>
       {time ? (
         <YStack
-          backgroundColor="rgba(90, 126, 176, 0.18)"
+          backgroundColor="rgba(198, 167, 94, 0.18)"
           paddingHorizontal={10}
           paddingVertical={6}
           borderRadius={8}
@@ -209,7 +208,7 @@ function IncludeItem({ icon, title, sub, time, location }: { icon: string; title
           marginTop={2}
           minWidth={56}
         >
-          <Text fontSize={13} fontWeight="700" color={DARK_THEME.primary} fontVariant={['tabular-nums']}>
+          <Text fontSize={13} fontWeight="700" color="#C6A75E" fontVariant={['tabular-nums']}>
             {time}
           </Text>
         </YStack>
@@ -218,8 +217,8 @@ function IncludeItem({ icon, title, sub, time, location }: { icon: string; title
   );
 }
 
-function ReviewCard({ initials, color, name, rating, text }: {
-  initials: string; color: string; name: string; rating: number; text: string;
+function ReviewCard({ initials, name, rating, text }: {
+  initials: string; color?: string; name: string; rating: number; text: string;
 }) {
   return (
     <YStack marginBottom="$5">
@@ -228,11 +227,13 @@ function ReviewCard({ initials, color, name, rating, text }: {
           width={40}
           height={40}
           borderRadius="$full"
-          backgroundColor={color}
+          backgroundColor="rgba(198,167,94,0.18)"
+          borderWidth={1}
+          borderColor="#C6A75E"
           alignItems="center"
           justifyContent="center"
         >
-          <Text fontSize={14} fontWeight="700" color="white">{initials}</Text>
+          <Text fontSize={14} fontWeight="700" color="#C6A75E">{initials}</Text>
         </YStack>
         <YStack flex={1}>
           <Text fontSize={14} fontWeight="600" color="$textPrimary">{name}</Text>
@@ -380,7 +381,7 @@ export default function PackageDetailsScreen() {
   if (!pkg) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background" padding="$6">
-        <Ionicons name="alert-circle-outline" size={48} color={DARK_THEME.primary} />
+        <Ionicons name="alert-circle-outline" size={48} color={'#C6A75E'} />
         <Text fontSize="$4" fontWeight="600" color="$textPrimary" marginTop="$3">
           {t.packageDetail.packageNotFound}
         </Text>
@@ -428,7 +429,7 @@ export default function PackageDetailsScreen() {
           style={{ height: 350 }}
         >
           <LinearGradient
-            colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(21,24,29,0.9)', DARK_THEME.background]}
+            colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(21,24,29,0.9)', '#0D1B2A']}
             locations={[0, 0.3, 0.7, 1]}
             style={{ flex: 1 }}
           >
@@ -452,7 +453,7 @@ export default function PackageDetailsScreen() {
               >
                 <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
               </XStack>
-              <Text fontSize="$4" fontWeight="600" color="white">{t.packageDetail.title}</Text>
+              <Text fontSize="$4" fontWeight="700" color="#FFFFFF">{t.packageDetail.title}</Text>
               <XStack
                 width={40}
                 height={40}
@@ -493,15 +494,15 @@ export default function PackageDetailsScreen() {
                 position="absolute"
                 bottom={100}
                 left={20}
-                backgroundColor="rgba(34, 197, 94, 0.9)"
+                backgroundColor="rgba(232,220,200,0.90)"
                 paddingHorizontal={14}
                 paddingVertical={6}
                 borderRadius={20}
                 gap="$1.5"
                 alignItems="center"
               >
-                <Ionicons name="sparkles" size={14} color="white" />
-                <Text color="white" fontSize={12} fontWeight="600">{t.packageDetail.recommendationBadge}</Text>
+                <Ionicons name="sparkles" size={14} color="#0D1B2A" />
+                <Text color="#0D1B2A" fontSize={12} fontWeight="700">{t.packageDetail.recommendationBadge}</Text>
               </XStack>
             )}
           </LinearGradient>
@@ -535,7 +536,7 @@ export default function PackageDetailsScreen() {
               </XStack>
             </YStack>
             <YStack alignItems="flex-end">
-              <Text fontSize={22} fontWeight="800" color={DARK_THEME.primary}>
+              <Text fontSize={22} fontWeight="800" color={'#C6A75E'}>
                 {formatPrice(totalGroupCents)}
               </Text>
               <Text fontSize={12} color="$textTertiary">{t.packageDetail.totalPeople.replace('{{count}}', String(participantCount))}</Text>
@@ -553,7 +554,7 @@ export default function PackageDetailsScreen() {
           {highlights.length > 0 && (
             <YStack marginBottom="$4">
               <XStack alignItems="center" gap="$2" marginBottom="$3">
-                <Ionicons name="diamond" size={16} color={DARK_THEME.primary} />
+                <Ionicons name="diamond" size={16} color={'#C6A75E'} />
                 <Text fontSize={13} fontWeight="700" color="$textPrimary" textTransform="uppercase" letterSpacing={1}>
                   {t.packageDetail.premiumHighlights}
                 </Text>
@@ -594,7 +595,7 @@ export default function PackageDetailsScreen() {
                 }}
                 testID="book-now-button"
               >
-                {t.packageDetail.selectThisPackage}
+                <Text color="#0D1B2A" fontWeight="700" fontSize="$4">{t.packageDetail.selectThisPackage}</Text>
               </Button>
             </YStack>
           )}

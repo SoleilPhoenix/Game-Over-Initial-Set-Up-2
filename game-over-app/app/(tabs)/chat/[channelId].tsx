@@ -21,7 +21,6 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { MessageBubble, MessageInput } from '@/components/chat';
 import { colors } from '@/constants/colors';
-import { DARK_THEME } from '@/constants/theme';
 import { useTranslation, getTranslation } from '@/i18n';
 import type { MessageWithAuthor } from '@/repositories/messages';
 
@@ -291,10 +290,10 @@ export default function ChatChannelScreen() {
   );
 
   const CATEGORY_COLORS: Record<string, string> = {
-    general: '#8B5CF6',
-    accommodation: '#3B82F6',
-    activities: '#F97316',
-    budget: '#10B981',
+    general: '#C6A75E',
+    accommodation: '#C6A75E',
+    activities: '#C6A75E',
+    budget: '#C6A75E',
   };
 
   const getCategoryIcon = (category: string | undefined): keyof typeof Ionicons.glyphMap => {
@@ -309,27 +308,27 @@ export default function ChatChannelScreen() {
 
   // Use the icon passed from the Topics list, fall back to category default
   const headerIcon = (channelIconParam ?? getCategoryIcon(channelDisplayCategory)) as keyof typeof Ionicons.glyphMap;
-  const headerColor = CATEGORY_COLORS[channelDisplayCategory ?? 'general'] ?? '#5A7EB0';
+  const headerColor = CATEGORY_COLORS[channelDisplayCategory ?? 'general'] ?? '#C6A75E';
   const headerBg = `${headerColor}26`; // 15% opacity
 
   // Remove full-screen loading - show UI immediately with loading states
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: DARK_THEME.background }}
+      style={{ flex: 1, backgroundColor: '#0D1B2A' }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
       testID="chat-screen"
     >
-      <YStack flex={1} backgroundColor="$background">
+      <YStack flex={1} backgroundColor="#0D1B2A">
         {/* Header */}
         <XStack
           paddingTop={insets.top + 8}
           paddingHorizontal="$3"
           paddingBottom="$3"
           alignItems="center"
-          backgroundColor="$surface"
+          backgroundColor="#1A2F47"
           borderBottomWidth={1}
-          borderBottomColor="$borderColor"
+          borderBottomColor="rgba(230,220,200,0.15)"
           gap="$2"
         >
           <XStack
@@ -342,7 +341,7 @@ export default function ChatChannelScreen() {
             onPress={() => router.back()}
             testID="back-button"
           >
-            <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
           </XStack>
 
           <YStack
@@ -376,7 +375,7 @@ export default function ChatChannelScreen() {
             testID="info-button"
             onPress={() => setInfoModalVisible(true)}
           >
-            <Ionicons name="information-circle-outline" size={24} color={DARK_THEME.textSecondary} />
+            <Ionicons name="information-circle-outline" size={24} color={'rgba(255,255,255,0.72)'} />
           </XStack>
         </XStack>
 
@@ -408,12 +407,12 @@ export default function ChatChannelScreen() {
                 width={60}
                 height={60}
                 borderRadius="$full"
-                backgroundColor="rgba(90, 126, 176, 0.15)"
+                backgroundColor="rgba(198,167,94,0.15)"
                 alignItems="center"
                 justifyContent="center"
                 marginBottom="$3"
               >
-                <Ionicons name="chatbubble-outline" size={28} color="#5A7EB0" />
+                <Ionicons name="chatbubble-outline" size={28} color="#C6A75E" />
               </YStack>
               <Text fontSize="$3" fontWeight="600" color="$textPrimary" marginBottom="$1">
                 {t.chat.noMessages}
@@ -457,13 +456,13 @@ export default function ChatChannelScreen() {
           <Animated.View
             accessibilityViewIsModal={true}
             style={{
-              backgroundColor: '#1E2329',
+              backgroundColor: '#1A2F47',
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               padding: 24,
               paddingBottom: 32,
               borderTopWidth: 1,
-              borderColor: 'rgba(255,255,255,0.08)',
+              borderColor: 'rgba(230,220,200,0.15)',
               transform: [{ translateY: infoSheetY }],
             }}
           >
@@ -475,7 +474,7 @@ export default function ChatChannelScreen() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '700' }}>Channel Info</Text>
               <Pressable onPress={() => setInfoModalVisible(false)} hitSlop={8}>
-                <Ionicons name="close" size={22} color="#9CA3AF" />
+                <Ionicons name="close" size={22} color="rgba(255,255,255,0.48)" />
               </Pressable>
             </View>
 

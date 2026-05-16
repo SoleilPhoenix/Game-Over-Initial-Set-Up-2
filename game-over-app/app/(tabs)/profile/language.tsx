@@ -11,7 +11,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLanguageStore, type Language } from '@/stores/languageStore';
 import { useTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
 
 const LANGUAGES: { code: Language; label: string; nativeLabel: string; flag: string }[] = [
   { code: 'en', label: 'English', nativeLabel: 'English', flag: '🇬🇧' },
@@ -29,7 +28,7 @@ export default function LanguageScreen() {
   };
 
   return (
-    <View flex={1} backgroundColor={DARK_THEME.background}>
+    <View flex={1} backgroundColor={'#0D1B2A'}>
       {/* Header */}
       <XStack
         paddingTop={insets.top}
@@ -37,18 +36,18 @@ export default function LanguageScreen() {
         paddingBottom="$3"
         alignItems="center"
         justifyContent="space-between"
-        backgroundColor={DARK_THEME.surface}
+        backgroundColor={'#12253A'}
         borderBottomWidth={1}
-        borderBottomColor={DARK_THEME.border}
+        borderBottomColor={'rgba(230,220,200,0.15)'}
       >
         <Pressable
           onPress={() => router.back()}
           style={styles.headerButton}
           testID="language-back"
         >
-          <Ionicons name="chevron-back" size={24} color={DARK_THEME.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={'#FFFFFF'} />
         </Pressable>
-        <Text fontSize={17} fontWeight="600" color={DARK_THEME.textPrimary}>
+        <Text fontSize={17} fontWeight="600" color={'#FFFFFF'}>
           {t.profile.languageTitle}
         </Text>
         <View width={40} />
@@ -66,7 +65,7 @@ export default function LanguageScreen() {
           {/* Subtitle */}
           <Text
             fontSize={14}
-            color={DARK_THEME.textSecondary}
+            color={'rgba(255,255,255,0.72)'}
             marginLeft="$1"
           >
             {t.profile.languageSubtitle}
@@ -90,17 +89,17 @@ export default function LanguageScreen() {
                         <Text
                           fontSize={15}
                           fontWeight={isSelected ? '700' : '500'}
-                          color={isSelected ? DARK_THEME.primary : DARK_THEME.textPrimary}
+                          color={isSelected ? '#C6A75E' : '#FFFFFF'}
                         >
                           {lang.label}
                         </Text>
-                        <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                        <Text fontSize={12} color={'rgba(255,255,255,0.48)'}>
                           {lang.nativeLabel}
                         </Text>
                       </YStack>
                     </XStack>
                     {isSelected && (
-                      <Ionicons name="checkmark-circle" size={24} color={DARK_THEME.primary} />
+                      <Ionicons name="checkmark-circle" size={24} color={'#C6A75E'} />
                     )}
                   </Pressable>
                 </React.Fragment>
@@ -111,16 +110,16 @@ export default function LanguageScreen() {
           {/* More languages coming soon */}
           <XStack
             padding="$3"
-            backgroundColor={DARK_THEME.surface}
+            backgroundColor={'#12253A'}
             borderRadius={12}
             borderWidth={1}
-            borderColor={DARK_THEME.border}
+            borderColor={'rgba(230,220,200,0.15)'}
             gap="$2"
             alignItems="center"
             justifyContent="center"
           >
-            <Ionicons name="globe-outline" size={16} color={DARK_THEME.textTertiary} />
-            <Text fontSize={13} color={DARK_THEME.textTertiary}>
+            <Ionicons name="globe-outline" size={16} color={'rgba(255,255,255,0.48)'} />
+            <Text fontSize={13} color={'rgba(255,255,255,0.48)'}>
               {t.profile.moreLangSoon}
             </Text>
           </XStack>
@@ -138,10 +137,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   card: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: '#12253A',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: 'rgba(230,220,200,0.15)',
     overflow: 'hidden',
   },
   languageItem: {
@@ -152,7 +151,7 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 1,
-    backgroundColor: DARK_THEME.border,
+    backgroundColor: 'rgba(230,220,200,0.15)',
     marginLeft: 60,
   },
 });

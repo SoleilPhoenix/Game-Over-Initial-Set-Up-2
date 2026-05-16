@@ -27,10 +27,10 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
-import { DARK_THEME } from '@/constants/theme';
 import { preloadPackageImages } from '@/constants/packageImages';
 import { preloadSportLogos, preloadShareImages } from '@/constants/sportLogos';
 import { initBudgetCache } from '@/lib/participantCountCache';
+import { useEditorialFonts } from '@/hooks/useEditorialFonts';
 import config from '../tamagui.config';
 
 // Crisp Chat — native module, not available in Expo Go
@@ -67,6 +67,7 @@ const queryClient = new QueryClient({
 
 function RootLayoutNav() {
   const { isInitialized, isLoading, session, initialize } = useAuthStore();
+  const { fontsLoaded } = useEditorialFonts();
   const segments = useSegments();
   const router = useRouter();
 
@@ -123,11 +124,11 @@ function RootLayoutNav() {
     }
   }, [session, isInitialized, segments, router]);
 
-  if (!isInitialized || isLoading) {
+  if (!isInitialized || isLoading || !fontsLoaded) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={DARK_THEME.background}>
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={'#0D1B2A'}>
         <LinearGradient
-          colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
+          colors={['#1A2F47', '#0D1B2A']}
           style={StyleSheet.absoluteFill}
         />
         {/* Game Over Logo */}
@@ -137,7 +138,7 @@ function RootLayoutNav() {
           resizeMode="contain"
         />
         {/* Loading Spinner below logo */}
-        <Spinner size="large" color={DARK_THEME.primary} style={{ marginTop: 24 }} />
+        <Spinner size="large" color={'#C6A75E'} style={{ marginTop: 24 }} />
       </YStack>
     );
   }

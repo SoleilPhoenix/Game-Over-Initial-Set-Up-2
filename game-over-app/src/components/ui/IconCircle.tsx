@@ -13,7 +13,7 @@ interface IconCircleProps {
   iconSize?: number;
   /** Icon color */
   color: string;
-  /** Circle background color (e.g. 'rgba(90,126,176,0.2)') */
+  /** Circle background color (e.g. 'rgba(198,167,94,0.2)') */
   backgroundColor: string;
   /** Circle diameter — defaults to 32 */
   size?: number;

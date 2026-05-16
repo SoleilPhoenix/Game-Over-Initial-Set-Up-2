@@ -12,7 +12,6 @@ import { YStack, XStack, Text, View } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
 
 function InfoRow({ label, value, isLink }: { label: string; value: string; isLink?: boolean }) {
   const handlePress = () => {
@@ -25,17 +24,17 @@ function InfoRow({ label, value, isLink }: { label: string; value: string; isLin
 
   return (
     <YStack gap={4} marginBottom="$3">
-      <Text fontSize={11} fontWeight="600" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.5}>
+      <Text fontSize={11} fontWeight="600" color={'rgba(255,255,255,0.48)'} textTransform="uppercase" letterSpacing={0.5}>
         {label}
       </Text>
       {isLink ? (
         <Pressable onPress={handlePress}>
-          <Text fontSize={14} color={DARK_THEME.primary} fontWeight="500">
+          <Text fontSize={14} color={'#C6A75E'} fontWeight="500">
             {value}
           </Text>
         </Pressable>
       ) : (
-        <Text fontSize={14} color={DARK_THEME.textPrimary} fontWeight="500">
+        <Text fontSize={14} color={'#FFFFFF'} fontWeight="500">
           {value}
         </Text>
       )}
@@ -88,7 +87,7 @@ export default function ImpressumScreen() {
   const c = CONTENT[language] ?? CONTENT.en;
 
   return (
-    <View flex={1} backgroundColor={DARK_THEME.background}>
+    <View flex={1} backgroundColor={'#0D1B2A'}>
       {/* Header */}
       <XStack
         paddingTop={insets.top}
@@ -96,18 +95,18 @@ export default function ImpressumScreen() {
         paddingBottom="$3"
         alignItems="center"
         justifyContent="space-between"
-        backgroundColor={DARK_THEME.surface}
+        backgroundColor={'#12253A'}
         borderBottomWidth={1}
-        borderBottomColor={DARK_THEME.border}
+        borderBottomColor={'rgba(230,220,200,0.15)'}
       >
         <Pressable
           onPress={() => router.back()}
           style={styles.headerButton}
           testID="impressum-back"
         >
-          <Ionicons name="chevron-back" size={24} color={DARK_THEME.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={'#FFFFFF'} />
         </Pressable>
-        <Text fontSize={17} fontWeight="600" color={DARK_THEME.textPrimary}>
+        <Text fontSize={17} fontWeight="600" color={'#FFFFFF'}>
           {t.support.impressum}
         </Text>
         <View width={40} />
@@ -124,14 +123,14 @@ export default function ImpressumScreen() {
       >
         {/* Company Info */}
         <YStack
-          backgroundColor={DARK_THEME.surface}
+          backgroundColor={'#12253A'}
           borderRadius={12}
           borderWidth={1}
-          borderColor={DARK_THEME.border}
+          borderColor={'rgba(230,220,200,0.15)'}
           padding="$4"
           marginBottom="$5"
         >
-          <Text fontSize={11} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={1} marginBottom="$4">
+          <Text fontSize={11} fontWeight="700" color={'rgba(255,255,255,0.48)'} textTransform="uppercase" letterSpacing={1} marginBottom="$4">
             {c.companyHeading}
           </Text>
 
@@ -143,14 +142,14 @@ export default function ImpressumScreen() {
 
         {/* Contact */}
         <YStack
-          backgroundColor={DARK_THEME.surface}
+          backgroundColor={'#12253A'}
           borderRadius={12}
           borderWidth={1}
-          borderColor={DARK_THEME.border}
+          borderColor={'rgba(230,220,200,0.15)'}
           padding="$4"
           marginBottom="$5"
         >
-          <Text fontSize={11} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={1} marginBottom="$4">
+          <Text fontSize={11} fontWeight="700" color={'rgba(255,255,255,0.48)'} textTransform="uppercase" letterSpacing={1} marginBottom="$4">
             {c.contactHeading}
           </Text>
 
@@ -160,34 +159,34 @@ export default function ImpressumScreen() {
 
         {/* Liability Disclaimer */}
         <YStack
-          backgroundColor={DARK_THEME.surface}
+          backgroundColor={'#12253A'}
           borderRadius={12}
           borderWidth={1}
-          borderColor={DARK_THEME.border}
+          borderColor={'rgba(230,220,200,0.15)'}
           padding="$4"
           marginBottom="$5"
         >
-          <Text fontSize={11} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={1} marginBottom="$3">
+          <Text fontSize={11} fontWeight="700" color={'rgba(255,255,255,0.48)'} textTransform="uppercase" letterSpacing={1} marginBottom="$3">
             {c.disclaimerHeading}
           </Text>
-          <Text fontSize={13} color={DARK_THEME.textSecondary} lineHeight={20}>
+          <Text fontSize={13} color={'rgba(255,255,255,0.72)'} lineHeight={20}>
             {c.disclaimerText}
           </Text>
         </YStack>
 
         {/* Data Protection */}
         <YStack
-          backgroundColor={DARK_THEME.surface}
+          backgroundColor={'#12253A'}
           borderRadius={12}
           borderWidth={1}
-          borderColor={DARK_THEME.border}
+          borderColor={'rgba(230,220,200,0.15)'}
           padding="$4"
           marginBottom="$5"
         >
-          <Text fontSize={11} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={1} marginBottom="$3">
+          <Text fontSize={11} fontWeight="700" color={'rgba(255,255,255,0.48)'} textTransform="uppercase" letterSpacing={1} marginBottom="$3">
             {c.dataProtectionHeading}
           </Text>
-          <Text fontSize={13} color={DARK_THEME.textSecondary} lineHeight={20}>
+          <Text fontSize={13} color={'rgba(255,255,255,0.72)'} lineHeight={20}>
             {c.dataProtectionText}
           </Text>
         </YStack>
@@ -201,7 +200,7 @@ export default function ImpressumScreen() {
           alignItems="center"
         >
           <Ionicons name="warning-outline" size={16} color="#FB923C" />
-          <Text fontSize={12} color={DARK_THEME.textTertiary} flex={1}>
+          <Text fontSize={12} color={'rgba(255,255,255,0.48)'} flex={1}>
             {c.placeholderNote}
           </Text>
         </XStack>

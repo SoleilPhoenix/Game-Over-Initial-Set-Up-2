@@ -8,7 +8,6 @@ import { TextInput, StyleSheet, Keyboard, Platform } from 'react-native';
 import { XStack, YStack, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/constants/colors';
-import { DARK_THEME } from '@/constants/theme';
 
 interface MessageInputProps {
   onSend: (message: string) => void;
@@ -63,7 +62,7 @@ export function MessageInput({
           value={message}
           onChangeText={setMessage}
           placeholder={placeholder}
-          placeholderTextColor={DARK_THEME.textTertiary}
+          placeholderTextColor={'rgba(255,255,255,0.48)'}
           multiline
           maxLength={1000}
           editable={!disabled}
@@ -108,7 +107,7 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     maxHeight: 100,
     paddingTop: 0,
     paddingBottom: 0,

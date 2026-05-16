@@ -44,7 +44,7 @@ export function Toggle({ value, onValueChange, disabled = false, testID }: Toggl
 
   const backgroundColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#4B5563', '#5A7EB0'],
+    outputRange: ['#4B5563', '#C6A75E'],
   });
 
   return (

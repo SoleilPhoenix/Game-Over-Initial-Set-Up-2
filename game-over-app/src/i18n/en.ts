@@ -62,6 +62,7 @@ const en = {
     languageTitle: 'Language',
     languageSubtitle: 'Choose your preferred language',
     moreLangSoon: 'More languages coming soon',
+    appearance: 'Appearance',
     wellnessSupport: 'Wellness & Support',
     relationshipHealthCenter: 'Relationship Health Center',
     supportFAQ: 'Support & FAQ',
@@ -179,6 +180,7 @@ const en = {
   wizard: {
     // Layout / header
     stepOf: 'Step {{current}} of {{total}}',
+    draftOptions: 'Draft Options',
     saveDraftTitle: 'Save Draft?',
     saveDraftMessage: 'Do you want to save your progress?',
     discard: 'Discard',
@@ -581,7 +583,7 @@ const en = {
     motto: "Let's make memories, not mistakes.",
     // Info card
     location: 'Location',
-    dates: 'Dates',
+    dates: 'Date',
     vibe: 'Package Highlight',
     // Progress
     stepsComplete: '{{completed}}/8 Steps Complete',
@@ -609,10 +611,10 @@ const en = {
     quizCategories: 'Suggested question types: How did you meet? Favorite memory together, Who said it first?, Embarrassing stories, Fun facts',
     // Planning tools
     planningTools: 'Planning Tools',
-    manageInvitations: 'Manage Invitations',
+    manageInvitations: 'Invitation',
     communication: 'Chat',
     budgetTool: 'Budget',
-    packagesTool: 'Packages',
+    packagesTool: 'Package',
     // Tool subtexts
     confirmed: '{{count}}/{{total}} Confirmed',
     openChat: 'Open Chat',
@@ -654,7 +656,7 @@ const en = {
 
   // ─── Manage Invitations ─────────────────────────
   manageInvitations: {
-    title: 'Manage Invitations',
+    title: 'Invitation',
     guestSlot: 'Guest #{{number}}',
     organizer: 'ORGANIZER',
     honoree: 'HONOREE',

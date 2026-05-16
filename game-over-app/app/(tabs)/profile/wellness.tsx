@@ -10,18 +10,17 @@ import { YStack, XStack, Text, View } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
 
 // ─── Section header ────────────────────────────────────────────
 
 function SectionLabel({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
     <YStack marginBottom="$3" marginLeft="$1">
-      <Text fontSize={11} fontWeight="600" color={DARK_THEME.textSecondary} textTransform="uppercase" letterSpacing={1}>
+      <Text fontSize={11} fontWeight="600" color={'rgba(255,255,255,0.72)'} textTransform="uppercase" letterSpacing={1}>
         {title}
       </Text>
       {subtitle && (
-        <Text fontSize={12} color={DARK_THEME.textTertiary} marginTop={2}>
+        <Text fontSize={12} color={'rgba(255,255,255,0.48)'} marginTop={2}>
           {subtitle}
         </Text>
       )}
@@ -44,6 +43,9 @@ function ToastBuilder() {
     t.wellness.toastPrompt4,
     t.wellness.toastPrompt5,
   ];
+
+  const toastIcons: Array<'wine' | 'heart' | 'star' | 'musical-notes' | 'glasses'> =
+    ['wine', 'heart', 'star', 'musical-notes', 'glasses'];
 
   const total = prompts.length;
 
@@ -76,13 +78,13 @@ function ToastBuilder() {
               <View key={i} style={[styles.toastSlide, { width: cardWidth }]}>
                 <XStack alignItems="center" justifyContent="space-between" marginBottom={12}>
                   <View style={styles.toastIconBg}>
-                    <Ionicons name="wine" size={20} color="#FB923C" />
+                    <Ionicons name={toastIcons[i]} size={20} color="#C6A75E" />
                   </View>
-                  <Text fontSize={11} color={DARK_THEME.textTertiary}>
+                  <Text fontSize={11} color={'#C6A75E'} fontWeight="600">
                     {i + 1} {t.wellness.toastOf} {total}
                   </Text>
                 </XStack>
-                <Text fontSize={16} color={DARK_THEME.textPrimary} fontWeight="500" lineHeight={24}>
+                <Text fontSize={16} color={'#FFFFFF'} fontWeight="500" lineHeight={24}>
                   {prompt}
                 </Text>
               </View>
@@ -99,7 +101,7 @@ function ToastBuilder() {
             width={i === index ? 20 : 6}
             height={6}
             borderRadius={3}
-            backgroundColor={i === index ? '#FB923C' : DARK_THEME.border}
+            backgroundColor={i === index ? '#C6A75E' : 'rgba(198,167,94,0.20)'}
           />
         ))}
       </XStack>
@@ -111,8 +113,8 @@ function ToastBuilder() {
           onPress={() => goTo(index - 1)}
           disabled={index === 0}
         >
-          <Ionicons name="chevron-back" size={16} color={index === 0 ? DARK_THEME.textTertiary : DARK_THEME.textPrimary} />
-          <Text fontSize={13} color={index === 0 ? DARK_THEME.textTertiary : DARK_THEME.textPrimary}>
+          <Ionicons name="chevron-back" size={16} color={index === 0 ? 'rgba(255,255,255,0.30)' : 'rgba(255,255,255,0.72)'} />
+          <Text fontSize={13} color={index === 0 ? 'rgba(255,255,255,0.30)' : 'rgba(255,255,255,0.72)'}>
             {t.wellness.toastPrev}
           </Text>
         </Pressable>
@@ -121,10 +123,10 @@ function ToastBuilder() {
           onPress={() => goTo(index + 1)}
           disabled={index === total - 1}
         >
-          <Text fontSize={13} color={index === total - 1 ? DARK_THEME.textTertiary : '#FB923C'} fontWeight="600">
+          <Text fontSize={13} color={index === total - 1 ? 'rgba(255,255,255,0.30)' : '#C6A75E'} fontWeight="600">
             {t.wellness.toastNext}
           </Text>
-          <Ionicons name="chevron-forward" size={16} color={index === total - 1 ? DARK_THEME.textTertiary : '#FB923C'} />
+          <Ionicons name="chevron-forward" size={16} color={index === total - 1 ? 'rgba(255,255,255,0.30)' : '#C6A75E'} />
         </Pressable>
       </XStack>
     </View>
@@ -146,11 +148,11 @@ function CoupleCard({ question, answer }: CoupleCardProps) {
     <Pressable onPress={() => setRevealed(r => !r)} style={styles.coupleCard}>
       <XStack alignItems="flex-start" justifyContent="space-between" gap="$3">
         <YStack flex={1}>
-          <Text fontSize={14} fontWeight="600" color={DARK_THEME.textPrimary} lineHeight={20}>
+          <Text fontSize={14} fontWeight="600" color={'#FFFFFF'} lineHeight={20}>
             {question}
           </Text>
           {revealed && (
-            <Text fontSize={13} color={DARK_THEME.textSecondary} lineHeight={19} marginTop={8}>
+            <Text fontSize={13} color={'rgba(255,255,255,0.72)'} lineHeight={19} marginTop={8}>
               {answer}
             </Text>
           )}
@@ -159,12 +161,12 @@ function CoupleCard({ question, answer }: CoupleCardProps) {
           <Ionicons
             name={revealed ? 'eye-off' : 'eye'}
             size={14}
-            color={revealed ? '#A78BFA' : DARK_THEME.textTertiary}
+            color={revealed ? '#C6A75E' : 'rgba(255,255,255,0.48)'}
           />
         </View>
       </XStack>
       {!revealed && (
-        <Text fontSize={11} color={DARK_THEME.textTertiary} marginTop={6}>
+        <Text fontSize={11} color={'rgba(255,255,255,0.48)'} marginTop={6}>
           {t.wellness.tapToReveal}
         </Text>
       )}
@@ -222,12 +224,12 @@ function GroupPledge() {
           {i > 0 && <View style={styles.separator} />}
           <Pressable style={styles.pledgeRow} onPress={() => toggle(i)}>
             <View style={[styles.checkbox, checked[i] && styles.checkboxChecked]}>
-              {checked[i] && <Ionicons name="checkmark" size={12} color="white" />}
+              {checked[i] && <Ionicons name="checkmark" size={12} color="#0D1B2A" />}
             </View>
             <Text
               flex={1}
               fontSize={13}
-              color={checked[i] ? DARK_THEME.textPrimary : DARK_THEME.textSecondary}
+              color={checked[i] ? '#FFFFFF' : 'rgba(255,255,255,0.72)'}
               lineHeight={19}
               fontWeight={checked[i] ? '500' : '400'}
             >
@@ -241,13 +243,13 @@ function GroupPledge() {
         <XStack
           marginTop="$3"
           padding="$3"
-          backgroundColor="rgba(52, 211, 153, 0.12)"
+          backgroundColor="rgba(198,167,94,0.12)"
           borderRadius={10}
           gap="$2"
           alignItems="center"
         >
-          <Ionicons name="heart" size={16} color="#34D399" />
-          <Text fontSize={12} color="#34D399" fontWeight="600">
+          <Ionicons name="heart" size={16} color="#C6A75E" />
+          <Text fontSize={12} color="#C6A75E" fontWeight="600">
             This group is ready. Have an incredible time! 🎉
           </Text>
         </XStack>
@@ -259,10 +261,10 @@ function GroupPledge() {
 // ─── Friendship Insights ───────────────────────────────────────
 
 const INSIGHT_CONFIGS = [
-  { icon: 'sunny', color: '#FBBF24', bg: 'rgba(251, 191, 36, 0.15)' },
-  { icon: 'chatbubble-ellipses', color: '#60A5FA', bg: 'rgba(96, 165, 250, 0.15)' },
-  { icon: 'leaf', color: '#34D399', bg: 'rgba(52, 211, 153, 0.15)' },
-  { icon: 'heart', color: '#F472B6', bg: 'rgba(244, 114, 182, 0.15)' },
+  { icon: 'sunny',               color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+  { icon: 'chatbubble-ellipses', color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+  { icon: 'leaf',                color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+  { icon: 'heart',               color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
 ];
 
 function FriendshipInsights() {
@@ -293,10 +295,10 @@ function FriendshipInsights() {
                 <Ionicons name={cfg.icon as any} size={18} color={cfg.color} />
               </View>
               <YStack flex={1}>
-                <Text fontSize={14} fontWeight="700" color={DARK_THEME.textPrimary} marginBottom={4}>
+                <Text fontSize={14} fontWeight="700" color={'#FFFFFF'} marginBottom={4}>
                   {insight.title}
                 </Text>
-                <Text fontSize={13} color={DARK_THEME.textSecondary} lineHeight={19}>
+                <Text fontSize={13} color={'rgba(255,255,255,0.72)'} lineHeight={19}>
                   {insight.body}
                 </Text>
               </YStack>
@@ -316,7 +318,7 @@ export default function WellnessScreen() {
   const { t } = useTranslation();
 
   return (
-    <View flex={1} backgroundColor={DARK_THEME.background}>
+    <View flex={1} backgroundColor={'#0D1B2A'}>
       {/* Header */}
       <XStack
         paddingTop={insets.top}
@@ -324,14 +326,14 @@ export default function WellnessScreen() {
         paddingBottom="$3"
         alignItems="center"
         justifyContent="space-between"
-        backgroundColor={DARK_THEME.surface}
+        backgroundColor={'#12253A'}
         borderBottomWidth={1}
-        borderBottomColor={DARK_THEME.border}
+        borderBottomColor={'rgba(230,220,200,0.15)'}
       >
         <Pressable onPress={() => router.back()} style={styles.headerButton} testID="wellness-back">
-          <Ionicons name="chevron-back" size={24} color={DARK_THEME.textPrimary} />
+          <Ionicons name="chevron-back" size={24} color={'#FFFFFF'} />
         </Pressable>
-        <Text fontSize={17} fontWeight="600" color={DARK_THEME.textPrimary}>
+        <Text fontSize={17} fontWeight="600" color={'#FFFFFF'}>
           {t.wellness.title}
         </Text>
         <View width={40} />
@@ -349,10 +351,10 @@ export default function WellnessScreen() {
               <Ionicons name="heart" size={28} color="#F472B6" />
             </View>
             <YStack flex={1}>
-              <Text fontSize={16} fontWeight="700" color={DARK_THEME.textPrimary}>
+              <Text fontSize={16} fontWeight="700" color={'#FFFFFF'}>
                 {t.wellness.title}
               </Text>
-              <Text fontSize={13} color={DARK_THEME.textSecondary} marginTop={2}>
+              <Text fontSize={13} color={'rgba(255,255,255,0.72)'} marginTop={2}>
                 {t.wellness.subtitle}
               </Text>
             </YStack>
@@ -412,15 +414,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   card: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: '#12253A',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: 'rgba(230,220,200,0.15)',
     overflow: 'hidden',
   },
   separator: {
     height: 1,
-    backgroundColor: DARK_THEME.border,
+    backgroundColor: 'rgba(230,220,200,0.15)',
     marginLeft: 16,
   },
   // Toast Builder
@@ -435,7 +437,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: 'rgba(251, 146, 60, 0.2)',
+    backgroundColor: 'rgba(198,167,94,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -446,12 +448,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
     margin: 12,
     marginTop: 0,
   },
   toastNavBtnNext: {
-    backgroundColor: 'rgba(251, 146, 60, 0.12)',
+    backgroundColor: 'rgba(198,167,94,0.12)',
   },
   toastNavBtnDisabled: {
     opacity: 0.4,
@@ -464,13 +466,13 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   revealBadgeActive: {
-    backgroundColor: 'rgba(167, 139, 250, 0.15)',
+    backgroundColor: 'rgba(198,167,94,0.15)',
   },
   // Pledge
   pledgeRow: {
@@ -484,22 +486,22 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: DARK_THEME.border,
+    borderColor: 'rgba(230,220,200,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
     marginTop: 1,
   },
   checkboxChecked: {
-    backgroundColor: '#34D399',
-    borderColor: '#34D399',
+    backgroundColor: '#C6A75E',
+    borderColor: '#C6A75E',
   },
   // Insights
   insightCard: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: '#12253A',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: 'rgba(230,220,200,0.15)',
     borderLeftWidth: 3,
     padding: 16,
   },

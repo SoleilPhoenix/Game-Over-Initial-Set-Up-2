@@ -15,7 +15,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useUser, useAuthStore } from '@/stores/authStore';
 import { useFavoritesStore } from '@/stores/favoritesStore';
 import { useTranslation, getTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
 import { getPackageImage } from '@/constants/packageImages';
 import { supabase } from '@/lib/supabase/client';
 
@@ -61,7 +60,7 @@ function MenuItem({
         >
           <Ionicons name={icon as any} size={18} color={iconColor} />
         </View>
-        <Text color={DARK_THEME.textPrimary} fontSize={14} fontWeight="500">
+        <Text color={'#FFFFFF'} fontSize={14} fontWeight="500">
           {label}
         </Text>
       </XStack>
@@ -70,7 +69,7 @@ function MenuItem({
           <View width={8} height={8} borderRadius={4} backgroundColor="#EF4444" />
         )}
         {value && (
-          <Text color={DARK_THEME.textSecondary} fontSize={12}>
+          <Text color={'rgba(255,255,255,0.72)'} fontSize={12}>
             {value}
           </Text>
         )}
@@ -91,7 +90,7 @@ function MenuSection({ title, children }: MenuSectionProps) {
       <Text
         fontSize={11}
         fontWeight="600"
-        color={DARK_THEME.textSecondary}
+        color={'rgba(255,255,255,0.72)'}
         textTransform="uppercase"
         letterSpacing={1}
         marginBottom="$3"
@@ -176,7 +175,7 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View flex={1} backgroundColor={DARK_THEME.background}>
+    <View flex={1} backgroundColor={'#0D1B2A'}>
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -187,11 +186,12 @@ export default function ProfileScreen() {
       >
         {/* Header Title */}
         <Text
-          fontSize={24}
-          fontWeight="700"
-          color={DARK_THEME.textPrimary}
+          fontSize={17}
+          fontWeight="600"
+          color={'#FFFFFF'}
           textAlign="center"
           marginBottom="$6"
+          style={{ fontFamily: 'Inter_500Medium' }}
         >
           {t.profile.title}
         </Text>
@@ -207,7 +207,7 @@ export default function ProfileScreen() {
           >
             <View style={styles.avatarContainer}>
               <LinearGradient
-                colors={[DARK_THEME.primary, '#60A5FA']}
+                colors={['#C6A75E', '#8A7338']}
                 style={styles.avatarGradient}
               >
                 <View style={styles.avatarInner}>
@@ -219,26 +219,26 @@ export default function ProfileScreen() {
                       cachePolicy="memory-disk"
                     />
                   ) : (
-                    <Text fontSize={24} fontWeight="700" color={DARK_THEME.textPrimary}>
+                    <Text fontSize={24} fontWeight="700" color={'#FFFFFF'}>
                       {userInitials}
                     </Text>
                   )}
                 </View>
               </LinearGradient>
               <View style={styles.editBadge}>
-                <Ionicons name="pencil" size={12} color={DARK_THEME.primary} />
+                <Ionicons name="pencil" size={12} color={'#C6A75E'} />
               </View>
             </View>
           </Pressable>
           <Text
             fontSize={20}
             fontWeight="700"
-            color={DARK_THEME.textPrimary}
+            color={'#FFFFFF'}
             marginTop="$4"
           >
             {userName}
           </Text>
-          <Text fontSize={14} color={DARK_THEME.textSecondary}>
+          <Text fontSize={14} color={'rgba(255,255,255,0.72)'}>
             {userEmail}
           </Text>
         </YStack>
@@ -255,7 +255,7 @@ export default function ProfileScreen() {
                 <Ionicons name="mail-outline" size={20} color="#F59E0B" />
                 <YStack flex={1}>
                   <Text fontSize={13} fontWeight="600" color="#F59E0B">Verify your email</Text>
-                  <Text fontSize={12} color={DARK_THEME.textSecondary}>
+                  <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
                     {isResendingVerification ? 'Sending…' : 'Tap to resend confirmation email'}
                   </Text>
                 </YStack>
@@ -268,8 +268,8 @@ export default function ProfileScreen() {
           <MenuSection title={t.profile.notifications}>
             <MenuItem
               icon="notifications"
-              iconColor="#60A5FA"
-              iconBgColor="rgba(96, 165, 250, 0.2)"
+              iconColor="#C6A75E"
+              iconBgColor="rgba(198, 167, 94, 0.2)"
               label={t.profile.notificationPreferences}
               onPress={() => router.push('/profile/notifications')}
               testID="menu-notifications"
@@ -282,7 +282,7 @@ export default function ProfileScreen() {
               <Text
                 fontSize={11}
                 fontWeight="600"
-                color={DARK_THEME.textSecondary}
+                color={'rgba(255,255,255,0.72)'}
                 textTransform="uppercase"
                 letterSpacing={1}
                 marginBottom="$3"
@@ -308,10 +308,10 @@ export default function ProfileScreen() {
                           />
                         </View>
                         <YStack flex={1}>
-                          <Text color={DARK_THEME.textPrimary} fontSize={14} fontWeight="500">
+                          <Text color={'#FFFFFF'} fontSize={14} fontWeight="500">
                             {fav.cityName} {TIER_LABELS[fav.tier] || fav.name}
                           </Text>
-                          <Text color={DARK_THEME.textSecondary} fontSize={11}>
+                          <Text color={'rgba(255,255,255,0.72)'} fontSize={11}>
                             {'\u20AC'}{(fav.pricePerPersonCents / 100).toFixed(0)} {t.profile.perPerson}
                           </Text>
                         </YStack>
@@ -328,8 +328,8 @@ export default function ProfileScreen() {
           <MenuSection title={t.profile.account}>
             <MenuItem
               icon="person"
-              iconColor="#A78BFA"
-              iconBgColor="rgba(167, 139, 250, 0.2)"
+              iconColor="#C6A75E"
+              iconBgColor="rgba(198, 167, 94, 0.2)"
               label={t.profile.editProfile}
               onPress={() => router.push('/profile/edit')}
               testID="menu-edit-profile"
@@ -337,8 +337,8 @@ export default function ProfileScreen() {
             <View style={styles.separator} />
             <MenuItem
               icon="lock-closed"
-              iconColor="#34D399"
-              iconBgColor="rgba(52, 211, 153, 0.2)"
+              iconColor="#C6A75E"
+              iconBgColor="rgba(198, 167, 94, 0.2)"
               label={t.profile.passwordSecurity}
               onPress={() => router.push('/profile/security')}
               testID="menu-security"
@@ -346,12 +346,21 @@ export default function ProfileScreen() {
             <View style={styles.separator} />
             <MenuItem
               icon="language"
-              iconColor="#FB923C"
-              iconBgColor="rgba(251, 146, 60, 0.2)"
+              iconColor="#C6A75E"
+              iconBgColor="rgba(198, 167, 94, 0.2)"
               label={t.profile.language}
               value={LANGUAGE_LABELS[language]}
               onPress={handleLanguagePress}
               testID="menu-language"
+            />
+            <View style={styles.separator} />
+            <MenuItem
+              icon="contrast-outline"
+              iconColor="#C6A75E"
+              iconBgColor="rgba(198, 167, 94, 0.2)"
+              label={t.profile.appearance ?? 'Appearance'}
+              onPress={() => router.push('/profile/appearance')}
+              testID="menu-appearance"
             />
           </MenuSection>
 
@@ -367,9 +376,9 @@ export default function ProfileScreen() {
             />
             <View style={styles.separator} />
             <MenuItem
-              icon="help-circle"
-              iconColor="#9CA3AF"
-              iconBgColor="rgba(156, 163, 175, 0.2)"
+              icon="chatbubble-ellipses"
+              iconColor="#C6A75E"
+              iconBgColor="rgba(198, 167, 94, 0.2)"
               label={t.profile.supportFAQ}
               onPress={() => router.push('/profile/support')}
               testID="menu-support"
@@ -408,10 +417,10 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   glassCard: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: '#12253A',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: 'rgba(230,220,200,0.15)',
     overflow: 'hidden',
   },
   verificationBanner: {
@@ -430,7 +439,7 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 1,
-    backgroundColor: DARK_THEME.border,
+    backgroundColor: 'rgba(230,220,200,0.15)',
     marginLeft: 56,
   },
   avatarContainer: {
@@ -468,9 +477,9 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: 'rgba(230,220,200,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },

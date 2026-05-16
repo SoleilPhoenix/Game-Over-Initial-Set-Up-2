@@ -13,7 +13,6 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { supabase } from '@/lib/supabase/client';
-import { DARK_THEME } from '@/constants/theme';
 
 const passwordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
@@ -82,7 +81,7 @@ export default function SecurityScreen() {
   };
 
   return (
-    <View flex={1} backgroundColor={DARK_THEME.background}>
+    <View flex={1} backgroundColor={'#0D1B2A'}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -94,18 +93,18 @@ export default function SecurityScreen() {
           paddingBottom="$3"
           alignItems="center"
           justifyContent="space-between"
-          backgroundColor={DARK_THEME.surface}
+          backgroundColor={'#12253A'}
           borderBottomWidth={1}
-          borderBottomColor={DARK_THEME.border}
+          borderBottomColor={'rgba(230,220,200,0.15)'}
         >
           <Pressable
             onPress={() => router.back()}
             style={styles.headerButton}
             testID="security-back"
           >
-            <Ionicons name="chevron-back" size={24} color={DARK_THEME.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={'#FFFFFF'} />
           </Pressable>
-          <Text fontSize={17} fontWeight="600" color={DARK_THEME.textPrimary}>
+          <Text fontSize={17} fontWeight="600" color={'#FFFFFF'}>
             Password & Security
           </Text>
           <View width={40} />
@@ -126,14 +125,14 @@ export default function SecurityScreen() {
               <Text
                 fontSize={11}
                 fontWeight="600"
-                color={DARK_THEME.textSecondary}
+                color={'rgba(255,255,255,0.72)'}
                 textTransform="uppercase"
                 letterSpacing={1}
                 marginLeft="$1"
               >
                 Change Password
               </Text>
-              <Text fontSize={13} color={DARK_THEME.textSecondary}>
+              <Text fontSize={13} color={'rgba(255,255,255,0.72)'}>
                 Enter your current password and a new password to update your credentials.
               </Text>
             </YStack>
@@ -143,7 +142,7 @@ export default function SecurityScreen() {
               <Text
                 fontSize={13}
                 fontWeight="500"
-                color={DARK_THEME.textPrimary}
+                color={'#FFFFFF'}
                 marginLeft="$1"
               >
                 Current Password
@@ -174,7 +173,7 @@ export default function SecurityScreen() {
                 )}
               />
               {errors.currentPassword && (
-                <Text fontSize={12} color={DARK_THEME.error} marginLeft="$1">
+                <Text fontSize={12} color={'#E8836B'} marginLeft="$1">
                   {errors.currentPassword.message}
                 </Text>
               )}
@@ -185,7 +184,7 @@ export default function SecurityScreen() {
               <Text
                 fontSize={13}
                 fontWeight="500"
-                color={DARK_THEME.textPrimary}
+                color={'#FFFFFF'}
                 marginLeft="$1"
               >
                 New Password
@@ -216,7 +215,7 @@ export default function SecurityScreen() {
                 )}
               />
               {errors.newPassword && (
-                <Text fontSize={12} color={DARK_THEME.error} marginLeft="$1">
+                <Text fontSize={12} color={'#E8836B'} marginLeft="$1">
                   {errors.newPassword.message}
                 </Text>
               )}
@@ -227,7 +226,7 @@ export default function SecurityScreen() {
               <Text
                 fontSize={13}
                 fontWeight="500"
-                color={DARK_THEME.textPrimary}
+                color={'#FFFFFF'}
                 marginLeft="$1"
               >
                 Confirm New Password
@@ -258,7 +257,7 @@ export default function SecurityScreen() {
                 )}
               />
               {errors.confirmPassword && (
-                <Text fontSize={12} color={DARK_THEME.error} marginLeft="$1">
+                <Text fontSize={12} color={'#E8836B'} marginLeft="$1">
                   {errors.confirmPassword.message}
                 </Text>
               )}
@@ -266,31 +265,31 @@ export default function SecurityScreen() {
 
             {/* Password Requirements */}
             <View style={styles.requirementsBox}>
-              <Text fontSize={12} fontWeight="600" color={DARK_THEME.textSecondary} marginBottom="$2">
+              <Text fontSize={12} fontWeight="600" color={'rgba(255,255,255,0.72)'} marginBottom="$2">
                 Password Requirements:
               </Text>
               <YStack gap="$1">
                 <XStack alignItems="center" gap="$2">
-                  <Ionicons name="checkmark-circle" size={14} color={DARK_THEME.success} />
-                  <Text fontSize={12} color={DARK_THEME.textSecondary}>
+                  <Ionicons name="checkmark-circle" size={14} color={'#C6A75E'} />
+                  <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
                     At least 8 characters
                   </Text>
                 </XStack>
                 <XStack alignItems="center" gap="$2">
-                  <Ionicons name="checkmark-circle" size={14} color={DARK_THEME.success} />
-                  <Text fontSize={12} color={DARK_THEME.textSecondary}>
+                  <Ionicons name="checkmark-circle" size={14} color={'#C6A75E'} />
+                  <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
                     One uppercase letter
                   </Text>
                 </XStack>
                 <XStack alignItems="center" gap="$2">
-                  <Ionicons name="checkmark-circle" size={14} color={DARK_THEME.success} />
-                  <Text fontSize={12} color={DARK_THEME.textSecondary}>
+                  <Ionicons name="checkmark-circle" size={14} color={'#C6A75E'} />
+                  <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
                     One lowercase letter
                   </Text>
                 </XStack>
                 <XStack alignItems="center" gap="$2">
-                  <Ionicons name="checkmark-circle" size={14} color={DARK_THEME.success} />
-                  <Text fontSize={12} color={DARK_THEME.textSecondary}>
+                  <Ionicons name="checkmark-circle" size={14} color={'#C6A75E'} />
+                  <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
                     One number
                   </Text>
                 </XStack>
@@ -306,13 +305,13 @@ export default function SecurityScreen() {
             >
               {isSubmitting ? (
                 <XStack gap="$2" alignItems="center">
-                  <Spinner size="small" color="white" />
-                  <Text color="white" fontWeight="600" fontSize={16}>
+                  <Spinner size="small" color="#0D1B2A" />
+                  <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
                     Updating...
                   </Text>
                 </XStack>
               ) : (
-                <Text color="white" fontWeight="600" fontSize={16}>
+                <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
                   Update Password
                 </Text>
               )}
@@ -332,10 +331,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   inputContainer: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: '#12253A',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: 'rgba(230,220,200,0.15)',
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -343,22 +342,22 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   inputError: {
-    borderColor: DARK_THEME.error,
+    borderColor: '#E8836B',
   },
   input: {
     flex: 1,
     fontSize: 16,
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   requirementsBox: {
-    backgroundColor: 'rgba(52, 211, 153, 0.1)',
+    backgroundColor: 'rgba(198, 167, 94, 0.1)',
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: 'rgba(52, 211, 153, 0.2)',
+    borderColor: 'rgba(198, 167, 94, 0.2)',
   },
   saveButton: {
-    backgroundColor: DARK_THEME.primary,
+    backgroundColor: '#C6A75E',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',

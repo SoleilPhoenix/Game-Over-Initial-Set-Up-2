@@ -34,7 +34,6 @@ import { useUser } from '@/stores/authStore';
 import { useWizardStore, type DraftSnapshot } from '@/stores/wizardStore';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
 import { useTranslation, getTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
 import { getCurrentPhaseLabel } from '@/utils/planningProgress';
 import type { BudgetInfo } from '@/lib/participantCountCache';
 import { useUrgentPayment } from '@/hooks/useUrgentPayment';
@@ -130,7 +129,7 @@ const getProgressConfig = (
         nextStepNum,
         nextStepLabel,
         percentage,
-        color: DARK_THEME.primary,
+        color: '#C6A75E',
         icon: 'ellipse',
         isBooked: true,
         completedSteps: completed,
@@ -283,10 +282,13 @@ export default function EventsScreen() {
   // Also hide events still in the wizard booking flow (created but not yet paid)
   const filteredEvents = useMemo(() => {
     if (!deduplicatedEvents) return [];
-    // Hide events still going through wizard → booking flow
-    const visible = wizardCreatedEventId
-      ? deduplicatedEvents.filter((e) => e.id !== wizardCreatedEventId)
-      : deduplicatedEvents;
+    // Hide events still in draft status (pre-created by wizard, not yet booked)
+    // and events actively being processed through the booking flow
+    const visible = deduplicatedEvents.filter((e) => {
+      if (e.status === 'draft') return false;
+      if (wizardCreatedEventId && e.id === wizardCreatedEventId) return false;
+      return true;
+    });
     let filtered: EventWithDetails[];
     switch (activeFilter) {
       case 'organizing':
@@ -332,7 +334,13 @@ export default function EventsScreen() {
     const existingEventIds = new Set(events.map(e => e.id));
 
     const filtered = userDrafts.filter(d => {
-      if (d.createdEventId && existingEventIds.has(d.createdEventId)) return false;
+      // Only suppress draft if the created event has progressed past draft status
+      // (planning/booked/completed). A 'draft' DB event is just a pre-created placeholder
+      // and the wizard draft is still the canonical source.
+      if (d.createdEventId && existingEventIds.has(d.createdEventId)) {
+        const dbEvent = events.find(e => e.id === d.createdEventId);
+        if (dbEvent && dbEvent.status !== 'draft') return false;
+      }
       if (d.honoreeName && existingHonoreeNames.has(d.honoreeName.toLowerCase())) return false;
       return true;
     });
@@ -471,7 +479,7 @@ export default function EventsScreen() {
           key={i}
           style={[
             styles.segment,
-            { backgroundColor: i < completedSteps ? color : DARK_THEME.deepNavy },
+            { backgroundColor: i < completedSteps ? color : '#1A2F47' },
             i === 0 && styles.segmentFirst,
             i === 7 && styles.segmentLast,
           ]}
@@ -508,7 +516,7 @@ export default function EventsScreen() {
         {role === 'guest' && (
           <View style={{
             position: 'absolute', top: 8, right: 8,
-            backgroundColor: 'rgba(90,126,176,0.85)',
+            backgroundColor: 'rgba(198,167,94,0.85)',
             borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
             zIndex: 1,
           }}>
@@ -548,7 +556,7 @@ export default function EventsScreen() {
               const count = budgetInfos[item.id]?.totalParticipants ?? participantCounts[item.id] ?? item.participant_count;
               return count > 0 ? (
                 <XStack alignItems="center" gap={6} marginTop={4}>
-                  <Ionicons name="people-outline" size={14} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="people-outline" size={14} color={'rgba(255,255,255,0.48)'} />
                   <Text style={styles.dateText}>
                     {count} {t.events.participantsLabel || 'participants'}
                   </Text>
@@ -558,7 +566,7 @@ export default function EventsScreen() {
 
             {/* Date */}
             <XStack alignItems="center" gap={6} marginTop={4}>
-              <Ionicons name="calendar-outline" size={14} color={DARK_THEME.textTertiary} />
+              <Ionicons name="calendar-outline" size={14} color={'rgba(255,255,255,0.48)'} />
               <Text style={styles.dateText}>{dateRange}</Text>
             </XStack>
 
@@ -632,7 +640,7 @@ export default function EventsScreen() {
       testID="start-new-plan-button"
     >
       <View style={styles.startNewPlanIcon}>
-        <Ionicons name="add" size={24} color={DARK_THEME.textTertiary} />
+        <Ionicons name="add" size={24} color={'rgba(255,255,255,0.48)'} />
       </View>
       <Text style={styles.startNewPlanText}>{t.events.startNewPlan}</Text>
     </Pressable>
@@ -653,14 +661,14 @@ export default function EventsScreen() {
           justifyContent: 'center',
           alignItems: 'center',
           padding: 24,
-          paddingBottom: insets.bottom + 180,
+          paddingBottom: insets.bottom + 120,
         }}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor={DARK_THEME.primary}
-            colors={[DARK_THEME.primary]}
+            tintColor={'#C6A75E'}
+            colors={['#C6A75E']}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -668,18 +676,18 @@ export default function EventsScreen() {
           <YStack justifyContent="center" alignItems="center" width="100%" paddingHorizontal={0}>
             <View style={styles.emptyIconContainer}>
               <LinearGradient
-                colors={[`${DARK_THEME.primary}30`, `${DARK_THEME.primary}10`]}
+                colors={['rgba(198,167,94,0.19)', 'rgba(198,167,94,0.06)']}
                 style={styles.emptyIconGradient}
               >
                 <Text fontSize={56}>{emptyEmoji}</Text>
               </LinearGradient>
             </View>
-            <Text fontSize={24} fontWeight="800" color={DARK_THEME.textPrimary} marginBottom={8}>
+            <Text fontSize={24} fontWeight="800" color={'#FFFFFF'} marginBottom={8}>
               {emptyTitle}
             </Text>
             <Text
               fontSize={16}
-              color={DARK_THEME.textSecondary}
+              color={'rgba(255,255,255,0.72)'}
               textAlign="center"
               marginBottom={24}
               maxWidth={280}
@@ -813,7 +821,7 @@ export default function EventsScreen() {
                 {subtitle}
               </Text>
             </YStack>
-            <Ionicons name="chevron-forward" size={20} color={DARK_THEME.textTertiary} />
+            <Ionicons name="chevron-forward" size={20} color={'rgba(255,255,255,0.48)'} />
           </XStack>
 
           <View style={styles.progressSection}>
@@ -878,36 +886,38 @@ export default function EventsScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Background */}
-      <LinearGradient
-        colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
-        style={StyleSheet.absoluteFill}
-      />
-
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
-          {/* Avatar and Title */}
-          <XStack alignItems="center" gap={12}>
-            <View style={styles.avatarContainer}>
-              {userAvatar ? (
-                <Image source={{ uri: userAvatar }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Text style={styles.avatarInitial}>{userInitial}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.headerTitle}>{t.events.title}</Text>
-          </XStack>
+        <XStack alignItems="center" paddingHorizontal={20}>
+          {/* Left: Avatar — tap to go to Profile */}
+          <Pressable
+            onPress={() => router.push('/(tabs)/profile')}
+            style={styles.avatarContainer}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Go to profile"
+          >
+            {userAvatar ? (
+              <Image source={{ uri: userAvatar }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarInitial}>{userInitial}</Text>
+              </View>
+            )}
+          </Pressable>
 
-          {/* Notification Bell */}
+          {/* Centre: Title */}
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={styles.headerTitle}>{t.events.title}</Text>
+          </View>
+
+          {/* Right: Notification Bell */}
           <Pressable
             onPress={handleNotifications}
             style={styles.notificationButton}
             testID="notifications-button"
           >
-            <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
+            <Ionicons name="notifications-outline" size={24} color={'#FFFFFF'} />
             {hasUnseenUrgency && (
               <View style={styles.notificationUrgentDot} />
             )}
@@ -942,14 +952,14 @@ export default function EventsScreen() {
             keyExtractor={keyExtractor}
             contentContainerStyle={{
               padding: 16,
-              paddingBottom: insets.bottom + 180
+              paddingBottom: insets.bottom + 120
             }}
             refreshControl={
               <RefreshControl
                 refreshing={isRefreshing}
                 onRefresh={handleRefresh}
-                tintColor={DARK_THEME.primary}
-                colors={[DARK_THEME.primary]}
+                tintColor={'#C6A75E'}
+                colors={['#C6A75E']}
               />
             }
             showsVerticalScrollIndicator={false}
@@ -965,14 +975,14 @@ export default function EventsScreen() {
             renderItem={null}
             contentContainerStyle={{
               padding: 16,
-              paddingBottom: insets.bottom + 180,
+              paddingBottom: insets.bottom + 120,
             }}
             refreshControl={
               <RefreshControl
                 refreshing={isRefreshing}
                 onRefresh={handleRefresh}
-                tintColor={DARK_THEME.primary}
-                colors={[DARK_THEME.primary]}
+                tintColor={'#C6A75E'}
+                colors={['#C6A75E']}
               />
             }
             showsVerticalScrollIndicator={false}
@@ -1002,12 +1012,12 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
   },
   header: {
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
+    borderBottomColor: 'rgba(230,220,200,0.15)',
   },
   avatarContainer: {
     position: 'relative',
@@ -1018,14 +1028,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   avatarPlaceholder: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   onlineIndicator: {
     position: 'absolute',
@@ -1036,18 +1046,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#10B981',
     borderWidth: 2,
-    borderColor: DARK_THEME.background,
+    borderColor: '#0D1B2A',
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter_500Medium',
   },
   notificationButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: DARK_THEME.surfaceCard,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1066,36 +1077,40 @@ const styles = StyleSheet.create({
   },
   filterPill: {
     flexDirection: 'row',
-    backgroundColor: DARK_THEME.surfaceCard,
-    borderRadius: 25,
+    backgroundColor: '#1A2F47',
+    borderRadius: 999,
     padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   filterTab: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    height: 40,
+    borderRadius: 999,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   filterTabActive: {
-    backgroundColor: '#5A7EB0',
+    backgroundColor: '#22385A',
   },
   filterTabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.55)',
+    fontFamily: 'Inter_600SemiBold',
   },
   filterTabTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: '#C6A75E',
+    fontWeight: '700',
+    fontFamily: 'Inter_600SemiBold',
   },
   eventCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   eventCardPressed: {
     opacity: 0.9,
@@ -1114,7 +1129,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#F97316',
     borderWidth: 1.5,
-    borderColor: DARK_THEME.surfaceCard,
+    borderColor: '#1A2F47',
   },
   thumbnailContainer: {
     width: 100,
@@ -1127,20 +1142,20 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   thumbnailPlaceholder: {
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
   eventTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     flex: 1,
     marginRight: 8,
   },
   dateText: {
     fontSize: 14,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   roleBadge: {
     paddingHorizontal: 10,
@@ -1156,15 +1171,15 @@ const styles = StyleSheet.create({
   roleBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: DARK_THEME.primary,
+    color: '#C6A75E',
     letterSpacing: 0.5,
   },
   statusText: {
     fontSize: 13,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   paymentBadge: {
-    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    backgroundColor: 'rgba(198, 167, 94, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
@@ -1172,13 +1187,13 @@ const styles = StyleSheet.create({
   paymentBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#5A7EB0',
+    color: '#C6A75E',
   },
   progressSection: {
     marginTop: 14,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: DARK_THEME.glassBorder,
+    borderTopColor: 'rgba(230,220,200,0.15)',
   },
   progressLabel: {
     fontSize: 13,
@@ -1190,7 +1205,7 @@ const styles = StyleSheet.create({
   },
   progressBarBackground: {
     height: 6,
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: '#1A2F47',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -1209,12 +1224,12 @@ const styles = StyleSheet.create({
   draftSectionLine: {
     flex: 1,
     height: 1,
-    backgroundColor: DARK_THEME.glassBorder,
+    backgroundColor: 'rgba(230,220,200,0.15)',
   },
   draftSectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -1229,25 +1244,25 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: DARK_THEME.primary,
-    backgroundColor: 'rgba(90, 126, 176, 0.08)',
+    borderColor: '#C6A75E',
+    backgroundColor: 'rgba(198, 167, 94, 0.08)',
   },
   startNewPlanButtonPressed: {
     opacity: 0.7,
-    backgroundColor: DARK_THEME.glass,
+    backgroundColor: 'rgba(26,47,71,0.8)',
   },
   startNewPlanIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
   startNewPlanText: {
     fontSize: 16,
     fontWeight: '500',
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
   },
   emptyIconContainer: {
     marginBottom: 24,

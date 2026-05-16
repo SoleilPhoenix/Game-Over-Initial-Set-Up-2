@@ -76,7 +76,7 @@ export default function EventDayScreen() {
     if (items.length === 0) return;
     scheduleRepository.createMany(items)
       .then(() => queryClient.invalidateQueries({ queryKey: scheduleKeys.byEvent(eventId) }))
-      .catch((err) => {
+      .catch((err: Error) => {
         generationAttempted.current = false;
         console.warn('Retroactive schedule generation failed:', err?.message);
       });
@@ -111,7 +111,7 @@ export default function EventDayScreen() {
       Alert.alert('Kein Plan', 'Es gibt noch keinen Tagesplan zum Teilen.');
       return;
     }
-    const lines = schedule.map((s) => `${formatScheduleTime(s.start_time)}  ${s.title}`).join('\n');
+    const lines = schedule.map((s: { start_time: string; title: string }) => `${formatScheduleTime(s.start_time)}  ${s.title}`).join('\n');
     const eventName = event?.honoree_name ? `${event.honoree_name}'s Bachelor` : 'unser Event';
     const msg = `🎉 Tagesplan für ${eventName}:\n\n${lines}\n\n— Game Over`;
     // TODO: wire send-push-notification edge function (organizer-only).
@@ -146,7 +146,7 @@ export default function EventDayScreen() {
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: insets.bottom + 32 }}>
         {/* Hero card */}
         <LinearGradient
-          colors={['#5A7EB0', '#3B5A85']}
+          colors={['#C6A75E', '#8A7338']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={styles.heroCard}
         >
@@ -170,7 +170,7 @@ export default function EventDayScreen() {
               </Text>
             </View>
           ) : (
-            schedule.map((item) => (
+            schedule.map((item: ScheduleItem) => (
               <XStack key={item.id} style={styles.row}>
                 <View style={styles.timePill}>
                   <Text style={styles.timeText}>{formatScheduleTime(item.start_time)}</Text>

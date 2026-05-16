@@ -25,7 +25,7 @@ interface AvatarUploadProps {
 
 const THEME = {
   background: '#2D3748',
-  primary: '#5A7EB0',
+  primary: '#C6A75E',
   textPrimary: '#FFFFFF',
   border: 'rgba(255, 255, 255, 0.08)',
 };
@@ -152,7 +152,7 @@ export function AvatarUpload({
       accessibilityState={{ disabled: isUploading }}
     >
       <LinearGradient
-        colors={[THEME.primary, '#60A5FA']}
+        colors={[THEME.primary, '#8A7338']}
         style={[styles.gradient, { width: size, height: size, borderRadius: size / 2 }]}
       >
         <View

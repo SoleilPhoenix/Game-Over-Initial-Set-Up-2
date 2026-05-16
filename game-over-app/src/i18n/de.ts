@@ -60,6 +60,7 @@ const de: TranslationKeys = {
     languageTitle: 'Sprache',
     languageSubtitle: 'Wähle deine bevorzugte Sprache',
     moreLangSoon: 'Weitere Sprachen folgen bald',
+    appearance: 'Darstellung',
     wellnessSupport: 'Wellness & Support',
     relationshipHealthCenter: 'Beziehungs-Gesundheitszentrum',
     supportFAQ: 'Support & FAQ',
@@ -175,6 +176,7 @@ const de: TranslationKeys = {
   // ─── Create Event Wizard ───────────────────────
   wizard: {
     stepOf: 'Schritt {{current}} von {{total}}',
+    draftOptions: 'Entwurf-Optionen',
     saveDraftTitle: 'Entwurf speichern?',
     saveDraftMessage: 'Möchtest du deinen Fortschritt speichern?',
     discard: 'Verwerfen',
@@ -596,10 +598,10 @@ const de: TranslationKeys = {
     finalBriefingDesc: 'Wird automatisch 3 Tage vor dem Event per E-Mail und Push-Benachrichtigung versendet.',
     quizCategories: 'Vorgeschlagene Fragetypen: Wie habt ihr euch kennengelernt? Lieblingserinnerung, Wer hat es zuerst gesagt?, Peinliche Geschichten, Fun Facts',
     planningTools: 'Planungs-Tools',
-    manageInvitations: 'Einladungen verwalten',
+    manageInvitations: 'Einladung',
     communication: 'Chat',
     budgetTool: 'Budget',
-    packagesTool: 'Pakete',
+    packagesTool: 'Paket',
     confirmed: '{{count}}/{{total}} Bestätigt',
     openChat: 'Chat öffnen',
     chatSubtext: 'Austausch mit deiner Gruppe',
@@ -638,7 +640,7 @@ const de: TranslationKeys = {
 
   // ─── Manage Invitations ─────────────────────────
   manageInvitations: {
-    title: 'Einladungen verwalten',
+    title: 'Einladung',
     guestSlot: 'Gast #{{number}}',
     organizer: 'ORGANISATOR',
     honoree: 'EHRENGAST',
