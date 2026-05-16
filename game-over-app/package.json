@@ -4,6 +4,7 @@
   "description": "AI-powered bachelor/bachelorette party planning app",
   "main": "expo-router/entry",
   "scripts": {
+    "postinstall": "patch-package",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
@@ -89,7 +90,9 @@
     "eslint-plugin-react-hooks": "^4.6.0",
     "jest": "^29.7.0",
     "jsdom": "^27.4.0",
+    "patch-package": "^8.0.1",
     "pngjs": "^7.0.0",
+    "postinstall-postinstall": "^2.1.0",
     "prettier": "^3.2.4",
     "ts-jest": "^29.4.6",
     "typescript": "^5.3.3",
