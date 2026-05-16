@@ -3,9 +3,6 @@ PODS:
     - ExpoModulesCore
     - SPAlert (~> 4.2)
     - SPIndicator (~> 1.6)
-  - Crisp (2.12.0):
-    - Crisp/Crisp (= 2.12.0)
-  - Crisp/Crisp (2.12.0)
   - EXApplication (7.0.8):
     - ExpoModulesCore
   - EXConstants (18.0.13):
@@ -1408,29 +1405,6 @@ PODS:
     - React-RCTFBReactNativeSpec
     - ReactCommon/turbomodule/core
     - ReactNativeDependencies
-  - react-native-crisp-chat-sdk (0.23.1):
-    - Crisp (= 2.12.0)
-    - hermes-engine
-    - RCTRequired
-    - RCTTypeSafety
-    - React-Core
-    - React-Core-prebuilt
-    - React-debug
-    - React-Fabric
-    - React-featureflags
-    - React-graphics
-    - React-ImageManager
-    - React-jsi
-    - React-NativeModulesApple
-    - React-RCTFabric
-    - React-renderercss
-    - React-rendererdebug
-    - React-utils
-    - ReactCodegen
-    - ReactCommon/turbomodule/bridging
-    - ReactCommon/turbomodule/core
-    - ReactNativeDependencies
-    - Yoga
   - react-native-mmkv (2.12.2):
     - hermes-engine
     - MMKV (>= 1.3.3)
@@ -2408,7 +2382,6 @@ DEPENDENCIES:
   - React-logger (from `../node_modules/react-native/ReactCommon/logger`)
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - React-microtasksnativemodule (from `../node_modules/react-native/ReactCommon/react/nativemodule/microtasks`)
-  - react-native-crisp-chat-sdk (from `../node_modules/react-native-crisp-chat-sdk`)
   - react-native-mmkv (from `../node_modules/react-native-mmkv`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - "react-native-slider (from `../node_modules/@react-native-community/slider`)"
@@ -2456,7 +2429,6 @@ DEPENDENCIES:
 
 SPEC REPOS:
   trunk:
-    - Crisp
     - libavif
     - libdav1d
     - libwebp
@@ -2600,8 +2572,6 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native/ReactCommon"
   React-microtasksnativemodule:
     :path: "../node_modules/react-native/ReactCommon/react/nativemodule/microtasks"
-  react-native-crisp-chat-sdk:
-    :path: "../node_modules/react-native-crisp-chat-sdk"
   react-native-mmkv:
     :path: "../node_modules/react-native-mmkv"
   react-native-safe-area-context:
@@ -2693,7 +2663,6 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   Burnt: 0616363a206ed96ba9af3e2eb0e184dc97be1458
-  Crisp: 8bf04420a5aef83f1034022eb709be177c42c878
   EXApplication: 1e98d4b1dccdf30627f92917f4b2c5a53c330e5f
   EXConstants: fce59a631a06c4151602843667f7cfe35f81e271
   EXImageLoader: 189e3476581efe3ad4d1d3fb4735b7179eb26f05
@@ -2758,7 +2727,6 @@ SPEC CHECKSUMS:
   React-logger: 50fdb9a8236da90c0b1072da5c32ee03aeb5bf28
   React-Mapbuffer: 9050ee10c19f4f7fca8963d0211b2854d624973e
   React-microtasksnativemodule: f775db9e991c6f3b8ccbc02bfcde22770f96e23b
-  react-native-crisp-chat-sdk: c93ae25a993de27d24fbd2c41e39cfa2598b8e3d
   react-native-mmkv: b5441a1fe4f4c5f616d6b70b37c7082ab29b19dd
   react-native-safe-area-context: 37e680fc4cace3c0030ee46e8987d24f5d3bdab2
   react-native-slider: 8b9a218d1a3e526146a170cb6133be9cda23e70e

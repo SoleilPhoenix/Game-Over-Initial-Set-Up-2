@@ -88,13 +88,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         enableGooglePay: true,
       },
     ],
-    [
-      '@sentry/react-native/expo',
-      {
-        organization: process.env.SENTRY_ORG,
-        project: process.env.SENTRY_PROJECT,
-      },
-    ],
+    // @sentry/react-native/expo plugin temporarily removed — it crashes
+    // metro bundling on Expo SDK 54 with "Cannot read properties of undefined
+    // (reading 'match')" in sentryMetroSerializer. The JS-side Sentry library
+    // still loads and reports crashes — we just lose automatic source-map
+    // upload. Re-enable when bumping to Expo SDK 55+ + sentry-react-native v8.
   ],
   experiments: {
     typedRoutes: false,
