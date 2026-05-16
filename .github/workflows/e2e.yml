@@ -17,6 +17,10 @@ defaults:
 # vars (see @sentry/react-native utils.ts:75 ‟Cannot read … 'match'‟).
 env:
   SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+  # Reanimated v4's androidTest APK (worklets runtime + native libs for 4 ABIs)
+  # overflows Gradle's default 2 GB heap during zipflinger ZIP construction.
+  # 4 GB gives generous headroom on the GH 7 GB Linux runner.
+  GRADLE_OPTS: '-Xmx4096m -XX:MaxMetaspaceSize=512m'
 
 jobs:
   ios:
