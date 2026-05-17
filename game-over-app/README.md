@@ -6,6 +6,20 @@ AI-powered bachelor / bachelorette party planning app. Built with Expo (React Na
 
 ---
 
+## Project state
+
+| | Status |
+|---|---|
+| **UI** | ✅ Editorial Navy & Gold redesign merged (PR #10, May 2026). Dark + light themes via `Profile → Appearance`. |
+| **Design system** | ✅ Single source of truth: `src/constants/designSystem.ts` (`EDITORIAL_DARK` + `EDITORIAL_LIGHT`). Tamagui tokens mirror it. |
+| **Fonts** | ✅ Inter only (Display / Body / Label). Fraunces removed. |
+| **CI checks** | ✅ Code Quality + Build iOS + Build Android run on every push; E2E (Detox) **manual-only** (see below). |
+| **EAS Build** | ✅ Configured for development / preview / production profiles. `EXPO_TOKEN` repo-secret set. |
+| **Stripe / Sentry** | ⚠️ Sentry source-map auto-upload **disabled** in CI builds (Plugin + Metro hook removed). JS-side `Sentry.init` still captures crashes. Re-enable when bumping to Expo SDK 55+ and `@sentry/react-native` 8.x. |
+| **App Store / Play Store** | ⏳ Not yet submitted. EAS submit configured but waiting for Apple Developer + Google Play credentials. |
+
+---
+
 ## Quick start
 
 ```bash
@@ -48,7 +62,7 @@ CI builds in this repo are **Debug builds for verification only** — they prove
 
 | Workflow | Trigger | What it does |
 |---|---|---|
-| **E2E Tests (Detox)** [`e2e.yml`] | Manual (Actions tab) + every push to `main` | Runs Detox tests on iOS Simulator (macOS runner) and Android Emulator (Ubuntu + KVM). ~30 min iOS, ~25 min Android. Failure artifacts uploaded for 7 days. Skipped on PRs to save macOS minutes. |
+| **E2E Tests (Detox)** [`e2e.yml`] | **Manual only** (Actions tab → "Run workflow") | Runs Detox tests on iOS Simulator (release config, macOS runner) and Android Emulator (Ubuntu + KVM). ~30 min iOS, ~25 min Android, 90 min job timeout. Failure artifacts uploaded for 7 days. **Auto-trigger removed** while the app is pre-launch — solo-dev manual QA on simulator catches regressions cheaper than ~70 min of macOS CI time per push. Re-enable by adding `push: { branches: [main] }` to the `on:` block. |
 | **EAS Preview Build** [`eas-preview.yml`] | Manual only | Triggers `eas build --profile preview` for internal testing (install link sent via EAS). |
 | **Release** [`release.yml`] | Git tag matching `v*.*.*` | `v1.0.0` → builds production + submits to App Store / Play Store + creates GitHub Release. `v1.0.0-rc.1` → builds only (no store submission). |
 
