@@ -18,61 +18,12 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { sendWhatsApp, sendSMS } from '../_shared/twilio.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-// ─── WhatsApp sender (mirrors send-guest-invitations) ─────────
-
-async function sendWhatsApp(to: string, body: string): Promise<{ success: boolean; error?: string; twilioCode?: number }> {
-  const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
-  const token = Deno.env.get('TWILIO_AUTH_TOKEN');
-  const from = Deno.env.get('TWILIO_WHATSAPP_FROM');
-  if (!sid || !token || !from) return { success: false, error: 'Twilio not configured' };
-
-  const toFormatted = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
-  const params = new URLSearchParams({ To: toFormatted, From: from, Body: body });
-
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    }
-  );
-  if (res.ok) return { success: true };
-  const err = await res.json();
-  return { success: false, error: err.message ?? `HTTP ${res.status}`, twilioCode: err.code };
-}
-
-async function sendSMS(to: string, body: string): Promise<{ success: boolean; error?: string }> {
-  const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
-  const token = Deno.env.get('TWILIO_AUTH_TOKEN');
-  const from = Deno.env.get('TWILIO_SMS_FROM') ?? 'GameOver';
-  if (!sid || !token) return { success: false, error: 'Twilio not configured' };
-
-  const params = new URLSearchParams({ To: to, From: from, Body: body });
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    }
-  );
-  if (res.ok) return { success: true };
-  const err = await res.json();
-  return { success: false, error: err.message ?? `HTTP ${res.status}` };
-}
 
 // ─── Build briefing message ───────────────────────────────────
 
@@ -114,6 +65,16 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  const authHeader = req.headers.get('Authorization');
+  const cronSecret = Deno.env.get('CRON_SECRET');
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  try {
   const supabase = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -240,4 +201,12 @@ serve(async (req) => {
   return new Response(JSON.stringify({ results }), {
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('[send-final-briefing] Unhandled error:', message);
+    return new Response(JSON.stringify({ error: 'Internal server error', detail: message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
 });

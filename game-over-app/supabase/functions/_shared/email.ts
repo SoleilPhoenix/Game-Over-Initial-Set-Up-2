@@ -18,7 +18,7 @@ interface SendEmailResult {
 }
 
 const SENDGRID_API_URL = 'https://api.sendgrid.com/v3/mail/send';
-const DEFAULT_FROM = 'Game Over <noreply@mail.game-over.app>';
+const DEFAULT_FROM = 'Game Over <support@game-over.app>';
 
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
   const apiKey = Deno.env.get('SENDGRID_API_KEY');

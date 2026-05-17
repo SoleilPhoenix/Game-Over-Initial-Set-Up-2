@@ -8,6 +8,14 @@ on:
 
 env:
   NODE_VERSION: '20'
+  # iOS xcode build phase + Android Gradle plugin both invoke sentry-cli
+  # to upload source maps. CI has no Sentry org/project that matches —
+  # disable the upload step globally to keep release builds passing.
+  SENTRY_DISABLE_AUTO_UPLOAD: 'true'
+
+defaults:
+  run:
+    working-directory: game-over-app
 
 jobs:
   quality:
@@ -17,28 +25,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: 'npm'
+          cache-dependency-path: game-over-app/package-lock.json
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci --legacy-peer-deps
 
       - name: Type check
-        run: pnpm typecheck
+        run: npm run typecheck
 
       - name: Lint
-        run: pnpm lint
+        run: npm run lint
 
       - name: Run tests
-        run: pnpm test
+        run: npx vitest run
 
   build-ios:
     name: Build iOS
@@ -48,28 +52,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: 'npm'
+          cache-dependency-path: game-over-app/package-lock.json
 
       - name: Install dependencies
-        run: pnpm install
+        run: npm install --legacy-peer-deps
 
       - name: Prebuild iOS
         run: npx expo prebuild --platform ios --no-install
 
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          rm -f Podfile.lock
+          pod install --repo-update
+
       - name: Build iOS
         run: |
           cd ios
-          xcodebuild -workspace gameoverapp.xcworkspace \
-            -scheme gameoverapp \
+          xcodebuild -workspace GameOver.xcworkspace \
+            -scheme GameOver \
             -configuration Debug \
             -sdk iphonesimulator \
             -derivedDataPath build \
@@ -83,16 +89,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'pnpm'
+          cache: 'npm'
+          cache-dependency-path: game-over-app/package-lock.json
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -101,7 +103,7 @@ jobs:
           java-version: '17'
 
       - name: Install dependencies
-        run: pnpm install
+        run: npm install --legacy-peer-deps
 
       - name: Prebuild Android
         run: npx expo prebuild --platform android --no-install

@@ -182,7 +182,7 @@ export default function BookingConfirmationScreen() {
               width={80}
               height={80}
               borderRadius={40}
-              backgroundColor="rgba(71, 184, 129, 0.2)"
+              backgroundColor="rgba(198,167,94,0.20)"
               alignItems="center"
               justifyContent="center"
               marginBottom="$4"
@@ -191,11 +191,11 @@ export default function BookingConfirmationScreen() {
                 width={56}
                 height={56}
                 borderRadius={28}
-                backgroundColor="$success"
+                backgroundColor="#C6A75E"
                 alignItems="center"
                 justifyContent="center"
               >
-                <Ionicons name="checkmark" size={32} color="white" />
+                <Ionicons name="checkmark" size={32} color="#0D1B2A" />
               </YStack>
             </YStack>
 
@@ -268,7 +268,7 @@ export default function BookingConfirmationScreen() {
                   <Ionicons
                     name={copied ? 'checkmark-circle' : 'copy-outline'}
                     size={18}
-                    color={copied ? '#47B881' : '#258CF4'}
+                    color={copied ? '#4ADE80' : '#C6A75E'}
                   />
                 </XStack>
               </Pressable>
@@ -316,25 +316,25 @@ export default function BookingConfirmationScreen() {
         </Card>
 
         {/* Next Steps */}
-        <Card width="100%" marginHorizontal="$4" paddingHorizontal={16} backgroundColor="rgba(37, 140, 244, 0.1)" borderWidth={0}>
+        <Card width="100%" marginHorizontal="$4" paddingHorizontal={16} backgroundColor="rgba(198, 167, 94, 0.1)" borderWidth={0}>
           <YStack gap="$3">
             <Text fontSize="$4" fontWeight="700" color="$primary" textAlign="center">
               {t.booking.whatsNext}
             </Text>
             <XStack gap="$2" alignItems="flex-start">
-              <Ionicons name="mail-outline" size={18} color="#258CF4" style={{ marginTop: 2 }} />
+              <Ionicons name="mail-outline" size={18} color="#C6A75E" style={{ marginTop: 2 }} />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
                 {t.booking.confirmationEmail}
               </Text>
             </XStack>
             <XStack gap="$2" alignItems="flex-start">
-              <Ionicons name="people-outline" size={18} color="#258CF4" style={{ marginTop: 2 }} />
+              <Ionicons name="people-outline" size={18} color="#C6A75E" style={{ marginTop: 2 }} />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
                 {t.booking.inviteGuests}
               </Text>
             </XStack>
             <XStack gap="$2" alignItems="flex-start">
-              <Ionicons name="chatbubbles-outline" size={18} color="#258CF4" style={{ marginTop: 2 }} />
+              <Ionicons name="chatbubbles-outline" size={18} color="#C6A75E" style={{ marginTop: 2 }} />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
                 {t.booking.useGroupChat}
               </Text>
@@ -359,7 +359,7 @@ export default function BookingConfirmationScreen() {
           testID="add-to-calendar-button"
         >
           <XStack gap="$2" alignItems="center">
-            <Ionicons name="calendar-outline" size={20} color="#258CF4" />
+            <Ionicons name="calendar-outline" size={20} color="#C6A75E" />
             <Text color="$primary" fontWeight="600">
               {t.booking.addToCalendar}
             </Text>

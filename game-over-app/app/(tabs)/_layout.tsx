@@ -5,15 +5,18 @@
  */
 
 import { Tabs, useRouter } from 'expo-router';
+import { useEffect } from 'react';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Alert, View, StyleSheet, Pressable, Platform, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { DARK_THEME } from '@/constants/theme';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useTranslation, getTranslation } from '@/i18n';
+import { useUser } from '@/stores/authStore';
+import { useEvents } from '@/hooks/queries/useEvents';
 
 type IconName = 'calendar' | 'calendar-outline' | 'chatbubbles' | 'chatbubbles-outline' |
   'card' | 'card-outline' | 'person-circle' | 'person-circle-outline' | 'add';
@@ -36,19 +39,20 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
   const config = iconMap[name] || { active: 'calendar', inactive: 'calendar-outline' };
   const label = labelMap[name] || name;
   const iconName = focused ? config.active : config.inactive;
-  const activeColor = '#5A7EB0'; // Same as Share Event card
+  const activeColor = '#C6A75E'; // Champagne Gold
+  const inactiveColor = 'rgba(255,255,255,0.40)';
 
   return (
     <View style={styles.iconContainer}>
       <Ionicons
         name={iconName}
         size={22}
-        color={focused ? activeColor : DARK_THEME.textSecondary}
+        color={focused ? activeColor : inactiveColor}
       />
       <Text
         style={[
           styles.tabLabel,
-          { color: focused ? activeColor : DARK_THEME.textSecondary }
+          { color: focused ? activeColor : inactiveColor }
         ]}
       >
         {label}
@@ -59,10 +63,27 @@ function TabIcon({ name, focused }: { name: string; focused: boolean }) {
 
 function FABButton() {
   const router = useRouter();
+  const user = useUser();
+  const { data: events } = useEvents();
+  const rawDrafts = useWizardStore((s) => s.getAllDrafts());
+
+  // User-scoped draft filtering (same logic as events/index.tsx)
+  const userDrafts = rawDrafts.filter(d => {
+    if (!d.createdBy || d.createdBy !== user?.id) return false;
+    if (!events) return true;
+    const existingNames = new Set(
+      events.filter(e => e.created_by === user?.id).map(e => e.honoree_name?.toLowerCase()).filter(Boolean)
+    );
+    const existingIds = new Set(events.map(e => e.id));
+    if (d.createdEventId && existingIds.has(d.createdEventId)) return false;
+    if (d.honoreeName && existingNames.has(d.honoreeName.toLowerCase())) return false;
+    return true;
+  });
+  const hasUserDrafts = userDrafts.length > 0;
 
   const handlePress = () => {
     const store = useWizardStore.getState();
-    if (store.hasDraft()) {
+    if (hasUserDrafts) {
       const tr = getTranslation();
       Alert.alert(
         tr.wizard.existingDraftTitle,
@@ -72,11 +93,10 @@ function FABButton() {
           {
             text: tr.wizard.continueDraft,
             onPress: () => {
-              const drafts = store.getAllDrafts();
-              if (drafts.length > 0) {
-                store.loadDraft(drafts[0].id);
+              if (userDrafts.length > 0) {
+                store.loadDraft(userDrafts[0].id);
                 const stepPaths = ['/create-event', '/create-event/preferences', '/create-event/participants', '/create-event/packages'];
-                const targetPath = stepPaths[Math.min(drafts[0].currentStep - 1, 3)];
+                const targetPath = stepPaths[Math.min(userDrafts[0].currentStep - 1, 3)];
                 router.push(targetPath as any);
               }
             },
@@ -85,7 +105,7 @@ function FABButton() {
             text: tr.wizard.startFresh,
             style: 'destructive',
             onPress: () => {
-              store.startNewDraft();
+              store.startNewDraft(user?.id);
               router.push('/create-event');
             },
           },
@@ -93,7 +113,7 @@ function FABButton() {
       );
       return;
     }
-    store.startNewDraft();
+    store.startNewDraft(user?.id);
     router.push('/create-event');
   };
 
@@ -105,9 +125,12 @@ function FABButton() {
         pressed && styles.fabButtonPressed,
       ]}
       testID="fab-create-event"
+      accessibilityRole="button"
+      accessibilityLabel="Create new event"
+      accessibilityHint="Opens the event creation wizard"
     >
       <LinearGradient
-        colors={['#5A7EB0', '#4A6E9F']}
+        colors={['#C6A75E', '#8A7338']}
         style={styles.fabGradient}
       >
         <Ionicons name="add" size={32} color="#FFFFFF" />
@@ -127,19 +150,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const isChannelDetailScreen = currentRoute?.name === 'chat' &&
     innerRoute?.name?.includes('[channelId]');
 
-  // Recursively check if any nested route has an eventId param
-  const routeHasEventId = (route: any): boolean => {
-    if (!route) return false;
-    if ((route.params as any)?.eventId) return true;
-    if (route.state?.routes) return route.state.routes.some(routeHasEventId);
-    return false;
-  };
-
-  // Hide tab bar when chat or budget opened from Event Summary (eventId param present)
-  const isChatFromEventSummary = currentRoute?.name === 'chat' && routeHasEventId(currentRoute);
-  const isBudgetFromEventSummary = currentRoute?.name === 'budget' && routeHasEventId(currentRoute);
-
-  if (tabBarHidden || isChannelDetailScreen || isChatFromEventSummary || isBudgetFromEventSummary) {
+  if (tabBarHidden || isChannelDetailScreen) {
     return null;
   }
 
@@ -191,7 +202,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
             return (
               <Pressable
                 key={route.key}
-                accessibilityRole="button"
+                accessibilityRole="tab"
                 accessibilityState={isFocused ? { selected: true } : {}}
                 accessibilityLabel={options.tabBarAccessibilityLabel}
                 testID={options.tabBarTestID || `tab-${routeName}`}
@@ -212,13 +223,21 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
 }
 
 export default function TabsLayout() {
+  const { t } = useTranslation();  // needed for translated tab accessibility labels
+
+  // Safety reset: ensure tab bar is never stuck hidden after hard navigation
+  useEffect(() => {
+    useTabBarStore.getState().setHidden(false);
+  }, []);
+
   return (
+    <ErrorBoundary fallbackTitle="Tab Error">
     <Tabs
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{
         headerShown: false,
         sceneStyle: {
-          backgroundColor: DARK_THEME.background,
+          backgroundColor: '#0D1B2A',
         },
       }}
     >
@@ -227,6 +246,7 @@ export default function TabsLayout() {
         options={{
           title: 'Events',
           href: '/(tabs)/events',
+          tabBarAccessibilityLabel: `${t.tabs.events}, tab 1 of 4`,
         }}
       />
       <Tabs.Screen
@@ -234,6 +254,7 @@ export default function TabsLayout() {
         options={{
           title: 'Chat',
           href: '/(tabs)/chat',
+          tabBarAccessibilityLabel: `${t.tabs.chat}, tab 2 of 4`,
         }}
       />
       <Tabs.Screen
@@ -241,6 +262,7 @@ export default function TabsLayout() {
         options={{
           title: 'Budget',
           href: '/(tabs)/budget',
+          tabBarAccessibilityLabel: `${t.tabs.budget}, tab 3 of 4`,
         }}
       />
       <Tabs.Screen
@@ -248,9 +270,11 @@ export default function TabsLayout() {
         options={{
           title: 'Profile',
           href: '/(tabs)/profile',
+          tabBarAccessibilityLabel: `${t.tabs.profile}, tab 4 of 4`,
         }}
       />
     </Tabs>
+    </ErrorBoundary>
   );
 }
 
@@ -268,8 +292,8 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: 120, // Cover more area
-    backgroundColor: 'rgba(21, 24, 29, 0.85)', // 85% opacity (between 30-50% transparency = 50-70% opacity)
+    height: 88, // Matches actual tab-bar visual height (buttons ~50px + safe-area ~34px + 4px buffer)
+    backgroundColor: 'rgba(13, 27, 42, 0.85)', // Editorial Midnight Navy @ 85% — matches sceneStyle
     zIndex: 1,
   },
   tabBarBlur: {
@@ -279,7 +303,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
     marginHorizontal: 16,
     marginBottom: Platform.OS === 'android' ? 8 : 0,
     zIndex: 2, // Above background
@@ -323,7 +347,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    shadowColor: '#5A7EB0',
+    shadowColor: '#C6A75E',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
@@ -341,6 +365,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 3,
-    borderColor: DARK_THEME.background,
+    borderColor: '#0D1B2A',
   },
 });

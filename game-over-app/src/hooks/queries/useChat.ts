@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tansta
 import { useEffect, useRef } from 'react';
 import { channelsRepository, messagesRepository, MessageWithAuthor } from '@/repositories';
 import { useAuthStore } from '@/stores/authStore';
+import { useAppState } from '@/hooks/useAppState';
 import type { Database } from '@/lib/supabase/types';
 
 type ChatChannelInsert = Database['public']['Tables']['chat_channels']['Insert'];
@@ -65,11 +66,13 @@ export function useMessages(channelId: string | undefined) {
  * Get total unread count for an event
  */
 export function useUnreadCount(eventId: string | undefined) {
+  const appState = useAppState();
+
   return useQuery({
     queryKey: chatKeys.unreadCount(eventId || ''),
     queryFn: () => channelsRepository.getTotalUnreadCount(eventId!),
     enabled: !!eventId,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: appState === 'active' ? 30000 : false,
   });
 }
 

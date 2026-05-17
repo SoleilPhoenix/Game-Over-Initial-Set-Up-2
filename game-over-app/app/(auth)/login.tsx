@@ -3,10 +3,11 @@
  * Dark glassmorphic design matching UI specifications
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   StatusBar,
   KeyboardAvoidingView,
@@ -23,8 +24,6 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { DARK_THEME } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
@@ -38,6 +37,7 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginScreen() {
   const [isLoading, setIsLoading] = React.useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const insets = useSafeAreaInsets();
   const { setError, error, clearError } = useAuthStore();
   const { t } = useTranslation();
@@ -85,7 +85,7 @@ export default function LoginScreen() {
 
       {/* Background gradient */}
       <LinearGradient
-        colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
+        colors={['#1A2F47', '#0D1B2A']}
         style={StyleSheet.absoluteFill}
       />
 
@@ -113,7 +113,7 @@ export default function LoginScreen() {
               hitSlop={10}
               testID="back-button"
             >
-              <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+              <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
             </Pressable>
           </View>
 
@@ -131,7 +131,7 @@ export default function LoginScreen() {
               {/* Error Message */}
               {error && (
                 <View style={styles.errorContainer} testID="error-message">
-                  <Ionicons name="alert-circle" size={18} color={DARK_THEME.error} />
+                  <Ionicons name="alert-circle" size={18} color={'#E8836B'} />
                   <Text style={styles.errorText}>{error}</Text>
                 </View>
               )}
@@ -145,22 +145,20 @@ export default function LoginScreen() {
                     name="email"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.email && styles.inputError]}>
-                        <Ionicons name="mail-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.enterEmail}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoComplete="email"
-                            textContentType="emailAddress"
-                            testID="input-email"
-                            style={styles.darkInput}
-                          />
-                        </View>
+                        <Ionicons name="mail-outline" size={20} color={'rgba(255,255,255,0.48)'} />
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder={t.auth.enterEmail}
+                          placeholderTextColor={'rgba(255,255,255,0.48)'}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          autoComplete="email"
+                          textContentType="emailAddress"
+                          testID="input-email"
+                        />
                       </View>
                     )}
                   />
@@ -176,21 +174,22 @@ export default function LoginScreen() {
                     name="password"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.password && styles.inputError]}>
-                        <Ionicons name="lock-closed-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.enterPassword}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            secureTextEntry
-                            autoComplete="password"
-                            textContentType="password"
-                            testID="input-password"
-                            style={styles.darkInput}
-                          />
-                        </View>
+                        <Ionicons name="lock-closed-outline" size={20} color={'rgba(255,255,255,0.48)'} />
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder={t.auth.enterPassword}
+                          placeholderTextColor={'rgba(255,255,255,0.48)'}
+                          secureTextEntry={!showPassword}
+                          autoComplete="password"
+                          textContentType="password"
+                          testID="input-password"
+                        />
+                        <Pressable onPress={() => setShowPassword(!showPassword)}>
+                          <Text style={styles.showHideText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                        </Pressable>
                       </View>
                     )}
                   />
@@ -247,7 +246,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
   },
   decorCircle1: {
     position: 'absolute',
@@ -256,7 +255,7 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: `${DARK_THEME.primary}20`,
+    backgroundColor: 'rgba(198,167,94,0.12)',
   },
   decorCircle2: {
     position: 'absolute',
@@ -265,7 +264,7 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: `${DARK_THEME.primary}10`,
+    backgroundColor: 'rgba(198,167,94,0.06)',
   },
   keyboardView: {
     flex: 1,
@@ -293,23 +292,23 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '800',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     marginBottom: 8,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
     lineHeight: 24,
   },
   glassCard: {
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   glassCardInner: {
-    backgroundColor: DARK_THEME.glass,
+    backgroundColor: 'rgba(26,47,71,0.8)',
     padding: 24,
     gap: 24,
   },
@@ -317,16 +316,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: `${DARK_THEME.error}15`,
+    backgroundColor: 'rgba(232,131,107,0.08)',
     borderRadius: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: `${DARK_THEME.error}30`,
+    borderColor: 'rgba(232,131,107,0.19)',
   },
   errorText: {
     flex: 1,
     fontSize: 14,
-    color: DARK_THEME.error,
+    color: '#E8836B',
   },
   form: {
     gap: 20,
@@ -337,7 +336,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -353,7 +352,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   inputError: {
-    borderColor: DARK_THEME.error,
+    borderColor: '#E8836B',
   },
   inputInner: {
     flex: 1,
@@ -361,7 +360,7 @@ const styles = StyleSheet.create({
   darkInput: {
     backgroundColor: 'transparent',
     borderWidth: 0,
-    color: '#1A202C', // Dark text for visibility on light input backgrounds
+    color: '#FFFFFF',
     fontSize: 16,
     paddingVertical: 0,
     paddingHorizontal: 0,
@@ -369,15 +368,21 @@ const styles = StyleSheet.create({
   },
   fieldError: {
     fontSize: 12,
-    color: DARK_THEME.error,
+    color: '#E8836B',
     marginTop: 4,
+  },
+  showHideText: {
+    color: '#C6A75E',
+    fontSize: 14,
+    fontWeight: '600',
+    paddingLeft: 8,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
   },
   forgotPasswordText: {
     fontSize: 14,
-    color: DARK_THEME.primary,
+    color: '#C6A75E',
     fontWeight: '600',
   },
   primaryButton: {
@@ -385,10 +390,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: DARK_THEME.primary,
+    backgroundColor: '#C6A75E',
     paddingVertical: 16,
     borderRadius: 12,
-    shadowColor: DARK_THEME.primary,
+    shadowColor: '#C6A75E',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -402,7 +407,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   primaryButtonText: {
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -413,11 +418,11 @@ const styles = StyleSheet.create({
   },
   signupText: {
     fontSize: 14,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   signupLinkText: {
     fontSize: 14,
-    color: DARK_THEME.primary,
+    color: '#C6A75E',
     fontWeight: '700',
   },
 });

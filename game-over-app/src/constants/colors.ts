@@ -1,55 +1,59 @@
 /**
  * Game-Over App Color Palette
- * Based on PRD and UI/UX Design Specifications
- * Updated to match Figma/HTML designs exactly
+ *
+ * LEGACY MODULE — kept for backwards-compat with screens that still reference
+ * `colors.*` or `DARK_THEME.*` from `src/constants/theme.ts`. The underlying
+ * values were remapped onto the editorial palette so old consumers render
+ * with the new theme automatically. New code should consume `useTheme()` /
+ * `EDITORIAL_DARK` / `EDITORIAL_LIGHT` from `src/constants/designSystem.ts`.
  */
 
 export const colors = {
-  // Primary Colors - Unified active blue across all screens
-  primary: '#5A7EB0',
-  primaryLight: '#7A9BC4',
-  primaryDark: '#456A9C',
+  // Primary — Champagne Gold (editorial redesign)
+  primary: '#C6A75E',
+  primaryLight: '#E8DCC8',
+  primaryDark: '#8A7338',
 
-  // Semantic Colors
-  success: '#22C55E',
-  warning: '#EAB308',
-  error: '#EF4444',
+  // Semantic Colors — soft editorial palette (warm, never harsh)
+  success: '#4ADE80',
+  warning: '#E8B14C',
+  error: '#E8836B',
   info: '#7B68EE',
 
-  // Light Mode - Neutral Colors (kept for potential light mode support)
+  // Light Mode — "Ethereal Architect" warm off-whites
   light: {
-    background: '#F6F7F7',
-    surface: '#FFFFFF',
-    textPrimary: '#1A202C',
-    textSecondary: '#64748B',
-    textTertiary: '#94A3B8',
-    border: '#E2E8F0',
-    primary: '#5A7EB0',
-    success: '#22C55E',
-    warning: '#EAB308',
-    error: '#EF4444',
+    background: '#FFFFFF',
+    surface: '#FBF9F4',
+    textPrimary: '#1F2A44',
+    textSecondary: 'rgba(31,42,68,0.72)',
+    textTertiary: 'rgba(31,42,68,0.48)',
+    border: 'rgba(31,42,68,0.15)',
+    primary: '#1F2A44',
+    success: '#2F8F5E',
+    warning: '#B48A3C',
+    error: '#C66A55',
   },
 
-  // Dark Mode - Neutral Colors (Primary theme per UI designs)
+  // Dark Mode — Midnight Navy editorial palette
   dark: {
-    background: '#15181D',
-    backgroundAlt: '#2D3748',  // Deep Navy - main background for most screens
-    surface: '#1E2329',
-    surfaceCard: '#23272F',
-    deepNavy: '#2D3748',
+    background: '#0D1B2A',
+    backgroundAlt: '#22385A',   // surfaceHigh — was deepNavy in old palette
+    surface: '#12253A',
+    surfaceCard: '#1A2F47',
+    deepNavy: '#22385A',
     textPrimary: '#FFFFFF',
-    textSecondary: '#D1D5DB',
-    textTertiary: '#9CA3AF',
-    border: 'rgba(255, 255, 255, 0.08)',
-    borderLight: 'rgba(255, 255, 255, 0.05)',
+    textSecondary: 'rgba(255,255,255,0.72)',
+    textTertiary: 'rgba(255,255,255,0.48)',
+    border: 'rgba(230,220,200,0.15)',
+    borderLight: 'rgba(230,220,200,0.08)',
   },
 
-  // Glassmorphic effects
+  // Glassmorphic effects — navy-tinted (was warm-gray before)
   glass: {
-    background: 'rgba(45, 55, 72, 0.7)',
-    backgroundLight: 'rgba(45, 55, 72, 0.6)',
-    border: 'rgba(255, 255, 255, 0.08)',
-    overlay: 'rgba(255, 255, 255, 0.05)',
+    background: 'rgba(26,47,71,0.7)',
+    backgroundLight: 'rgba(26,47,71,0.6)',
+    border: 'rgba(230,220,200,0.15)',
+    overlay: 'rgba(255,255,255,0.05)',
   },
 
   // Social Platform Colors
@@ -66,20 +70,20 @@ export const colors = {
 
   // Gradients
   gradients: {
-    primary: ['#5A7EB0', '#456A9C'],
-    surfaceLight: ['#FFFFFF', '#F0F2F5'],
-    surfaceDark: ['#1B2127', '#222A33'],
+    primary: ['#C6A75E', '#8A7338'],     // gold → deep gold (editorial)
+    surfaceLight: ['#FFFFFF', '#F7F5F0'],
+    surfaceDark: ['#0D1B2A', '#12253A'],
   },
 
-  // Transparent variants
+  // Transparent variants — gold-tinted (was muted-blue)
   transparent: {
-    primary10: 'rgba(90, 126, 176, 0.1)',
-    primary20: 'rgba(90, 126, 176, 0.2)',
-    primary30: 'rgba(90, 126, 176, 0.3)',
-    black10: 'rgba(0, 0, 0, 0.1)',
-    black50: 'rgba(0, 0, 0, 0.5)',
-    white10: 'rgba(255, 255, 255, 0.1)',
-    white50: 'rgba(255, 255, 255, 0.5)',
+    primary10: 'rgba(198,167,94,0.1)',
+    primary20: 'rgba(198,167,94,0.2)',
+    primary30: 'rgba(198,167,94,0.3)',
+    black10: 'rgba(0,0,0,0.1)',
+    black50: 'rgba(0,0,0,0.5)',
+    white10: 'rgba(255,255,255,0.1)',
+    white50: 'rgba(255,255,255,0.5)',
   },
 } as const;
 

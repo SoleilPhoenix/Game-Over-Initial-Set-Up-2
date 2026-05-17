@@ -34,7 +34,6 @@ import { useUser } from '@/stores/authStore';
 import { useWizardStore, type DraftSnapshot } from '@/stores/wizardStore';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
 import { useTranslation, getTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
 import { getCurrentPhaseLabel } from '@/utils/planningProgress';
 import type { BudgetInfo } from '@/lib/participantCountCache';
 import { useUrgentPayment } from '@/hooks/useUrgentPayment';
@@ -49,6 +48,7 @@ type FilterTab = 'organizing' | 'attending';
 const getBookedStepCount = (
   event: EventWithDetails,
   invitedCount = 0,
+  step2Confirmed = false,
 ): number => {
   const checklist = event.planning_checklist || {};
   // Mirror calculatePlanningSteps: threshold based on participant_count (expected total)
@@ -66,11 +66,10 @@ const getBookedStepCount = (
     else break;
   }
 
-  // Step 2 (group_confirmed): we can't check confirmed count on the list card.
+  // Step 2 (group_confirmed): use cached flag written by the event detail screen (which has participant data).
   // If any manual step is present, sequential enforcement guarantees step2 was already done.
-  // Otherwise we cannot confirm it — keep step2=0 so the card correctly shows "Next Step 2".
-  const step2 = manualCount > 0 ? 1 : 0;
-  const effectiveStep1 = manualCount > 0 ? 1 : step1;
+  const step2 = (manualCount > 0 || step2Confirmed) ? 1 : 0;
+  const effectiveStep1 = (manualCount > 0 || step2Confirmed) ? 1 : step1;
 
   return effectiveStep1 + step2 + manualCount;
 };
@@ -91,6 +90,7 @@ const getProgressConfig = (
   event: EventWithDetails,
   t: any,
   invitedCount = 0,
+  step2Confirmed = false,
 ): {
   phase: string;
   nextStepNum: number;
@@ -104,7 +104,7 @@ const getProgressConfig = (
   const status = event.status;
   switch (status) {
     case 'booked': {
-      const completed = getBookedStepCount(event, invitedCount);
+      const completed = getBookedStepCount(event, invitedCount, step2Confirmed);
       const percentage = Math.round((completed / 8) * 100);
       if (completed === 8) {
         return { phase: t.events.allSetReady, nextStepNum: 8, nextStepLabel: '', percentage: 100, color: '#10B981', icon: 'checkmark-circle', isBooked: true, completedSteps: 8 };
@@ -129,7 +129,7 @@ const getProgressConfig = (
         nextStepNum,
         nextStepLabel,
         percentage,
-        color: DARK_THEME.primary,
+        color: '#C6A75E',
         icon: 'ellipse',
         isBooked: true,
         completedSteps: completed,
@@ -189,20 +189,47 @@ export default function EventsScreen() {
   const [budgetInfos, setBudgetInfos] = useState<Record<string, BudgetInfo>>({});
   // Cache of invited guest counts (set after sending invitations)
   const [invitedCounts, setInvitedCounts] = useState<Record<string, number>>({});
-  useEffect(() => {
-    AsyncStorage.getItem('desired_participant_counts')
-      .then(raw => { if (raw) setParticipantCounts(JSON.parse(raw)); })
-      .catch(() => {});
-    AsyncStorage.getItem('budget_info')
-      .then(raw => { if (raw) setBudgetInfos(JSON.parse(raw)); })
-      .catch(() => {});
-    AsyncStorage.getItem('invited_guest_counts')
-      .then(raw => { if (raw) setInvitedCounts(JSON.parse(raw)); })
+  // Cache of step 2 (group_confirmed) completion — written by event detail screen
+  const [step2ConfirmedMap, setStep2ConfirmedMap] = useState<Record<string, boolean>>({});
+
+  /**
+   * Load all event caches in a single multiGet (3 base keys → 1 I/O round-trip).
+   * When `eventIds` are provided, also loads step2_confirmed flags in the same call.
+   */
+  const loadEventCaches = useCallback((eventIds?: string[]) => {
+    const baseKeys = ['desired_participant_counts', 'budget_info', 'invited_guest_counts'];
+    const step2Keys = eventIds?.map(id => `gameover:step2_confirmed:${id}`) ?? [];
+    AsyncStorage.multiGet([...baseKeys, ...step2Keys])
+      .then(pairs => {
+        const step2Map: Record<string, boolean> = {};
+        for (const [key, raw] of pairs) {
+          if (key === 'desired_participant_counts') {
+            if (raw) try { setParticipantCounts(JSON.parse(raw)); } catch {}
+          } else if (key === 'budget_info') {
+            if (raw) try { setBudgetInfos(JSON.parse(raw)); } catch {}
+          } else if (key === 'invited_guest_counts') {
+            if (raw) try { setInvitedCounts(JSON.parse(raw)); } catch {}
+          } else if (key.startsWith('gameover:step2_confirmed:')) {
+            const id = key.replace('gameover:step2_confirmed:', '');
+            step2Map[id] = !!raw;
+          }
+        }
+        if (step2Keys.length > 0) setStep2ConfirmedMap(step2Map);
+      })
       .catch(() => {});
   }, []);
 
+  // Initial load: base caches only (events not yet loaded)
+  useEffect(() => { loadEventCaches(); }, [loadEventCaches]);
+
   const queryClient = useQueryClient();
   const { data: events, isLoading, error: eventsError, refetch } = useEvents();
+
+  // Once events load, reload caches + step2 flags in a single multiGet round-trip
+  useEffect(() => {
+    if (!events?.length) return;
+    loadEventCaches(events.map(e => e.id));
+  }, [events, loadEventCaches]);
 
   // Compute urgency: event ≤14 days away + unpaid balance
   const getDaysLeftNum = (startDate?: string): number | null => {
@@ -228,13 +255,9 @@ export default function EventsScreen() {
   useFocusEffect(
     useCallback(() => {
       refetch();
-      AsyncStorage.getItem('invited_guest_counts')
-        .then(raw => { if (raw) setInvitedCounts(JSON.parse(raw)); })
-        .catch(() => {});
-      AsyncStorage.getItem('budget_info')
-        .then(raw => { if (raw) setBudgetInfos(JSON.parse(raw)); })
-        .catch(() => {});
-    }, [refetch])
+      // Single multiGet: 3 base caches + all step2_confirmed flags (1 I/O round-trip total)
+      loadEventCaches(events?.map(e => e.id));
+    }, [refetch, events, loadEventCaches])
   );
 
   // Hide events still in wizard booking flow (created at Step 4 but not yet paid)
@@ -259,10 +282,13 @@ export default function EventsScreen() {
   // Also hide events still in the wizard booking flow (created but not yet paid)
   const filteredEvents = useMemo(() => {
     if (!deduplicatedEvents) return [];
-    // Hide events still going through wizard → booking flow
-    const visible = wizardCreatedEventId
-      ? deduplicatedEvents.filter((e) => e.id !== wizardCreatedEventId)
-      : deduplicatedEvents;
+    // Hide events still in draft status (pre-created by wizard, not yet booked)
+    // and events actively being processed through the booking flow
+    const visible = deduplicatedEvents.filter((e) => {
+      if (e.status === 'draft') return false;
+      if (wizardCreatedEventId && e.id === wizardCreatedEventId) return false;
+      return true;
+    });
     let filtered: EventWithDetails[];
     switch (activeFilter) {
       case 'organizing':
@@ -288,29 +314,48 @@ export default function EventsScreen() {
     setIsRefreshing(false);
   }, [refetch]);
 
-  // Draft state (multi-draft) — filter out drafts that match an already-booked event
+  // Draft state (multi-draft) — filter out drafts that don't belong to current user
+  // and drafts whose event has already been created in the DB
   const rawDrafts = useWizardStore((s) => s.getAllDrafts());
   const allDrafts = useMemo(() => {
-    if (!events || events.length === 0) return rawDrafts;
-    // If a booked/completed event exists with the same honoree name, hide the draft
-    const bookedNames = new Set(
+    // Filter 1: Only show this user's drafts (strict — legacy drafts without createdBy are hidden)
+    const userDrafts = rawDrafts.filter(d => d.createdBy === user?.id);
+
+    if (!events || events.length === 0) return userDrafts;
+
+    // Filter 2: If an event already exists in DB with same honoree name (any status), hide the draft
+    const existingHonoreeNames = new Set(
       events
-        .filter(e => e.status === 'booked' || e.status === 'completed')
+        .filter(e => e.created_by === user?.id) // only organizer's own events
         .map(e => e.honoree_name?.toLowerCase())
         .filter(Boolean)
     );
-    const filtered = rawDrafts.filter(d => !bookedNames.has(d.honoreeName?.toLowerCase()));
+    // Filter 3: If a draft's createdEventId matches a DB event, it was already submitted
+    const existingEventIds = new Set(events.map(e => e.id));
+
+    const filtered = userDrafts.filter(d => {
+      // Only suppress draft if the created event has progressed past draft status
+      // (planning/booked/completed). A 'draft' DB event is just a pre-created placeholder
+      // and the wizard draft is still the canonical source.
+      if (d.createdEventId && existingEventIds.has(d.createdEventId)) {
+        const dbEvent = events.find(e => e.id === d.createdEventId);
+        if (dbEvent && dbEvent.status !== 'draft') return false;
+      }
+      if (d.honoreeName && existingHonoreeNames.has(d.honoreeName.toLowerCase())) return false;
+      return true;
+    });
     return [...filtered].sort((a, b) => {
       const aTime = a.startDate ? new Date(a.startDate).getTime() : Infinity;
       const bTime = b.startDate ? new Date(b.startDate).getTime() : Infinity;
       return aTime - bTime;
     });
-  }, [rawDrafts, events]);
+  }, [rawDrafts, events, user?.id]);
   const hasDrafts = allDrafts.length > 0;
 
   const handleCreateEvent = () => {
-    const store = useWizardStore.getState();
-    if (store.hasDraft()) {
+    // Use filtered allDrafts (user-scoped) instead of store.hasDraft() to avoid
+    // showing the dialog when the device has another user's drafts
+    if (hasDrafts) {
       const tr = getTranslation();
       Alert.alert(
         tr.wizard.existingDraftTitle,
@@ -320,15 +365,14 @@ export default function EventsScreen() {
           {
             text: tr.wizard.continueDraft,
             onPress: () => {
-              const drafts = store.getAllDrafts();
-              if (drafts.length > 0) handleResumeDraft(drafts[0].id);
+              if (allDrafts.length > 0) handleResumeDraft(allDrafts[0].id);
             },
           },
           {
             text: tr.wizard.startFresh,
             style: 'destructive',
             onPress: () => {
-              useWizardStore.getState().startNewDraft();
+              useWizardStore.getState().startNewDraft(user?.id);
               router.push('/create-event');
             },
           },
@@ -336,7 +380,7 @@ export default function EventsScreen() {
       );
       return;
     }
-    useWizardStore.getState().startNewDraft();
+    useWizardStore.getState().startNewDraft(user?.id);
     router.push('/create-event');
   };
 
@@ -367,20 +411,13 @@ export default function EventsScreen() {
       queryFn: () => bookingsRepository.getByEventId(eventId),
       staleTime: 60 * 1000,
     });
-    router.push(`/event/${eventId}`);
+    const role = activeFilter === 'attending' ? 'guest' : 'organizer';
+    router.push(`/event/${eventId}?role=${role}`);
   };
 
   const handleNotifications = () => {
     markUrgencySeen();
-    if (isGuestContribution && guestUrgentEvent) {
-      Alert.alert(
-        'Contribution Due',
-        `Your share for ${guestUrgentEvent.title} is due in ${guestDaysLeft} days.\nPlease transfer your contribution to the organizer.`,
-        [{ text: 'OK' }]
-      );
-    } else {
-      router.push('/notifications');
-    }
+    router.push('/notifications');
   };
 
   // Note: this heuristic uses created_by to determine role.
@@ -442,7 +479,7 @@ export default function EventsScreen() {
           key={i}
           style={[
             styles.segment,
-            { backgroundColor: i < completedSteps ? color : DARK_THEME.deepNavy },
+            { backgroundColor: i < completedSteps ? color : '#1A2F47' },
             i === 0 && styles.segmentFirst,
             i === 7 && styles.segmentLast,
           ]}
@@ -451,11 +488,14 @@ export default function EventsScreen() {
     </View>
   );
 
-  const renderEventCard = ({ item }: { item: EventWithDetails }) => {
+  const keyExtractor = useCallback((item: EventWithDetails) => item.id, []);
+
+  const renderEventCard = useCallback(({ item }: { item: EventWithDetails }) => {
     const role = getUserRole(item);
     const progress = getProgressConfig(
       item, t,
       invitedCounts[item.id] || 0,
+      step2ConfirmedMap[item.id] || false,
     );
     const daysLeft = getDaysLeft(item.start_date);
     const paymentStatus = getPaymentStatus(item);
@@ -473,10 +513,10 @@ export default function EventsScreen() {
         ]}
         testID={`event-card-${item.id}`}
       >
-        {getUserRole(item) === 'guest' && (
+        {role === 'guest' && (
           <View style={{
             position: 'absolute', top: 8, right: 8,
-            backgroundColor: 'rgba(90,126,176,0.85)',
+            backgroundColor: 'rgba(198,167,94,0.85)',
             borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
             zIndex: 1,
           }}>
@@ -516,7 +556,7 @@ export default function EventsScreen() {
               const count = budgetInfos[item.id]?.totalParticipants ?? participantCounts[item.id] ?? item.participant_count;
               return count > 0 ? (
                 <XStack alignItems="center" gap={6} marginTop={4}>
-                  <Ionicons name="people-outline" size={14} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="people-outline" size={14} color={'rgba(255,255,255,0.48)'} />
                   <Text style={styles.dateText}>
                     {count} {t.events.participantsLabel || 'participants'}
                   </Text>
@@ -526,7 +566,7 @@ export default function EventsScreen() {
 
             {/* Date */}
             <XStack alignItems="center" gap={6} marginTop={4}>
-              <Ionicons name="calendar-outline" size={14} color={DARK_THEME.textTertiary} />
+              <Ionicons name="calendar-outline" size={14} color={'rgba(255,255,255,0.48)'} />
               <Text style={styles.dateText}>{dateRange}</Text>
             </XStack>
 
@@ -587,7 +627,8 @@ export default function EventsScreen() {
         </View>
       </Pressable>
     );
-  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t, invitedCounts, step2ConfirmedMap, budgetInfos, isEventUrgent, handleEventPress]);
 
   const renderStartNewPlanButton = () => (
     <Pressable
@@ -599,7 +640,7 @@ export default function EventsScreen() {
       testID="start-new-plan-button"
     >
       <View style={styles.startNewPlanIcon}>
-        <Ionicons name="add" size={24} color={DARK_THEME.textTertiary} />
+        <Ionicons name="add" size={24} color={'rgba(255,255,255,0.48)'} />
       </View>
       <Text style={styles.startNewPlanText}>{t.events.startNewPlan}</Text>
     </Pressable>
@@ -620,14 +661,14 @@ export default function EventsScreen() {
           justifyContent: 'center',
           alignItems: 'center',
           padding: 24,
-          paddingBottom: insets.bottom + 180,
+          paddingBottom: insets.bottom + 120,
         }}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor={DARK_THEME.primary}
-            colors={[DARK_THEME.primary]}
+            tintColor={'#C6A75E'}
+            colors={['#C6A75E']}
           />
         }
         showsVerticalScrollIndicator={false}
@@ -635,18 +676,18 @@ export default function EventsScreen() {
           <YStack justifyContent="center" alignItems="center" width="100%" paddingHorizontal={0}>
             <View style={styles.emptyIconContainer}>
               <LinearGradient
-                colors={[`${DARK_THEME.primary}30`, `${DARK_THEME.primary}10`]}
+                colors={['rgba(198,167,94,0.19)', 'rgba(198,167,94,0.06)']}
                 style={styles.emptyIconGradient}
               >
                 <Text fontSize={56}>{emptyEmoji}</Text>
               </LinearGradient>
             </View>
-            <Text fontSize={24} fontWeight="800" color={DARK_THEME.textPrimary} marginBottom={8}>
+            <Text fontSize={24} fontWeight="800" color={'#FFFFFF'} marginBottom={8}>
               {emptyTitle}
             </Text>
             <Text
               fontSize={16}
-              color={DARK_THEME.textSecondary}
+              color={'rgba(255,255,255,0.72)'}
               textAlign="center"
               marginBottom={24}
               maxWidth={280}
@@ -780,7 +821,7 @@ export default function EventsScreen() {
                 {subtitle}
               </Text>
             </YStack>
-            <Ionicons name="chevron-forward" size={20} color={DARK_THEME.textTertiary} />
+            <Ionicons name="chevron-forward" size={20} color={'rgba(255,255,255,0.48)'} />
           </XStack>
 
           <View style={styles.progressSection}>
@@ -803,6 +844,10 @@ export default function EventsScreen() {
   // Drafts section rendered BELOW booked events with visual separator
   const renderDraftSection = () => {
     if (activeFilter === 'attending') return null;
+    // Don't show device-level wizard drafts if this user has no organizing events in DB.
+    // Prevents a guest (who joins as attending) from seeing the organizer's drafts on a shared device.
+    const hasOrganizingEvents = (events || []).some(e => e.created_by === user?.id);
+    if (!hasOrganizingEvents) return null;
     const showDrafts = hasDrafts;
     return (
       <View>
@@ -841,36 +886,38 @@ export default function EventsScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Background */}
-      <LinearGradient
-        colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
-        style={StyleSheet.absoluteFill}
-      />
-
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
-          {/* Avatar and Title */}
-          <XStack alignItems="center" gap={12}>
-            <View style={styles.avatarContainer}>
-              {userAvatar ? (
-                <Image source={{ uri: userAvatar }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Text style={styles.avatarInitial}>{userInitial}</Text>
-                </View>
-              )}
-            </View>
-            <Text style={styles.headerTitle}>{t.events.title}</Text>
-          </XStack>
+        <XStack alignItems="center" paddingHorizontal={20}>
+          {/* Left: Avatar — tap to go to Profile */}
+          <Pressable
+            onPress={() => router.push('/(tabs)/profile')}
+            style={styles.avatarContainer}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Go to profile"
+          >
+            {userAvatar ? (
+              <Image source={{ uri: userAvatar }} style={styles.avatar} />
+            ) : (
+              <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                <Text style={styles.avatarInitial}>{userInitial}</Text>
+              </View>
+            )}
+          </Pressable>
 
-          {/* Notification Bell */}
+          {/* Centre: Title */}
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={styles.headerTitle}>{t.events.title}</Text>
+          </View>
+
+          {/* Right: Notification Bell */}
           <Pressable
             onPress={handleNotifications}
             style={styles.notificationButton}
             testID="notifications-button"
           >
-            <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
+            <Ionicons name="notifications-outline" size={24} color={'#FFFFFF'} />
             {hasUnseenUrgency && (
               <View style={styles.notificationUrgentDot} />
             )}
@@ -902,37 +949,40 @@ export default function EventsScreen() {
           <FlatList
             data={filteredEvents}
             renderItem={renderEventCard}
-            keyExtractor={(item) => item.id}
+            keyExtractor={keyExtractor}
             contentContainerStyle={{
               padding: 16,
-              paddingBottom: insets.bottom + 180
+              paddingBottom: insets.bottom + 120
             }}
             refreshControl={
               <RefreshControl
                 refreshing={isRefreshing}
                 onRefresh={handleRefresh}
-                tintColor={DARK_THEME.primary}
-                colors={[DARK_THEME.primary]}
+                tintColor={'#C6A75E'}
+                colors={['#C6A75E']}
               />
             }
             showsVerticalScrollIndicator={false}
             ListFooterComponent={renderListFooter}
+            removeClippedSubviews
+            maxToRenderPerBatch={5}
+            windowSize={10}
             testID="events-list"
           />
-        ) : hasDrafts && activeFilter !== 'attending' ? (
+        ) : hasDrafts && activeFilter !== 'attending' && (events || []).some(e => e.created_by === user?.id) ? (
           <FlatList
             data={[]}
             renderItem={null}
             contentContainerStyle={{
               padding: 16,
-              paddingBottom: insets.bottom + 180,
+              paddingBottom: insets.bottom + 120,
             }}
             refreshControl={
               <RefreshControl
                 refreshing={isRefreshing}
                 onRefresh={handleRefresh}
-                tintColor={DARK_THEME.primary}
-                colors={[DARK_THEME.primary]}
+                tintColor={'#C6A75E'}
+                colors={['#C6A75E']}
               />
             }
             showsVerticalScrollIndicator={false}
@@ -962,12 +1012,12 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
   },
   header: {
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
+    borderBottomColor: 'rgba(230,220,200,0.15)',
   },
   avatarContainer: {
     position: 'relative',
@@ -978,14 +1028,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   avatarPlaceholder: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   onlineIndicator: {
     position: 'absolute',
@@ -996,18 +1046,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#10B981',
     borderWidth: 2,
-    borderColor: DARK_THEME.background,
+    borderColor: '#0D1B2A',
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter_500Medium',
   },
   notificationButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: DARK_THEME.surfaceCard,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1026,36 +1077,40 @@ const styles = StyleSheet.create({
   },
   filterPill: {
     flexDirection: 'row',
-    backgroundColor: DARK_THEME.surfaceCard,
-    borderRadius: 25,
+    backgroundColor: '#1A2F47',
+    borderRadius: 999,
     padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   filterTab: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    height: 40,
+    borderRadius: 999,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   filterTabActive: {
-    backgroundColor: '#5A7EB0',
+    backgroundColor: '#22385A',
   },
   filterTabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.55)',
+    fontFamily: 'Inter_600SemiBold',
   },
   filterTabTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: '#C6A75E',
+    fontWeight: '700',
+    fontFamily: 'Inter_600SemiBold',
   },
   eventCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   eventCardPressed: {
     opacity: 0.9,
@@ -1074,7 +1129,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#F97316',
     borderWidth: 1.5,
-    borderColor: DARK_THEME.surfaceCard,
+    borderColor: '#1A2F47',
   },
   thumbnailContainer: {
     width: 100,
@@ -1087,20 +1142,20 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   thumbnailPlaceholder: {
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
   eventTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     flex: 1,
     marginRight: 8,
   },
   dateText: {
     fontSize: 14,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   roleBadge: {
     paddingHorizontal: 10,
@@ -1116,15 +1171,15 @@ const styles = StyleSheet.create({
   roleBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: DARK_THEME.primary,
+    color: '#C6A75E',
     letterSpacing: 0.5,
   },
   statusText: {
     fontSize: 13,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   paymentBadge: {
-    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    backgroundColor: 'rgba(198, 167, 94, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
@@ -1132,13 +1187,13 @@ const styles = StyleSheet.create({
   paymentBadgeText: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#5A7EB0',
+    color: '#C6A75E',
   },
   progressSection: {
     marginTop: 14,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: DARK_THEME.glassBorder,
+    borderTopColor: 'rgba(230,220,200,0.15)',
   },
   progressLabel: {
     fontSize: 13,
@@ -1150,7 +1205,7 @@ const styles = StyleSheet.create({
   },
   progressBarBackground: {
     height: 6,
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: '#1A2F47',
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -1169,12 +1224,12 @@ const styles = StyleSheet.create({
   draftSectionLine: {
     flex: 1,
     height: 1,
-    backgroundColor: DARK_THEME.glassBorder,
+    backgroundColor: 'rgba(230,220,200,0.15)',
   },
   draftSectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
@@ -1189,25 +1244,25 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: DARK_THEME.primary,
-    backgroundColor: 'rgba(90, 126, 176, 0.08)',
+    borderColor: '#C6A75E',
+    backgroundColor: 'rgba(198, 167, 94, 0.08)',
   },
   startNewPlanButtonPressed: {
     opacity: 0.7,
-    backgroundColor: DARK_THEME.glass,
+    backgroundColor: 'rgba(26,47,71,0.8)',
   },
   startNewPlanIcon: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
   startNewPlanText: {
     fontSize: 16,
     fontWeight: '500',
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
   },
   emptyIconContainer: {
     marginBottom: 24,

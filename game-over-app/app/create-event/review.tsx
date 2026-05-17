@@ -16,7 +16,6 @@ import { usePackage } from '@/hooks/queries/usePackages';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { DARK_THEME } from '@/constants/theme';
 
 // Standard per-person pricing for fallback packages
 const TIER_PRICE_PER_PERSON: Record<string, number> = {
@@ -210,17 +209,19 @@ export default function WizardStep5() {
         {/* Info Banner */}
         <XStack
           padding="$4"
-          backgroundColor="rgba(37, 140, 244, 0.1)"
-          borderRadius="$lg"
+          backgroundColor="rgba(198,167,94,0.08)"
+          borderRadius={16}
+          borderWidth={1}
+          borderColor="rgba(198,167,94,0.2)"
           gap="$3"
           alignItems="flex-start"
         >
-          <Ionicons name="information-circle" size={24} color="#5A7EB0" />
+          <Ionicons name="information-circle" size={24} color="#C6A75E" />
           <YStack flex={1}>
-            <Text fontSize="$3" color="$primary" fontWeight="600">
+            <Text fontSize="$3" color="#C6A75E" fontWeight="600">
               What happens next?
             </Text>
-            <Text fontSize="$2" color="$textSecondary" marginTop="$1">
+            <Text fontSize="$2" color="rgba(255,255,255,0.55)" marginTop="$1">
               After creating your event, you can invite guests, finalize your package booking, and start planning the details!
             </Text>
           </YStack>

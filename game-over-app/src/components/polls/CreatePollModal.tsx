@@ -8,7 +8,6 @@ import { Modal, Pressable, ScrollView, StyleSheet, TextInput, Alert } from 'reac
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '@/constants/colors';
 import { Button } from '@/components/ui/Button';
 import type { Database } from '@/lib/supabase/types';
 
@@ -121,7 +120,7 @@ export function CreatePollModal({
       onRequestClose={handleClose}
       testID="create-poll-modal"
     >
-      <YStack flex={1} backgroundColor="$background">
+      <YStack flex={1} backgroundColor="$background" accessibilityViewIsModal={true}>
         {/* Header */}
         <XStack
           paddingTop={insets.top || 16}
@@ -158,7 +157,7 @@ export function CreatePollModal({
               value={question}
               onChangeText={setQuestion}
               placeholder="What would you like to ask?"
-              placeholderTextColor={colors.light.textTertiary}
+              placeholderTextColor={'rgba(255,255,255,0.48)'}
               multiline
               maxLength={200}
               testID="poll-question-input"
@@ -187,7 +186,7 @@ export function CreatePollModal({
                   <Ionicons
                     name={cat.icon}
                     size={16}
-                    color={category === cat.value ? 'white' : colors.light.textSecondary}
+                    color={category === cat.value ? 'white' : 'rgba(255,255,255,0.72)'}
                   />
                   <Text
                     fontSize="$2"
@@ -231,7 +230,7 @@ export function CreatePollModal({
                   value={option}
                   onChangeText={(value) => handleOptionChange(index, value)}
                   placeholder={`Option ${index + 1}`}
-                  placeholderTextColor={colors.light.textTertiary}
+                  placeholderTextColor={'rgba(255,255,255,0.48)'}
                   maxLength={100}
                   testID={`poll-option-${index}`}
                 />
@@ -241,7 +240,7 @@ export function CreatePollModal({
                     style={styles.removeButton}
                     testID={`remove-option-${index}`}
                   >
-                    <Ionicons name="close-circle" size={24} color={colors.light.error} />
+                    <Ionicons name="close-circle" size={24} color={'#E8836B'} />
                   </Pressable>
                 )}
               </XStack>
@@ -249,7 +248,7 @@ export function CreatePollModal({
 
             {options.length < 6 && (
               <Pressable style={styles.addOptionButton} onPress={handleAddOption} testID="add-option-button">
-                <Ionicons name="add" size={20} color={colors.light.primary} />
+                <Ionicons name="add" size={20} color={'#C6A75E'} />
                 <Text color="$primary" fontWeight="500">
                   Add Option
                 </Text>
@@ -299,13 +298,13 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   questionInput: {
-    backgroundColor: colors.light.surface,
+    backgroundColor: '#12253A',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.light.border,
+    borderColor: 'rgba(230,220,200,0.15)',
     padding: 16,
     fontSize: 16,
-    color: colors.light.textPrimary,
+    color: '#FFFFFF',
     minHeight: 80,
     textAlignVertical: 'top',
   },
@@ -316,23 +315,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 20,
-    backgroundColor: colors.light.surface,
+    backgroundColor: '#12253A',
     borderWidth: 1,
-    borderColor: colors.light.border,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   categoryChipSelected: {
-    backgroundColor: colors.light.primary,
-    borderColor: colors.light.primary,
+    backgroundColor: '#C6A75E',
+    borderColor: '#C6A75E',
   },
   optionInput: {
     flex: 1,
-    backgroundColor: colors.light.surface,
+    backgroundColor: '#12253A',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: colors.light.border,
+    borderColor: 'rgba(230,220,200,0.15)',
     padding: 12,
     fontSize: 15,
-    color: colors.light.textPrimary,
+    color: '#FFFFFF',
   },
   removeButton: {
     padding: 4,
@@ -346,7 +345,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: colors.light.primary,
-    backgroundColor: `${colors.light.primary}08`,
+    borderColor: '#C6A75E',
+    backgroundColor: 'rgba(198, 167, 94, 0.08)',
   },
 });

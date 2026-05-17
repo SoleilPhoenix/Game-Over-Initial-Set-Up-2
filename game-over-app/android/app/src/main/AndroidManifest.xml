@@ -32,8 +32,8 @@
       </intent-filter>
       <intent-filter android:autoVerify="true" data-generated="true">
         <action android:name="android.intent.action.VIEW"/>
-        <data android:scheme="https" android:host="gameover.app" android:pathPrefix="/invite"/>
-        <data android:scheme="https" android:host="gameover.app" android:pathPrefix="/event"/>
+        <data android:scheme="https" android:host="game-over.app" android:pathPrefix="/invite"/>
+        <data android:scheme="https" android:host="game-over.app" android:pathPrefix="/event"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <category android:name="android.intent.category.DEFAULT"/>
       </intent-filter>

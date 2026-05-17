@@ -61,7 +61,7 @@ export function SocialButton({
         styles.button,
         {
           backgroundColor: config.backgroundColor,
-          borderColor: provider === 'google' ? colors.light.border : config.backgroundColor,
+          borderColor: provider === 'google' ? 'rgba(230,220,200,0.15)' : config.backgroundColor,
         },
         pressed && !isDisabled && styles.pressed,
         isDisabled && styles.disabled,

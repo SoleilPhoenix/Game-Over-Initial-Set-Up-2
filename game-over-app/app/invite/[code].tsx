@@ -8,7 +8,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View, ScrollView, KeyboardAvoidingView, Platform,
-  Pressable, Alert, StyleSheet, Image,
+  Pressable, Alert, StyleSheet, Image, Linking,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
@@ -22,13 +22,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
+import { useLanguageStore } from '@/stores/languageStore';
 import { usePublicInvitePreview, useAcceptInvite } from '@/hooks/queries/useInvites';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
-import { DARK_THEME } from '@/constants/theme';
 
 // ─── Types ───────────────────────────────────────────────────
 type WizardStep = 'preview' | 'signup' | 'profile';
@@ -61,6 +61,7 @@ export default function InviteWizardScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useAuthStore(s => s.user);
+  const language = useLanguageStore(s => s.language);
 
   const [step, setStep] = useState<WizardStep>('preview');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -86,17 +87,24 @@ export default function InviteWizardScreen() {
         return;
       }
 
-      // If profile data provided, save it first
-      if (phone || avatarUrl) {
-        const { error: profileError } = await supabase
+      // Save profile data — phone and avatar_url in separate calls so one cannot block the other
+      if (phone) {
+        const { error } = await supabase
           .from('profiles')
-          .update({ ...(phone ? { phone } : {}), ...(avatarUrl ? { avatar_url: avatarUrl } : {}) })
+          .update({ phone })
           .eq('id', currentUser.id);
+        if (error) console.warn('Phone update failed:', error.message);
+      }
 
-        if (profileError) {
-          console.warn('Profile update failed:', profileError.message);
-          // Don't block — continue with invite acceptance
-        }
+      if (avatarUrl) {
+        const { error } = await supabase
+          .from('profiles')
+          .update({ avatar_url: avatarUrl })
+          .eq('id', currentUser.id);
+        if (error) console.warn('Avatar update failed:', error.message);
+
+        // Sync into user_metadata so auth store picks it up immediately via USER_UPDATED event
+        await supabase.auth.updateUser({ data: { avatar_url: avatarUrl } }).catch(() => {});
       }
 
       try {
@@ -105,6 +113,30 @@ export default function InviteWizardScreen() {
           Alert.alert('Error', result.error || 'Could not join event.');
           return;
         }
+
+        // Notify organizer that the guest joined (non-blocking)
+        void (async () => {
+          try {
+            if (!result.eventId) return;
+            const { data: eventData } = await supabase
+              .from('events')
+              .select('created_by')
+              .eq('id', result.eventId)
+              .single();
+            if (!eventData?.created_by) return;
+            const guestName = currentUser.user_metadata?.full_name || currentUser.email || 'A guest';
+            await supabase.from('notifications').insert({
+              event_id: result.eventId,
+              title: 'Guest Joined',
+              body: `${guestName} has joined your event.`,
+              type: 'guest_joined',
+              user_id: eventData.created_by,
+            });
+          } catch {
+            // Non-blocking — ignore notification errors
+          }
+        })();
+
         router.replace(`/event/${result.eventId}?firstVisit=1`);
       } catch {
         Alert.alert('Error', 'Failed to join event. Please try again.');
@@ -130,19 +162,22 @@ export default function InviteWizardScreen() {
     resolver: zodResolver(signupSchema),
     defaultValues: {
       firstName: '', lastName: '',
-      email: preview?.guestEmail ?? '',
+      email: '',
       password: '', confirmPassword: '',
     },
   });
 
+  // Pre-fill registration form with guest's data from the invite code
   useEffect(() => {
-    if (preview?.guestEmail) {
-      signupForm.reset({
-        ...signupForm.getValues(),
-        email: preview.guestEmail,
-      });
-    }
-  }, [preview?.guestEmail, signupForm]);
+    if (!preview) return;
+    signupForm.reset({
+      ...signupForm.getValues(),
+      firstName: preview.guestFirstName ?? signupForm.getValues('firstName'),
+      lastName: preview.guestLastName ?? signupForm.getValues('lastName'),
+      email: preview.guestEmail ?? signupForm.getValues('email'),
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preview?.guestEmail, preview?.guestFirstName, preview?.guestLastName]);
 
   const handleSignup = async (data: SignupForm) => {
     setIsSubmitting(true);
@@ -164,14 +199,21 @@ export default function InviteWizardScreen() {
         throw signUpError;
       }
 
-      // Guard: email confirmation required (production Supabase config)
+      // If email confirmation is required (no session returned), auto sign-in with password
       if (!signUpData?.session) {
-        Alert.alert(
-          'Check your email',
-          'Please confirm your email address, then return to accept the invite.',
-          [{ text: 'OK' }]
-        );
-        return;
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: data.email,
+          password: data.password,
+        });
+        if (signInError) {
+          // Truly needs email confirmation — show friendly message
+          Alert.alert(
+            'Almost there!',
+            'Check your inbox for a confirmation email, then tap "Log in instead" below.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
       }
 
       setSignupCompleted(true);
@@ -190,8 +232,16 @@ export default function InviteWizardScreen() {
   // ── Step 3 handlers ─────────────────────────────────────────
   const profileForm = useForm<ProfileForm>({
     resolver: zodResolver(profileSchema),
-    defaultValues: { phone: '' },
+    defaultValues: { phone: preview?.guestPhone ?? '' },
   });
+
+  // Pre-fill phone when preview loads (guest invited by phone)
+  useEffect(() => {
+    if (preview?.guestPhone) {
+      profileForm.reset({ phone: preview.guestPhone });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preview?.guestPhone]);
 
   const handlePickPhoto = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -231,16 +281,34 @@ export default function InviteWizardScreen() {
       // Upload avatar if selected
       let avatarUrl: string | null = null;
       if (avatarUri) {
-        const ext = avatarUri.split('.').pop() ?? 'jpg';
-        const path = `avatars/${currentUser.id}.${ext}`;
         const response = await fetch(avatarUri);
         const blob = await response.blob();
+
+        const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+        const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+        if (!ALLOWED_MIME_TYPES.includes(blob.type)) {
+          Alert.alert('Invalid file', 'Please select a JPEG, PNG, or WebP image.');
+          return;
+        }
+        if (blob.size > MAX_FILE_SIZE_BYTES) {
+          Alert.alert('File too large', 'Please select an image under 5 MB.');
+          return;
+        }
+
+        const mimeToExt: Record<string, string> = {
+          'image/jpeg': 'jpg',
+          'image/png': 'png',
+          'image/webp': 'webp',
+        };
+        const ext = mimeToExt[blob.type] ?? 'jpg';
+        const path = `avatars/${currentUser.id}.${ext}`;
         const { error: uploadError } = await supabase.storage
           .from('avatars')
           .upload(path, blob, { upsert: true });
         if (!uploadError) {
           const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-          avatarUrl = urlData.publicUrl;
+          avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
         }
       }
 
@@ -251,6 +319,27 @@ export default function InviteWizardScreen() {
       setIsSubmitting(false);
     }
   };
+
+  // ── Web: auto-open app deep link when page loads in browser ──
+  useEffect(() => {
+    if (Platform.OS === 'web' && code) {
+      Linking.openURL(`gameover://invite/${code}`).catch(() => {});
+    }
+  }, [code]);
+
+  // ── Web: "Open in App" banner — shown only in browser, not in native app ──
+  const WebAppBanner = Platform.OS === 'web' ? (
+    <Pressable
+      onPress={() => Linking.openURL(`gameover://invite/${code}`)}
+      style={styles.webBanner}
+    >
+      <View style={styles.webBannerInner}>
+        <Ionicons name="phone-portrait-outline" size={18} color="#FFFFFF" />
+        <Text style={styles.webBannerText}>Already have the app? </Text>
+        <Text style={styles.webBannerLink}>Open in Game Over →</Text>
+      </View>
+    </Pressable>
+  ) : null;
 
   // ── Loading ──────────────────────────────────────────────────
   if (previewLoading) {
@@ -266,7 +355,7 @@ export default function InviteWizardScreen() {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center"
         backgroundColor="$background" paddingHorizontal="$6" gap="$4">
-        <Ionicons name="link-outline" size={48} color={DARK_THEME.textTertiary} />
+        <Ionicons name="link-outline" size={48} color={'rgba(255,255,255,0.48)'} />
         <Text fontSize={18} fontWeight="700" color="$textPrimary" textAlign="center">
           This invite link is no longer valid
         </Text>
@@ -283,19 +372,20 @@ export default function InviteWizardScreen() {
     const citySlug = CITY_UUID_TO_SLUG[preview.cityId] ?? preview.cityName.toLowerCase();
     return (
       <YStack flex={1} backgroundColor="$background">
+        {WebAppBanner}
         <View style={{ height: 280 + insets.top }}>
           <KenBurnsImage
             source={resolveImageSource(getPackageImage(citySlug, 'classic'))}
             style={StyleSheet.absoluteFillObject}
           />
           <LinearGradient
-            colors={['transparent', DARK_THEME.background]}
+            colors={['transparent', '#0D1B2A']}
             style={[StyleSheet.absoluteFillObject, { top: '40%' }]}
           />
           <View style={{ position: 'absolute', bottom: 24, left: 24, right: 24 }}>
             <Text fontSize={26} fontWeight="900" color="white">{preview.eventName}</Text>
             <Text fontSize={15} color="rgba(255,255,255,0.8)" marginTop={4}>
-              {new Date(preview.startDate).toLocaleDateString('en-US', {
+              {new Date(preview.startDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', {
                 month: 'long', day: 'numeric', year: 'numeric',
               })} · {preview.cityName}
             </Text>
@@ -306,15 +396,9 @@ export default function InviteWizardScreen() {
           <YStack gap="$4">
             <YStack gap="$2">
               <XStack gap="$2" alignItems="center">
-                <Ionicons name="person-circle-outline" size={18} color={DARK_THEME.textTertiary} />
+                <Ionicons name="person-circle-outline" size={18} color={'rgba(255,255,255,0.48)'} />
                 <Text fontSize={14} color="$textTertiary">
                   Invited by <Text fontWeight="700" color="$textPrimary">{preview.organizerName}</Text>
-                </Text>
-              </XStack>
-              <XStack gap="$2" alignItems="center">
-                <Ionicons name="people-outline" size={18} color={DARK_THEME.textTertiary} />
-                <Text fontSize={14} color="$textTertiary">
-                  <Text fontWeight="700" color="$textPrimary">{preview.acceptedCount}</Text> guests already in
                 </Text>
               </XStack>
             </YStack>
@@ -323,7 +407,17 @@ export default function InviteWizardScreen() {
               Accept Invitation →
             </Button>
 
-            <Pressable onPress={() => router.back()} style={{ alignItems: 'center', paddingVertical: 8 }}>
+            <Pressable
+              onPress={() => {
+                if (router.canGoBack()) {
+                  router.back();
+                } else {
+                  router.replace('/(tabs)/events');
+                }
+              }}
+              style={{ alignItems: 'center', paddingVertical: 8 }}
+              testID="decline-invite-button"
+            >
               <Text fontSize={13} color="$textTertiary">Decline</Text>
             </Pressable>
           </YStack>
@@ -339,7 +433,7 @@ export default function InviteWizardScreen() {
         <YStack flex={1} backgroundColor="$background" paddingTop={insets.top}>
           <XStack paddingHorizontal="$5" paddingVertical="$3" alignItems="center" gap="$3">
             <Pressable onPress={() => setStep('preview')}>
-              <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+              <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
             </Pressable>
             <YStack flex={1}>
               <Text fontSize={11} color="$textTertiary">Joining: {preview.eventName}</Text>
@@ -347,7 +441,10 @@ export default function InviteWizardScreen() {
             </YStack>
           </XStack>
 
-          <ScrollView contentContainerStyle={{ padding: 24, gap: 16 }}>
+          <ScrollView
+            contentContainerStyle={{ padding: 24, gap: 16, paddingBottom: 120 }}
+            keyboardShouldPersistTaps="handled"
+          >
             <XStack gap="$3">
               <View style={{ flex: 1 }}>
                 <Controller
@@ -400,13 +497,7 @@ export default function InviteWizardScreen() {
                 />
               )}
             />
-            {signupForm.formState.errors.email?.message?.includes('Log in instead') && (
-              <Pressable onPress={handleLoginInstead}>
-                <Text fontSize={13} color={DARK_THEME.primary} textDecorationLine="underline">
-                  Log in instead →
-                </Text>
-              </Pressable>
-            )}
+{/* Persistent login link below the form supersedes this conditional — removed to avoid duplicate */}
             <Controller
               control={signupForm.control}
               name="password"
@@ -445,6 +536,20 @@ export default function InviteWizardScreen() {
             >
               Create Account →
             </Button>
+
+            {/* Persistent link — visible before any error occurs */}
+            <Pressable
+              onPress={handleLoginInstead}
+              style={{ alignItems: 'center', paddingVertical: 12 }}
+              testID="login-instead-link"
+            >
+              <Text fontSize={13} color={'rgba(255,255,255,0.48)'}>
+                Already have an account?{' '}
+                <Text color={'#C6A75E'} textDecorationLine="underline">
+                  Log in instead →
+                </Text>
+              </Text>
+            </Pressable>
           </ScrollView>
         </YStack>
       </KeyboardAvoidingView>
@@ -458,7 +563,7 @@ export default function InviteWizardScreen() {
         <XStack paddingHorizontal="$5" paddingVertical="$3" alignItems="center" gap="$3">
           {!signupCompleted && (
             <Pressable onPress={() => setStep('signup')}>
-              <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+              <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
             </Pressable>
           )}
           {signupCompleted && <View style={{ width: 24 }} />}
@@ -476,11 +581,11 @@ export default function InviteWizardScreen() {
               ) : (
                 <View style={{
                   width: 88, height: 88, borderRadius: 44,
-                  backgroundColor: DARK_THEME.surfaceCard,
+                  backgroundColor: '#1A2F47',
                   alignItems: 'center', justifyContent: 'center',
-                  borderWidth: 2, borderColor: DARK_THEME.glassBorder,
+                  borderWidth: 2, borderColor: 'rgba(230,220,200,0.15)',
                 }}>
-                  <Ionicons name="camera-outline" size={28} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="camera-outline" size={28} color={'rgba(255,255,255,0.48)'} />
                 </View>
               )}
             </Pressable>
@@ -524,3 +629,26 @@ export default function InviteWizardScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+const styles = StyleSheet.create({
+  webBanner: {
+    backgroundColor: '#C6A75E',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+  },
+  webBannerInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  webBannerText: {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 14,
+  },
+  webBannerLink: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+});

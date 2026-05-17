@@ -7,7 +7,6 @@
 import React from 'react';
 import { XStack, YStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
-import { DARK_THEME } from '@/constants/theme';
 
 export interface OptionBlockProps {
   label: string;
@@ -21,9 +20,9 @@ export function OptionBlock({ label, selected, onPress, testID }: OptionBlockPro
     <XStack
       height={48}
       borderRadius="$full"
-      backgroundColor={selected ? DARK_THEME.primary : 'rgba(45, 55, 72, 0.6)'}
-      borderWidth={1}
-      borderColor={selected ? DARK_THEME.primary : 'rgba(255, 255, 255, 0.08)'}
+      backgroundColor={selected ? '#22385A' : 'rgba(26, 47, 71, 0.8)'}
+      borderWidth={selected ? 1.5 : 1}
+      borderColor={selected ? '#C6A75E' : 'rgba(230,220,200,0.15)'}
       alignItems="center"
       justifyContent="center"
       gap="$2"
@@ -31,11 +30,11 @@ export function OptionBlock({ label, selected, onPress, testID }: OptionBlockPro
       onPress={onPress}
       testID={testID}
     >
-      <Text fontWeight="600" color={selected ? '#FFFFFF' : '$textPrimary'}>
+      <Text fontWeight="600" color={selected ? '#C6A75E' : 'rgba(255,255,255,0.72)'}>
         {label}
       </Text>
       {selected && (
-        <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+        <Ionicons name="checkmark-circle" size={18} color="#C6A75E" />
       )}
     </XStack>
   );

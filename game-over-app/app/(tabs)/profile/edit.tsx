@@ -13,12 +13,23 @@ import { useUser } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
 import { Button } from '@/components/ui/Button';
-import { DARK_THEME } from '@/constants/theme';
 
 export default function EditProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useUser();
+
+  // Check if this user is a guest in any event — guests cannot change name/phone/email
+  const [isGuestUser, setIsGuestUser] = useState(false);
+  React.useEffect(() => {
+    if (!user?.id) return;
+    void supabase.from('event_participants')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'guest')
+      .limit(1)
+      .then(({ data }) => { if (data && data.length > 0) setIsGuestUser(true); });
+  }, [user?.id]);
 
   const [firstName, setFirstName] = useState(() => {
     const full = (user?.user_metadata?.full_name || '').trim();
@@ -29,7 +40,15 @@ export default function EditProfileScreen() {
     const parts = full.split(' ');
     return parts.slice(1).join(' ');
   });
+  const [phone, setPhone] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+
+  // Load phone from profiles table (not in user_metadata)
+  React.useEffect(() => {
+    if (!user?.id) return;
+    void supabase.from('profiles').select('phone').eq('id', user.id).single()
+      .then(({ data }) => { if (data?.phone) setPhone(data.phone); });
+  }, [user?.id]);
 
   const userEmail = user?.email || '';
   const fullNameCombined = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
@@ -57,7 +76,7 @@ export default function EditProfileScreen() {
       // Also sync to profiles table (used by Edge Functions and server-side features)
       await supabase
         .from('profiles')
-        .update({ full_name: fullNameCombined })
+        .update({ full_name: fullNameCombined, ...(phone.trim() ? { phone: phone.trim() } : {}) })
         .eq('id', user!.id);
 
       Alert.alert('Success', 'Profile updated successfully.', [
@@ -76,7 +95,7 @@ export default function EditProfileScreen() {
   };
 
   return (
-    <View flex={1} backgroundColor={DARK_THEME.background} testID="edit-profile-screen">
+    <View flex={1} backgroundColor={'#0D1B2A'} testID="edit-profile-screen">
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -88,18 +107,18 @@ export default function EditProfileScreen() {
           paddingBottom="$3"
           alignItems="center"
           justifyContent="space-between"
-          backgroundColor={DARK_THEME.surface}
+          backgroundColor={'#12253A'}
           borderBottomWidth={1}
-          borderBottomColor={DARK_THEME.border}
+          borderBottomColor={'rgba(230,220,200,0.15)'}
         >
           <Pressable
             onPress={() => router.back()}
             style={styles.headerButton}
             testID="edit-profile-back"
           >
-            <Ionicons name="chevron-back" size={24} color={DARK_THEME.textPrimary} />
+            <Ionicons name="chevron-back" size={24} color={'#FFFFFF'} />
           </Pressable>
-          <Text fontSize={17} fontWeight="600" color={DARK_THEME.textPrimary}>
+          <Text fontSize={17} fontWeight="600" color={'#FFFFFF'}>
             Edit Profile
           </Text>
           <View width={40} />
@@ -126,7 +145,7 @@ export default function EditProfileScreen() {
             />
             <Text
               fontSize={13}
-              color={DARK_THEME.textSecondary}
+              color={'rgba(255,255,255,0.72)'}
               marginTop="$3"
             >
               Tap to change photo
@@ -134,29 +153,41 @@ export default function EditProfileScreen() {
           </YStack>
 
           <YStack paddingHorizontal="$4" gap="$5">
+            {/* Guest lock banner */}
+            {isGuestUser && (
+              <View style={styles.guestLockBanner}>
+                <Ionicons name="lock-closed" size={16} color="#F59E0B" style={{ marginRight: 8 }} />
+                <Text fontSize={13} color="#F59E0B" flex={1}>
+                  Your profile details were set by the event organizer. To change your name, phone, or email please contact our support team.
+                </Text>
+              </View>
+            )}
+
             {/* First Name Input */}
             <YStack gap="$2">
               <Text
                 fontSize={11}
                 fontWeight="600"
-                color={DARK_THEME.textSecondary}
+                color={'rgba(255,255,255,0.72)'}
                 textTransform="uppercase"
                 letterSpacing={1}
                 marginLeft="$1"
               >
                 First Name
               </Text>
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, isGuestUser && styles.readOnlyContainer]}>
                 <TextInput
                   style={styles.input}
                   value={firstName}
-                  onChangeText={setFirstName}
+                  onChangeText={isGuestUser ? undefined : setFirstName}
                   placeholder="Enter your first name"
                   placeholderTextColor="#6B7280"
                   autoCapitalize="words"
                   autoCorrect={false}
+                  editable={!isGuestUser}
                   testID="edit-profile-firstname-input"
                 />
+                {isGuestUser && <Ionicons name="lock-closed" size={16} color="#6B7280" />}
               </View>
             </YStack>
 
@@ -165,24 +196,53 @@ export default function EditProfileScreen() {
               <Text
                 fontSize={11}
                 fontWeight="600"
-                color={DARK_THEME.textSecondary}
+                color={'rgba(255,255,255,0.72)'}
                 textTransform="uppercase"
                 letterSpacing={1}
                 marginLeft="$1"
               >
                 Last Name
               </Text>
-              <View style={styles.inputContainer}>
+              <View style={[styles.inputContainer, isGuestUser && styles.readOnlyContainer]}>
                 <TextInput
                   style={styles.input}
                   value={lastName}
-                  onChangeText={setLastName}
+                  onChangeText={isGuestUser ? undefined : setLastName}
                   placeholder="Enter your last name"
                   placeholderTextColor="#6B7280"
                   autoCapitalize="words"
                   autoCorrect={false}
+                  editable={!isGuestUser}
                   testID="edit-profile-lastname-input"
                 />
+              </View>
+            </YStack>
+
+            {/* Phone Input */}
+            <YStack gap="$2">
+              <Text
+                fontSize={11}
+                fontWeight="600"
+                color={'rgba(255,255,255,0.72)'}
+                textTransform="uppercase"
+                letterSpacing={1}
+                marginLeft="$1"
+              >
+                Phone / WhatsApp
+              </Text>
+              <View style={[styles.inputContainer, isGuestUser && styles.readOnlyContainer]}>
+                <TextInput
+                  style={styles.input}
+                  value={phone}
+                  onChangeText={isGuestUser ? undefined : setPhone}
+                  placeholder="e.g. +49 152 12345678"
+                  placeholderTextColor="#6B7280"
+                  keyboardType="phone-pad"
+                  autoCorrect={false}
+                  editable={!isGuestUser}
+                  testID="edit-profile-phone-input"
+                />
+                {isGuestUser && <Ionicons name="lock-closed" size={16} color="#6B7280" />}
               </View>
             </YStack>
 
@@ -191,7 +251,7 @@ export default function EditProfileScreen() {
               <Text
                 fontSize={11}
                 fontWeight="600"
-                color={DARK_THEME.textSecondary}
+                color={'rgba(255,255,255,0.72)'}
                 textTransform="uppercase"
                 letterSpacing={1}
                 marginLeft="$1"
@@ -206,15 +266,15 @@ export default function EditProfileScreen() {
               </View>
               <Text
                 fontSize={11}
-                color={DARK_THEME.textSecondary}
+                color={'rgba(255,255,255,0.72)'}
                 marginLeft="$1"
               >
                 Email cannot be changed
               </Text>
             </YStack>
 
-            {/* Save Button */}
-            <YStack marginTop="$4">
+            {/* Save Button — hidden for guests (data managed by organizer) */}
+            {!isGuestUser && <YStack marginTop="$4">
               <Pressable
                 style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
                 onPress={handleSave}
@@ -223,18 +283,18 @@ export default function EditProfileScreen() {
               >
                 {isSaving ? (
                   <XStack gap="$2" alignItems="center">
-                    <Spinner size="small" color="white" />
-                    <Text color="white" fontWeight="600" fontSize={16}>
+                    <Spinner size="small" color="#0D1B2A" />
+                    <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
                       Saving...
                     </Text>
                   </XStack>
                 ) : (
-                  <Text color="white" fontWeight="600" fontSize={16}>
+                  <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
                     Save Changes
                   </Text>
                 )}
               </Pressable>
-            </YStack>
+            </YStack>}
           </YStack>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -250,10 +310,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   inputContainer: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: '#12253A',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: 'rgba(230,220,200,0.15)',
     paddingHorizontal: 16,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -266,10 +326,10 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     fontSize: 16,
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   saveButton: {
-    backgroundColor: DARK_THEME.primary,
+    backgroundColor: '#C6A75E',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
@@ -277,5 +337,15 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: {
     opacity: 0.7,
+  },
+  guestLockBanner: {
+    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
 });

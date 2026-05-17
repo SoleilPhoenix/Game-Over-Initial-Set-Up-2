@@ -43,16 +43,25 @@ export function calculatePlanningSteps(
   participants: ParticipantWithProfile[] | undefined,
   checklist: PlanningChecklist | undefined,
   cachedInvitedCount?: number,
+  desiredParticipantCount?: number,
 ): PlanningStep[] {
   if (event.status !== 'booked' && event.status !== 'completed') return [];
 
-  const totalExpected = event.participant_count || 1;
+  const participantList = participants || [];
+  // Non-honoree participants are the relevant group for confirmation thresholds
+  const nonHonoree = participantList.filter(p => p.role !== 'honoree');
+  // Priority: desired count from wizard cache (most accurate) → actual DB count → non-honoree length
+  // desiredParticipantCount excludes honoree (organizer + guests only), so use directly.
+  const totalExpected = desiredParticipantCount || event.participant_count || Math.max(nonHonoree.length, 1);
   const threshold = Math.ceil(totalExpected * 0.5);
 
-  const participantList = participants || [];
   // For step 1: use whichever is higher — DB participants or cached invited count
   const invitedCount = Math.max(participantList.length, cachedInvitedCount || 0);
-  const confirmedCount = participantList.filter(p => p.confirmed_at != null).length;
+  // Confirmed = organizer (implicit) + participants with confirmed_at set OR with a linked user_id
+  // (user_id set means the guest has registered and is part of the event)
+  const confirmedCount = nonHonoree.filter(p =>
+    p.role === 'organizer' || p.confirmed_at != null || p.user_id != null
+  ).length;
 
   const safeChecklist = checklist || {};
 
@@ -65,7 +74,9 @@ export function calculatePlanningSteps(
           completed = invitedCount >= threshold;
           break;
         case 'group_confirmed':
-          completed = confirmedCount >= threshold;
+          // Require at least organizer + 1 guest (min 2) so a solo-organizer event
+          // never auto-confirms the group before any guests join.
+          completed = confirmedCount >= Math.max(threshold, 2);
           break;
         case 'final_briefing':
           // Auto-completes when all 5 manual planning steps (3-7) are checked
@@ -103,7 +114,7 @@ export function calculatePlanningSteps(
 export function getProgressPercentage(steps: PlanningStep[]): number {
   if (steps.length === 0) return 0;
   const completedCount = steps.filter(s => s.completed).length;
-  return Math.round((completedCount / 8) * 100);
+  return Math.round((completedCount / steps.length) * 100);
 }
 
 /**
@@ -114,7 +125,8 @@ export function getCompletedCount(steps: PlanningStep[]): number {
 }
 
 /**
- * Returns the label key of the first incomplete step, or null if all done.
+ * Returns the i18n labelKey of the first incomplete step, or null if all done.
+ * Note: returns a key (e.g. 'inviteParticipants'), not a translated string.
  */
 export function getCurrentPhaseLabel(steps: PlanningStep[]): string | null {
   const nextStep = steps.find(s => !s.completed);

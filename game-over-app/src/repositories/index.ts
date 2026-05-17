@@ -26,3 +26,6 @@ export type { PollWithOptions } from './polls';
 export { notificationsRepository } from './notifications';
 
 export { citiesRepository } from './cities';
+
+export { scheduleRepository } from './schedule';
+export type { ScheduleItem, ScheduleItemInsert, ScheduleItemUpdate } from './schedule';

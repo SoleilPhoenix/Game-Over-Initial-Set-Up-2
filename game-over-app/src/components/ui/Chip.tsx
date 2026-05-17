@@ -101,6 +101,7 @@ export interface ChipProps extends Omit<StyledChipProps, 'children'> {
   showCheckmark?: boolean; // Show checkmark icon when selected
   onPress?: () => void;
   testID?: string;
+  accessibilityLabel?: string;
 }
 
 export function Chip({
@@ -113,6 +114,7 @@ export function Chip({
   size = 'md',
   onPress,
   testID,
+  accessibilityLabel,
   ...props
 }: ChipProps) {
   // Icon size based on chip size
@@ -126,8 +128,9 @@ export function Chip({
       size={size}
       onPress={onPress}
       testID={testID}
-      aria-selected={selected}
-      aria-disabled={disabled}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: selected, disabled }}
+      accessibilityLabel={accessibilityLabel ?? label}
       gap="$1.5"
     >
       {icon && iconPosition === 'left' && icon}

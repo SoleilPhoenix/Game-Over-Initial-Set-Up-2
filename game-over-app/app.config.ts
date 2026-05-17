@@ -4,6 +4,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
   name: 'Game Over',
   slug: 'game-over-app',
+  owner: 'soleil_phoenix',
   version: '1.0.0',
   orientation: 'portrait',
   icon: './assets/icon.png',
@@ -14,12 +15,13 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     resizeMode: 'contain',
     backgroundColor: '#15181D', // Match DARK_THEME.background
   },
-  assetBundlePatterns: ['**/*'],
+  // Bundle image assets only — excludes assets/store/*.md and assets/store/*.txt (app store copy)
+  assetBundlePatterns: ['**/*.png', '**/*.jpg', '**/*.jpeg', '**/*.gif', '**/*.svg', '**/*.webp'],
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'app.gameover.ios',
     usesAppleSignIn: true,
-    associatedDomains: ['applinks:gameover.app'],
+    associatedDomains: ['applinks:game-over.app'],
     splash: {
       image: './assets/splash.png',
       resizeMode: 'contain',
@@ -54,12 +56,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         data: [
           {
             scheme: 'https',
-            host: 'gameover.app',
+            host: 'game-over.app',
             pathPrefix: '/invite',
           },
           {
             scheme: 'https',
-            host: 'gameover.app',
+            host: 'game-over.app',
             pathPrefix: '/event',
           },
         ],
@@ -86,10 +88,31 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         enableGooglePay: true,
       },
     ],
+    // @sentry/react-native/expo plugin temporarily removed — it crashes
+    // metro bundling on Expo SDK 54 with "Cannot read properties of undefined
+    // (reading 'match')" in sentryMetroSerializer. The JS-side Sentry library
+    // still loads and reports crashes — we just lose automatic source-map
+    // upload. Re-enable when bumping to Expo SDK 55+ + sentry-react-native v8.
     [
-      'react-native-crisp-chat-sdk',
+      'expo-build-properties',
       {
-        websiteId: '403b436b-3ea7-4b76-8d8d-3f860ed63468',
+        android: {
+          // Detox androidTest builds hit "2 files found with path 'lib/.../libfbjni.so'"
+          // because react-native-gesture-handler bundles fbjni and so does the React
+          // Native AAR. pickFirst tells Gradle to take whichever it sees first.
+          packagingOptions: {
+            pickFirst: [
+              'lib/arm64-v8a/libfbjni.so',
+              'lib/armeabi-v7a/libfbjni.so',
+              'lib/x86/libfbjni.so',
+              'lib/x86_64/libfbjni.so',
+              'lib/arm64-v8a/libc++_shared.so',
+              'lib/armeabi-v7a/libc++_shared.so',
+              'lib/x86/libc++_shared.so',
+              'lib/x86_64/libc++_shared.so',
+            ],
+          },
+        },
       },
     ],
   ],
@@ -100,10 +123,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     router: {
       origin: false,
     },
-    // EAS project ID will be set when building with EAS
-    // eas: {
-    //   projectId: 'your-project-id',
-    // },
+    eas: {
+      projectId: '0e06655a-2e82-4574-b673-5dc6b7c42206',
+    },
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
     googleClientIdIos: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS,

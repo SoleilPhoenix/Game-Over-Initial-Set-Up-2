@@ -183,3 +183,18 @@ export async function loadInvitedCount(eventId: string): Promise<number> {
   } catch {}
   return 0;
 }
+
+/**
+ * Eagerly hydrates the in-memory budgetCache from AsyncStorage.
+ * Call once at app startup (before any queries run) to ensure
+ * getAllBudgetInfos() returns correct data on cold start.
+ */
+export async function initBudgetCache(): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem(BUDGET_KEY);
+    if (raw) {
+      const data = JSON.parse(raw);
+      Object.assign(budgetCache, data);
+    }
+  } catch {}
+}

@@ -11,7 +11,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePolls, useCreatePoll, useVote } from '@/hooks/queries/usePolls';
 import { PollCard, CreatePollModal } from '@/components/polls';
-import { colors } from '@/constants/colors';
 import type { Database } from '@/lib/supabase/types';
 
 type PollCategory = Database['public']['Tables']['polls']['Row']['category'];
@@ -117,7 +116,7 @@ export default function PollsScreen() {
           onPress={() => router.back()}
           testID="back-button"
         >
-          <Ionicons name="arrow-back" size={24} color="#1A202C" />
+          <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
         </XStack>
 
         <YStack flex={1}>
@@ -179,8 +178,8 @@ export default function PollsScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            colors={[colors.light.primary]}
-            tintColor={colors.light.primary}
+            colors={['#C6A75E']}
+            tintColor={'#C6A75E'}
           />
         }
         ListEmptyComponent={
@@ -189,7 +188,7 @@ export default function PollsScreen() {
               width={80}
               height={80}
               borderRadius="$full"
-              backgroundColor={`${colors.light.primary}15`}
+              backgroundColor="rgba(198, 167, 94, 0.08)"
               alignItems="center"
               justifyContent="center"
               marginBottom="$4"
@@ -197,7 +196,7 @@ export default function PollsScreen() {
               <Ionicons
                 name={filter === 'closed' ? 'checkmark-done' : 'bar-chart-outline'}
                 size={40}
-                color={colors.light.primary}
+                color={'#C6A75E'}
               />
             </YStack>
             <Text fontSize="$4" fontWeight="700" color="$textPrimary" marginBottom="$2">
@@ -239,7 +238,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.light.primary,
+    backgroundColor: '#C6A75E',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -247,13 +246,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: colors.light.background,
+    backgroundColor: '#12253A',
     borderWidth: 1,
-    borderColor: colors.light.border,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   filterChipSelected: {
-    backgroundColor: colors.light.primary,
-    borderColor: colors.light.primary,
+    backgroundColor: '#C6A75E',
+    borderColor: '#C6A75E',
   },
   listContent: {
     paddingTop: 16,
@@ -264,7 +263,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.light.primary,
+    backgroundColor: '#C6A75E',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,

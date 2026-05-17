@@ -33,7 +33,7 @@ const StyledBadge = styled(XStack, {
         backgroundColor: '$backgroundHover',
       },
       primary: {
-        backgroundColor: 'rgba(37, 140, 244, 0.15)',
+        backgroundColor: 'rgba(198, 167, 94, 0.15)',
       },
       bestMatch: {
         backgroundColor: 'rgba(255, 215, 0, 0.2)',
@@ -159,7 +159,7 @@ function getOutlineColor(variant: BadgeProps['variant']): string {
     error: '#E12D39',
     info: '#7B68EE',
     neutral: '#64748B',
-    primary: '#5A7EB0',
+    primary: '#C6A75E',
     bestMatch: '#FFD700',
   };
   return colors[variant || 'neutral'];
