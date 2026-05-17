@@ -1,11 +1,16 @@
 name: E2E Tests (Detox)
 
-# Manual trigger + automatically after merging to main.
-# Skipped on PRs to keep macOS minutes affordable.
+# Manual trigger ONLY.
+#
+# Auto-runs on every push were costing 60-90 min of macOS minutes per commit
+# while the app is still pre-launch and Solo-dev manually QAs on the simulator
+# before TestFlight releases. Trigger this workflow explicitly from the GitHub
+# Actions tab (Run workflow button) before App-Store submissions, after major
+# refactors, or whenever a deep regression check is needed.
+#
+# To re-enable auto-runs on main: add `push: { branches: [main] }` below.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 
 defaults:
   run:
