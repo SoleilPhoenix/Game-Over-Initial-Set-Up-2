@@ -16,7 +16,19 @@ Sentry.init({
 import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Image, StyleSheet } from 'react-native';
+import { Image, LogBox, StyleSheet } from 'react-native';
+
+// Suppress noisy dev-only LogBox red-boxes for Supabase Auth network retries.
+// AuthRetryableFetchError is *by design* — Supabase will retry transparently
+// when the network or backend is briefly unavailable (e.g. project paused on
+// free tier and waking up). Surfacing it as a red box scares users without
+// being actionable. Production builds aren't affected (LogBox is dev-only).
+if (__DEV__) {
+  LogBox.ignoreLogs([
+    'AuthRetryableFetchError',
+    'TypeError: Network request failed',
+  ]);
+}
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
