@@ -271,6 +271,23 @@ serve(async (req: Request) => {
           if (milestone.daysBefore === 14) {
             // Guard: only cancel events that are not already cancelled (idempotent)
             if (event.status !== 'cancelled') {
+              // Race-condition guard: between the initial query (line ~210) and now,
+              // a payment webhook could have fired and marked the booking as fully
+              // paid. Re-fetch the booking's current state right before we cancel.
+              const { data: currentBooking } = await supabase
+                .from('bookings')
+                .select('fully_paid_at, payment_status')
+                .eq('id', booking.id)
+                .maybeSingle();
+
+              if (currentBooking?.fully_paid_at || currentBooking?.payment_status === 'paid') {
+                console.log(
+                  `Skipping cancellation for event ${event.id} — payment arrived ` +
+                  `during the cron window (booking ${booking.id})`
+                );
+                continue;
+              }
+
               console.log(`Auto-cancelling unpaid event: ${event.id}`);
 
               const { error: cancelError } = await supabase

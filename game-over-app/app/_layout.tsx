@@ -17,7 +17,10 @@ import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Image, StyleSheet } from 'react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TamaguiProvider, Theme, Spinner, YStack } from 'tamagui';
 import { ToastProvider, ToastViewport } from '@tamagui/toast';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -58,11 +61,27 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5, // 5 minutes
-      gcTime: 1000 * 60 * 30, // 30 minutes
+      // gcTime must outlive the persister's maxAge so cache entries survive
+      // the in-memory garbage collector long enough to be persisted/restored.
+      gcTime: 1000 * 60 * 60 * 24, // 24 hours
       retry: 2,
       refetchOnWindowFocus: false,
     },
   },
+});
+
+/**
+ * AsyncStorage-backed query cache persister.
+ * On launch, queries are rehydrated from storage so the app shows last-seen
+ * data immediately — no spinner on reconnect or cold start with no network.
+ * Stale queries still refetch in background once a connection is available.
+ */
+const queryPersister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+  key: 'game-over-rq-cache',
+  // Throttle writes — every state change writing to AsyncStorage would
+  // thrash storage and battery. 1 second is the React Query default.
+  throttleTime: 1000,
 });
 
 function RootLayoutNav() {
@@ -188,9 +207,20 @@ function RootLayout() {
         <TamaguiProvider config={config} defaultTheme="dark">
           <Theme name="dark">
             <ToastProvider>
-              <QueryClientProvider client={queryClient}>
+              <PersistQueryClientProvider
+                client={queryClient}
+                persistOptions={{
+                  persister: queryPersister,
+                  // Cached queries older than 24h are dropped on hydrate —
+                  // forces a refresh of long-stale data on next launch.
+                  maxAge: 1000 * 60 * 60 * 24,
+                  // Buster invalidates every cached query when bumped; do this
+                  // whenever query shape changes in a breaking way.
+                  buster: 'v1',
+                }}
+              >
                 <RootLayoutNav />
-              </QueryClientProvider>
+              </PersistQueryClientProvider>
             </ToastProvider>
           </Theme>
         </TamaguiProvider>
