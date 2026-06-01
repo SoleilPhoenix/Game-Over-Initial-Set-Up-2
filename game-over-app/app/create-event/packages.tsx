@@ -18,6 +18,7 @@ import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { LinearGradient } from 'expo-linear-gradient';
 import { setDesiredParticipants, setBudgetInfo } from '@/lib/participantCountCache';
 import { assemblePackages } from '@/utils/packageAssembly';
+import { TIER_DISPLAY_NAME, TIER_SIZE_LABEL } from '@/constants/packageTiers';
 
 // Feature counts by tier: S=3, M=4, L=5
 // Fallback packages when DB returns empty (for Berlin, Hamburg, Hannover)
@@ -67,19 +68,9 @@ function PackageSelectionCard({
   onSelect,
   onViewDetails,
 }: PackageSelectionCardProps) {
-  const tierLabels: Record<string, string> = {
-    essential: 'S',
-    classic: 'M',
-    grand: 'L',
-  };
-  const tierNames: Record<string, string> = {
-    essential: 'Essential',
-    classic: 'Classic',
-    grand: 'Grand',
-  };
-  const tierLabel = tierLabels[pkg.tier] || '';
-  const tierName = tierNames[pkg.tier] || pkg.name;
-  const displayName = `${tierName} (${tierLabel})`;
+  const tierLabel = TIER_SIZE_LABEL[pkg.tier as keyof typeof TIER_SIZE_LABEL] || '';
+  const tierName = TIER_DISPLAY_NAME[pkg.tier as keyof typeof TIER_DISPLAY_NAME] || pkg.name;
+  const displayName = tierLabel ? `${tierName} (${tierLabel})` : tierName;
 
   const perPersonCents = pkg.price_per_person_cents || pkg.base_price_cents || 0;
   const totalGroupCents = perPersonCents * participantCount;

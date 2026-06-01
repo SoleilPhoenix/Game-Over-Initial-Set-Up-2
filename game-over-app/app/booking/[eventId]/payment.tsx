@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Alert, ScrollView, Platform } from 'react-native';
+import { Alert, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,18 +20,19 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useTranslation, getTranslation } from '@/i18n';
 import { setDesiredParticipants, setBudgetInfo } from '@/lib/participantCountCache';
+import { getCityTierName, getTierDisplayLabel, TIER_PRICE_PER_PERSON_CENTS } from '@/constants/packageTiers';
 
-// Fallback packages for draft mode
+// Fallback packages for draft mode — names + prices from packageTiers constants
 const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; price_per_person_cents: number }> = {
-  'berlin-classic': { id: 'berlin-classic', name: 'Berlin Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'berlin-essential': { id: 'berlin-essential', name: 'Berlin Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'berlin-grand': { id: 'berlin-grand', name: 'Berlin Grand', tier: 'grand', price_per_person_cents: 199_00 },
-  'hamburg-classic': { id: 'hamburg-classic', name: 'Hamburg Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'hamburg-essential': { id: 'hamburg-essential', name: 'Hamburg Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'hamburg-grand': { id: 'hamburg-grand', name: 'Hamburg Grand', tier: 'grand', price_per_person_cents: 199_00 },
-  'hannover-classic': { id: 'hannover-classic', name: 'Hannover Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'hannover-essential': { id: 'hannover-essential', name: 'Hannover Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'hannover-grand': { id: 'hannover-grand', name: 'Hannover Grand', tier: 'grand', price_per_person_cents: 199_00 },
+  'berlin-essential':   { id: 'berlin-essential',   name: getCityTierName('berlin',   'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential },
+  'berlin-classic':     { id: 'berlin-classic',     name: getCityTierName('berlin',   'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic },
+  'berlin-grand':       { id: 'berlin-grand',       name: getCityTierName('berlin',   'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand },
+  'hamburg-essential':  { id: 'hamburg-essential',  name: getCityTierName('hamburg',  'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential },
+  'hamburg-classic':    { id: 'hamburg-classic',    name: getCityTierName('hamburg',  'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic },
+  'hamburg-grand':      { id: 'hamburg-grand',      name: getCityTierName('hamburg',  'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand },
+  'hannover-essential': { id: 'hannover-essential', name: getCityTierName('hannover', 'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential },
+  'hannover-classic':   { id: 'hannover-classic',   name: getCityTierName('hannover', 'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic },
+  'hannover-grand':     { id: 'hannover-grand',     name: getCityTierName('hannover', 'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand },
 };
 const CITY_NAMES: Record<string, string> = {
   berlin: 'Berlin', hamburg: 'Hamburg', hannover: 'Hannover',
@@ -39,8 +40,7 @@ const CITY_NAMES: Record<string, string> = {
   '550e8400-e29b-41d4-a716-446655440102': 'Hamburg',
   '550e8400-e29b-41d4-a716-446655440103': 'Hannover',
 };
-const SERVICE_FEE_RATE = 0.10;
-const MIN_SERVICE_FEE_CENTS = 5000;
+// Service fee removed — package prices are final all-in.
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // In E2E mode, we mock the payment
@@ -94,12 +94,10 @@ export default function PaymentScreen() {
     const perPersonPrice = draftPkg.price_per_person_cents;
     // Package Base is ALWAYS price × total participants (fixed amount)
     const packagePrice = perPersonPrice * totalParticipants;
-    const serviceFee = Math.max(Math.ceil(packagePrice * SERVICE_FEE_RATE / 100) * 100, MIN_SERVICE_FEE_CENTS);
-    // Round total to whole euros — perPerson × payingCount must match displayed Total Group Cost
-    const totalEurosRounded = Math.round((packagePrice + serviceFee) / 100);
-    const total = totalEurosRounded * 100;
+    // No service fee — package prices are final all-in
+    const total = packagePrice;
     const perPerson = Math.ceil(total / payingCount);
-    return { packagePriceCents: packagePrice, serviceFeeCents: serviceFee, totalCents: total, perPersonCents: perPerson, payingParticipantCount: payingCount };
+    return { packagePriceCents: packagePrice, serviceFeeCents: 0, totalCents: total, perPersonCents: perPerson, payingParticipantCount: payingCount };
   }, [draftPkg, urlParticipantCount, wizardParticipantCount, honoreeExcluded]);
 
   const effectiveCityId = paramCityId || wizardCityId;
@@ -133,7 +131,7 @@ export default function PaymentScreen() {
 
   const createBookingMutation = useCreateBooking();
   const updatePaymentMutation = useUpdatePaymentStatus();
-  const { processPayment, isLoading: isPaymentLoading, showError } = usePaymentSheet();
+  const { processPayment, isLoading: isPaymentLoading } = usePaymentSheet();
 
   if (isLoading || !activePkg || !activePricing) {
     return (
@@ -530,11 +528,7 @@ export default function PaymentScreen() {
                 </YStack>
                 <YStack flex={1}>
                   <Text fontWeight="600" color="$textPrimary">
-                    {(() => {
-                      const tierLabels: Record<string, string> = { essential: 'S', classic: 'M', grand: 'L' };
-                      const tierNames: Record<string, string> = { essential: 'Essential', classic: 'Classic', grand: 'Grand' };
-                      return activePkg.tier ? `${tierNames[activePkg.tier] || activePkg.tier} (${tierLabels[activePkg.tier] || ''})` : activePkg.name;
-                    })()}
+                    {activePkg.tier ? getTierDisplayLabel(activePkg.tier) : activePkg.name}
                   </Text>
                   <Text fontSize="$2" color="$textSecondary">
                     {[

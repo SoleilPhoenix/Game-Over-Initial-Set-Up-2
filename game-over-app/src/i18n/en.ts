@@ -22,6 +22,7 @@ const en = {
     noEventsSubtitle: 'Create your first event and start planning an unforgettable party!',
     startNewPlan: 'Start New Plan',
     draft: 'DRAFT',
+    pastSessions: 'Past Sessions',
     newEvent: 'New Event',
     noCityLabel: 'No city',
     noDateLabel: 'No date set',
@@ -111,7 +112,7 @@ const en = {
     faq2Q: 'How do I create an event?',
     faq2A: 'Tap the "+" button on the Events tab or "Start New Plan". Follow the 4-step wizard: enter key details (name, city, party type), set preferences, configure participant options, and choose a package. Your progress is auto-saved as a draft.',
     faq3Q: 'What packages are available?',
-    faq3A: 'We offer three tiers: Essential (S) for a solid party with the basics, Classic (M) for the ideal balance of activities and nightlife, and Grand (L) for the ultimate premium luxury experience. Each tier includes different activities, venues, and services.',
+    faq3A: 'We offer three tiers: Feier (S) for a solid party with the basics, Rausch (M) for the ideal balance of activities and nightlife, and Legende (L) for the ultimate premium luxury experience. Each tier includes different activities, venues, and services.',
     faq4Q: 'How does payment splitting work?',
     faq4A: 'After selecting a package, you can choose to exclude the honoree from paying. The total cost is split evenly among all paying participants. Each person pays their share directly through the app using credit card, debit card, Apple Pay, or Google Pay.',
     faq5Q: 'Can I cancel my booking?',
@@ -291,6 +292,7 @@ const en = {
   // ─── Package Detail ────────────────────────────
   packageDetail: {
     title: 'Package Details',
+    archived: 'ARCHIVED',
     premiumHighlights: 'Premium Highlights',
     packageIncludes: 'Package Includes',
     reviews: 'Reviews',
@@ -367,7 +369,6 @@ const en = {
     selectedPackageLabel: 'Selected Package',
     nights: '{{count}} Nights',
     guests: '{{count}} Guests',
-    serviceFee: 'Service Fee (10%)',
     totalGroupCost: 'Total Group Cost',
     excludeHonoreeLabel: 'Exclude Honoree',
     honoreePays: 'Honoree pays {{amount}}',
@@ -501,6 +502,7 @@ const en = {
     dueInDays: '{{count}} days left',
     payRemainingBtn: 'Pay Remaining Balance',
     payRemainingSubtitle: '75% balance due before event',
+    packageFrozen: 'Package costs are locked — the event has already taken place.',
     notif14DayTitle: 'Final Payment Due Soon',
     notif14DayBody: '{{eventName}} is in {{count}} days. Pay your remaining balance of {{amount}} to secure your booking.',
     // Alert strings
@@ -677,6 +679,7 @@ const en = {
     honoreeNotificationBody: 'The honoree will receive an invitation to the app {{time}} before the first activity and will be asked to join.',
     honoreeNotificationTime: '1 hour',
     honoreePrivacyNote: 'Budget & costs are not shown to the honoree',
+    pastEventReadOnly: 'Invitations are closed — the event has already taken place.',
   },
 
   // ─── Chat ──────────────────────────────────────

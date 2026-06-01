@@ -18,6 +18,8 @@ import { useTranslation, getTranslation } from '@/i18n';
 import { getPackageImage } from '@/constants/packageImages';
 import { supabase } from '@/lib/supabase/client';
 
+import { getTierDisplayLabel } from '@/constants/packageTiers';
+
 interface MenuItemProps {
   icon: string;
   iconColor: string;
@@ -105,7 +107,11 @@ function MenuSection({ title, children }: MenuSectionProps) {
   );
 }
 
-const TIER_LABELS: Record<string, string> = { essential: 'Essential (S)', classic: 'Classic (M)', grand: 'Grand (L)' };
+const TIER_LABELS: Record<string, string> = {
+  essential: getTierDisplayLabel('essential'),
+  classic:   getTierDisplayLabel('classic'),
+  grand:     getTierDisplayLabel('grand'),
+};
 
 const LANGUAGE_LABELS: Record<string, string> = { en: 'English', de: 'Deutsch' };
 

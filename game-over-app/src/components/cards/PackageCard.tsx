@@ -13,6 +13,8 @@ import { Card } from '../ui/Card';
 import { OptimizedImage } from '../ui/OptimizedImage';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 
+import { TIER_DISPLAY_NAME } from '@/constants/packageTiers';
+
 const BestMatchBadge = styled(XStack, {
   position: 'absolute',
   top: '$2',
@@ -42,9 +44,9 @@ export interface PackageCardProps {
 }
 
 const tierConfig = {
-  essential: { label: 'Essential', color: '$textSecondary' },
-  classic: { label: 'Classic', color: '$primary' },
-  grand: { label: 'Grand', color: '$warning' },
+  essential: { label: TIER_DISPLAY_NAME.essential, color: '$textSecondary' },
+  classic: { label: TIER_DISPLAY_NAME.classic, color: '$primary' },
+  grand: { label: TIER_DISPLAY_NAME.grand, color: '$warning' },
 };
 
 export const PackageCard = memo(function PackageCard({
