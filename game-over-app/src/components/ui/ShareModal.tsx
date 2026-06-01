@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, View, Pressable, Share, Linking, Alert } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { YStack, Text } from 'tamagui';
+import { Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 

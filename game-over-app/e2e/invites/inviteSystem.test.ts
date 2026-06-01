@@ -16,7 +16,7 @@ import {
   waitForLoadingComplete,
   TEST_USER,
 } from '../utils/testHelpers';
-import { navigateToTab, navigateToFirstEvent, goBack } from '../utils/navigation';
+// navigation helpers unused in current test set
 
 // Test invite codes for various scenarios
 const TEST_INVITE_CODES = {
@@ -379,9 +379,6 @@ describe('Invite System', () => {
       await waitForElement('invite-modal', 5000);
       await tap('generate-invite-button');
       await waitForLoadingComplete();
-
-      // Store first code for comparison
-      const firstCodeElement = element(by.id('invite-code-display'));
 
       // Regenerate
       await tap('regenerate-invite-button');

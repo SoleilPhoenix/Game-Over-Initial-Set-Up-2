@@ -17,6 +17,7 @@ const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreCl
 let showCrispChat: (() => void) | undefined;
 if (!isExpoGo) {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional native module
     showCrispChat = require('react-native-crisp-chat-sdk').show;
   } catch {
     // Crisp SDK not available

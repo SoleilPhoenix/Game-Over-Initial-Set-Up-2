@@ -20,7 +20,6 @@ import {
 } from '@/hooks/queries/useChat';
 import { useAuthStore } from '@/stores/authStore';
 import { MessageBubble, MessageInput } from '@/components/chat';
-import { colors } from '@/constants/colors';
 import { useTranslation, getTranslation } from '@/i18n';
 import type { MessageWithAuthor } from '@/repositories/messages';
 
@@ -89,15 +88,15 @@ export default function ChatChannelScreen() {
     if (!isDbChannel && localMessages.length > 0) {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 150);
     }
-  }, [isDbChannel]); // Only run on mount for local channels
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only auto-scroll once on mount for local channels
+  }, [isDbChannel]);
 
   // Fetch channel info (only for real DB channels)
-  const { data: channel, isLoading: channelLoading } = useChannel(isDbChannel ? channelId : undefined);
+  const { data: channel } = useChannel(isDbChannel ? channelId : undefined);
 
   // Fetch messages with infinite scroll (only for real DB channels)
   const {
     data: messagesData,
-    isLoading: messagesLoading,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -130,7 +129,7 @@ export default function ChatChannelScreen() {
                 await AsyncStorage.removeItem(`local-messages-${channelId}`);
                 const raw = await AsyncStorage.getItem('localChannelsByEvent');
                 if (raw) {
-                  const map = JSON.parse(raw) as Record<string, Array<{ id: string; channels: Array<{ id: string }> }>>;
+                  const map = JSON.parse(raw) as Record<string, { id: string; channels: { id: string }[] }[]>;
                   for (const eventKey of Object.keys(map)) {
                     for (const section of map[eventKey]) {
                       section.channels = section.channels.filter((ch: any) => ch.id !== channelId);
@@ -186,6 +185,7 @@ export default function ChatChannelScreen() {
     if (channelId && isDbChannel) {
       markAsReadMutation.mutate(channelId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mark-as-read should fire once per channel change, not on mutation/isDbChannel change
   }, [channelId]);
 
   // Keyboard listeners
@@ -254,6 +254,7 @@ export default function ChatChannelScreen() {
         console.error('Failed to send message:', error);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isDbChannel and user info captured at send-time; adding them re-creates the callback unnecessarily
     [channelId, sendMessageMutation, localMessages]
   );
 

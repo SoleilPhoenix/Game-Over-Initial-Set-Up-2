@@ -159,7 +159,7 @@ export const participantsRepository = {
   /**
    * Get all events where the user participates as a guest
    */
-  async getGuestParticipations(userId: string): Promise<Array<{ event_id: string; role: string; payment_status: string | null }>> {
+  async getGuestParticipations(userId: string): Promise<{ event_id: string; role: string; payment_status: string | null }[]> {
     const { data, error } = await supabase
       .from('event_participants')
       .select('event_id, role, payment_status')

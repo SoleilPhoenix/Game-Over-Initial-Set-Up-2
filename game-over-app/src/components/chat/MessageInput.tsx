@@ -4,10 +4,9 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { TextInput, StyleSheet, Keyboard, Platform } from 'react-native';
+import { TextInput, StyleSheet, Platform } from 'react-native';
 import { XStack, YStack, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '@/constants/colors';
 
 interface MessageInputProps {
   onSend: (message: string) => void;

@@ -44,7 +44,7 @@ function ToastBuilder() {
     t.wellness.toastPrompt5,
   ];
 
-  const toastIcons: Array<'wine' | 'heart' | 'star' | 'musical-notes' | 'glasses'> =
+  const toastIcons: ('wine' | 'heart' | 'star' | 'musical-notes' | 'glasses')[] =
     ['wine', 'heart', 'star', 'musical-notes', 'glasses'];
 
   const total = prompts.length;

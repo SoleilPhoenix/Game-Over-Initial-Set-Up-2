@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/array-type -- auto-generated Supabase types */
 export type Json =
   | string
   | number
@@ -883,7 +884,7 @@ export type Database = {
       is_event_participant: { Args: { p_event_id: string }; Returns: boolean }
       get_invite_preview: {
         Args: { p_code: string }
-        Returns: Array<{
+        Returns: {
           event_id: string
           event_title: string
           honoree_name: string
@@ -899,7 +900,7 @@ export type Database = {
           guest_last_name: string | null
           guest_email: string | null
           guest_phone: string | null
-        }>
+        }[]
       }
     }
     Enums: {

@@ -7,14 +7,13 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { FlatList, RefreshControl, Pressable, StyleSheet, Alert, SectionList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { YStack, XStack, Text, Spinner, Image } from 'tamagui';
+import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChannels } from '@/hooks/queries/useChat';
 import { usePolls, useCreatePoll, useVote } from '@/hooks/queries/usePolls';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { PollCard, CreatePollModal } from '@/components/polls';
-import { colors } from '@/constants/colors';
 import type { Database } from '@/lib/supabase/types';
 
 type TabType = 'chat' | 'voting' | 'decisions';
@@ -78,8 +77,8 @@ export default function CommunicationCenterScreen() {
   }, [channels]);
 
   // Separate active and closed polls, grouped by category
-  const { activePolls, closedPolls, groupedActivePolls } = useMemo(() => {
-    if (!polls) return { activePolls: [], closedPolls: [], groupedActivePolls: [] };
+  const { closedPolls, groupedActivePolls } = useMemo(() => {
+    if (!polls) return { closedPolls: [], groupedActivePolls: [] };
 
     const active = polls.filter(p => p.status === 'active' || p.status === 'closing_soon' || p.status === 'draft');
     const closed = polls.filter(p => p.status === 'closed');
@@ -98,7 +97,7 @@ export default function CommunicationCenterScreen() {
       data,
     }));
 
-    return { activePolls: active, closedPolls: closed, groupedActivePolls: grouped };
+    return { closedPolls: closed, groupedActivePolls: grouped };
   }, [polls]);
 
   // Handle channel press
@@ -151,8 +150,6 @@ export default function CommunicationCenterScreen() {
     }
   }, [activeTab, refetchChannels, refetchPolls]);
 
-  const isRefreshing = activeTab === 'chat' ? isRefetchingChannels : isRefetchingPolls;
-  const isLoading = activeTab === 'chat' ? channelsLoading : pollsLoading;
 
   // Tab configuration
   const tabs: { key: TabType; label: string }[] = [

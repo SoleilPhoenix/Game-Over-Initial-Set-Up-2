@@ -12,7 +12,6 @@ import {
   ActivityIndicator,
   PressableProps,
 } from 'react-native';
-import { colors } from '@/constants/colors';
 import { spacing, borderRadius, layout } from '@/constants/spacing';
 
 type SocialProvider = 'apple' | 'google' | 'facebook';

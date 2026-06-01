@@ -28,7 +28,6 @@ import { useWizardStore } from '@/stores/wizardStore';
 import { WizardFooter } from '@/components/ui/WizardFooter';
 import { useTranslation } from '@/i18n';
 import { useTheme } from '@/hooks/useTheme';
-import { getPackageImage } from '@/constants/packageImages';
 
 // ─── City data ─────────────────────────────────────────────────────────────
 // UUIDs must match supabase/migrations/20260211000000_add_german_cities.sql
@@ -74,7 +73,7 @@ function SectionHeader({ number, title }: { number: string; title: string }) {
 export default function WizardStep1() {
   const router = useRouter();
   const { t } = useTranslation();
-  const { theme, resolvedMode } = useTheme();
+  const { resolvedMode } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   // 2-col grid: screen minus container padding (20×2) minus gap between columns (10)
   const cityCardWidth = (screenWidth - 40 - 10) / 2;

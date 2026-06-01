@@ -8,7 +8,6 @@ import * as Crypto from 'expo-crypto';
 import type { Database } from '@/lib/supabase/types';
 
 type InviteCode = Database['public']['Tables']['invite_codes']['Row'];
-type InviteCodeInsert = Database['public']['Tables']['invite_codes']['Insert'];
 
 export interface InviteCodeWithEvent extends InviteCode {
   event: {
@@ -314,12 +313,12 @@ export const invitesRepository = {
   /**
    * Get guest details from invite codes for an event
    */
-  async getGuestsByEventId(eventId: string): Promise<Array<{
+  async getGuestsByEventId(eventId: string): Promise<{
     id: string;
     guest_first_name: string | null;
     guest_last_name: string | null;
     guest_email: string | null;
-  }>> {
+  }[]> {
     const { data, error } = await supabase
       .from('invite_codes')
       .select('id, guest_first_name, guest_last_name, guest_email')

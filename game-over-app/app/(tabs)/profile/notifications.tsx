@@ -35,6 +35,7 @@ export default function NotificationsScreen() {
 
   useEffect(() => {
     loadPreferences();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadPreferences is defined below and stable; we only want to reload when user changes
   }, [user?.id]);
 
   const loadPreferences = async () => {

@@ -2,7 +2,7 @@ import { createAnimations } from '@tamagui/animations-react-native';
 import { createInterFont } from '@tamagui/font-inter';
 import { createMedia } from '@tamagui/react-native-media-driver';
 import { shorthands } from '@tamagui/shorthands';
-import { themes, tokens as defaultTokens } from '@tamagui/themes';
+import { tokens as defaultTokens } from '@tamagui/themes';
 import { createTamagui, createTokens } from 'tamagui';
 
 // Animations
@@ -386,5 +386,6 @@ export default config;
 export type AppConfig = typeof config;
 
 declare module 'tamagui' {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- required Tamagui type augmentation pattern
   interface TamaguiCustomConfig extends AppConfig {}
 }

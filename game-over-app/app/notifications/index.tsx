@@ -149,6 +149,7 @@ export default function NotificationsScreen() {
     if (earlierNotifs.length > 0) sections.push({ title: t.notifications.earlier, data: earlierNotifs });
 
     return sections;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
   }, [data]);
 
   const handleNotificationPress = useCallback((notification: Notification) => {
