@@ -10,7 +10,9 @@ import { YStack, XStack, Text, Spinner } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePolls, useCreatePoll, useVote } from '@/hooks/queries/usePolls';
+import { useEvent } from '@/hooks/queries/useEvents';
 import { PollCard, CreatePollModal } from '@/components/polls';
+import { isReadOnlyEvent } from '@/utils/eventLifecycle';
 import type { Database } from '@/lib/supabase/types';
 
 type PollCategory = Database['public']['Tables']['polls']['Row']['category'];
@@ -33,6 +35,10 @@ export default function PollsScreen() {
   // Mutations
   const createPollMutation = useCreatePoll();
   const voteMutation = useVote();
+
+  // Past events: voting is greyed out, but topics (poll creation/discussion) stay open
+  const { data: event } = useEvent(eventId);
+  const isReadOnly = event ? isReadOnlyEvent(event) : false;
 
   // Filter polls based on status
   const filteredPolls = React.useMemo(() => {
@@ -80,10 +86,11 @@ export default function PollsScreen() {
         poll={item}
         onVote={(optionId) => handleVote(item.id, optionId)}
         isVoting={voteMutation.isPending}
+        readOnly={isReadOnly}
         testID={`poll-${item.id}`}
       />
     </YStack>
-  ), [handleVote, voteMutation.isPending]);
+  ), [handleVote, voteMutation.isPending, isReadOnly]);
 
   if (isLoading) {
     return (
