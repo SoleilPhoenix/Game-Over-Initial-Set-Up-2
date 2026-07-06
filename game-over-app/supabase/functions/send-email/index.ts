@@ -24,11 +24,7 @@ import {
   getBookingConfirmationEmailHtml,
   getPaymentReminderEmailHtml,
 } from '../_shared/email-templates.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders as buildCors, bearerMatches } from '../_shared/http.ts';
 
 type TemplateName = 'welcome' | 'booking_confirmation' | 'payment_reminder';
 
@@ -92,13 +88,14 @@ function renderTemplate(template: TemplateName, data: Record<string, unknown>): 
 }
 
 serve(async (req: Request) => {
+  const corsHeaders = buildCors(req);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const authHeader = req.headers.get('Authorization');
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!authHeader || authHeader !== `Bearer ${serviceRoleKey}`) {
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  if (!bearerMatches(req.headers.get('Authorization'), serviceRoleKey)) {
     return new Response(JSON.stringify({ error: 'Unauthorized — internal function' }), {
       status: 401,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

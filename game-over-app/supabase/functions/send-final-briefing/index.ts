@@ -19,11 +19,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { sendWhatsApp, sendSMS } from '../_shared/twilio.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders as buildCors, bearerMatches } from '../_shared/http.ts';
 
 // ─── Build briefing message ───────────────────────────────────
 
@@ -61,16 +57,17 @@ function buildBriefingMessage(params: {
 // ─── Main handler ─────────────────────────────────────────────
 
 serve(async (req) => {
+  const corsHeaders = buildCors(req);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const authHeader = req.headers.get('Authorization');
-  const cronSecret = Deno.env.get('CRON_SECRET');
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  const cronSecret = Deno.env.get('CRON_SECRET') ?? '';
+  if (!cronSecret || !bearerMatches(req.headers.get('Authorization'), cronSecret)) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 

@@ -6,11 +6,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders as buildCors, bearerMatches } from '../_shared/http.ts';
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
 
@@ -37,32 +33,22 @@ interface ExpoPushMessage {
 }
 
 serve(async (req: Request) => {
+  const corsHeaders = buildCors(req);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  const authHeader = req.headers.get('Authorization');
-  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-  if (!authHeader) {
-    return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
+  // Service-role-only. This function can push arbitrary title/body to arbitrary
+  // userIds, so it must never accept a plain user JWT — otherwise any signed-in
+  // user could send spoofed ("payment failed, tap here") notifications to others.
+  // All legitimate callers are other edge functions using the service-role key.
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  if (!bearerMatches(req.headers.get('Authorization'), serviceRoleKey)) {
+    return new Response(JSON.stringify({ error: 'Unauthorized — internal function' }), {
       status: 401,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  }
-  if (authHeader !== `Bearer ${serviceRoleKey}`) {
-    const { createClient: createUserClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.3');
-    const userSupabase = createUserClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
-    );
-    const { error: authError } = await userSupabase.auth.getUser();
-    if (authError) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-        status: 401,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
   }
 
   try {

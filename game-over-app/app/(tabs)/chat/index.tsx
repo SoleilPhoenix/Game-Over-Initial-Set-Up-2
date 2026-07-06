@@ -506,10 +506,14 @@ export default function CommunicationScreen() {
     });
   }, []);
 
+  // Debounce persistence: this fires on every channel-map mutation, so coalesce
+  // rapid updates into a single AsyncStorage write instead of one per keystroke.
   useEffect(() => {
-    if (Object.keys(localChannelsByEvent).length > 0) {
+    if (Object.keys(localChannelsByEvent).length === 0) return;
+    const handle = setTimeout(() => {
       AsyncStorage.setItem('localChannelsByEvent', JSON.stringify(localChannelsByEvent)).catch(() => {});
-    }
+    }, 400);
+    return () => clearTimeout(handle);
   }, [localChannelsByEvent]);
 
   // Re-sync local channels from AsyncStorage whenever this screen gains focus

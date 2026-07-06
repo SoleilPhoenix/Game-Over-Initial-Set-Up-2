@@ -509,6 +509,13 @@ const de: TranslationKeys = {
     thankYou: 'Danke!',
     paymentConfirmedMsg: 'Deine Zahlung wurde bestätigt. Der Organisator wird benachrichtigt.',
     errorUpdatingStatus: 'Status konnte nicht aktualisiert werden. Bitte versuche es erneut.',
+    awaitingConfirmation: 'Warten auf Bestätigung',
+    claimSentTitle: 'Als bezahlt markiert',
+    claimSentMsg: 'Der Organisator bestätigt deine Zahlung. Dein Status wechselt erst nach der Bestätigung auf „Bezahlt".',
+    confirmGuestPayment: 'Bestätigen',
+    confirmGuestTitle: 'Gastzahlung bestätigen',
+    confirmGuestMsg: 'Bestätigen, dass {{name}} den Anteil bezahlt hat? Damit gilt der Gast für alle als bezahlt.',
+    guestConfirmedMsg: 'Zahlung bestätigt.',
   },
 
   // ─── Chat Screen ─────────────────────────────

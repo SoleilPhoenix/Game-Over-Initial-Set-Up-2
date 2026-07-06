@@ -28,6 +28,7 @@ import { isReadOnlyEvent } from '@/utils/eventLifecycle';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import { loadBudgetInfo, loadDesiredParticipants, loadGuestDetails, type BudgetInfo, type GuestDetail } from '@/lib/participantCountCache';
 import { supabase } from '@/lib/supabase/client';
+import { participantsRepository } from '@/repositories';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import type { EventWithDetails } from '@/repositories/events';
@@ -146,6 +147,7 @@ export default function BudgetDashboardScreen() {
   const user = useUser();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(eventIdParam || null);
   const [markingPaidUserId, setMarkingPaidUserId] = useState<string | null>(null);
+  const [confirmingUserId, setConfirmingUserId] = useState<string | null>(null);
   const [manualRefreshing, setManualRefreshing] = useState(false);
   // Derived: is the current user the organizer of the selected event?
   // Used to hide organizer-only actions (Pay Remaining Balance, Invite Guests, Remind All).
@@ -1255,7 +1257,10 @@ export default function BudgetDashboardScreen() {
                   const isPaid = isDemo
                     ? (participantRaw as DemoP).status === 'paid'
                     : (participantRaw as any).payment_status === 'paid' || isOrganizerRow;
-                  const isPending = !isPaid;
+                  // Guest self-claim awaiting organizer confirmation (real events only).
+                  const paymentClaimedAt = isDemo ? null : ((participantRaw as any).payment_claimed_at ?? null);
+                  const isClaimed = !isPaid && !isDemo && !!paymentClaimedAt;
+                  const isPending = !isPaid && !isClaimed;
                   const perPersonAmount = booking?.per_person_cents || budgetStats.perPerson || 0;
                   const amountForRow = isDemo
                     ? (participantRaw as DemoP).amount
@@ -1312,8 +1317,8 @@ export default function BudgetDashboardScreen() {
                         <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
                           {formatCurrency(amountForRow)}
                         </Text>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: isPaid ? theme.textTertiary : pendingColor, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                          {isPaid ? t.budget.paid : t.budget.pending}
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: isPaid ? theme.textTertiary : isClaimed ? theme.accentGold : pendingColor, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                          {isPaid ? t.budget.paid : isClaimed ? t.budget.awaitingConfirmation : t.budget.pending}
                         </Text>
                       </YStack>
 
@@ -1334,14 +1339,12 @@ export default function BudgetDashboardScreen() {
                                     if (!selectedEventId || !user?.id) return;
                                     setMarkingPaidUserId(user.id);
                                     try {
-                                      await supabase
-                                        .from('event_participants')
-                                        .update({ payment_status: 'paid' })
-                                        .eq('event_id', selectedEventId)
-                                        .eq('user_id', user.id);
+                                      // Guest CLAIMS payment; status only flips to 'paid' after the
+                                      // organizer confirms (payment_status is organizer-only via DB trigger).
+                                      await participantsRepository.claimPayment(selectedEventId, user.id);
                                       queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(selectedEventId) });
                                       queryClient.invalidateQueries({ queryKey: ['guestParticipations', user.id] });
-                                      Alert.alert(t.budget.thankYou, t.budget.paymentConfirmedMsg);
+                                      Alert.alert(t.budget.claimSentTitle, t.budget.claimSentMsg);
                                     } catch {
                                       Alert.alert(t.common.error, t.budget.errorUpdatingStatus);
                                     } finally {
@@ -1355,6 +1358,44 @@ export default function BudgetDashboardScreen() {
                         >
                           <Ionicons name="checkmark-circle-outline" size={14} color={theme.accentGold} />
                           <Text style={styles.markPaidButtonText}>I've Paid</Text>
+                        </Pressable>
+                      )}
+
+                      {/* Organizer confirms a guest's claimed payment → flips to Paid for everyone */}
+                      {isOrganizer && isClaimed && !isDemo && (
+                        <Pressable
+                          style={[styles.markPaidButton, { marginLeft: 8 }, confirmingUserId === (participantRaw as any).user_id && { opacity: 0.6 }]}
+                          disabled={confirmingUserId === (participantRaw as any).user_id}
+                          onPress={() => {
+                            const guestUserId = (participantRaw as any).user_id as string;
+                            Alert.alert(
+                              t.budget.confirmGuestTitle,
+                              t.budget.confirmGuestMsg.replace('{{name}}', name),
+                              [
+                                { text: t.budget.notYet, style: 'cancel' },
+                                {
+                                  text: t.budget.confirmGuestPayment,
+                                  onPress: async () => {
+                                    if (!selectedEventId || !guestUserId) return;
+                                    setConfirmingUserId(guestUserId);
+                                    try {
+                                      await participantsRepository.confirmPayment(selectedEventId, guestUserId);
+                                      queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(selectedEventId) });
+                                      queryClient.invalidateQueries({ queryKey: ['guestParticipations', guestUserId] });
+                                      Alert.alert(t.budget.thankYou, t.budget.guestConfirmedMsg);
+                                    } catch {
+                                      Alert.alert(t.common.error, t.budget.errorUpdatingStatus);
+                                    } finally {
+                                      setConfirmingUserId(null);
+                                    }
+                                  },
+                                },
+                              ]
+                            );
+                          }}
+                        >
+                          <Ionicons name="checkmark-done-outline" size={14} color={theme.accentGold} />
+                          <Text style={styles.markPaidButtonText}>{t.budget.confirmGuestPayment}</Text>
                         </Pressable>
                       )}
                     </View>

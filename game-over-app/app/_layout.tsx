@@ -24,7 +24,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { preloadPackageImages } from '@/constants/packageImages';
 import { preloadSportLogos, preloadShareImages } from '@/constants/sportLogos';
-import { initBudgetCache } from '@/lib/participantCountCache';
+import { initBudgetCache, migratePlaintextGuestDetails } from '@/lib/participantCountCache';
 import { useEditorialFonts } from '@/hooks/useEditorialFonts';
 import config from '../tamagui.config';
 
@@ -118,9 +118,11 @@ function RootLayoutNav() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initialize is a stable Zustand action; effect must run only once on mount
   }, []);
 
-  // Eagerly hydrate budget cache so urgency bell works on cold start
+  // Eagerly hydrate budget cache so urgency bell works on cold start, and move
+  // any legacy plaintext guest PII into encrypted storage.
   useEffect(() => {
     void initBudgetCache();
+    void migratePlaintextGuestDetails();
   }, []);
 
   // Sync user info with Crisp when session changes (with identity verification)

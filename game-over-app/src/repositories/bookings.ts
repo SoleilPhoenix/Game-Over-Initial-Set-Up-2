@@ -9,7 +9,6 @@ import { calculateBookingPricing } from '@/utils/pricing';
 
 type Booking = Database['public']['Tables']['bookings']['Row'];
 type BookingInsert = Database['public']['Tables']['bookings']['Insert'];
-type BookingUpdate = Database['public']['Tables']['bookings']['Update'];
 type Package = Database['public']['Tables']['packages']['Row'];
 
 export interface BookingWithDetails extends Booking {
@@ -86,18 +85,10 @@ export const bookingsRepository = {
 
     if (error) throw error;
 
-    // Update event status to 'booked'
-    const { error: statusError } = await supabase
-      .from('events')
-      .update({ status: 'booked' })
-      .eq('id', booking.event_id);
-
-    if (statusError) {
-      throw new Error(
-        `Booking created but event status update failed: ${statusError?.message ?? JSON.stringify(statusError)}`
-      );
-    }
-
+    // NOTE: event.status is intentionally NOT set here. Marking an event 'booked'
+    // is reserved for the Stripe webhook (service role) once payment settles — a
+    // DB trigger now rejects client-side 'booked' writes. Creating a booking row
+    // only records intent to pay; it does not confirm the event.
     return data;
   },
 
@@ -130,69 +121,11 @@ export const bookingsRepository = {
     };
   },
 
-  /**
-   * Update payment status
-   */
-  async updatePaymentStatus(
-    bookingId: string,
-    status: Booking['payment_status'],
-    stripePaymentIntentId?: string
-  ): Promise<Booking> {
-    const updates: BookingUpdate = {
-      payment_status: status,
-    };
-
-    if (stripePaymentIntentId) {
-      updates.stripe_payment_intent_id = stripePaymentIntentId;
-    }
-
-    const { data, error } = await supabase
-      .from('bookings')
-      .update(updates)
-      .eq('id', bookingId)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Atomically append to audit log (prevents race conditions on concurrent webhook retries)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    void (supabase as any).rpc('append_booking_audit_log', {
-      booking_id: bookingId,
-      entry: { action: 'payment_status_updated', status, timestamp: new Date().toISOString() },
-    }).catch((err: unknown) => {
-      console.error('[bookings] audit log append failed in updatePaymentStatus', err);
-    });
-
-    return data;
-  },
-
-  /**
-   * Request a refund
-   */
-  async requestRefund(bookingId: string, reason: string): Promise<Booking> {
-    const { data, error } = await supabase
-      .from('bookings')
-      .update({
-        payment_status: 'refunded',
-      })
-      .eq('id', bookingId)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Atomically append to audit log (prevents race conditions on concurrent webhook retries)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    void (supabase as any).rpc('append_booking_audit_log', {
-      booking_id: bookingId,
-      entry: { action: 'refund_requested', reason, timestamp: new Date().toISOString() },
-    }).catch((err: unknown) => {
-      console.error('[bookings] audit log append failed in requestRefund', err);
-    });
-
-    return data;
-  },
+  // NOTE: updatePaymentStatus() and requestRefund() were removed. payment_status
+  // is server-authoritative — a DB trigger rejects client writes to it, and the
+  // Stripe webhook is the only writer. Refunds must be issued via Stripe (a
+  // server-side edge function), never by flipping the DB column from the client
+  // (which never actually moved money). See payment-integrity notes.
 
   /**
    * Get all bookings for a user

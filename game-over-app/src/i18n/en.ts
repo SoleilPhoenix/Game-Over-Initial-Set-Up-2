@@ -517,6 +517,13 @@ const en = {
     thankYou: 'Thank you!',
     paymentConfirmedMsg: 'Your payment has been confirmed. The organizer will be notified.',
     errorUpdatingStatus: 'Could not update status. Please try again.',
+    awaitingConfirmation: 'Awaiting confirmation',
+    claimSentTitle: 'Marked as paid',
+    claimSentMsg: 'The organizer will confirm your payment. Your status updates to Paid once they confirm.',
+    confirmGuestPayment: 'Confirm',
+    confirmGuestTitle: 'Confirm guest payment',
+    confirmGuestMsg: 'Confirm that {{name}} has paid their share? This marks them Paid for everyone.',
+    guestConfirmedMsg: 'Payment confirmed.',
   },
 
   // ─── Chat Screen ─────────────────────────────

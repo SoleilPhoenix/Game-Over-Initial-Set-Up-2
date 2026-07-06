@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBookingFlow } from '@/hooks/useBookingFlow';
 import { usePaymentSheet } from '@/hooks/usePaymentSheet';
-import { useCreateBooking, useUpdatePaymentStatus } from '@/hooks/queries/useBookings';
+import { useCreateBooking, bookingKeys } from '@/hooks/queries/useBookings';
 import { eventKeys } from '@/hooks/queries/useEvents';
 import { useWizardStore } from '@/stores/wizardStore';
 import { supabase } from '@/lib/supabase/client';
@@ -130,7 +130,6 @@ export default function PaymentScreen() {
   const activePricing = pricing || syntheticPricing;
 
   const createBookingMutation = useCreateBooking();
-  const updatePaymentMutation = useUpdatePaymentStatus();
   const { processPayment, isLoading: isPaymentLoading } = usePaymentSheet();
 
   if (isLoading || !activePkg || !activePricing) {
@@ -171,9 +170,12 @@ export default function PaymentScreen() {
     if (!eventId) return;
 
     try {
-      // Demo mode: draft events, E2E tests, missing Stripe key, or fallback package (non-UUID ID)
+      // Demo mode: draft events, E2E tests, or fallback package (non-UUID ID) that
+      // has no real DB/Stripe target. A MISSING Stripe key is deliberately NOT a
+      // demo trigger — otherwise a misconfigured production build would silently
+      // "succeed" real payments. Real bookings fail loudly at the Stripe step instead.
       const isFallbackPackage = !!(activePkg?.id && !UUID_REGEX.test(activePkg.id));
-      const useSimulatedPayment = isDraft || IS_E2E || !process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || isFallbackPackage;
+      const useSimulatedPayment = isDraft || IS_E2E || isFallbackPackage;
 
       if (useSimulatedPayment) {
         const tr = getTranslation();
@@ -293,12 +295,12 @@ export default function PaymentScreen() {
         throw new Error(error || 'Payment failed');
       }
 
-      // Confirm booking
+      // Booking confirmation is authoritative on the server: the Stripe webhook
+      // sets payment_status/event.status once the charge settles. The client no
+      // longer writes payment_status itself (that path let a user self-confirm a
+      // booking without paying). We just advance the UI; the webhook does the rest.
       setPaymentStep('confirming');
-      await updatePaymentMutation.mutateAsync({
-        bookingId: booking.id,
-        status: 'completed',
-      });
+      queryClient.invalidateQueries({ queryKey: bookingKeys.byEvent(eventId) });
 
       // Pass package info so confirmation shows the correct tier image
       const realConfirmParams = new URLSearchParams();

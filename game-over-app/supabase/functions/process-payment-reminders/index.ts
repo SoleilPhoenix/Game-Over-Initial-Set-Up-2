@@ -13,11 +13,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { sendEmail } from '../_shared/email.ts';
 import { getPaymentReminderEmailHtml } from '../_shared/email-templates.ts';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders as buildCors, bearerMatches } from '../_shared/http.ts';
 
 // Milestone configuration
 const MILESTONES = [
@@ -58,6 +54,8 @@ function addDays(date: Date, days: number): string {
 }
 
 serve(async (req: Request) => {
+  const corsHeaders = buildCors(req);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -74,8 +72,7 @@ serve(async (req: Request) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
-  const authHeader = req.headers.get('Authorization');
-  if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
+  if (!bearerMatches(req.headers.get('Authorization'), cronSecret)) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

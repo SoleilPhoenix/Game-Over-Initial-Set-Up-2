@@ -1,0 +1,28 @@
+name: Security Audit
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    # Weekly, Monday 06:00 UTC — catches newly-disclosed CVEs in existing deps.
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit:
+    name: npm audit (fail on high/critical)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      # Reads package-lock.json; no install needed, so the project's
+      # --legacy-peer-deps quirk does not affect the audit.
+      - name: Run npm audit
+        run: npm audit --audit-level=high
