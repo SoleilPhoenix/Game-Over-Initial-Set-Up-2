@@ -12,13 +12,12 @@ import {
   StatusBar,
   ImageBackground,
   Pressable,
-  Dimensions,
   TextInput,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,8 +31,6 @@ import * as WebBrowser from 'expo-web-browser';
 import { makeRedirectUri } from 'expo-auth-session';
 
 WebBrowser.maybeCompleteAuthSession();
-
-const { width, height } = Dimensions.get('window');
 
 /**
  * Validates that a token appears to be a valid JWT format

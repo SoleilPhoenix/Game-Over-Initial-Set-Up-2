@@ -2,7 +2,7 @@
  * Wizard Step 1: Key Details Tests
  */
 
-import { by, device, element, expect, waitFor } from 'detox';
+import { by, device, element, expect } from 'detox';
 import { loginAsTestUser } from '../utils/auth';
 import { navigateToCreateEvent } from '../utils/navigation';
 

@@ -14,6 +14,8 @@ import type { ParticipantWithProfile } from '@/repositories/participants';
 import type { BookingWithDetails } from '@/repositories/bookings';
 import type { Database } from '@/lib/supabase/types';
 
+import { getCityTierName, TIER_PRICE_PER_PERSON_CENTS } from '@/constants/packageTiers';
+
 type Package = Database['public']['Tables']['packages']['Row'];
 
 export interface FallbackPackage {
@@ -46,17 +48,17 @@ export interface UseBookingFlowResult {
   error: Error | null;
 }
 
-// Fallback packages for local IDs that don't exist in DB
+// Fallback packages for local IDs that don't exist in DB — names + prices from packageTiers
 const FALLBACK_PKG: Record<string, FallbackPackage> = {
-  'berlin-classic': { id: 'berlin-classic', name: 'Berlin Classic', tier: 'classic', price_per_person_cents: 149_00, base_price_cents: 0 },
-  'berlin-essential': { id: 'berlin-essential', name: 'Berlin Essential', tier: 'essential', price_per_person_cents: 99_00, base_price_cents: 0 },
-  'berlin-grand': { id: 'berlin-grand', name: 'Berlin Grand', tier: 'grand', price_per_person_cents: 199_00, base_price_cents: 0 },
-  'hamburg-classic': { id: 'hamburg-classic', name: 'Hamburg Classic', tier: 'classic', price_per_person_cents: 149_00, base_price_cents: 0 },
-  'hamburg-essential': { id: 'hamburg-essential', name: 'Hamburg Essential', tier: 'essential', price_per_person_cents: 99_00, base_price_cents: 0 },
-  'hamburg-grand': { id: 'hamburg-grand', name: 'Hamburg Grand', tier: 'grand', price_per_person_cents: 199_00, base_price_cents: 0 },
-  'hannover-classic': { id: 'hannover-classic', name: 'Hannover Classic', tier: 'classic', price_per_person_cents: 149_00, base_price_cents: 0 },
-  'hannover-essential': { id: 'hannover-essential', name: 'Hannover Essential', tier: 'essential', price_per_person_cents: 99_00, base_price_cents: 0 },
-  'hannover-grand': { id: 'hannover-grand', name: 'Hannover Grand', tier: 'grand', price_per_person_cents: 199_00, base_price_cents: 0 },
+  'berlin-essential':   { id: 'berlin-essential',   name: getCityTierName('berlin',   'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential, base_price_cents: 0 },
+  'berlin-classic':     { id: 'berlin-classic',     name: getCityTierName('berlin',   'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic,   base_price_cents: 0 },
+  'berlin-grand':       { id: 'berlin-grand',       name: getCityTierName('berlin',   'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand,     base_price_cents: 0 },
+  'hamburg-essential':  { id: 'hamburg-essential',  name: getCityTierName('hamburg',  'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential, base_price_cents: 0 },
+  'hamburg-classic':    { id: 'hamburg-classic',    name: getCityTierName('hamburg',  'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic,   base_price_cents: 0 },
+  'hamburg-grand':      { id: 'hamburg-grand',      name: getCityTierName('hamburg',  'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand,     base_price_cents: 0 },
+  'hannover-essential': { id: 'hannover-essential', name: getCityTierName('hannover', 'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential, base_price_cents: 0 },
+  'hannover-classic':   { id: 'hannover-classic',   name: getCityTierName('hannover', 'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic,   base_price_cents: 0 },
+  'hannover-grand':     { id: 'hannover-grand',     name: getCityTierName('hannover', 'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand,     base_price_cents: 0 },
 };
 
 export function useBookingFlow(eventId: string | undefined, packageIdOverride?: string, participantCountOverride?: number): UseBookingFlowResult {

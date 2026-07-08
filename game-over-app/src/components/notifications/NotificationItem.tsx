@@ -14,17 +14,6 @@ import type { Database } from '@/lib/supabase/types';
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
 // Dark theme colors
-const DARK_THEME = {
-  backgroundDark: '#0D1B2A',
-  secondary: '#2D3748',
-  glassCard: 'rgba(45, 55, 72, 0.7)',
-  glassOverlay: 'rgba(255, 255, 255, 0.05)',
-  border: 'rgba(255, 255, 255, 0.08)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#D1D5DB',
-  textTertiary: '#9CA3AF',
-};
-
 // Notification type configuration with colors
 const NOTIFICATION_CONFIG: Record<
   string,

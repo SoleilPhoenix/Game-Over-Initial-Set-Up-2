@@ -6,13 +6,11 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import Stripe from 'https://esm.sh/stripe@14.1.0?target=deno';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, stripe-signature',
-};
+import { corsHeaders as buildCors } from '../_shared/http.ts';
 
 serve(async (req: Request) => {
+  const corsHeaders = buildCors(req);
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -75,6 +73,28 @@ serve(async (req: Request) => {
     }
 
     console.log(`Processing webhook event: ${event.type}`);
+
+    // --- EXACTLY-ONCE GUARD ---
+    // Stripe retries deliveries; claim the immutable event id so concurrent or
+    // repeated deliveries of the same event are processed only once. This is
+    // stronger than the per-booking audit_log check (which is subject to
+    // read-modify-write races).
+    const { data: claimed, error: claimError } = await supabase.rpc('claim_stripe_event', {
+      p_event_id: event.id,
+      p_event_type: event.type,
+    });
+    if (claimError) {
+      console.error('claim_stripe_event failed:', claimError);
+      // Fail closed: let Stripe retry rather than risk double-processing.
+      throw new Error('Idempotency ledger unavailable');
+    }
+    if (claimed === false) {
+      console.log(`[stripe-webhook] Event ${event.id} already processed — skipping.`);
+      return new Response(
+        JSON.stringify({ received: true, duplicate: true, type: event.type }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    }
 
     // Handle the event
     switch (event.type) {

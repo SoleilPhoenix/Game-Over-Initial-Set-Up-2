@@ -4,8 +4,10 @@
  * Replaces duplicated logic in bookingsRepository and useBookingFlow.
  */
 
-export const SERVICE_FEE_PERCENTAGE = 0.10; // 10%
-export const MIN_SERVICE_FEE_CENTS = 5000;  // €50 minimum
+// Service fee was removed — package prices are now final all-in prices.
+// Constants kept at 0 for backwards compatibility with existing imports/bookings.
+export const SERVICE_FEE_PERCENTAGE = 0;
+export const MIN_SERVICE_FEE_CENTS = 0;
 
 export interface PackagePricingInput {
   pricePerPersonCents: number;
@@ -27,10 +29,10 @@ export interface BookingPricing {
 /**
  * Calculate all pricing values for a booking.
  *
- * Business rules (per MEMORY):
+ * Business rules:
  * - Package base = pricePerPerson × ALL participants (fixed regardless of honoree exclusion)
  * - Honoree exclusion only changes the per-person split, not the total
- * - Service fee = max(10% of package base, €50)
+ * - No service fee — package prices are final all-in prices
  * - Per person = ceil(total / payingCount)
  * - Deposit = 25% of total
  */
@@ -45,12 +47,9 @@ export function calculateBookingPricing(input: PackagePricingInput): BookingPric
   // Package base always uses ALL participants
   const packageBaseCents = pricePerPersonCents * totalParticipants + baseFeeCents;
 
-  const serviceFeeCents = Math.max(
-    Math.round(packageBaseCents * SERVICE_FEE_PERCENTAGE),
-    MIN_SERVICE_FEE_CENTS,
-  );
-
-  const totalCents = packageBaseCents + serviceFeeCents;
+  // Service fee removed — prices are final all-in. Kept as 0 for shape compatibility.
+  const serviceFeeCents = 0;
+  const totalCents = packageBaseCents;
 
   // Paying count drives the per-person split only
   const payingCount = excludeHonoree ? Math.max(totalParticipants - 1, 1) : totalParticipants;

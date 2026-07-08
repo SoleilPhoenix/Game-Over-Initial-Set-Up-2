@@ -4,11 +4,10 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Animated, PanResponder, ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar, Alert, TextInput, KeyboardAvoidingView, Platform, Modal } from 'react-native';
+import { Animated, PanResponder, ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadDesiredParticipants } from '@/lib/participantCountCache';
-import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { Image as ExpoImage } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,7 +24,7 @@ import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import type { Database } from '@/lib/supabase/types';
 
 // 100 icon options per category — best match chosen from channel name keywords
-const CATEGORY_ICON_POOLS: Record<string, Array<{ icon: string; keywords: string[] }>> = {
+const CATEGORY_ICON_POOLS: Record<string, { icon: string; keywords: string[] }[]> = {
   general: [
     { icon: 'chatbubbles',           keywords: ['chat', 'general', 'talk', 'discussion', 'lobby', 'main'] },
     { icon: 'megaphone',             keywords: ['announcement', 'news', 'update', 'broadcast', 'info'] },
@@ -447,7 +446,6 @@ type LocalChannelSection = {
 
 export default function CommunicationScreen() {
   const router = useRouter();
-  const { hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
   // eventIdParam is set when navigating from Event Summary — pre-selects that event
   const { eventId: eventIdParam } = useLocalSearchParams<{ eventId?: string }>();
   const insets = useSafeAreaInsets();
@@ -508,10 +506,14 @@ export default function CommunicationScreen() {
     });
   }, []);
 
+  // Debounce persistence: this fires on every channel-map mutation, so coalesce
+  // rapid updates into a single AsyncStorage write instead of one per keystroke.
   useEffect(() => {
-    if (Object.keys(localChannelsByEvent).length > 0) {
+    if (Object.keys(localChannelsByEvent).length === 0) return;
+    const handle = setTimeout(() => {
       AsyncStorage.setItem('localChannelsByEvent', JSON.stringify(localChannelsByEvent)).catch(() => {});
-    }
+    }, 400);
+    return () => clearTimeout(handle);
   }, [localChannelsByEvent]);
 
   // Re-sync local channels from AsyncStorage whenever this screen gains focus
@@ -594,6 +596,7 @@ export default function CommunicationScreen() {
       return aDate - bDate;
     });
     setSelectedEventId(sorted[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally ignores eventIdParam; auto-select runs only when bookedEvents list changes
   }, [bookedEvents]);
 
   // Fetch channels for selected event (only if event exists)
@@ -621,7 +624,7 @@ export default function CommunicationScreen() {
     const latest = polls.find(p => p.id === id);
     if (latest) setPollInfoModal(latest);
   }, [polls]);
-  const optionInputRefs = useRef<Array<import('react-native').TextInput | null>>([]);
+  const optionInputRefs = useRef<(import('react-native').TextInput | null)[]>([]);
   const pollInfoScrollRef = useRef<ScrollView | null>(null);
 
   // Derived local sections for current event (per-event map)
@@ -643,7 +646,7 @@ export default function CommunicationScreen() {
 
   // Group channels by category (use DB channels if event exists, otherwise local)
   const groupedChannels = useMemo(() => {
-    const groups: Record<ChannelCategory, Array<ChatChannel | LocalChannel>> = {
+    const groups: Record<ChannelCategory, (ChatChannel | LocalChannel)[]> = {
       general: [],
       accommodation: [],
       activities: [],
@@ -675,18 +678,6 @@ export default function CommunicationScreen() {
     setIsRefreshing(false);
   };
 
-  const handleNotifications = () => {
-    markUrgencySeen();
-    if (isGuestContribution && guestUrgentEvent) {
-      Alert.alert(
-        'Contribution Due',
-        `Your share for ${guestUrgentEvent.title} is due in ${guestDaysLeft} days.\nPlease transfer your contribution to the organizer.`,
-        [{ text: 'OK' }]
-      );
-    } else {
-      router.push('/notifications');
-    }
-  };
 
   const [shareModalVisible, setShareModalVisible] = useState(false);
 

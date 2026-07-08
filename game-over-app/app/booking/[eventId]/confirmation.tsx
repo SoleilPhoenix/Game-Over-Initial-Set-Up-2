@@ -21,6 +21,7 @@ import { useTranslation, getTranslation } from '@/i18n';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
+import { getTierDisplayLabel } from '@/constants/packageTiers';
 
 const CITY_NAMES: Record<string, string> = {
   berlin: 'Berlin', hamburg: 'Hamburg', hannover: 'Hannover',
@@ -29,9 +30,15 @@ const CITY_NAMES: Record<string, string> = {
   '550e8400-e29b-41d4-a716-446655440103': 'Hannover',
 };
 const FALLBACK_PKG_NAMES: Record<string, string> = {
-  'berlin-classic': 'Classic (M)', 'berlin-essential': 'Essential (S)', 'berlin-grand': 'Grand (L)',
-  'hamburg-classic': 'Classic (M)', 'hamburg-essential': 'Essential (S)', 'hamburg-grand': 'Grand (L)',
-  'hannover-classic': 'Classic (M)', 'hannover-essential': 'Essential (S)', 'hannover-grand': 'Grand (L)',
+  'berlin-essential':   getTierDisplayLabel('essential'),
+  'berlin-classic':     getTierDisplayLabel('classic'),
+  'berlin-grand':       getTierDisplayLabel('grand'),
+  'hamburg-essential':  getTierDisplayLabel('essential'),
+  'hamburg-classic':    getTierDisplayLabel('classic'),
+  'hamburg-grand':      getTierDisplayLabel('grand'),
+  'hannover-essential': getTierDisplayLabel('essential'),
+  'hannover-classic':   getTierDisplayLabel('classic'),
+  'hannover-grand':     getTierDisplayLabel('grand'),
 };
 
 export default function BookingConfirmationScreen() {
@@ -219,8 +226,7 @@ export default function BookingConfirmationScreen() {
                   : (packageId ? FALLBACK_PKG_NAMES[packageId] : null) || (() => {
                       const bk = booking as any;
                       const tier = bk?.package?.tier || bk?.tier;
-                      const tierNames: Record<string, string> = { essential: 'Essential (S)', classic: 'Classic (M)', grand: 'Grand (L)' };
-                      return tier ? tierNames[tier] || event?.title : event?.title;
+                      return tier ? getTierDisplayLabel(tier) || event?.title : event?.title;
                     })() || 'Package'}
               </Text>
             </XStack>

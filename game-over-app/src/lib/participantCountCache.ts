@@ -5,6 +5,13 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+
+/** Best-effort persistence should never crash callers, but silent failures hide
+ *  real bugs. Surface them in development while staying quiet in production. */
+function warnDev(scope: string, err: unknown): void {
+  if (__DEV__) console.warn(`[participantCountCache] ${scope}:`, err);
+}
 
 // ─── Participant Count Cache ──────────────────
 const PARTICIPANTS_KEY = 'desired_participant_counts';
@@ -17,11 +24,15 @@ export async function setDesiredParticipants(eventId: string, count: number): Pr
     const data = raw ? JSON.parse(raw) : {};
     data[eventId] = count;
     await AsyncStorage.setItem(PARTICIPANTS_KEY, JSON.stringify(data));
-  } catch {}
+  } catch (err) { warnDev('setDesiredParticipants', err); }
 }
 
 export async function loadDesiredParticipants(eventId: string): Promise<number | undefined> {
-  if (participantCache[eventId]) return participantCache[eventId];
+  // NOTE: use hasOwnProperty, not truthiness — a legitimately cached 0 must not
+  // be treated as a cache miss.
+  if (Object.prototype.hasOwnProperty.call(participantCache, eventId)) {
+    return participantCache[eventId];
+  }
   try {
     const raw = await AsyncStorage.getItem(PARTICIPANTS_KEY);
     if (raw) {
@@ -29,7 +40,7 @@ export async function loadDesiredParticipants(eventId: string): Promise<number |
       Object.assign(participantCache, data);
       return data[eventId];
     }
-  } catch {}
+  } catch (err) { warnDev('loadDesiredParticipants', err); }
   return undefined;
 }
 
@@ -62,7 +73,7 @@ export async function loadChecklist(eventId: string): Promise<Record<string, boo
   return {};
 }
 
-// ─── Guest Details Cache ─────────────────────
+// ─── Guest Details Cache (PII → encrypted at rest) ───────────
 export interface GuestDetail {
   firstName?: string;
   lastName?: string;
@@ -70,30 +81,53 @@ export interface GuestDetail {
   phone?: string;
 }
 
-const GUESTS_KEY = 'guest_details';
+// Guest names/emails/phones are personal data, so they are stored via
+// expo-secure-store (OS keychain / EncryptedSharedPreferences) rather than
+// plaintext AsyncStorage. One key per event keeps each value small.
+const GUESTS_KEY_PREFIX = 'guest_details_';
 const guestsCache: Record<string, Record<number, GuestDetail>> = {};
+
+// SecureStore keys allow only [A-Za-z0-9._-]; UUID event ids already qualify,
+// but sanitise defensively.
+function guestStoreKey(eventId: string): string {
+  return `${GUESTS_KEY_PREFIX}${eventId.replace(/[^A-Za-z0-9._-]/g, '_')}`;
+}
 
 export async function saveGuestDetails(eventId: string, details: Record<number, GuestDetail>): Promise<void> {
   guestsCache[eventId] = details;
   try {
-    const raw = await AsyncStorage.getItem(GUESTS_KEY);
-    const data = raw ? JSON.parse(raw) : {};
-    data[eventId] = details;
-    await AsyncStorage.setItem(GUESTS_KEY, JSON.stringify(data));
-  } catch {}
+    await SecureStore.setItemAsync(guestStoreKey(eventId), JSON.stringify(details));
+  } catch (err) { warnDev('saveGuestDetails', err); }
 }
 
 export async function loadGuestDetails(eventId: string): Promise<Record<number, GuestDetail>> {
   if (guestsCache[eventId]) return guestsCache[eventId];
   try {
-    const raw = await AsyncStorage.getItem(GUESTS_KEY);
+    const raw = await SecureStore.getItemAsync(guestStoreKey(eventId));
     if (raw) {
-      const data = JSON.parse(raw);
-      Object.assign(guestsCache, data);
-      return data[eventId] || {};
+      const data = JSON.parse(raw) as Record<number, GuestDetail>;
+      guestsCache[eventId] = data;
+      return data;
     }
-  } catch {}
+  } catch (err) { warnDev('loadGuestDetails', err); }
   return {};
+}
+
+/** One-time migration: move any pre-existing plaintext guest details out of
+ *  AsyncStorage into SecureStore, then delete the plaintext copy. Safe to call
+ *  on every app start; it no-ops once the legacy key is gone. */
+export async function migratePlaintextGuestDetails(): Promise<void> {
+  try {
+    const legacy = await AsyncStorage.getItem('guest_details');
+    if (!legacy) return;
+    const data = JSON.parse(legacy) as Record<string, Record<number, GuestDetail>>;
+    await Promise.all(
+      Object.entries(data).map(([eventId, details]) =>
+        SecureStore.setItemAsync(guestStoreKey(eventId), JSON.stringify(details))
+      )
+    );
+    await AsyncStorage.removeItem('guest_details');
+  } catch (err) { warnDev('migratePlaintextGuestDetails', err); }
 }
 
 // ─── Budget Info Cache (demo-mode events) ────

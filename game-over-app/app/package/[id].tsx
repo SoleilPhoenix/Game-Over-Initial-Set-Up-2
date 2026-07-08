@@ -14,6 +14,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { usePackage } from '@/hooks/queries/usePackages';
 import { useEventSchedule, scheduleKeys } from '@/hooks/queries/useSchedule';
 import { useEvent } from '@/hooks/queries/useEvents';
+import { isReadOnlyEvent } from '@/utils/eventLifecycle';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useFavoritesStore } from '@/stores/favoritesStore';
@@ -282,6 +283,8 @@ export default function PackageDetailsScreen() {
   const { data: scheduleData } = useEventSchedule(isViewOnly ? eventId : undefined);
   const { data: eventData } = useEvent(isViewOnly ? eventId : undefined);
   const isOrganizer = !!eventData && eventData.created_by === user?.id;
+  // Show archived badge when viewing a past event's package
+  const isArchivedView = isViewOnly && eventData ? isReadOnlyEvent(eventData) : false;
 
   // Auto-generate schedule when missing (mirrors the previous day.tsx logic)
   const genAttempted = useRef(false);
@@ -453,7 +456,26 @@ export default function PackageDetailsScreen() {
               >
                 <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
               </XStack>
-              <Text fontSize="$4" fontWeight="700" color="#FFFFFF">{t.packageDetail.title}</Text>
+              <YStack alignItems="center">
+                <Text fontSize="$4" fontWeight="700" color="#FFFFFF">{t.packageDetail.title}</Text>
+                {isArchivedView && (
+                  <XStack
+                    alignItems="center"
+                    gap={4}
+                    marginTop={2}
+                    paddingHorizontal={8}
+                    paddingVertical={2}
+                    borderRadius={10}
+                    backgroundColor="rgba(255,255,255,0.12)"
+                    testID="package-archived-badge"
+                  >
+                    <Ionicons name="lock-closed-outline" size={10} color="rgba(255,255,255,0.8)" />
+                    <Text fontSize={10} fontWeight="700" color="rgba(255,255,255,0.8)" letterSpacing={0.8}>
+                      {(t.packageDetail as any).archived || 'ARCHIVED'}
+                    </Text>
+                  </XStack>
+                )}
+              </YStack>
               <XStack
                 width={40}
                 height={40}

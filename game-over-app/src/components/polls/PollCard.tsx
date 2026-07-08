@@ -5,23 +5,12 @@
  */
 
 import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, View, Image } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import type { PollWithOptions } from '@/repositories/polls';
 
 // Dark theme colors
-const DARK_THEME = {
-  backgroundDark: '#0D1B2A',
-  surfaceDark: '#12253A',
-  surfaceCard: '#1A2F47',
-  primary: '#C6A75E',
-  border: 'rgba(255, 255, 255, 0.05)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#9CA3AF',
-  textTertiary: '#6B7280',
-};
-
 // Category configuration
 const CATEGORY_CONFIG: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; bgColor: string }> = {
   accommodation: { icon: 'home', color: '#3B82F6', bgColor: 'rgba(59, 130, 246, 0.1)' },
@@ -63,15 +52,16 @@ interface PollCardProps {
   poll: PollWithOptions;
   onVote: (optionId: string) => void;
   isVoting?: boolean;
+  /** When true (e.g. past event), voting is disabled regardless of poll status. */
+  readOnly?: boolean;
   testID?: string;
 }
 
-export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardProps) {
+export function PollCard({ poll, onVote, isVoting = false, readOnly = false, testID }: PollCardProps) {
   const hasVoted = !!poll.user_vote;
   const isClosed = poll.status === 'closed';
-  const isClosingSoon = poll.status === 'closing_soon';
   const isDraft = poll.status === 'draft';
-  const canVote = poll.status === 'active' && !hasVoted;
+  const canVote = !readOnly && poll.status === 'active' && !hasVoted;
 
   const categoryConfig = CATEGORY_CONFIG[poll.category || 'general'] || CATEGORY_CONFIG.general;
   const statusConfig = STATUS_CONFIG[poll.status || 'draft'] || STATUS_CONFIG.draft;

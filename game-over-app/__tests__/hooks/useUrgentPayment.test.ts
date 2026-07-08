@@ -72,7 +72,7 @@ function daysUntil(startDate?: string): number | null {
 function findGuestUrgentEvent(
   events: any[],
   currentUserId: string | undefined,
-  userParticipations: Array<{ event_id: string; role: string; payment_status: string | null }>
+  userParticipations: { event_id: string; role: string; payment_status: string | null }[]
 ): any | null {
   if (!currentUserId || userParticipations.length === 0) return null;
   return (

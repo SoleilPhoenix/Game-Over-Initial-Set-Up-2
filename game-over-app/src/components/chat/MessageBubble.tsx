@@ -5,7 +5,6 @@
 
 import React, { memo } from 'react';
 import { YStack, XStack, Text, Avatar } from 'tamagui';
-import { colors } from '@/constants/colors';
 import type { MessageWithAuthor } from '@/repositories/messages';
 
 interface MessageBubbleProps {

@@ -23,11 +23,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { sendEmail } from '../_shared/email.ts';
 import { getGuestInviteEmailHtml } from '../_shared/email-templates.ts';
 import { sendSMS, sendWhatsApp } from '../_shared/twilio.ts';
+import { corsHeaders as buildCors, checkRateLimit } from '../_shared/http.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+// How many guests to process concurrently. Keeps total latency bounded well
+// under the edge-function timeout without hammering SendGrid/Twilio.
+const CONCURRENCY = 8;
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -74,13 +74,17 @@ function normalisePhone(phone: string): string {
   return `+${stripped}`;
 }
 
+// Unambiguous alphabet (no 0/O/1/I) — matches the client generator. Each of the
+// 8 characters is drawn uniformly, giving ~40 bits of entropy (vs the old
+// implementation which effectively kept only 4 random bytes, non-uniformly).
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 function generateCode(): string {
-  // 8-char alphanumeric code, URL-safe
-  return Array.from(crypto.getRandomValues(new Uint8Array(6)))
-    .map(b => b.toString(36).padStart(2, '0'))
-    .join('')
-    .toUpperCase()
-    .slice(0, 8);
+  const bytes = crypto.getRandomValues(new Uint8Array(8));
+  let code = '';
+  for (let i = 0; i < 8; i++) {
+    code += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+  }
+  return code;
 }
 
 // ─── Validation ───────────────────────────────────────────────
@@ -138,6 +142,8 @@ async function validatePhone(phone: string): Promise<{ valid: boolean; reason?: 
 // ─── Main handler ─────────────────────────────────────────────
 
 serve(async (req: Request) => {
+  const corsHeaders = buildCors(req);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -190,37 +196,9 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── Ownership check ──
-    const { data: eventCheck, error: eventCheckError } = await supabase
-      .from('events')
-      .select('id, created_by')
-      .eq('id', eventId)
-      .single();
-    if (eventCheckError || !eventCheck) {
-      return new Response(JSON.stringify({ error: 'Event not found' }), {
-        status: 404,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-    if (eventCheck.created_by !== user.id) {
-      return new Response(JSON.stringify({ error: 'Forbidden' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // ── Batch size guard ──
-    const MAX_GUESTS_PER_CALL = 50;
-    if ((guestsRaw ?? []).length > MAX_GUESTS_PER_CALL) {
-      return new Response(JSON.stringify({ error: `Too many guests. Maximum ${MAX_GUESTS_PER_CALL} per call.` }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    // ── Fetch event details ──
+    // ── Fetch event details + ownership in one query ──
     // NOTE: events.created_by → auth.users (NOT profiles), so PostgREST cannot
-    // resolve a profiles:created_by(...) join. Two separate queries required.
+    // resolve a profiles:created_by(...) join; organizer name is fetched below.
     const { data: event, error: eventError } = await supabase
       .from('events')
       .select('id, title, honoree_name, created_by, party_type')
@@ -230,9 +208,35 @@ serve(async (req: Request) => {
     if (eventError || !event) {
       console.error('[fetch event]', eventError?.message ?? 'not found', 'id=', eventId);
       return new Response(
-        JSON.stringify({ error: 'Event not found', detail: eventError?.message }),
+        JSON.stringify({ error: 'Event not found' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 404 }
       );
+    }
+    if (event.created_by !== user.id) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ── Rate limit (Twilio/SendGrid cost control) ──
+    // Each call can fan out to MAX_GUESTS_PER_CALL messages, so keep the per-user
+    // call rate low.
+    const allowed = await checkRateLimit(supabase, 'send-guest-invitations', user.id, 5, 60);
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ error: 'Too many invitation sends. Please wait a minute and try again.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ── Batch size guard ──
+    const MAX_GUESTS_PER_CALL = 50;
+    if ((guestsRaw ?? []).length > MAX_GUESTS_PER_CALL) {
+      return new Response(JSON.stringify({ error: `Too many guests. Maximum ${MAX_GUESTS_PER_CALL} per call.` }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // Fetch organizer's full name — auth user metadata is always up to date,
@@ -277,65 +281,74 @@ serve(async (req: Request) => {
       );
     }
 
-    // ── Process each guest ──
-    const results: GuestResult[] = [];
-    let sentCount = 0;
-    let failedCount = 0;
-    let invalidCount = 0;
+    // ── Insert a unique invite code, retrying once on collision. ──
+    // Returns the stored code, or null if it could not be persisted — in which
+    // case we must NOT send a message pointing at a code that doesn't exist.
+    async function createInviteCode(guest: GuestSlot, contact: string): Promise<string | null> {
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const code = generateCode();
+        const { error } = await supabase.from('invite_codes').insert({
+          event_id: eventId,
+          code,
+          created_by: event.created_by, // organizer's user id — required NOT NULL field
+          max_uses: 1,
+          expires_at: expiresAt,
+          guest_first_name: guest.firstName ?? null,
+          guest_last_name: guest.lastName ?? null,
+          guest_email: channel === 'email' ? contact : (guest.email ?? null),
+          guest_phone: channel !== 'email' ? contact : (guest.phone ?? null),
+        });
+        if (!error) return code;
+        console.error(`[invite_codes] insert failed (attempt ${attempt + 1}):`, error.message, 'code=', code);
+      }
+      return null;
+    }
 
-    for (const guest of eligible) {
+    async function recordInvitation(
+      slotIndex: number,
+      actualChannel: Channel,
+      contact: string,
+      status: SendStatus,
+      error: string | undefined,
+      inviteCode: string | null,
+    ): Promise<void> {
+      const { error: insertError } = await supabase.from('guest_invitations').insert({
+        event_id: eventId,
+        slot_index: slotIndex,
+        channel: actualChannel,
+        recipient: contact,
+        status,
+        error: error ?? null,
+        invite_code: inviteCode,
+      });
+      if (insertError) console.warn('[guest_invitations] insert failed:', insertError.message);
+    }
+
+    // ── Process one guest end-to-end. ──
+    async function processGuest(guest: GuestSlot): Promise<GuestResult> {
       const rawContact = channel === 'email' ? guest.email! : guest.phone!;
       // Normalise phone numbers to E.164 (strip spaces, dashes, parentheses)
       const contact = channel === 'email' ? rawContact : normalisePhone(rawContact);
+      const maskedRecipient = channel === 'email' ? maskEmail(contact) : maskPhone(contact);
 
       // 1. Validate
-      let validation: { valid: boolean; reason?: string };
-      if (channel === 'email') {
-        validation = await validateEmail(contact);
-      } else {
-        validation = await validatePhone(contact);
-      }
+      const validation = channel === 'email'
+        ? await validateEmail(contact)
+        : await validatePhone(contact);
 
       if (!validation.valid) {
-        invalidCount++;
-        results.push({
-          slotIndex: guest.slotIndex,
-          status: 'invalid',
-          recipient: channel === 'email' ? maskEmail(contact) : maskPhone(contact),
-          error: validation.reason,
-        });
-        // Non-blocking — record failure but don't crash if table is unavailable
-        supabase.from('guest_invitations').insert({
-          event_id: eventId,
-          slot_index: guest.slotIndex,
-          channel,
-          recipient: contact,
-          status: 'invalid',
-          error: validation.reason,
-        }).then(({ error }) => {
-          if (error) console.warn('[guest_invitations] insert failed (invalid):', error.message);
-        });
-        continue;
+        await recordInvitation(guest.slotIndex, channel, contact, 'invalid', validation.reason, null);
+        return { slotIndex: guest.slotIndex, status: 'invalid', recipient: maskedRecipient, error: validation.reason };
       }
 
-      // 2. Generate unique invite code and store it with guest contact details
-      const code = generateCode();
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      const { error: codeInsertError } = await supabase.from('invite_codes').insert({
-        event_id: eventId,
-        code,
-        created_by: event.created_by,  // organizer's user id — required NOT NULL field
-        max_uses: 1,
-        expires_at: expiresAt,
-        guest_first_name: guest.firstName ?? null,
-        guest_last_name: guest.lastName ?? null,
-        guest_email: channel === 'email' ? contact : (guest.email ?? null),
-        guest_phone: channel !== 'email' ? contact : (guest.phone ?? null),
-      });
-      if (codeInsertError) {
-        console.error('[invite_codes] insert failed:', codeInsertError.message, 'code=', code);
-        // Non-critical for sending the message, but log clearly
+      // 2. Persist the invite code FIRST — never send a code we couldn't store.
+      const code = await createInviteCode(guest, contact);
+      if (!code) {
+        await recordInvitation(guest.slotIndex, channel, contact, 'failed', 'Could not generate invite code', null);
+        return { slotIndex: guest.slotIndex, status: 'failed', recipient: maskedRecipient, error: 'Could not generate invite code' };
       }
+
       const appBaseUrl = Deno.env.get('APP_BASE_URL') ?? 'https://game-over.app';
       const inviteUrl = `${appBaseUrl}/invite/${code}`;
 
@@ -395,30 +408,31 @@ serve(async (req: Request) => {
 
       // 5. Record result
       const status: SendStatus = sendResult.success ? 'sent' : 'failed';
-      if (sendResult.success) sentCount++; else failedCount++;
-
-      results.push({
-        slotIndex: guest.slotIndex,
-        status,
-        recipient: channel === 'email' ? maskEmail(contact) : maskPhone(contact),
-        error: sendResult.error,
-      });
-
-      // Non-blocking — record send result but don't crash if table is unavailable
-      supabase.from('guest_invitations').insert({
-        event_id: eventId,
-        slot_index: guest.slotIndex,
-        channel: actualChannel,
-        recipient: contact,
-        status,
-        error: sendResult.error ?? null,
-        invite_code: code,
-      }).then(({ error }) => {
-        if (error) console.warn('[guest_invitations] insert failed (sent):', error.message);
-      });
-
+      await recordInvitation(guest.slotIndex, actualChannel, contact, status, sendResult.error, code);
       console.log(`[${actualChannel}] slot=${guest.slotIndex} status=${status}`);
+
+      return { slotIndex: guest.slotIndex, status, recipient: maskedRecipient, error: sendResult.error };
     }
+
+    // ── Process guests in bounded-concurrency batches (was fully sequential). ──
+    const results: GuestResult[] = [];
+    for (let i = 0; i < eligible.length; i += CONCURRENCY) {
+      const batch = eligible.slice(i, i + CONCURRENCY);
+      const settled = await Promise.allSettled(batch.map(processGuest));
+      for (let j = 0; j < settled.length; j++) {
+        const s = settled[j];
+        if (s.status === 'fulfilled') {
+          results.push(s.value);
+        } else {
+          console.error('[processGuest] unexpected rejection:', s.reason);
+          results.push({ slotIndex: batch[j].slotIndex, status: 'failed', recipient: '***', error: 'Internal error' });
+        }
+      }
+    }
+
+    const sentCount = results.filter(r => r.status === 'sent').length;
+    const failedCount = results.filter(r => r.status === 'failed').length;
+    const invalidCount = results.filter(r => r.status === 'invalid').length;
 
     return new Response(
       JSON.stringify({ sent: sentCount, failed: failedCount, invalid: invalidCount, results }),

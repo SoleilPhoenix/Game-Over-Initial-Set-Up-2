@@ -10,6 +10,27 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { ScrollView, Share, ActivityIndicator, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Modal, Alert, Image } from 'react-native';
 
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
+import { participantKeys } from '@/hooks/queries/useParticipants';
+import { YStack, XStack, Text, Spinner } from 'tamagui';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useEvent } from '@/hooks/queries/useEvents';
+import { useParticipants } from '@/hooks/queries/useParticipants';
+import { useInviteGuests } from '@/hooks/queries/useInvites';
+import { useBooking } from '@/hooks/queries/useBookings';
+import { useUser } from '@/stores/authStore';
+import { useTranslation } from '@/i18n';
+import { useTheme } from '@/hooks/useTheme';
+import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { ambientShadow, type EditorialTheme } from '@/constants/designSystem';
+import { GoldButton } from '@/components/ui/editorial';
+import type { ParticipantWithProfile } from '@/repositories';
+import { loadDesiredParticipants, loadBudgetInfo, loadGuestDetails, saveGuestDetails, setInvitedCount, type GuestDetail } from '@/lib/participantCountCache';
+import { supabase } from '@/lib/supabase/client';
+
 // ─── Phone Formatting ──────────────────────────
 /** Auto-formats German phone numbers with dash after prefix */
 function formatGermanPhone(text: string): string {
@@ -58,27 +79,6 @@ function AvatarImage({ uri, style, fallback }: { uri: string; style: any; fallba
   return <Image source={{ uri }} style={style} onError={() => setErrored(true)} />;
 }
 
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useFocusEffect } from '@react-navigation/native';
-import { useQueryClient } from '@tanstack/react-query';
-import { participantKeys } from '@/hooks/queries/useParticipants';
-import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useEvent } from '@/hooks/queries/useEvents';
-import { useParticipants } from '@/hooks/queries/useParticipants';
-import { useInviteGuests } from '@/hooks/queries/useInvites';
-import { useBooking } from '@/hooks/queries/useBookings';
-import { useUser } from '@/stores/authStore';
-import { useTranslation } from '@/i18n';
-import { useTheme } from '@/hooks/useTheme';
-import { ambientShadow, type EditorialTheme } from '@/constants/designSystem';
-import { Button } from '@/components/ui/Button';
-import { GoldButton } from '@/components/ui/editorial';
-import type { ParticipantWithProfile } from '@/repositories';
-import { loadDesiredParticipants, loadBudgetInfo, loadGuestDetails, saveGuestDetails, setInvitedCount, type GuestDetail } from '@/lib/participantCountCache';
-import { supabase } from '@/lib/supabase/client';
-
 type SlotRole = 'organizer' | 'guest' | 'honoree';
 type SlotStatus = 'confirmed' | 'pending' | 'not_invited';
 
@@ -107,18 +107,20 @@ export default function ManageInvitationsScreen() {
 
   const queryClient = useQueryClient();
   const { data: event, isLoading: eventLoading } = useEvent(id);
-  const { data: participants, isLoading: isLoadingParticipants } = useParticipants(id);
-  const { data: booking, isLoading: bookingLoading } = useBooking(id);
+  const { data: participants } = useParticipants(id);
+  const { data: booking } = useBooking(id);
   const currentParticipant = participants?.find(p => p.user_id === user?.id);
   // Use role param from navigation (known immediately) — fallback to participants query
   const isGuest = roleParam === 'guest' || (!roleParam && currentParticipant?.role === 'guest');
+  // Past events: no more invitations — view-only
+  const isReadOnly = event ? isReadOnlyEvent(event) : false;
 
   // Guests see a read-only view — no redirect needed
 
   // Local state for guest details entered by organizer
   const [guestDetails, setGuestDetails] = useState<Record<number, GuestDetails>>({});
   const [expandedSlot, setExpandedSlot] = useState<number | null>(null);
-  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteLoading] = useState(false);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   type InviteSendStatus = 'idle' | 'sending' | 'done';
   type GuestResult = { slotIndex: number; status: 'sent' | 'failed' | 'invalid'; recipient: string; error?: string };
@@ -806,8 +808,8 @@ export default function ManageInvitationsScreen() {
         {slots.map((slot) => renderSlotCard(slot))}
       </ScrollView>
 
-      {/* Invite All Footer — organizers only, edge-to-edge */}
-      {!isGuest && (
+      {/* Invite All Footer — organizers only, hidden once event has ended (no more invites possible) */}
+      {!isGuest && !isReadOnly && (
         <View style={[styles.footer, { paddingBottom: insets.bottom }]}>
           <GoldButton
             label={inviteLoading ? 'Sending…' : t.manageInvitations.inviteAll}
@@ -817,6 +819,16 @@ export default function ManageInvitationsScreen() {
             onPress={handleInviteAll}
             testID="invite-all-button"
           />
+        </View>
+      )}
+      {!isGuest && isReadOnly && (
+        <View style={[styles.footer, { paddingBottom: insets.bottom }]}>
+          <View style={styles.readOnlyBanner} testID="invitations-readonly-banner">
+            <Ionicons name="lock-closed-outline" size={16} color={theme.textSecondary} />
+            <Text style={styles.readOnlyBannerText}>
+              {(t.manageInvitations as any).pastEventReadOnly || 'Invitations are closed — the event has already taken place.'}
+            </Text>
+          </View>
         </View>
       )}
 
@@ -1197,6 +1209,26 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     left: 0,
     right: 0,
     // No background/border — GoldButton is the visual element
+  },
+  readOnlyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(230,220,200,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
+  },
+  readOnlyBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: theme.textSecondary,
+    textAlign: 'center',
   },
   // ─── Status chip (above participant list) ───
   statusChipRow: {

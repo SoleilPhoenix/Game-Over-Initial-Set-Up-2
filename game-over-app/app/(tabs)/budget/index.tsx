@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, Share, Modal, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { ActivityIndicator, Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, Modal, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,24 +18,20 @@ import { useParticipants, participantKeys } from '@/hooks/queries/useParticipant
 import { useInviteGuests } from '@/hooks/queries/useInvites';
 import { useUser } from '@/stores/authStore';
 import { useTheme } from '@/hooks/useTheme';
-import { ambientShadow, type EditorialTheme } from '@/constants/designSystem';
+import { type EditorialTheme } from '@/constants/designSystem';
 import { GoldButton } from '@/components/ui/editorial';
 import { ShareModal } from '@/components/ui/ShareModal';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
+import { isReadOnlyEvent } from '@/utils/eventLifecycle';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import { loadBudgetInfo, loadDesiredParticipants, loadGuestDetails, type BudgetInfo, type GuestDetail } from '@/lib/participantCountCache';
 import { supabase } from '@/lib/supabase/client';
-import { useUrgentPayment } from '@/hooks/useUrgentPayment';
+import { participantsRepository } from '@/repositories';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import type { Database } from '@/lib/supabase/types';
 import type { EventWithDetails } from '@/repositories/events';
-
-type Event = Database['public']['Tables']['events']['Row'] & {
-  city?: { name: string } | null;
-};
 
 /** Shows a profile image with graceful fallback to children when the URL fails to load. */
 function AvatarImage({ uri, style, fallback }: { uri: string; style: any; fallback: React.ReactNode }) {
@@ -143,7 +139,6 @@ export default function BudgetDashboardScreen() {
   const { theme } = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const remindStyles = useMemo(() => makeRemindStyles(theme), [theme]);
-  const { hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
   // eventId = opened via /(tabs)/budget?eventId=xxx (old approach, kept for safety)
   // id     = opened via /event/[id]/budget (event-stack, router.back() works correctly)
   const { eventId: rawEventIdParam, id: pathId } = useLocalSearchParams<{ eventId?: string; id?: string }>();
@@ -152,6 +147,7 @@ export default function BudgetDashboardScreen() {
   const user = useUser();
   const [selectedEventId, setSelectedEventId] = useState<string | null>(eventIdParam || null);
   const [markingPaidUserId, setMarkingPaidUserId] = useState<string | null>(null);
+  const [confirmingUserId, setConfirmingUserId] = useState<string | null>(null);
   const [manualRefreshing, setManualRefreshing] = useState(false);
   // Derived: is the current user the organizer of the selected event?
   // Used to hide organizer-only actions (Pay Remaining Balance, Invite Guests, Remind All).
@@ -170,7 +166,7 @@ export default function BudgetDashboardScreen() {
     visible: boolean;
     sendStatus: 'idle' | 'sending' | 'done';
     activeChannel: 'email' | 'sms' | 'whatsapp' | null;
-    results: Array<{ status: string; recipient: string; error?: string }>;
+    results: { status: string; recipient: string; error?: string }[];
   }>({ visible: false, sendStatus: 'idle', activeChannel: null, results: [] });
 
   // Expense modal
@@ -187,10 +183,10 @@ export default function BudgetDashboardScreen() {
     payerDropdownOpen: boolean;
   }>({ visible: false, categoryKey: null, viewMode: 'form', description: '', amount: '', paidBy: 'you', paidByPerson: null, contributors: [], editingIndex: null, payerDropdownOpen: false });
 
-  const [addedExpenses, setAddedExpenses] = useState<Array<{
+  const [addedExpenses, setAddedExpenses] = useState<{
     categoryKey: string; description: string; amount: string;
     paidBy: 'you' | 'other'; paidByPerson?: string | null; contributors: string[];
-  }>>([]);
+  }[]>([]);
 
   // Custom categories (user-created)
   const [customCategories, setCustomCategories] = useState<ExpenseCategory[]>([]);
@@ -207,10 +203,10 @@ export default function BudgetDashboardScreen() {
     amount: string;
   }>({ visible: false, templateKey: null, description: '', amount: '' });
 
-  const [addedRefunds, setAddedRefunds] = useState<Array<{ description: string; amount: string; status: 'processing' | 'received'; icon?: string; color?: string; bg?: string; }>>([]);
+  const [addedRefunds, setAddedRefunds] = useState<{ description: string; amount: string; status: 'processing' | 'received'; icon?: string; color?: string; bg?: string; }[]>([]);
 
   // Ref always holds latest contributors — avoids declaration-order TDZ issue with useCallback
-  const allContributorsRef = useRef<Array<{ id: string; name: string; userId?: string | null; role?: string }>>([]);
+  const allContributorsRef = useRef<{ id: string; name: string; userId?: string | null; role?: string }[]>([]);
 
   // Drag-to-dismiss for budget modals (matches destination.tsx pattern)
   const expenseSheetY = useRef(new Animated.Value(0)).current;
@@ -325,6 +321,7 @@ export default function BudgetDashboardScreen() {
         queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(selectedEventId) });
       }
       return () => setTabBarHidden(false);
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- setTabBarHidden is a stable Zustand setter
     }, [eventIdParam, selectedEventId, queryClient])
   );
 
@@ -336,7 +333,6 @@ export default function BudgetDashboardScreen() {
     data: events,
     isLoading: eventsLoading,
     refetch: refetchEvents,
-    isRefetching,
   } = useEvents();
 
   // Filter booked events
@@ -362,15 +358,6 @@ export default function BudgetDashboardScreen() {
     }
   }, [refetchEvents]);
 
-  const handleNotifications = () => {
-    markUrgencySeen();
-    if (isGuestContribution && guestUrgentEvent) {
-      router.push(`/event/${guestUrgentEvent.id}/budget` as any);
-    } else {
-      router.push('/notifications');
-    }
-  };
-
   // Auto-select nearest booked event (skip if opened from Event Summary)
   const hasAutoSelected = React.useRef(false);
   useEffect(() => {
@@ -386,20 +373,23 @@ export default function BudgetDashboardScreen() {
       return aDate - bDate;
     });
     setSelectedEventId(sorted[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally ignores eventIdParam; auto-select runs only when bookedEvents list changes
   }, [bookedEvents]);
 
   // ONLY fetch booking if we have booked events (prevent unnecessary queries)
-  const { data: booking, isLoading: bookingLoading } = useBooking(
+  const { data: booking } = useBooking(
     hasBookedEvents ? (selectedEventId || undefined) : undefined
   );
 
   // ONLY fetch participants if we have booked events
-  const { data: participants, isLoading: participantsLoading } = useParticipants(
+  const { data: participants } = useParticipants(
     hasBookedEvents ? (selectedEventId || undefined) : undefined
   );
 
   const selectedEvent = bookedEvents.find((e: EventWithDetails) => e.id === selectedEventId);
   const isOrganizer = selectedEvent?.created_by === user?.id;
+  // Package costs freeze once the event has ended; Other Expenses stays editable
+  const isPackageFrozen = selectedEvent ? isReadOnlyEvent(selectedEvent) : false;
 
   // Fetch invite codes to include non-registered invited guests in contributors list
   const { data: rawInviteGuests = [] } = useInviteGuests(selectedEventId ?? null);
@@ -479,9 +469,9 @@ export default function BudgetDashboardScreen() {
     });
 
     const perPersonCents = booking!.per_person_cents || 0;
-    // Reverse-engineer paying count from total: assumes total = perPerson × count × 1.1 (10% service fee)
+    // Reverse-engineer paying count from total. No service fee — total = perPerson × count.
     // This is display-only — not used for payment calculations
-    const dbPayingCount = perPersonCents > 0 ? Math.round(totalBudget / (perPersonCents * 1.1)) : (participants?.length || 0);
+    const dbPayingCount = perPersonCents > 0 ? Math.round(totalBudget / perPersonCents) : (participants?.length || 0);
     return {
       totalBudget,
       collected,
@@ -532,6 +522,7 @@ export default function BudgetDashboardScreen() {
     } else {
       Alert.alert(t.budget.noEventSelected, t.budget.noEventSelectedMsg);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
   }, [selectedEventId, eventIdParam]);
 
   // Remind All — opens channel picker modal (same UX as Manage Invitations)
@@ -571,10 +562,8 @@ export default function BudgetDashboardScreen() {
       Alert.alert(t.common.error, t.budget.errorSendingReminders);
       setRemindModal(prev => ({ ...prev, sendStatus: 'idle' }));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
   }, [selectedEventId]);
-
-  // Only show loading for booking/participants data when we have events
-  const isLoading = hasBookedEvents && (bookingLoading || participantsLoading);
 
   // Navigate back — always use router.back(); when accessed via /event/[id]/budget
   // the stack correctly returns to Event Summary without any loops
@@ -603,7 +592,7 @@ export default function BudgetDashboardScreen() {
       || guestCount
       || 0);
     if (totalPaying === 0) return null;
-    const list: Array<{ id: string; name: string; status: 'paid' | 'pending'; amount: number }> = [];
+    const list: { id: string; name: string; status: 'paid' | 'pending'; amount: number }[] = [];
     // Organizer (current user) — paid the 25% deposit
     list.push({ id: 'organizer', name: userName, status: 'paid', amount: budgetStats.collected });
     // Other participants from guest details cache or placeholders
@@ -645,7 +634,7 @@ export default function BudgetDashboardScreen() {
 
   // Normalised contributor list for expense modal (works with both demo + DB participants)
   // Includes userId + role for filtering (exclude self, exclude honoree)
-  const allContributors = useMemo<Array<{ id: string; name: string; userId?: string | null; role?: string }>>(() => {
+  const allContributors = useMemo<{ id: string; name: string; userId?: string | null; role?: string }[]>(() => {
     if (demoParticipants) return demoParticipants.map(p => ({
       id: p.id,
       name: p.name,
@@ -653,7 +642,7 @@ export default function BudgetDashboardScreen() {
       role: p.id === 'organizer' ? 'organizer' : p.id === 'honoree' ? 'honoree' : 'guest',
     }));
     if (sortedParticipants) {
-      const base: Array<{ id: string; name: string; userId?: string | null; role?: string }> =
+      const base: { id: string; name: string; userId?: string | null; role?: string }[] =
         sortedParticipants.map(p => ({
           id: p.id as string,
           name: p.profile?.full_name || p.profile?.email?.split('@')[0] || 'Guest',
@@ -703,7 +692,7 @@ export default function BudgetDashboardScreen() {
   const nonRegisteredInviteGuests = useMemo(() => {
     if (demoParticipants) return [];
     const seen = new Set<string>();
-    const result: Array<{ id: string; name: string; email: string }> = [];
+    const result: { id: string; name: string; email: string }[] = [];
     // 1. Sent invitations (invite_codes DB rows)
     for (const ic of inviteCodeGuests) {
       if (ic.email && registeredEmailSet.has(ic.email)) continue;
@@ -772,6 +761,7 @@ export default function BudgetDashboardScreen() {
       }).catch(() => {});
       AsyncStorage.setItem(notifKey, 'shown');
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally re-runs only on daysUntilEvent/percentage milestones; selectedEvent fields used only at fire-time
   }, [selectedEventId, daysUntilEvent, budgetStats.percentage]);
 
   // All expense categories (preset + user-created)
@@ -1092,6 +1082,24 @@ export default function BudgetDashboardScreen() {
           )}
           {selectedCategory === 'package' ? (
             <>
+            {/* Frozen banner — shown when event has ended; package costs are no longer editable */}
+            {isPackageFrozen && (
+              <View
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 8,
+                  paddingVertical: 12, paddingHorizontal: 14,
+                  backgroundColor: 'rgba(230,220,200,0.06)',
+                  borderRadius: 12, borderWidth: 1, borderColor: 'rgba(230,220,200,0.15)',
+                  marginBottom: 12,
+                }}
+                testID="budget-package-frozen-banner"
+              >
+                <Ionicons name="lock-closed-outline" size={16} color={theme.textSecondary} />
+                <Text style={{ flex: 1, fontSize: 13, color: theme.textSecondary }}>
+                  {(t.budget as any).packageFrozen || 'Package costs are locked — the event has already taken place.'}
+                </Text>
+              </View>
+            )}
             {/* Total Budget Cards — two side-by-side standalone cards, no outer wrapper */}
             <YStack gap={12} marginBottom={16}>
                 {budgetStats.percentage >= 100 ? (
@@ -1180,8 +1188,8 @@ export default function BudgetDashboardScreen() {
                   })()
                 )}
 
-                {/* Pay Remaining Balance — organizers only */}
-                {budgetStats.percentage < 100 && budgetStats.pending > 0 && (
+                {/* Pay Remaining Balance — organizers only, hidden if package is frozen (event ended) */}
+                {budgetStats.percentage < 100 && budgetStats.pending > 0 && !isPackageFrozen && (
                   isOrganizer ? (
                     <Pressable
                       style={[styles.payRemainingButton, { marginHorizontal: 0, marginBottom: 0, borderRadius: 12 }]}
@@ -1249,7 +1257,10 @@ export default function BudgetDashboardScreen() {
                   const isPaid = isDemo
                     ? (participantRaw as DemoP).status === 'paid'
                     : (participantRaw as any).payment_status === 'paid' || isOrganizerRow;
-                  const isPending = !isPaid;
+                  // Guest self-claim awaiting organizer confirmation (real events only).
+                  const paymentClaimedAt = isDemo ? null : ((participantRaw as any).payment_claimed_at ?? null);
+                  const isClaimed = !isPaid && !isDemo && !!paymentClaimedAt;
+                  const isPending = !isPaid && !isClaimed;
                   const perPersonAmount = booking?.per_person_cents || budgetStats.perPerson || 0;
                   const amountForRow = isDemo
                     ? (participantRaw as DemoP).amount
@@ -1306,8 +1317,8 @@ export default function BudgetDashboardScreen() {
                         <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
                           {formatCurrency(amountForRow)}
                         </Text>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: isPaid ? theme.textTertiary : pendingColor, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                          {isPaid ? t.budget.paid : t.budget.pending}
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: isPaid ? theme.textTertiary : isClaimed ? theme.accentGold : pendingColor, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                          {isPaid ? t.budget.paid : isClaimed ? t.budget.awaitingConfirmation : t.budget.pending}
                         </Text>
                       </YStack>
 
@@ -1328,14 +1339,12 @@ export default function BudgetDashboardScreen() {
                                     if (!selectedEventId || !user?.id) return;
                                     setMarkingPaidUserId(user.id);
                                     try {
-                                      await supabase
-                                        .from('event_participants')
-                                        .update({ payment_status: 'paid' })
-                                        .eq('event_id', selectedEventId)
-                                        .eq('user_id', user.id);
+                                      // Guest CLAIMS payment; status only flips to 'paid' after the
+                                      // organizer confirms (payment_status is organizer-only via DB trigger).
+                                      await participantsRepository.claimPayment(selectedEventId, user.id);
                                       queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(selectedEventId) });
                                       queryClient.invalidateQueries({ queryKey: ['guestParticipations', user.id] });
-                                      Alert.alert(t.budget.thankYou, t.budget.paymentConfirmedMsg);
+                                      Alert.alert(t.budget.claimSentTitle, t.budget.claimSentMsg);
                                     } catch {
                                       Alert.alert(t.common.error, t.budget.errorUpdatingStatus);
                                     } finally {
@@ -1349,6 +1358,44 @@ export default function BudgetDashboardScreen() {
                         >
                           <Ionicons name="checkmark-circle-outline" size={14} color={theme.accentGold} />
                           <Text style={styles.markPaidButtonText}>I've Paid</Text>
+                        </Pressable>
+                      )}
+
+                      {/* Organizer confirms a guest's claimed payment → flips to Paid for everyone */}
+                      {isOrganizer && isClaimed && !isDemo && (
+                        <Pressable
+                          style={[styles.markPaidButton, { marginLeft: 8 }, confirmingUserId === (participantRaw as any).user_id && { opacity: 0.6 }]}
+                          disabled={confirmingUserId === (participantRaw as any).user_id}
+                          onPress={() => {
+                            const guestUserId = (participantRaw as any).user_id as string;
+                            Alert.alert(
+                              t.budget.confirmGuestTitle,
+                              t.budget.confirmGuestMsg.replace('{{name}}', name),
+                              [
+                                { text: t.budget.notYet, style: 'cancel' },
+                                {
+                                  text: t.budget.confirmGuestPayment,
+                                  onPress: async () => {
+                                    if (!selectedEventId || !guestUserId) return;
+                                    setConfirmingUserId(guestUserId);
+                                    try {
+                                      await participantsRepository.confirmPayment(selectedEventId, guestUserId);
+                                      queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(selectedEventId) });
+                                      queryClient.invalidateQueries({ queryKey: ['guestParticipations', guestUserId] });
+                                      Alert.alert(t.budget.thankYou, t.budget.guestConfirmedMsg);
+                                    } catch {
+                                      Alert.alert(t.common.error, t.budget.errorUpdatingStatus);
+                                    } finally {
+                                      setConfirmingUserId(null);
+                                    }
+                                  },
+                                },
+                              ]
+                            );
+                          }}
+                        >
+                          <Ionicons name="checkmark-done-outline" size={14} color={theme.accentGold} />
+                          <Text style={styles.markPaidButtonText}>{t.budget.confirmGuestPayment}</Text>
                         </Pressable>
                       )}
                     </View>
@@ -1404,7 +1451,6 @@ export default function BudgetDashboardScreen() {
                     const val = parseFloat(e.amount.replace(',', '.'));
                     return sum + (isNaN(val) ? 0 : val);
                   }, 0);
-                  const showBorder = index < allExpenseCategories.length - 1 || true; // always border between rows
                   return (
                     <View key={item.key}>
                       {/* Category header row — tap anywhere to open modal */}

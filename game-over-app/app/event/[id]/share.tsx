@@ -16,13 +16,13 @@ import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { getEventImage } from '@/constants/packageImages';
 
 // Social platform config — each opens native app, falls back to web
-const SOCIALS: Array<{
+const SOCIALS: {
   key: string;
   label: string;
   bgColor: string;
   renderIcon: () => React.ReactNode;
   onPress: (msg: string, url: string) => Promise<void>;
-}> = [
+}[] = [
   {
     key: 'instagram',
     label: 'Instagram',

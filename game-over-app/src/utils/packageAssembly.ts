@@ -201,7 +201,7 @@ export function assemblePackages(answers: WizardAnswers, citySlug: string): Asse
 
   const city = citySlug.charAt(0).toUpperCase() + citySlug.slice(1);
 
-  const tiers: Array<{ tier: 'essential' | 'classic' | 'grand'; features: string[]; bestMatch?: boolean }> = [
+  const tiers: { tier: 'essential' | 'classic' | 'grand'; features: string[]; bestMatch?: boolean }[] = [
     { tier: 'essential', features: [act(0), topDining, topBar] },
     { tier: 'classic',   features: [act(0), act(1), topDining, topBar], bestMatch: true },
     { tier: 'grand',     features: [act(0), act(1), act(2), topDining, topBar] },

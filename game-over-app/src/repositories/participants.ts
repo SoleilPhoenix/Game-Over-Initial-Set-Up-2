@@ -113,6 +113,37 @@ export const participantsRepository = {
   },
 
   /**
+   * Guest self-claims that they have paid their share.
+   *
+   * Writes ONLY `payment_claimed_at` — NEVER `payment_status`. The authoritative
+   * paid state is organizer-confirmed and is additionally enforced organizer-only
+   * by a DB trigger (enforce_participant_update_integrity). Keeping the guest
+   * write in this single method guarantees the client can't accidentally
+   * self-confirm.
+   */
+  async claimPayment(eventId: string, userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('event_participants')
+      .update({ payment_claimed_at: new Date().toISOString() })
+      .eq('event_id', eventId)
+      .eq('user_id', userId);
+    if (error) throw error;
+  },
+
+  /**
+   * Organizer confirms a guest's claimed payment → authoritative 'paid'.
+   * (Allowed only for the event creator / service role at the DB level.)
+   */
+  async confirmPayment(eventId: string, userId: string): Promise<void> {
+    const { error } = await supabase
+      .from('event_participants')
+      .update({ payment_status: 'paid' })
+      .eq('event_id', eventId)
+      .eq('user_id', userId);
+    if (error) throw error;
+  },
+
+  /**
    * Update payment status for a participant
    */
   async updatePaymentStatus(
@@ -159,7 +190,7 @@ export const participantsRepository = {
   /**
    * Get all events where the user participates as a guest
    */
-  async getGuestParticipations(userId: string): Promise<Array<{ event_id: string; role: string; payment_status: string | null }>> {
+  async getGuestParticipations(userId: string): Promise<{ event_id: string; role: string; payment_status: string | null }[]> {
     const { data, error } = await supabase
       .from('event_participants')
       .select('event_id, role, payment_status')

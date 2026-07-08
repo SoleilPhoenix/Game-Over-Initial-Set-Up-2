@@ -27,6 +27,7 @@ import { type EditorialTheme } from '@/constants/designSystem';
 import { useParticipants, participantKeys } from '@/hooks/queries/useParticipants';
 import { useUser } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
+import { participantsRepository } from '@/repositories';
 import type { Database } from '@/lib/supabase/types';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
@@ -76,12 +77,9 @@ export default function NotificationsScreen() {
             if (!guestUrgentEvent?.id || !user?.id) return;
             setGuestPayConfirming(true);
             try {
-              const { error: updateError } = await supabase
-                .from('event_participants')
-                .update({ payment_status: 'paid' })
-                .eq('event_id', guestUrgentEvent.id)
-                .eq('user_id', user.id);
-              if (updateError) throw updateError;
+              // Guest CLAIMS payment; the organizer must confirm before it counts
+              // as paid (payment_status is organizer-only, enforced by a DB trigger).
+              await participantsRepository.claimPayment(guestUrgentEvent.id, user.id);
               void supabase.from('notifications').insert({
                 event_id: guestUrgentEvent.id,
                 title: 'Payment Confirmed',
@@ -149,6 +147,7 @@ export default function NotificationsScreen() {
     if (earlierNotifs.length > 0) sections.push({ title: t.notifications.earlier, data: earlierNotifs });
 
     return sections;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
   }, [data]);
 
   const handleNotificationPress = useCallback((notification: Notification) => {

@@ -12,8 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   useWizardStore,
-  useWizardLastSavedAt,
-  useWizardIsDirty,
   useWizardAutoSave,
 } from '@/stores/wizardStore';
 import { useTranslation, getTranslation } from '@/i18n';
@@ -31,7 +29,7 @@ export default function CreateEventLayout() {
   const insets   = useSafeAreaInsets();
   const { t }    = useTranslation();
 
-  const { deleteDraft, activeDraftId, saveDraft, hasDraft, partyType, goToStep } =
+  const { deleteDraft, activeDraftId, saveDraft, partyType, goToStep } =
     useWizardStore();
 
   const [menuVisible, setMenuVisible] = useState(false);

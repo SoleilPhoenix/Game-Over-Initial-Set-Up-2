@@ -56,7 +56,7 @@ export type Database = {
           per_person_cents: number
           reference_number?: string | null
           remaining_amount_cents?: number | null
-          service_fee_cents: number
+          service_fee_cents?: number
           stripe_payment_intent_id?: string | null
           total_amount_cents: number
           updated_at?: string | null
@@ -174,6 +174,7 @@ export type Database = {
           id: string
           invited_at: string | null
           invited_via: string | null
+          payment_claimed_at: string | null
           payment_status: Database["public"]["Enums"]["payment_status"] | null
           role: Database["public"]["Enums"]["participant_role"]
           user_id: string
@@ -185,6 +186,7 @@ export type Database = {
           id?: string
           invited_at?: string | null
           invited_via?: string | null
+          payment_claimed_at?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
           role: Database["public"]["Enums"]["participant_role"]
           user_id: string
@@ -196,6 +198,7 @@ export type Database = {
           id?: string
           invited_at?: string | null
           invited_via?: string | null
+          payment_claimed_at?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
           role?: Database["public"]["Enums"]["participant_role"]
           user_id?: string
@@ -294,6 +297,53 @@ export type Database = {
             foreignKeyName: "event_preferences_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: true
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_schedule_items: {
+        Row: {
+          created_at: string | null
+          duration_minutes: number
+          event_id: string
+          id: string
+          location: string | null
+          notes: string | null
+          sort_order: number
+          start_time: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          duration_minutes?: number
+          event_id: string
+          id?: string
+          location?: string | null
+          notes?: string | null
+          sort_order?: number
+          start_time: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          duration_minutes?: number
+          event_id?: string
+          id?: string
+          location?: string | null
+          notes?: string | null
+          sort_order?: number
+          start_time?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_schedule_items_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
             referencedRelation: "events"
             referencedColumns: ["id"]
           },
@@ -803,6 +853,24 @@ export type Database = {
           },
         ]
       }
+      processed_stripe_events: {
+        Row: {
+          event_id: string
+          event_type: string | null
+          processed_at: string
+        }
+        Insert: {
+          event_id: string
+          event_type?: string | null
+          processed_at?: string
+        }
+        Update: {
+          event_id?: string
+          event_type?: string | null
+          processed_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -842,6 +910,27 @@ export type Database = {
         }
         Relationships: []
       }
+      rate_limit_hits: {
+        Row: {
+          bucket: string
+          count: number
+          identifier: string
+          window_start: string
+        }
+        Insert: {
+          bucket: string
+          count?: number
+          identifier: string
+          window_start: string
+        }
+        Update: {
+          bucket?: string
+          count?: number
+          identifier?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       user_push_tokens: {
         Row: {
           created_at: string | null
@@ -874,32 +963,70 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_invite: {
+        Args: { p_code: string }
+        Returns: {
+          event_id: string
+          reason: string
+          success: boolean
+        }[]
+      }
+      append_booking_audit_log: {
+        Args: { booking_id: string; entry: Json }
+        Returns: undefined
+      }
+      check_rate_limit: {
+        Args: {
+          p_bucket: string
+          p_identifier: string
+          p_max: number
+          p_window_seconds: number
+        }
+        Returns: boolean
+      }
+      claim_stripe_event: {
+        Args: { p_event_id: string; p_event_type: string }
+        Returns: boolean
+      }
       generate_booking_reference: { Args: never; Returns: string }
+      get_invite_preview: {
+        Args: { p_code: string }
+        Returns: {
+          accepted_count: number
+          city_id: string
+          city_name: string
+          event_id: string
+          event_title: string
+          expires_at: string
+          guest_email: string
+          guest_first_name: string
+          guest_last_name: string
+          guest_phone: string
+          honoree_name: string
+          max_uses: number
+          organizer_name: string
+          start_date: string
+          use_count: number
+        }[]
+      }
+      get_invite_status: {
+        Args: { p_code: string }
+        Returns: {
+          event_id: string
+          invite_id: string
+          is_valid: boolean
+          reason: string
+        }[]
+      }
       increment_invite_use_count: {
         Args: { invite_id: string }
-        Returns: void
+        Returns: undefined
       }
       is_event_creator: { Args: { p_event_id: string }; Returns: boolean }
       is_event_participant: { Args: { p_event_id: string }; Returns: boolean }
-      get_invite_preview: {
-        Args: { p_code: string }
-        Returns: Array<{
-          event_id: string
-          event_title: string
-          honoree_name: string
-          city_name: string | null
-          city_id: string
-          start_date: string
-          organizer_name: string
-          accepted_count: number
-          expires_at: string | null
-          max_uses: number | null
-          use_count: number | null
-          guest_first_name: string | null
-          guest_last_name: string | null
-          guest_email: string | null
-          guest_phone: string | null
-        }>
+      prune_rate_limit_hits: {
+        Args: { p_older_than_seconds?: number }
+        Returns: undefined
       }
     }
     Enums: {

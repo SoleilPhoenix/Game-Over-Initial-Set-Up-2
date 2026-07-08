@@ -5,7 +5,6 @@
 
 import React from 'react';
 import { Pressable, StyleSheet, Animated } from 'react-native';
-import { View } from 'tamagui';
 
 interface ToggleProps {
   value: boolean;

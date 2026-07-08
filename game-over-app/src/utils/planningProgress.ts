@@ -17,13 +17,13 @@ export interface PlanningStep {
 
 export type PlanningChecklist = Record<string, boolean>;
 
-const STEP_DEFINITIONS: Array<{
+const STEP_DEFINITIONS: {
   key: string;
   labelKey: string;
   descriptionKey: string;
   icon: string;
   auto: boolean;
-}> = [
+}[] = [
   { key: 'invitations_sent', labelKey: 'inviteParticipants', descriptionKey: 'inviteParticipantsDesc', icon: 'mail-outline', auto: true },
   { key: 'group_confirmed', labelKey: 'groupConfirmed', descriptionKey: 'groupConfirmedDesc', icon: 'people-outline', auto: true },
   { key: 'budget_collected', labelKey: 'collectBudget', descriptionKey: 'collectBudgetDesc', icon: 'wallet-outline', auto: false },

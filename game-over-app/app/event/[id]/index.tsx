@@ -20,13 +20,12 @@ import { useBooking } from '@/hooks/queries/useBookings';
 import { useCreateInvite } from '@/hooks/queries/useInvites';
 import { useTranslation } from '@/i18n';
 import { useTheme } from '@/hooks/useTheme';
-import { SPACING, RADII, TYPE_SCALE, ambientShadow, type EditorialTheme } from '@/constants/designSystem';
+import { RADII, TYPE_SCALE, ambientShadow, type EditorialTheme } from '@/constants/designSystem';
 import { DisplayHeading, GoldButton } from '@/components/ui/editorial';
 import { ShareModal } from '@/components/ui/ShareModal';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import {
   calculatePlanningSteps,
-  getProgressPercentage,
   getCompletedCount,
   type PlanningStep,
   type PlanningChecklist,
@@ -57,7 +56,7 @@ export default function EventSummaryScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
 
   const { data: event, isLoading: eventLoading, error: eventError, refetch: refetchEvent } = useEvent(id);
-  const { data: participants, isLoading: isLoadingParticipants } = useParticipants(id);
+  const { data: participants } = useParticipants(id);
   const { data: booking } = useBooking(id);
   const currentUserId = useAuthStore(s => s.user?.id);
   const currentParticipant = participants?.find(p => p.user_id === currentUserId);
@@ -142,7 +141,6 @@ export default function EventSummaryScreen() {
   }, [event, participants, effectiveChecklist, cachedInvitedCount, nonHonoreeDesiredEarly]);
 
   const completedCount = getCompletedCount(planningSteps);
-  const progressPct = getProgressPercentage(planningSteps);
   const isBooked = event?.status === 'booked' || event?.status === 'completed';
 
   const isBudgetUrgent = useMemo(() => {
@@ -175,6 +173,7 @@ export default function EventSummaryScreen() {
     if (Array.isArray(bookingFeatures) && bookingFeatures.length > 0) return bookingFeatures[0] as string;
     if (event.status === 'planning') return t.events.planningPhase || 'Planning in progress';
     return '';
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
   }, [event, booking, cachedBudget]);
 
   const handleGenerateInvite = async (): Promise<string> => {
@@ -254,20 +253,6 @@ export default function EventSummaryScreen() {
   const dateStr = event.start_date
     ? new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : 'TBD';
-
-  const confirmedCount = participants?.filter(p =>
-    p.role !== 'honoree' && (p.role === 'organizer' || p.confirmed_at != null || p.user_id != null)
-  ).length ?? 0;
-  const bookingDesiredTotal = booking
-    ? (booking.paying_participants ?? 0) + (booking.exclude_honoree ? 1 : 0)
-    : 0;
-  const rawDesiredTotal = cachedParticipants || bookingDesiredTotal || 10;
-  const totalParticipants = Math.max(rawDesiredTotal - 1, 1);
-
-  const perPersonCents = booking?.per_person_cents || booking?.total_amount_cents
-    ? Math.round((booking?.total_amount_cents || 0) / Math.max(totalParticipants, 1))
-    : 0;
-  const perPersonDisplay = perPersonCents > 0 ? Math.round(perPersonCents / 100) : null;
 
   const citySlug = event.city?.name?.toLowerCase() || 'berlin';
   const cityImage = getEventImage(citySlug, booking?.package_id || event.hero_image_url);

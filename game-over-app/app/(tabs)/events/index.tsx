@@ -4,7 +4,7 @@
  * Matches UI mockup: Avatar header, filter tabs, card layout with thumbnails
  */
 
-import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
@@ -41,6 +41,7 @@ import { getEventImage, resolveImageSource, getPackageImage, getTierFromSlug } f
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import type { EventWithDetails } from '@/repositories';
 import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
+import { isPastEvent, isReadOnlyEvent } from '@/utils/eventLifecycle';
 
 type FilterTab = 'organizing' | 'attending';
 
@@ -175,7 +176,7 @@ export default function EventsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useUser();
-  const { hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
+  const { hasUnseenUrgency, markUrgencySeen } = useUrgentPayment();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterTab>('organizing');
   const { t } = useTranslation();
@@ -307,6 +308,17 @@ export default function EventsScreen() {
       return aDate - bDate;
     });
   }, [deduplicatedEvents, activeFilter, user?.id, wizardCreatedEventId]);
+
+  // Split into active vs past — past events (2+ days after end) move to a separate section below drafts
+  const activeEvents = useMemo(
+    () => filteredEvents.filter((e) => !isPastEvent(e)),
+    [filteredEvents],
+  );
+  const pastEvents = useMemo(
+    () => filteredEvents.filter((e) => isPastEvent(e)).reverse(), // most-recent-past first
+    [filteredEvents],
+  );
+  const hasPastEvents = pastEvents.length > 0;
 
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
@@ -502,13 +514,16 @@ export default function EventsScreen() {
     const dateRange = formatDateRange(item.start_date, item.end_date);
     const eventTitle = item.title || `${item.honoree_name}'s Event`;
     const urgent = isEventUrgent(item);
+    // Read-only state (Day 1+ after end): card is greyed; past state (Day 2+) also moves it below
+    const isReadOnly = isReadOnlyEvent(item);
 
     return (
       <Pressable
         onPress={() => handleEventPress(item.id)}
         style={({ pressed }) => [
           styles.eventCard,
-          urgent && styles.eventCardUrgent,
+          urgent && !isReadOnly && styles.eventCardUrgent,
+          isReadOnly && styles.eventCardReadOnly,
           pressed && styles.eventCardPressed,
         ]}
         testID={`event-card-${item.id}`}
@@ -743,7 +758,7 @@ export default function EventsScreen() {
       ? (CITY_UUID_TO_SLUG[draft.cityId] || (['berlin', 'hamburg', 'hannover'].includes(draft.cityId) ? draft.cityId : null))
       : null;
 
-    // Step 4 with a package chosen → show that tier; steps 1-3 → always show Classic (M)
+    // Step 4 with a package chosen → show that tier; steps 1-3 → always show Rausch (M)
     const draftImageTier = (draft.currentStep >= 4 && draft.selectedPackageId)
       ? getTierFromSlug(draft.selectedPackageId)
       : 'classic';
@@ -772,18 +787,22 @@ export default function EventsScreen() {
       );
     };
 
-    const renderRightActions = (draftId: string, title: string) => (
-      _progress: Animated.AnimatedInterpolation<number>,
-      _dragX: Animated.AnimatedInterpolation<number>,
-    ) => (
-      <Pressable
-        onPress={() => handleDeleteDraft(draftId, title)}
-        style={styles.swipeDeleteAction}
-      >
-        <Ionicons name="trash-outline" size={22} color="#FFFFFF" />
-        <Text style={styles.swipeDeleteText}>{t.common?.delete || 'Delete'}</Text>
-      </Pressable>
-    );
+    const renderRightActions = (draftId: string, title: string) => {
+      const RenderRightActions = (
+        _progress: Animated.AnimatedInterpolation<number>,
+        _dragX: Animated.AnimatedInterpolation<number>,
+      ) => (
+        <Pressable
+          onPress={() => handleDeleteDraft(draftId, title)}
+          style={styles.swipeDeleteAction}
+        >
+          <Ionicons name="trash-outline" size={22} color="#FFFFFF" />
+          <Text style={styles.swipeDeleteText}>{t.common?.delete || 'Delete'}</Text>
+        </Pressable>
+      );
+      RenderRightActions.displayName = 'RenderRightActions';
+      return RenderRightActions;
+    };
 
     return (
       <Swipeable
@@ -869,10 +888,30 @@ export default function EventsScreen() {
     );
   };
 
+  // Past Sessions section — shown BELOW drafts. Cards reuse renderEventCard (already greyed via isReadOnly).
+  const renderPastEventsSection = () => {
+    if (!hasPastEvents) return null;
+    return (
+      <View style={{ marginTop: 8 }}>
+        <View style={styles.draftSectionSeparator}>
+          <View style={styles.draftSectionLine} />
+          <Text style={styles.draftSectionLabel}>
+            {t.events.pastSessions || 'Past Sessions'}
+          </Text>
+          <View style={styles.draftSectionLine} />
+        </View>
+        {pastEvents.map((item) => (
+          <View key={item.id}>{renderEventCard({ item })}</View>
+        ))}
+      </View>
+    );
+  };
+
   const renderListFooter = () => {
     return (
       <View style={{ paddingBottom: 20 }}>
         {renderDraftSection()}
+        {renderPastEventsSection()}
       </View>
     );
   };
@@ -945,9 +984,9 @@ export default function EventsScreen() {
       <Animated.View style={[{ flex: 1 }, swipeAnimStyle]} {...swipeHandlers}>
         {isLoading && !events ? (
           renderLoadingState()
-        ) : filteredEvents && filteredEvents.length > 0 ? (
+        ) : (activeEvents.length > 0 || hasPastEvents) ? (
           <FlatList
-            data={filteredEvents}
+            data={activeEvents}
             renderItem={renderEventCard}
             keyExtractor={keyExtractor}
             contentContainerStyle={{
@@ -1119,6 +1158,9 @@ const styles = StyleSheet.create({
   eventCardUrgent: {
     borderColor: '#F97316',
     borderWidth: 2,
+  },
+  eventCardReadOnly: {
+    opacity: 0.55,
   },
   notificationUrgentDot: {
     position: 'absolute',

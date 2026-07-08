@@ -120,12 +120,10 @@ function calculateMatchScore(
   preferences: Partial<EventPreferences>
 ): number {
   let score = 50; // Base score
-  let factors = 0;
 
   // Gathering size match
   const prefsAny = preferences as any;
   if (prefsAny.gathering_size && pkg.ideal_gathering_size?.length) {
-    factors++;
     if (pkg.ideal_gathering_size.includes(prefsAny.gathering_size)) {
       score += 15;
     }
@@ -133,7 +131,6 @@ function calculateMatchScore(
 
   // Energy level match
   if (prefsAny.energy_level && pkg.ideal_energy_level?.length) {
-    factors++;
     if (pkg.ideal_energy_level.includes(prefsAny.energy_level)) {
       score += 15;
     }
@@ -141,7 +138,6 @@ function calculateMatchScore(
 
   // Vibe preferences match
   if (preferences.vibe_preferences?.length && pkg.ideal_vibe?.length) {
-    factors++;
     const matchingVibes = preferences.vibe_preferences.filter(v =>
       pkg.ideal_vibe?.includes(v)
     );

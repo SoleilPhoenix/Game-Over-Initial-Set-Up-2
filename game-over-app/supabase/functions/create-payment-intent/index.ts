@@ -6,21 +6,20 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import Stripe from 'https://esm.sh/stripe@14.1.0?target=deno';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders as buildCors, checkRateLimit } from '../_shared/http.ts';
 
 interface CreatePaymentIntentRequest {
   booking_id: string;
   payment_type?: 'deposit' | 'remaining' | 'full'; // client hints what they're paying
   currency?: string;
   // NOTE: amount_cents is intentionally NOT accepted from the client.
-  // The server computes the correct amount from the DB booking record.
+  // The server computes the correct amount from the package price (never the
+  // client-supplied booking total).
 }
 
 serve(async (req: Request) => {
+  const corsHeaders = buildCors(req);
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -63,6 +62,16 @@ serve(async (req: Request) => {
       throw new Error('Invalid or expired token');
     }
 
+    // Rate limit per user: cap payment-intent creation to blunt card-testing
+    // and repeated-intent abuse.
+    const allowed = await checkRateLimit(supabase, 'create-payment-intent', user.id, 20, 60);
+    if (!allowed) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Too many payment attempts. Please wait a moment and try again.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Parse request body — amount_cents is NOT accepted from the client
     const { booking_id, payment_type = 'full', currency }: CreatePaymentIntentRequest = await req.json();
 
@@ -84,11 +93,15 @@ serve(async (req: Request) => {
       });
     }
 
-    // Fetch booking to verify it exists and belongs to user's event
+    // Fetch booking to verify it exists and belongs to user's event.
+    // We pull paying_participants / exclude_honoree / package price so the amount
+    // can be recomputed from authoritative data rather than the stored total.
     const { data: booking, error: bookingError } = await supabase
       .from('bookings')
       .select(`
-        id, total_amount_cents, deposit_amount_cents, deposit_paid_at, payment_status, stripe_payment_intent_id, audit_log,
+        id, total_amount_cents, deposit_amount_cents, deposit_paid_at, payment_status,
+        stripe_payment_intent_id, audit_log, paying_participants, exclude_honoree,
+        package:packages!inner(price_per_person_cents, base_price_cents),
         event:events!inner(id, created_by, title, honoree_name)
       `)
       .eq('id', booking_id)
@@ -104,8 +117,26 @@ serve(async (req: Request) => {
     }
 
     // --- SERVER-SIDE AMOUNT CALCULATION ---
-    // NEVER trust amount_cents from the client. Compute from DB.
-    const bookingTotalCents: number = booking.total_amount_cents ?? 0;
+    // NEVER trust the stored total: recompute from the package price. This is
+    // defence-in-depth alongside the DB trigger (enforce_booking_financial_integrity)
+    // that already rewrites booking money columns on insert.
+    const pkgPerPersonCents: number = booking.package?.price_per_person_cents ?? 0;
+    const pkgBaseCents: number = booking.package?.base_price_cents ?? 0;
+    const payingParticipants: number = booking.paying_participants ?? 0;
+    if (pkgPerPersonCents <= 0 || payingParticipants < 1) {
+      throw new Error('Booking is missing package pricing data');
+    }
+    // Package base is priced across ALL participants (honoree included).
+    const totalParticipants = booking.exclude_honoree ? payingParticipants + 1 : payingParticipants;
+    const bookingTotalCents: number = pkgPerPersonCents * totalParticipants + pkgBaseCents;
+
+    // Flag (do not trust) any drift between the stored total and the recomputed one.
+    if ((booking.total_amount_cents ?? 0) !== bookingTotalCents) {
+      console.warn(
+        `[create-payment-intent] stored total ${booking.total_amount_cents} != recomputed ${bookingTotalCents} for booking ${booking_id} — using recomputed value`
+      );
+    }
+
     const depositPaidCents: number = booking.deposit_amount_cents ?? 0;
 
     let serverAmountCents: number;
@@ -144,13 +175,29 @@ serve(async (req: Request) => {
 
     // Check if booking already has a valid payment intent
     if (booking.stripe_payment_intent_id) {
-      // Retrieve existing payment intent to check its status
+      // Retrieve the existing intent. Only the *retrieve* call is inside try/catch
+      // (it can 404 if the intent was deleted); business-logic decisions on the
+      // retrieved status must NOT be swallowed by that catch — otherwise an
+      // already-succeeded booking would fall through and be charged again.
+      let existingIntent: Stripe.PaymentIntent | null = null;
       try {
-        const existingIntent = await stripe.paymentIntents.retrieve(booking.stripe_payment_intent_id);
+        existingIntent = await stripe.paymentIntents.retrieve(booking.stripe_payment_intent_id);
+      } catch (_stripeError) {
+        // Intent no longer exists in Stripe — safe to create a fresh one below.
+        console.log('Existing payment intent not found, creating a new one');
+      }
 
-        // If the existing intent is still valid (not succeeded, canceled, or requires_payment_method)
+      if (existingIntent) {
+        // Already paid — refuse rather than create a second charge.
+        if (existingIntent.status === 'succeeded') {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Payment has already been completed for this booking' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 }
+          );
+        }
+
+        // Still payable — return the existing client secret (idempotent retry).
         if (existingIntent.status === 'requires_payment_method' || existingIntent.status === 'requires_confirmation') {
-          // Return the existing client secret
           return new Response(
             JSON.stringify({
               success: true,
@@ -158,20 +205,10 @@ serve(async (req: Request) => {
               payment_intent_id: existingIntent.id,
               status: existingIntent.status,
             }),
-            {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-              status: 200,
-            }
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
           );
         }
-
-        // If payment already succeeded
-        if (existingIntent.status === 'succeeded') {
-          throw new Error('Payment has already been completed for this booking');
-        }
-      } catch (stripeError) {
-        // Payment intent might not exist anymore, create a new one
-        console.log('Existing payment intent not found or invalid, creating new one');
+        // Any other status (canceled, processing, etc.) falls through to create a new intent.
       }
     }
 

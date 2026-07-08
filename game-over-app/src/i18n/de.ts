@@ -24,6 +24,7 @@ const de: TranslationKeys = {
     noEventsSubtitle: 'Erstelle dein erstes Event und plane eine unvergessliche Party!',
     startNewPlan: 'Neuen Plan starten',
     draft: 'ENTWURF',
+    pastSessions: 'Vergangene Events',
     newEvent: 'Neues Event',
     noCityLabel: 'Keine Stadt',
     noDateLabel: 'Kein Datum',
@@ -108,7 +109,7 @@ const de: TranslationKeys = {
     faq2Q: 'Wie erstelle ich ein Event?',
     faq2A: 'Tippe auf den "+"-Button im Events-Tab oder "Neuen Plan starten". Folge dem 4-Schritte-Assistenten: gib die wichtigsten Details ein (Name, Stadt, Art der Party), lege Präferenzen fest, konfiguriere die Teilnehmeroptionen und wähle ein Paket. Dein Fortschritt wird automatisch als Entwurf gespeichert.',
     faq3Q: 'Welche Pakete gibt es?',
-    faq3A: 'Wir bieten drei Stufen: Essential (S) für eine solide Party mit den Basics, Classic (M) für die ideale Balance aus Aktivitäten und Nachtleben, und Grand (L) für das ultimative Premium-Luxus-Erlebnis. Jede Stufe beinhaltet verschiedene Aktivitäten, Locations und Services.',
+    faq3A: 'Wir bieten drei Stufen: Feier (S) für eine solide Party mit den Basics, Rausch (M) für die ideale Balance aus Aktivitäten und Nachtleben, und Legende (L) für das ultimative Premium-Luxus-Erlebnis. Jede Stufe beinhaltet verschiedene Aktivitäten, Locations und Services.',
     faq4Q: 'Wie funktioniert die Kostenteilung?',
     faq4A: 'Nach der Paketauswahl kannst du wählen, ob der Ehrengast von der Zahlung ausgeschlossen wird. Die Gesamtkosten werden gleichmäßig auf alle zahlenden Teilnehmer aufgeteilt. Jeder zahlt seinen Anteil direkt über die App per Kreditkarte, Debitkarte, Apple Pay oder Google Pay.',
     faq5Q: 'Kann ich meine Buchung stornieren?',
@@ -286,6 +287,7 @@ const de: TranslationKeys = {
   // ─── Package Detail ────────────────────────────
   packageDetail: {
     title: 'Paketdetails',
+    archived: 'ARCHIVIERT',
     premiumHighlights: 'Premium-Highlights',
     packageIncludes: 'Paket beinhaltet',
     reviews: 'Bewertungen',
@@ -359,7 +361,6 @@ const de: TranslationKeys = {
     selectedPackageLabel: 'Ausgewähltes Paket',
     nights: '{{count}} Nächte',
     guests: '{{count}} Gäste',
-    serviceFee: 'Servicegebühr (10%)',
     totalGroupCost: 'Gesamtkosten Gruppe',
     excludeHonoreeLabel: 'Ehrengast ausschließen',
     honoreePays: 'Ehrengast zahlt {{amount}}',
@@ -493,6 +494,7 @@ const de: TranslationKeys = {
     dueInDays: 'Noch {{count}} Tage',
     payRemainingBtn: 'Restbetrag bezahlen',
     payRemainingSubtitle: '75% Restbetrag vor dem Event fällig',
+    packageFrozen: 'Paketkosten sind eingefroren — das Event hat bereits stattgefunden.',
     notif14DayTitle: 'Restzahlung bald fällig',
     notif14DayBody: '{{eventName}} ist in {{count}} Tagen. Bezahle jetzt deinen Restbetrag von {{amount}}.',
     // Alert strings
@@ -507,6 +509,13 @@ const de: TranslationKeys = {
     thankYou: 'Danke!',
     paymentConfirmedMsg: 'Deine Zahlung wurde bestätigt. Der Organisator wird benachrichtigt.',
     errorUpdatingStatus: 'Status konnte nicht aktualisiert werden. Bitte versuche es erneut.',
+    awaitingConfirmation: 'Warten auf Bestätigung',
+    claimSentTitle: 'Als bezahlt markiert',
+    claimSentMsg: 'Der Organisator bestätigt deine Zahlung. Dein Status wechselt erst nach der Bestätigung auf „Bezahlt".',
+    confirmGuestPayment: 'Bestätigen',
+    confirmGuestTitle: 'Gastzahlung bestätigen',
+    confirmGuestMsg: 'Bestätigen, dass {{name}} den Anteil bezahlt hat? Damit gilt der Gast für alle als bezahlt.',
+    guestConfirmedMsg: 'Zahlung bestätigt.',
   },
 
   // ─── Chat Screen ─────────────────────────────
@@ -661,6 +670,7 @@ const de: TranslationKeys = {
     honoreeNotificationBody: 'Der Ehrengast erhält {{time}} vor der ersten Aktivität eine Einladung zur App und wird zur Teilnahme aufgefordert.',
     honoreeNotificationTime: '1 Stunde',
     honoreePrivacyNote: 'Budget & Kosten werden dem Ehrengast nicht angezeigt',
+    pastEventReadOnly: 'Einladungen sind geschlossen — das Event hat bereits stattgefunden.',
   },
 
   // ─── Chat ──────────────────────────────────────

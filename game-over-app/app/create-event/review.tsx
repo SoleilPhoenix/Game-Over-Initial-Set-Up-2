@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { YStack, XStack, Text, Spinner } from 'tamagui';
+import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWizardStore } from '@/stores/wizardStore';
@@ -17,24 +17,19 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
-// Standard per-person pricing for fallback packages
-const TIER_PRICE_PER_PERSON: Record<string, number> = {
-  essential: 99_00,
-  classic: 149_00,
-  grand: 199_00,
-};
+import { TIER_DISPLAY_NAME, TIER_PRICE_PER_PERSON_CENTS } from '@/constants/packageTiers';
 
-// Fallback package lookup for local IDs that don't exist in DB
+// Fallback package lookup for local IDs that don't exist in DB — names + prices from packageTiers
 const FALLBACK_PKG_MAP: Record<string, { name: string; tier: string; price_per_person_cents: number }> = {
-  'berlin-classic': { name: 'Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'berlin-essential': { name: 'Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'berlin-grand': { name: 'Grand', tier: 'grand', price_per_person_cents: 199_00 },
-  'hamburg-classic': { name: 'Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'hamburg-essential': { name: 'Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'hamburg-grand': { name: 'Grand', tier: 'grand', price_per_person_cents: 199_00 },
-  'hannover-classic': { name: 'Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'hannover-essential': { name: 'Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'hannover-grand': { name: 'Grand', tier: 'grand', price_per_person_cents: 199_00 },
+  'berlin-essential':   { name: TIER_DISPLAY_NAME.essential, tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential },
+  'berlin-classic':     { name: TIER_DISPLAY_NAME.classic,   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic },
+  'berlin-grand':       { name: TIER_DISPLAY_NAME.grand,     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand },
+  'hamburg-essential':  { name: TIER_DISPLAY_NAME.essential, tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential },
+  'hamburg-classic':    { name: TIER_DISPLAY_NAME.classic,   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic },
+  'hamburg-grand':      { name: TIER_DISPLAY_NAME.grand,     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand },
+  'hannover-essential': { name: TIER_DISPLAY_NAME.essential, tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential },
+  'hannover-classic':   { name: TIER_DISPLAY_NAME.classic,   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic },
+  'hannover-grand':     { name: TIER_DISPLAY_NAME.grand,     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand },
 };
 
 export default function WizardStep5() {
@@ -59,9 +54,8 @@ export default function WizardStep5() {
     : 0;
   const participantCount = wizardState.participantCount;
   const packageTotalCents = perPersonCents * participantCount;
-  const serviceFeeCents = Math.round(packageTotalCents * 0.10);
-  const grandTotalCents = packageTotalCents + serviceFeeCents;
-  const perPersonFinalCents = participantCount > 0 ? Math.round(grandTotalCents / participantCount) : 0;
+  // No service fee — package prices are final all-in
+  const grandTotalCents = packageTotalCents;
 
   const formatPrice = (cents: number) =>
     '\u20AC' + (cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });

@@ -5,30 +5,10 @@
 
 import * as Sentry from '@sentry/react-native';
 
-Sentry.init({
-  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
-  enableNativeCrashHandling: true,
-  enableAutoSessionTracking: true,
-  tracesSampleRate: 0.2,
-  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN,
-});
-
 import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { Image, LogBox, StyleSheet } from 'react-native';
-
-// Suppress noisy dev-only LogBox red-boxes for Supabase Auth network retries.
-// AuthRetryableFetchError is *by design* — Supabase will retry transparently
-// when the network or backend is briefly unavailable (e.g. project paused on
-// free tier and waking up). Surfacing it as a red box scares users without
-// being actionable. Production builds aren't affected (LogBox is dev-only).
-if (__DEV__) {
-  LogBox.ignoreLogs([
-    'AuthRetryableFetchError',
-    'TypeError: Network request failed',
-  ]);
-}
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
@@ -44,9 +24,29 @@ import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { preloadPackageImages } from '@/constants/packageImages';
 import { preloadSportLogos, preloadShareImages } from '@/constants/sportLogos';
-import { initBudgetCache } from '@/lib/participantCountCache';
+import { initBudgetCache, migratePlaintextGuestDetails } from '@/lib/participantCountCache';
 import { useEditorialFonts } from '@/hooks/useEditorialFonts';
 import config from '../tamagui.config';
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  enableNativeCrashHandling: true,
+  enableAutoSessionTracking: true,
+  tracesSampleRate: 0.2,
+  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN,
+});
+
+// Suppress noisy dev-only LogBox red-boxes for Supabase Auth network retries.
+// AuthRetryableFetchError is *by design* — Supabase will retry transparently
+// when the network or backend is briefly unavailable (e.g. project paused on
+// free tier and waking up). Surfacing it as a red box scares users without
+// being actionable. Production builds aren't affected (LogBox is dev-only).
+if (__DEV__) {
+  LogBox.ignoreLogs([
+    'AuthRetryableFetchError',
+    'TypeError: Network request failed',
+  ]);
+}
 
 // Crisp Chat — native module, not available in Expo Go
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
@@ -56,6 +56,7 @@ let setUserNickname: ((name: string) => void) | undefined;
 
 if (!isExpoGo) {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional native module
     const crisp = require('react-native-crisp-chat-sdk');
     configureCrisp = crisp.configure;
     setUserEmail = crisp.setUserEmail;
@@ -114,11 +115,14 @@ function RootLayoutNav() {
     preloadSportLogos().catch(() => {});
     preloadShareImages().catch(() => {});
     return () => { cleanup?.(); };
-  }, []); // initialize is a stable Zustand action
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialize is a stable Zustand action; effect must run only once on mount
+  }, []);
 
-  // Eagerly hydrate budget cache so urgency bell works on cold start
+  // Eagerly hydrate budget cache so urgency bell works on cold start, and move
+  // any legacy plaintext guest PII into encrypted storage.
   useEffect(() => {
     void initBudgetCache();
+    void migratePlaintextGuestDetails();
   }, []);
 
   // Sync user info with Crisp when session changes (with identity verification)
@@ -205,9 +209,7 @@ const styles = StyleSheet.create({
 });
 
 function RootLayout() {
-  // Force dark theme - Game Over is a dark-mode-only app
-  const colorScheme = 'dark';
-
+  // Game Over is a dark-mode-only app
   return (
     <ErrorBoundary>
     <GestureHandlerRootView style={{ flex: 1 }}>

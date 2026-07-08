@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { invitesRepository, InviteCodeWithEvent, type InvitePreview } from '@/repositories/invites';
+import { invitesRepository, type InvitePreview } from '@/repositories/invites';
 import { useAuthStore } from '@/stores/authStore';
 import { participantKeys } from './useParticipants';
 import { eventKeys } from './useEvents';

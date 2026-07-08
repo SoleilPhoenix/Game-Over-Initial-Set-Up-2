@@ -26,6 +26,7 @@ let MMKVClass: (new (options: { id: string }) => {
 
 if (!isExpoGo) {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional native module
     MMKVClass = require('react-native-mmkv').MMKV;
   } catch {
     console.warn('[Storage] react-native-mmkv native module not available — will fall back to AsyncStorage');

@@ -9,7 +9,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { useEffect, useRef } from 'react';
-import { createSyncStorage, deleteFromStorage } from '@/lib/storage';
+import { createSyncStorage } from '@/lib/storage';
 
 // Storage instance for wizard (works in both Expo Go and dev builds)
 const wizardStorage = createSyncStorage('wizard-storage');

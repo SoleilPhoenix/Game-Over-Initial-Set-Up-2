@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Alert, ScrollView, Image, Pressable, StyleSheet } from 'react-native';
+import { ScrollView, Image, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner, Switch } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,13 +14,8 @@ import { useBookingFlow } from '@/hooks/useBookingFlow';
 import { useWizardStore } from '@/stores/wizardStore';
 import { Button } from '@/components/ui/Button';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
+import { getTierDisplayLabel, getCityTierName, TIER_PRICE_PER_PERSON_CENTS } from '@/constants/packageTiers';
 import { useTranslation } from '@/i18n';
-
-const TIER_LABELS: Record<string, string> = {
-  essential: 'Essential (S)',
-  classic: 'Classic (M)',
-  grand: 'Grand (L)',
-};
 
 const styles = StyleSheet.create({
   payOption: {
@@ -44,17 +39,17 @@ const styles = StyleSheet.create({
   },
 });
 
-// Fallback package data for draft mode
+// Fallback package data for draft mode — names + prices come from packageTiers constants
 const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; price_per_person_cents: number; hero_image_url: any }> = {
-  'berlin-classic': { id: 'berlin-classic', name: 'Berlin Classic', tier: 'classic', price_per_person_cents: 149_00, hero_image_url: getPackageImage('berlin', 'classic') },
-  'berlin-essential': { id: 'berlin-essential', name: 'Berlin Essential', tier: 'essential', price_per_person_cents: 99_00, hero_image_url: getPackageImage('berlin', 'essential') },
-  'berlin-grand': { id: 'berlin-grand', name: 'Berlin Grand', tier: 'grand', price_per_person_cents: 199_00, hero_image_url: getPackageImage('berlin', 'grand') },
-  'hamburg-classic': { id: 'hamburg-classic', name: 'Hamburg Classic', tier: 'classic', price_per_person_cents: 149_00, hero_image_url: getPackageImage('hamburg', 'classic') },
-  'hamburg-essential': { id: 'hamburg-essential', name: 'Hamburg Essential', tier: 'essential', price_per_person_cents: 99_00, hero_image_url: getPackageImage('hamburg', 'essential') },
-  'hamburg-grand': { id: 'hamburg-grand', name: 'Hamburg Grand', tier: 'grand', price_per_person_cents: 199_00, hero_image_url: getPackageImage('hamburg', 'grand') },
-  'hannover-classic': { id: 'hannover-classic', name: 'Hannover Classic', tier: 'classic', price_per_person_cents: 149_00, hero_image_url: getPackageImage('hannover', 'classic') },
-  'hannover-essential': { id: 'hannover-essential', name: 'Hannover Essential', tier: 'essential', price_per_person_cents: 99_00, hero_image_url: getPackageImage('hannover', 'essential') },
-  'hannover-grand': { id: 'hannover-grand', name: 'Hannover Grand', tier: 'grand', price_per_person_cents: 199_00, hero_image_url: getPackageImage('hannover', 'grand') },
+  'berlin-essential':   { id: 'berlin-essential',   name: getCityTierName('berlin',   'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential, hero_image_url: getPackageImage('berlin',   'essential') },
+  'berlin-classic':     { id: 'berlin-classic',     name: getCityTierName('berlin',   'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic,   hero_image_url: getPackageImage('berlin',   'classic') },
+  'berlin-grand':       { id: 'berlin-grand',       name: getCityTierName('berlin',   'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand,     hero_image_url: getPackageImage('berlin',   'grand') },
+  'hamburg-essential':  { id: 'hamburg-essential',  name: getCityTierName('hamburg',  'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential, hero_image_url: getPackageImage('hamburg',  'essential') },
+  'hamburg-classic':    { id: 'hamburg-classic',    name: getCityTierName('hamburg',  'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic,   hero_image_url: getPackageImage('hamburg',  'classic') },
+  'hamburg-grand':      { id: 'hamburg-grand',      name: getCityTierName('hamburg',  'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand,     hero_image_url: getPackageImage('hamburg',  'grand') },
+  'hannover-essential': { id: 'hannover-essential', name: getCityTierName('hannover', 'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential, hero_image_url: getPackageImage('hannover', 'essential') },
+  'hannover-classic':   { id: 'hannover-classic',   name: getCityTierName('hannover', 'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic,   hero_image_url: getPackageImage('hannover', 'classic') },
+  'hannover-grand':     { id: 'hannover-grand',     name: getCityTierName('hannover', 'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand,     hero_image_url: getPackageImage('hannover', 'grand') },
 };
 
 const CITY_NAMES: Record<string, string> = {
@@ -67,8 +62,7 @@ const CITY_NAMES: Record<string, string> = {
   '550e8400-e29b-41d4-a716-446655440103': 'Hannover',
 };
 
-const SERVICE_FEE_RATE = 0.10;
-const MIN_SERVICE_FEE_CENTS = 5000;
+// Service fee removed — package prices are final all-in.
 
 export default function BookingSummaryScreen() {
   const { eventId, packageId, cityId: paramCityId, participants: paramParticipants } = useLocalSearchParams<{ eventId: string; packageId?: string; cityId?: string; participants?: string }>();
@@ -107,15 +101,13 @@ export default function BookingSummaryScreen() {
     const perPersonPrice = draftPkg.price_per_person_cents;
     // Package Base is ALWAYS price × total participants (fixed amount)
     const packagePrice = perPersonPrice * totalParticipants;
-    const serviceFee = Math.max(Math.ceil(packagePrice * SERVICE_FEE_RATE / 100) * 100, MIN_SERVICE_FEE_CENTS);
-    // Round total to whole euros so perPerson × payingCount matches displayed Total Group Cost
-    const totalEurosRounded = Math.round((packagePrice + serviceFee) / 100);
-    const total = totalEurosRounded * 100;
-    // Per-person derived from rounded total so the math adds up on screen
+    // No service fee — package prices are final all-in
+    const total = packagePrice;
+    // Per-person derived from total so the math adds up on screen
     const perPerson = Math.ceil(total / payingCount);
     return {
       packagePriceCents: packagePrice,
-      serviceFeeCents: serviceFee,
+      serviceFeeCents: 0,
       totalCents: total,
       perPersonCents: perPerson,
       payingParticipantCount: payingCount,
@@ -159,7 +151,7 @@ export default function BookingSummaryScreen() {
     router.push(`/booking/${eventId}/payment${qs}`);
   };
 
-  const tierLabel = TIER_LABELS[pkg.tier] || pkg.name;
+  const tierLabel = pkg.tier ? getTierDisplayLabel(pkg.tier) : pkg.name;
   const heroImage = pkg.hero_image_url || null;
 
   // City name: event data > URL params > wizard store
@@ -188,8 +180,6 @@ export default function BookingSummaryScreen() {
   const totalEuros = Math.round(pricing.totalCents / 100);
   const depositEuros = Math.round((pricing.totalCents * 0.25) / 100);
   const remainingEuros = totalEuros - depositEuros;
-  // Keep cent values for payment flow (payment.tsx recalculates independently)
-  const depositCents = depositEuros * 100;
 
   return (
     <YStack flex={1} backgroundColor={'#0D1B2A'}>
@@ -269,21 +259,6 @@ export default function BookingSummaryScreen() {
             <Text fontSize={14} color={'rgba(255,255,255,0.72)'}>Package Base</Text>
             <Text fontSize={14} fontWeight="600" color="white">
               {formatPriceWhole(Math.round(pricing.packagePriceCents / 100))}
-            </Text>
-          </XStack>
-
-          <XStack justifyContent="space-between" marginBottom="$3">
-            <XStack gap="$1" alignItems="center">
-              <Text fontSize={14} color={'rgba(255,255,255,0.72)'}>{t.booking.serviceFee}</Text>
-              <Pressable
-                onPress={() => Alert.alert(t.booking.serviceFee, '10% of the package base price, minimum €50.')}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="information-circle-outline" size={14} color={'rgba(255,255,255,0.48)'} />
-              </Pressable>
-            </XStack>
-            <Text fontSize={14} fontWeight="600" color="white">
-              {formatPriceWhole(Math.round(pricing.serviceFeeCents / 100))}
             </Text>
           </XStack>
 
