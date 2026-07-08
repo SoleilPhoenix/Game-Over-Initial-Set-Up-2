@@ -441,6 +441,18 @@ npx supabase secrets set APP_BASE_URL=https://game-over.app --project-ref stdbve
     - Signup attempts: 5 per hour per IP
     - Password reset: 5 per hour per IP
   - Enable CAPTCHA for repeated failed attempts
+- [ ] **Enable "Leaked Password Protection" (requires Supabase Pro Plan)**
+  - Go to Supabase Dashboard → Authentication → Providers → Email → toggle **"Prevent use of leaked passwords"** ON
+  - Rejects known-compromised passwords on sign-up / password change via the HaveIBeenPwned.org Pwned Passwords API
+  - **⚠️ Blocked on Free Plan:** attempting to enable it returns *"Configuring leaked password protection via HaveIBeenPwned.org is available on Pro Plans and up."* — upgrade the project to **Pro (~$25/month)** first
+  - Flagged by the Supabase security advisor (`auth_leaked_password_protection`); enabling it clears that warning
+  - Alternatively via Management API once on Pro:
+    ```bash
+    curl -X PATCH "https://api.supabase.com/v1/projects/stdbvehmjpmqbjyiodqg/config/auth" \
+      -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"password_hibp_enabled": true}'
+    ```
 - [ ] Review and optimize Row Level Security (RLS) policies
 - [ ] Set up database backups
 - [ ] Configure production database indexes for performance
