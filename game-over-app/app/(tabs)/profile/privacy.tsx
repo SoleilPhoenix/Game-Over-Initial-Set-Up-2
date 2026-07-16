@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from '@/i18n';
 
-const LAST_UPDATED = '2026-02-09';
+const LAST_UPDATED = '2026-07-16';
 
 interface SectionData {
   title: string;
@@ -36,7 +36,7 @@ const SECTIONS: Record<string, SectionData[]> = {
   en: [
     {
       title: '1. Introduction',
-      body: 'Game-Over.app ("we", "us", "our") is committed to protecting the privacy of our users. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application ("App"). Please read this policy carefully. By using the App, you consent to the data practices described in this policy.',
+      body: 'Game Over UG, Hagebuttenweg 13, 30657 Hannover, Germany ("we", "us", "our") — operator of the Game-Over.app mobile application ("App") and Data Controller within the meaning of Art. 4 (7) GDPR — is committed to protecting the privacy of our users. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use the App. Please read this policy carefully. By using the App, you consent to the data practices described in this policy.',
     },
     {
       title: '2. Information We Collect',
@@ -56,11 +56,11 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '6. Your Rights (GDPR)',
-      body: 'Under the General Data Protection Regulation (GDPR), you have the right to: Access the personal data we hold about you; Request correction of inaccurate personal data; Request deletion of your personal data ("right to be forgotten"); Object to processing of your personal data; Request restriction of processing; Data portability (receive your data in a structured, machine-readable format); Withdraw consent at any time. To exercise any of these rights, please contact us at: support@game-over.app',
+      body: 'Under the General Data Protection Regulation (GDPR), you have the right to: Access the personal data we hold about you; Request correction of inaccurate personal data; Request deletion of your personal data ("right to be forgotten"); Object to processing of your personal data; Request restriction of processing; Data portability (receive your data in a structured, machine-readable format); Withdraw consent at any time. To exercise any of these rights, please contact us at: support@game-over.app. You also have the right, under Art. 77 GDPR, to lodge a complaint with a supervisory authority — for our jurisdiction, this is the Landesbeauftragte für den Datenschutz Niedersachsen, Prinzenstraße 5, 30159 Hannover.',
     },
     {
       title: '7. Data Retention',
-      body: 'We retain your personal data only for as long as necessary to fulfill the purposes for which it was collected, including: Active account data is retained while your account is active; Booking and transaction records are retained for 7 years for legal and tax purposes; Chat messages are retained for the duration of the event and 90 days after; Phone numbers entered by event organisers are used solely to send event invitations via SMS or WhatsApp and are deleted 90 days after the event date; You may request deletion of your account and associated data at any time.',
+      body: 'We retain your personal data only for as long as necessary to fulfill the purposes for which it was collected, including: Active account data is retained while your account is active; Booking and transaction records are retained for 7 years for legal and tax purposes (§ 147 AO, § 257 HGB); Chat messages are retained for the duration of the event and 90 days after; Phone numbers entered by event organisers are used solely to send event invitations via WhatsApp and are deleted 90 days after the event date; You may request deletion of your account and associated data at any time.',
     },
     {
       title: '8. Cookies and Tracking',
@@ -68,7 +68,7 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '9. Third-Party Services',
-      body: "The App integrates with the following third-party services: Stripe (payment processing) \u2014 governed by Stripe's Privacy Policy; Supabase (backend infrastructure) \u2014 data hosted in EU; Twilio (SMS and WhatsApp messaging) and Twilio SendGrid (email delivery) \u2014 phone numbers and email addresses are transmitted to Twilio solely to deliver event invitations; Expo (app distribution and push notifications); Apple and Google (authentication via Sign in with Apple / Google OAuth). Each of these services has its own privacy policy that governs their handling of your data.",
+      body: "The App integrates with the following third-party services: Stripe (payment processing) \u2014 governed by Stripe's Privacy Policy; Supabase (backend infrastructure) \u2014 data hosted in EU; Twilio (WhatsApp messaging) \u2014 phone numbers are transmitted solely to deliver event invitations, briefings, and payment reminders; Resend (transactional email delivery) \u2014 email addresses are transmitted solely to deliver event invitations, briefings, and account notifications; Expo (app distribution and push notifications); Apple and Google (authentication via Sign in with Apple / Google OAuth). Each of these services has its own privacy policy that governs their handling of your data.",
     },
     {
       title: "10. Children's Privacy",
@@ -80,13 +80,13 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '12. Contact Us',
-      body: 'If you have questions or concerns about this Privacy Policy or our data practices, please contact us at:\n\nEmail: support@game-over.app\nAddress: Hagebuttenweg 13, 30657 Hannover, Germany',
+      body: 'If you have questions or concerns about this Privacy Policy or our data practices, please contact us at:\n\nData Controller: Game Over UG\nEmail: support@game-over.app\nAddress: Hagebuttenweg 13, 30657 Hannover, Germany',
     },
   ],
   de: [
     {
       title: '1. Einleitung',
-      body: 'Game-Over.app („wir", „uns", „unser") verpflichtet sich zum Schutz der Privatsphäre unserer Nutzer. Diese Datenschutzerklärung erläutert, wie wir Ihre Daten erfassen, verwenden, weitergeben und schützen, wenn Sie unsere mobile Anwendung („App") nutzen. Bitte lesen Sie diese Erklärung sorgfältig durch. Durch die Nutzung der App stimmen Sie den in dieser Erklärung beschriebenen Datenpraktiken zu.',
+      body: 'Die Game Over UG, Hagebuttenweg 13, 30657 Hannover, Deutschland („wir", „uns", „unser") — Betreiberin der mobilen Anwendung Game-Over.app („App") und Verantwortliche im Sinne von Art. 4 Nr. 7 DSGVO — verpflichtet sich zum Schutz der Privatsphäre unserer Nutzer. Diese Datenschutzerklärung erläutert, wie wir Ihre Daten erfassen, verwenden, weitergeben und schützen, wenn Sie die App nutzen. Bitte lesen Sie diese Erklärung sorgfältig durch. Durch die Nutzung der App stimmen Sie den in dieser Erklärung beschriebenen Datenpraktiken zu.',
     },
     {
       title: '2. Welche Daten wir erheben',
@@ -106,11 +106,11 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '6. Ihre Rechte (DSGVO)',
-      body: 'Gemäß der Datenschutz-Grundverordnung (DSGVO) haben Sie das Recht auf: Zugang zu den personenbezogenen Daten, die wir über Sie gespeichert haben; Berichtigung unrichtiger personenbezogener Daten; Löschung Ihrer personenbezogenen Daten („Recht auf Vergessenwerden"); Widerspruch gegen die Verarbeitung Ihrer personenbezogenen Daten; Einschränkung der Verarbeitung; Datenübertragbarkeit (Erhalt Ihrer Daten in einem strukturierten, maschinenlesbaren Format); jederzeitigen Widerruf der Einwilligung. Um eines dieser Rechte auszuüben, kontaktieren Sie uns bitte unter: support@game-over.app',
+      body: 'Gemäß der Datenschutz-Grundverordnung (DSGVO) haben Sie das Recht auf: Zugang zu den personenbezogenen Daten, die wir über Sie gespeichert haben; Berichtigung unrichtiger personenbezogener Daten; Löschung Ihrer personenbezogenen Daten („Recht auf Vergessenwerden"); Widerspruch gegen die Verarbeitung Ihrer personenbezogenen Daten; Einschränkung der Verarbeitung; Datenübertragbarkeit (Erhalt Ihrer Daten in einem strukturierten, maschinenlesbaren Format); jederzeitigen Widerruf der Einwilligung. Um eines dieser Rechte auszuüben, kontaktieren Sie uns bitte unter: support@game-over.app. Zudem haben Sie gemäß Art. 77 DSGVO das Recht auf Beschwerde bei einer Aufsichtsbehörde — für unseren Sitz zuständig ist die Landesbeauftragte für den Datenschutz Niedersachsen, Prinzenstraße 5, 30159 Hannover.',
     },
     {
       title: '7. Datenspeicherung',
-      body: 'Wir speichern Ihre personenbezogenen Daten nur so lange, wie es zur Erfüllung der Zwecke erforderlich ist, für die sie erhoben wurden, einschließlich: Aktive Kontodaten werden aufbewahrt, solange Ihr Konto aktiv ist; Buchungs- und Transaktionsdaten werden aus steuer- und handelsrechtlichen Gründen 7 Jahre aufbewahrt; Chat-Nachrichten werden für die Dauer des Events und 90 Tage danach aufbewahrt; Von Event-Organisatoren eingegebene Telefonnummern werden ausschließlich zum Versand von Event-Einladungen per SMS oder WhatsApp verwendet und 90 Tage nach dem Event-Datum gelöscht; Sie können jederzeit die Löschung Ihres Kontos und der zugehörigen Daten beantragen.',
+      body: 'Wir speichern Ihre personenbezogenen Daten nur so lange, wie es zur Erfüllung der Zwecke erforderlich ist, für die sie erhoben wurden, einschließlich: Aktive Kontodaten werden aufbewahrt, solange Ihr Konto aktiv ist; Buchungs- und Transaktionsdaten werden aus steuer- und handelsrechtlichen Gründen 7 Jahre aufbewahrt (§ 147 AO, § 257 HGB); Chat-Nachrichten werden für die Dauer des Events und 90 Tage danach aufbewahrt; Von Event-Organisatoren eingegebene Telefonnummern werden ausschließlich zum Versand von Event-Einladungen per WhatsApp verwendet und 90 Tage nach dem Event-Datum gelöscht; Sie können jederzeit die Löschung Ihres Kontos und der zugehörigen Daten beantragen.',
     },
     {
       title: '8. Cookies und Tracking',
@@ -118,7 +118,7 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '9. Dienste Dritter',
-      body: 'Die App integriert folgende Dienste Dritter: Stripe (Zahlungsabwicklung) \u2014 geregelt durch die Datenschutzrichtlinie von Stripe; Supabase (Backend-Infrastruktur) \u2014 Daten in der EU gehostet; Twilio (SMS- und WhatsApp-Versand) und Twilio SendGrid (E-Mail-Zustellung) \u2014 Telefonnummern und E-Mail-Adressen werden ausschließlich zur Zustellung von Event-Einladungen an Twilio übermittelt; Expo (App-Verteilung und Push-Benachrichtigungen); Apple und Google (Authentifizierung über „Mit Apple anmelden" / Google OAuth). Jeder dieser Dienste hat eine eigene Datenschutzrichtlinie, die den Umgang mit Ihren Daten regelt.',
+      body: 'Die App integriert folgende Dienste Dritter: Stripe (Zahlungsabwicklung) \u2014 geregelt durch die Datenschutzrichtlinie von Stripe; Supabase (Backend-Infrastruktur) \u2014 Daten in der EU gehostet; Twilio (WhatsApp-Versand) — Telefonnummern werden ausschließlich zum Versand von Event-Einladungen, Briefings und Zahlungserinnerungen übermittelt; Resend (transaktionaler E-Mail-Versand) \u2014 E-Mail-Adressen werden ausschließlich zum Versand von Event-Einladungen, Briefings und Kontobenachrichtigungen übermittelt; Expo (App-Verteilung und Push-Benachrichtigungen); Apple und Google (Authentifizierung über „Mit Apple anmelden" / Google OAuth). Jeder dieser Dienste hat eine eigene Datenschutzrichtlinie, die den Umgang mit Ihren Daten regelt.',
     },
     {
       title: '10. Datenschutz für Kinder',
@@ -130,7 +130,7 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '12. Kontakt',
-      body: 'Bei Fragen oder Bedenken zu dieser Datenschutzerklärung oder unseren Datenpraktiken kontaktieren Sie uns bitte unter:\n\nE-Mail: support@game-over.app\nAdresse: Hagebuttenweg 13, 30657 Hannover, Deutschland',
+      body: 'Bei Fragen oder Bedenken zu dieser Datenschutzerklärung oder unseren Datenpraktiken kontaktieren Sie uns bitte unter:\n\nVerantwortliche Stelle: Game Over UG\nE-Mail: support@game-over.app\nAdresse: Hagebuttenweg 13, 30657 Hannover, Deutschland',
     },
   ],
 };
