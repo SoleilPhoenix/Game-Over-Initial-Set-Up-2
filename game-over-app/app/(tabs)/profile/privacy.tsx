@@ -106,7 +106,7 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '6. Ihre Rechte (DSGVO)',
-      body: 'Gemäß der Datenschutz-Grundverordnung (DSGVO) haben Sie das Recht auf: Zugang zu den personenbezogenen Daten, die wir über Sie gespeichert haben; Berichtigung unrichtiger personenbezogener Daten; Löschung Ihrer personenbezogenen Daten („Recht auf Vergessenwerden"); Widerspruch gegen die Verarbeitung Ihrer personenbezogenen Daten; Einschränkung der Verarbeitung; Datenübertragbarkeit (Erhalt Ihrer Daten in einem strukturierten, maschinenlesbaren Format); jederzeitigen Widerruf der Einwilligung. Um eines dieser Rechte auszuüben, kontaktieren Sie uns bitte unter: privacy@game-over.app',
+      body: 'Gemäß der Datenschutz-Grundverordnung (DSGVO) haben Sie das Recht auf: Zugang zu den personenbezogenen Daten, die wir über Sie gespeichert haben; Berichtigung unrichtiger personenbezogener Daten; Löschung Ihrer personenbezogenen Daten („Recht auf Vergessenwerden"); Widerspruch gegen die Verarbeitung Ihrer personenbezogenen Daten; Einschränkung der Verarbeitung; Datenübertragbarkeit (Erhalt Ihrer Daten in einem strukturierten, maschinenlesbaren Format); jederzeitigen Widerruf der Einwilligung. Um eines dieser Rechte auszuüben, kontaktieren Sie uns bitte unter: support@game-over.app',
     },
     {
       title: '7. Datenspeicherung',
@@ -130,7 +130,7 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '12. Kontakt',
-      body: 'Bei Fragen oder Bedenken zu dieser Datenschutzerklärung oder unseren Datenpraktiken kontaktieren Sie uns bitte unter:\n\nE-Mail: privacy@game-over.app\nAllgemein: support@game-over.app\nAdresse: Siehe Impressum für die Postanschrift',
+      body: 'Bei Fragen oder Bedenken zu dieser Datenschutzerklärung oder unseren Datenpraktiken kontaktieren Sie uns bitte unter:\n\nE-Mail: support@game-over.app\nAdresse: Hagebuttenweg 13, 30657 Hannover, Deutschland',
     },
   ],
 };

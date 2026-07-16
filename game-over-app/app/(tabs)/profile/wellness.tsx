@@ -250,7 +250,7 @@ function GroupPledge() {
         >
           <Ionicons name="heart" size={16} color="#C6A75E" />
           <Text fontSize={12} color="#C6A75E" fontWeight="600">
-            This group is ready. Have an incredible time! 🎉
+            {t.wellness.groupReady}
           </Text>
         </XStack>
       )}

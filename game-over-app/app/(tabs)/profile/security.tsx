@@ -13,30 +13,36 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { supabase } from '@/lib/supabase/client';
+import { useTranslation } from '@/i18n';
 
-const passwordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: z
-    .string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Z]/, 'Password must contain at least one uppercase letter')
-    .regex(/[a-z]/, 'Password must contain at least one lowercase letter')
-    .regex(/[0-9]/, 'Password must contain at least one number'),
-  confirmPassword: z.string().min(1, 'Please confirm your password'),
-}).refine((data) => data.newPassword === data.confirmPassword, {
-  message: 'Passwords do not match',
-  path: ['confirmPassword'],
-});
-
-type PasswordFormData = z.infer<typeof passwordSchema>;
+type PasswordFormData = {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+};
 
 export default function SecurityScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { t } = useTranslation();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const passwordSchema = React.useMemo(() => z.object({
+    currentPassword: z.string().min(1, t.security.validCurrentRequired),
+    newPassword: z
+      .string()
+      .min(8, t.security.validMinLength)
+      .regex(/[A-Z]/, t.security.validUpper)
+      .regex(/[a-z]/, t.security.validLower)
+      .regex(/[0-9]/, t.security.validNumber),
+    confirmPassword: z.string().min(1, t.security.validConfirmRequired),
+  }).refine((data) => data.newPassword === data.confirmPassword, {
+    message: t.security.validMatch,
+    path: ['confirmPassword'],
+  }), [t]);
 
   const {
     control,
@@ -62,9 +68,9 @@ export default function SecurityScreen() {
       if (error) throw error;
 
       Alert.alert(
-        'Password Updated',
-        'Your password has been changed successfully.',
-        [{ text: 'OK', onPress: () => {
+        t.security.passwordUpdatedTitle,
+        t.security.passwordUpdatedMsg,
+        [{ text: t.security.ok, onPress: () => {
           reset();
           router.back();
         }}]
@@ -72,8 +78,8 @@ export default function SecurityScreen() {
     } catch (error: any) {
       console.error('Password change error:', error);
       Alert.alert(
-        'Error',
-        error.message || 'Failed to update password. Please try again.'
+        t.security.errorTitle,
+        error.message || t.security.updateFailedMsg
       );
     } finally {
       setIsSubmitting(false);
@@ -105,7 +111,7 @@ export default function SecurityScreen() {
             <Ionicons name="chevron-back" size={24} color={'#FFFFFF'} />
           </Pressable>
           <Text fontSize={17} fontWeight="600" color={'#FFFFFF'}>
-            Password & Security
+            {t.security.headerTitle}
           </Text>
           <View width={40} />
         </XStack>
@@ -130,10 +136,10 @@ export default function SecurityScreen() {
                 letterSpacing={1}
                 marginLeft="$1"
               >
-                Change Password
+                {t.security.changePasswordSection}
               </Text>
               <Text fontSize={13} color={'rgba(255,255,255,0.72)'}>
-                Enter your current password and a new password to update your credentials.
+                {t.security.changePasswordDesc}
               </Text>
             </YStack>
 
@@ -145,7 +151,7 @@ export default function SecurityScreen() {
                 color={'#FFFFFF'}
                 marginLeft="$1"
               >
-                Current Password
+                {t.security.currentPasswordLabel}
               </Text>
               <Controller
                 control={control}
@@ -156,7 +162,7 @@ export default function SecurityScreen() {
                       style={styles.input}
                       value={value}
                       onChangeText={onChange}
-                      placeholder="Enter current password"
+                      placeholder={t.security.currentPasswordPlaceholder}
                       placeholderTextColor="#6B7280"
                       secureTextEntry={!showCurrentPassword}
                       autoCapitalize="none"
@@ -187,7 +193,7 @@ export default function SecurityScreen() {
                 color={'#FFFFFF'}
                 marginLeft="$1"
               >
-                New Password
+                {t.security.newPasswordLabel}
               </Text>
               <Controller
                 control={control}
@@ -198,7 +204,7 @@ export default function SecurityScreen() {
                       style={styles.input}
                       value={value}
                       onChangeText={onChange}
-                      placeholder="Enter new password"
+                      placeholder={t.security.newPasswordPlaceholder}
                       placeholderTextColor="#6B7280"
                       secureTextEntry={!showNewPassword}
                       autoCapitalize="none"
@@ -229,7 +235,7 @@ export default function SecurityScreen() {
                 color={'#FFFFFF'}
                 marginLeft="$1"
               >
-                Confirm New Password
+                {t.security.confirmPasswordLabel}
               </Text>
               <Controller
                 control={control}
@@ -240,7 +246,7 @@ export default function SecurityScreen() {
                       style={styles.input}
                       value={value}
                       onChangeText={onChange}
-                      placeholder="Confirm new password"
+                      placeholder={t.security.confirmPasswordPlaceholder}
                       placeholderTextColor="#6B7280"
                       secureTextEntry={!showConfirmPassword}
                       autoCapitalize="none"
@@ -266,31 +272,31 @@ export default function SecurityScreen() {
             {/* Password Requirements */}
             <View style={styles.requirementsBox}>
               <Text fontSize={12} fontWeight="600" color={'rgba(255,255,255,0.72)'} marginBottom="$2">
-                Password Requirements:
+                {t.security.requirementsTitle}
               </Text>
               <YStack gap="$1">
                 <XStack alignItems="center" gap="$2">
                   <Ionicons name="checkmark-circle" size={14} color={'#C6A75E'} />
                   <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
-                    At least 8 characters
+                    {t.security.reqMinLength}
                   </Text>
                 </XStack>
                 <XStack alignItems="center" gap="$2">
                   <Ionicons name="checkmark-circle" size={14} color={'#C6A75E'} />
                   <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
-                    One uppercase letter
+                    {t.security.reqUppercase}
                   </Text>
                 </XStack>
                 <XStack alignItems="center" gap="$2">
                   <Ionicons name="checkmark-circle" size={14} color={'#C6A75E'} />
                   <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
-                    One lowercase letter
+                    {t.security.reqLowercase}
                   </Text>
                 </XStack>
                 <XStack alignItems="center" gap="$2">
                   <Ionicons name="checkmark-circle" size={14} color={'#C6A75E'} />
                   <Text fontSize={12} color={'rgba(255,255,255,0.72)'}>
-                    One number
+                    {t.security.reqNumber}
                   </Text>
                 </XStack>
               </YStack>
@@ -307,12 +313,12 @@ export default function SecurityScreen() {
                 <XStack gap="$2" alignItems="center">
                   <Spinner size="small" color="#0D1B2A" />
                   <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
-                    Updating...
+                    {t.security.updating}
                   </Text>
                 </XStack>
               ) : (
                 <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
-                  Update Password
+                  {t.security.updateBtn}
                 </Text>
               )}
             </Pressable>

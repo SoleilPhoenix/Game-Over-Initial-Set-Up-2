@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/hooks/useTheme';
 import type { ThemeMode } from '@/constants/designSystem';
+import { useTranslation } from '@/i18n';
 
 interface Option {
   code: ThemeMode;
@@ -20,31 +21,32 @@ interface Option {
   icon: keyof typeof Ionicons.glyphMap;
 }
 
-const OPTIONS: Option[] = [
-  {
-    code: 'dark',
-    label: 'Midnight Navy',
-    description: 'Editorial dark — default, matches mockups',
-    icon: 'moon',
-  },
-  {
-    code: 'light',
-    label: 'Ivory Paper',
-    description: 'Warm off-white — editorial light variant',
-    icon: 'sunny',
-  },
-  {
-    code: 'system',
-    label: 'System',
-    description: 'Follow device appearance setting',
-    icon: 'phone-portrait',
-  },
-];
-
 export default function AppearanceScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { theme, mode, setMode } = useTheme();
+  const { t } = useTranslation();
+
+  const OPTIONS: Option[] = [
+    {
+      code: 'dark',
+      label: t.appearance.darkLabel,
+      description: t.appearance.darkDesc,
+      icon: 'moon',
+    },
+    {
+      code: 'light',
+      label: t.appearance.lightLabel,
+      description: t.appearance.lightDesc,
+      icon: 'sunny',
+    },
+    {
+      code: 'system',
+      label: t.appearance.systemLabel,
+      description: t.appearance.systemDesc,
+      icon: 'phone-portrait',
+    },
+  ];
 
   return (
     <View flex={1} backgroundColor={theme.background}>
@@ -66,7 +68,7 @@ export default function AppearanceScreen() {
           <Ionicons name="chevron-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text fontSize={17} fontWeight="600" color={theme.textPrimary}>
-          Appearance
+          {t.appearance.headerTitle}
         </Text>
         <View width={40} />
       </XStack>
@@ -81,7 +83,7 @@ export default function AppearanceScreen() {
       >
         <YStack paddingHorizontal="$4" gap="$6">
           <Text fontSize={14} color={theme.textSecondary} marginLeft="$1">
-            Choose how Game Over looks. Your preference is saved across sessions.
+            {t.appearance.description}
           </Text>
 
           <View

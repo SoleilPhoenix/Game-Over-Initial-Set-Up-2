@@ -12,11 +12,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useUser } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
+import { useTranslation } from '@/i18n';
 
 export default function EditProfileScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const user = useUser();
+  const { t } = useTranslation();
 
   // Check if this user is a guest in any event — guests cannot change name/phone/email
   const [isGuestUser, setIsGuestUser] = useState(false);
@@ -60,7 +62,7 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     if (!firstName.trim()) {
-      Alert.alert('Error', 'Please enter your first name.');
+      Alert.alert(t.editProfile.errorTitle, t.editProfile.firstNameRequired);
       return;
     }
 
@@ -78,12 +80,12 @@ export default function EditProfileScreen() {
         .update({ full_name: fullNameCombined, ...(phone.trim() ? { phone: phone.trim() } : {}) })
         .eq('id', user!.id);
 
-      Alert.alert('Success', 'Profile updated successfully.', [
-        { text: 'OK', onPress: () => router.back() },
+      Alert.alert(t.editProfile.successTitle, t.editProfile.profileUpdated, [
+        { text: t.editProfile.ok, onPress: () => router.back() },
       ]);
     } catch (error) {
       console.error('Profile update error:', error);
-      Alert.alert('Error', 'Failed to update profile. Please try again.');
+      Alert.alert(t.editProfile.errorTitle, t.editProfile.updateFailed);
     } finally {
       setIsSaving(false);
     }
@@ -118,7 +120,7 @@ export default function EditProfileScreen() {
             <Ionicons name="chevron-back" size={24} color={'#FFFFFF'} />
           </Pressable>
           <Text fontSize={17} fontWeight="600" color={'#FFFFFF'}>
-            Edit Profile
+            {t.editProfile.headerTitle}
           </Text>
           <View width={40} />
         </XStack>
@@ -147,7 +149,7 @@ export default function EditProfileScreen() {
               color={'rgba(255,255,255,0.72)'}
               marginTop="$3"
             >
-              Tap to change photo
+              {t.editProfile.tapToChangePhoto}
             </Text>
           </YStack>
 
@@ -157,7 +159,7 @@ export default function EditProfileScreen() {
               <View style={styles.guestLockBanner}>
                 <Ionicons name="lock-closed" size={16} color="#F59E0B" style={{ marginRight: 8 }} />
                 <Text fontSize={13} color="#F59E0B" flex={1}>
-                  Your profile details were set by the event organizer. To change your name, phone, or email please contact our support team.
+                  {t.editProfile.guestLockBanner}
                 </Text>
               </View>
             )}
@@ -172,14 +174,14 @@ export default function EditProfileScreen() {
                 letterSpacing={1}
                 marginLeft="$1"
               >
-                First Name
+                {t.editProfile.firstNameLabel}
               </Text>
               <View style={[styles.inputContainer, isGuestUser && styles.readOnlyContainer]}>
                 <TextInput
                   style={styles.input}
                   value={firstName}
                   onChangeText={isGuestUser ? undefined : setFirstName}
-                  placeholder="Enter your first name"
+                  placeholder={t.editProfile.firstNamePlaceholder}
                   placeholderTextColor="#6B7280"
                   autoCapitalize="words"
                   autoCorrect={false}
@@ -200,14 +202,14 @@ export default function EditProfileScreen() {
                 letterSpacing={1}
                 marginLeft="$1"
               >
-                Last Name
+                {t.editProfile.lastNameLabel}
               </Text>
               <View style={[styles.inputContainer, isGuestUser && styles.readOnlyContainer]}>
                 <TextInput
                   style={styles.input}
                   value={lastName}
                   onChangeText={isGuestUser ? undefined : setLastName}
-                  placeholder="Enter your last name"
+                  placeholder={t.editProfile.lastNamePlaceholder}
                   placeholderTextColor="#6B7280"
                   autoCapitalize="words"
                   autoCorrect={false}
@@ -227,14 +229,14 @@ export default function EditProfileScreen() {
                 letterSpacing={1}
                 marginLeft="$1"
               >
-                Phone / WhatsApp
+                {t.editProfile.phoneLabel}
               </Text>
               <View style={[styles.inputContainer, isGuestUser && styles.readOnlyContainer]}>
                 <TextInput
                   style={styles.input}
                   value={phone}
                   onChangeText={isGuestUser ? undefined : setPhone}
-                  placeholder="e.g. +49 152 12345678"
+                  placeholder={t.editProfile.phonePlaceholder}
                   placeholderTextColor="#6B7280"
                   keyboardType="phone-pad"
                   autoCorrect={false}
@@ -255,7 +257,7 @@ export default function EditProfileScreen() {
                 letterSpacing={1}
                 marginLeft="$1"
               >
-                Email
+                {t.editProfile.emailLabel}
               </Text>
               <View style={[styles.inputContainer, styles.readOnlyContainer]}>
                 <Text color="#6B7280" fontSize={16}>
@@ -268,7 +270,7 @@ export default function EditProfileScreen() {
                 color={'rgba(255,255,255,0.72)'}
                 marginLeft="$1"
               >
-                Email cannot be changed
+                {t.editProfile.emailCannotChange}
               </Text>
             </YStack>
 
@@ -284,12 +286,12 @@ export default function EditProfileScreen() {
                   <XStack gap="$2" alignItems="center">
                     <Spinner size="small" color="#0D1B2A" />
                     <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
-                      Saving...
+                      {t.editProfile.saving}
                     </Text>
                   </XStack>
                 ) : (
                   <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
-                    Save Changes
+                    {t.editProfile.saveChanges}
                   </Text>
                 )}
               </Pressable>

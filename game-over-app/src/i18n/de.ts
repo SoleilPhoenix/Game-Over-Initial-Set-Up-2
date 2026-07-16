@@ -51,7 +51,7 @@ const de: TranslationKeys = {
   profile: {
     title: 'Einstellungen',
     notifications: 'Benachrichtigungen',
-    notificationPreferences: 'Benachrichtigungseinstellungen',
+    notificationPreferences: 'Benachrichtigungen',
     savedPackages: 'Gespeicherte Pakete',
     perPerson: 'pro Person',
     account: 'Konto',
@@ -63,7 +63,7 @@ const de: TranslationKeys = {
     moreLangSoon: 'Weitere Sprachen folgen bald',
     appearance: 'Darstellung',
     wellnessSupport: 'Wellness & Support',
-    relationshipHealthCenter: 'Beziehungs-Gesundheitszentrum',
+    relationshipHealthCenter: 'Beziehungszentrum',
     supportFAQ: 'Support & FAQ',
     logOut: 'Abmelden',
     logOutConfirmTitle: 'Abmelden',
@@ -76,7 +76,7 @@ const de: TranslationKeys = {
 
   // ─── Notification Preferences ──────────────────
   notificationPrefs: {
-    title: 'Benachrichtigungseinstellungen',
+    title: 'Benachrichtigungen',
     pushNotifications: 'Push-Benachrichtigungen',
     enablePush: 'Push-Benachrichtigungen aktivieren',
     enablePushDesc: 'Erhalte Echtzeit-Updates zu deinen Events',
@@ -127,8 +127,8 @@ const de: TranslationKeys = {
 
   // ─── Relationship Health Center ────────────────
   wellness: {
-    title: 'Relationship Health Center',
-    subtitle: 'Macht diese Feier wirklich bedeutungsvoll',
+    title: 'Beziehungszentrum',
+    subtitle: 'Für Momente, die in Erinnerung bleiben',
 
     toastSection: 'Toast-Baukasten',
     toastSectionSubtitle: 'Schreib eine herzliche Rede, einen Prompt nach dem anderen',
@@ -175,6 +175,75 @@ const de: TranslationKeys = {
     insight3Body: 'Starke Freundschaften wachsen in den alltäglichen Momenten zwischen den großen Events.',
     insight4Title: 'Meilensteine vertiefen Verbindungen',
     insight4Body: 'Jemanden bei einem lebensverändernden Moment zu begleiten schafft eine Verbindung fürs Leben.',
+
+    groupReady: 'Diese Gruppe ist bereit. Habt eine unvergessliche Zeit! 🎉',
+  },
+
+  // ─── Edit Profile ──────────────────────────────
+  editProfile: {
+    headerTitle: 'Profil bearbeiten',
+    tapToChangePhoto: 'Antippen, um Foto zu ändern',
+    guestLockBanner: 'Deine Profildaten wurden vom Event-Organisator festgelegt. Um Name, Telefon oder E-Mail zu ändern, kontaktiere bitte unseren Support.',
+    firstNameLabel: 'Vorname',
+    firstNamePlaceholder: 'Vornamen eingeben',
+    lastNameLabel: 'Nachname',
+    lastNamePlaceholder: 'Nachnamen eingeben',
+    phoneLabel: 'Telefon / WhatsApp',
+    phonePlaceholder: 'z. B. +49 152 12345678',
+    emailLabel: 'E-Mail',
+    emailCannotChange: 'E-Mail kann nicht geändert werden',
+    saveChanges: 'Änderungen speichern',
+    saving: 'Speichern...',
+    errorTitle: 'Fehler',
+    firstNameRequired: 'Bitte gib deinen Vornamen ein.',
+    successTitle: 'Erfolgreich',
+    profileUpdated: 'Profil wurde aktualisiert.',
+    updateFailed: 'Profil konnte nicht aktualisiert werden. Bitte versuche es erneut.',
+    ok: 'OK',
+  },
+
+  // ─── Password & Security ───────────────────────
+  security: {
+    headerTitle: 'Passwort & Sicherheit',
+    changePasswordSection: 'Passwort ändern',
+    changePasswordDesc: 'Gib dein aktuelles Passwort und ein neues Passwort ein, um deine Anmeldedaten zu aktualisieren.',
+    currentPasswordLabel: 'Aktuelles Passwort',
+    currentPasswordPlaceholder: 'Aktuelles Passwort eingeben',
+    newPasswordLabel: 'Neues Passwort',
+    newPasswordPlaceholder: 'Neues Passwort eingeben',
+    confirmPasswordLabel: 'Neues Passwort bestätigen',
+    confirmPasswordPlaceholder: 'Neues Passwort bestätigen',
+    requirementsTitle: 'Passwort-Anforderungen:',
+    reqMinLength: 'Mindestens 8 Zeichen',
+    reqUppercase: 'Ein Großbuchstabe',
+    reqLowercase: 'Ein Kleinbuchstabe',
+    reqNumber: 'Eine Zahl',
+    updateBtn: 'Passwort aktualisieren',
+    updating: 'Wird aktualisiert...',
+    passwordUpdatedTitle: 'Passwort aktualisiert',
+    passwordUpdatedMsg: 'Dein Passwort wurde erfolgreich geändert.',
+    errorTitle: 'Fehler',
+    updateFailedMsg: 'Passwort konnte nicht aktualisiert werden. Bitte versuche es erneut.',
+    ok: 'OK',
+    validCurrentRequired: 'Aktuelles Passwort ist erforderlich',
+    validMinLength: 'Passwort muss mindestens 8 Zeichen lang sein',
+    validUpper: 'Passwort muss mindestens einen Großbuchstaben enthalten',
+    validLower: 'Passwort muss mindestens einen Kleinbuchstaben enthalten',
+    validNumber: 'Passwort muss mindestens eine Zahl enthalten',
+    validConfirmRequired: 'Bitte bestätige dein Passwort',
+    validMatch: 'Passwörter stimmen nicht überein',
+  },
+
+  // ─── Appearance ────────────────────────────────
+  appearance: {
+    headerTitle: 'Darstellung',
+    description: 'Wähle, wie Game Over aussehen soll. Deine Auswahl bleibt sitzungsübergreifend gespeichert.',
+    darkLabel: 'Midnight Navy',
+    darkDesc: 'Editorial-Dunkel — Standard, wie in den Mockups',
+    lightLabel: 'Ivory Paper',
+    lightDesc: 'Warmes Off-White — Editorial-Hell-Variante',
+    systemLabel: 'System',
+    systemDesc: 'Gerätedarstellung folgen',
   },
 
   // ─── Create Event Wizard ───────────────────────
