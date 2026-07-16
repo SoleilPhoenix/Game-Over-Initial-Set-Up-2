@@ -61,11 +61,11 @@ const EXPENSE_CATEGORIES: ExpenseCategory[] = [
 ];
 
 const REFUND_TEMPLATES = [
-  { key: 'hotel_deposit',    label: 'Hotel Security Deposit',  icon: 'home-outline',            color: '#3B82F6', bg: 'rgba(59,130,246,0.15)'  },
-  { key: 'venue_deposit',    label: 'Event Venue Deposit',     icon: 'storefront-outline',      color: '#8B5CF6', bg: 'rgba(139,92,246,0.15)'  },
-  { key: 'activity_payment', label: 'Activity Pre-payment',    icon: 'game-controller-outline', color: '#F97316', bg: 'rgba(249,115,22,0.15)'  },
-  { key: 'transport_prepay', label: 'Transport Pre-payment',   icon: 'car-outline',             color: '#10B981', bg: 'rgba(16,185,129,0.15)'  },
-  { key: 'restaurant_deposit', label: 'Restaurant Deposit',   icon: 'restaurant-outline',      color: '#EC4899', bg: 'rgba(236,72,153,0.15)'  },
+  { key: 'hotel_deposit',      labelKey: 'refundHotelDeposit',      icon: 'home-outline',            color: '#3B82F6', bg: 'rgba(59,130,246,0.15)'  },
+  { key: 'venue_deposit',      labelKey: 'refundVenueDeposit',      icon: 'storefront-outline',      color: '#8B5CF6', bg: 'rgba(139,92,246,0.15)'  },
+  { key: 'activity_payment',   labelKey: 'refundActivityPayment',   icon: 'game-controller-outline', color: '#F97316', bg: 'rgba(249,115,22,0.15)'  },
+  { key: 'transport_prepay',   labelKey: 'refundTransportPrepay',   icon: 'car-outline',             color: '#10B981', bg: 'rgba(16,185,129,0.15)'  },
+  { key: 'restaurant_deposit', labelKey: 'refundRestaurantDeposit', icon: 'restaurant-outline',      color: '#EC4899', bg: 'rgba(236,72,153,0.15)'  },
 ];
 
 // Unique colors for custom categories / custom refunds (never overlap with EXPENSE_CATEGORIES or REFUND_TEMPLATES)
@@ -801,7 +801,7 @@ export default function BudgetDashboardScreen() {
           />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={styles.eventSelectorLabel}>
-              {t.budget.totalBudget ? 'CURRENT EVENT' : 'CURRENT EVENT'}
+              {t.budget.currentEventLabel}
             </Text>
             <Text style={styles.eventSelectorName} numberOfLines={1}>
               {selectedEventName}
@@ -1071,7 +1071,7 @@ export default function BudgetDashboardScreen() {
           {isOrganizer && !isPackageFrozen && (
             <View style={{ marginBottom: 16 }}>
               <GoldButton
-                label="Share Invite — Invite Friends to Join"
+                label={t.budget.shareInviteBanner}
                 fullWidth
                 size="md"
                 onPress={handleInvite}
@@ -1091,7 +1091,7 @@ export default function BudgetDashboardScreen() {
                       <XStack justifyContent="space-between" alignItems="flex-start">
                         <YStack flex={1}>
                           <Text fontSize={10} fontWeight="700" color={theme.accentGold} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
-                            Total Package Paid
+                            {t.budget.totalPackagePaid}
                           </Text>
                           <Text fontSize={36} fontWeight="700" color={theme.accentGold} letterSpacing={-1} style={{ marginTop: 4 }}>
                             {formatCurrencyRounded(budgetStats.totalBudget)}
@@ -1103,7 +1103,7 @@ export default function BudgetDashboardScreen() {
                       </XStack>
                       <XStack alignItems="center" gap={8} style={{ marginTop: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.ghostBorder }}>
                         <Ionicons name="checkmark-circle" size={16} color={theme.success} />
-                        <Text fontSize={13} color={theme.textSecondary}>All scheduled payments confirmed</Text>
+                        <Text fontSize={13} color={theme.textSecondary}>{t.budget.allPaymentsConfirmed}</Text>
                       </XStack>
                     </View>
                     {/* Card 2 — Amount Due €0 → gray amount */}
@@ -1111,14 +1111,14 @@ export default function BudgetDashboardScreen() {
                       <View style={{ width: 4, backgroundColor: theme.accentGold }} />
                       <YStack flex={1} padding={20} gap={6}>
                         <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
-                          Amount Due
+                          {t.budget.amountDueLabel}
                         </Text>
                         <Text fontSize={36} fontWeight="700" color={theme.textTertiary} letterSpacing={-1}>
                           {formatCurrencyRounded(0)}
                         </Text>
                         <View style={{ alignSelf: 'flex-start', backgroundColor: `${theme.success}1A`, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginTop: 2 }}>
                           <Text fontSize={11} fontWeight="700" color={theme.success} letterSpacing={0.5} style={{ textTransform: 'uppercase' }}>
-                            ✓  Clear Balance
+                            {t.budget.clearBalanceBadge}
                           </Text>
                         </View>
                       </YStack>
@@ -1136,7 +1136,7 @@ export default function BudgetDashboardScreen() {
                           <XStack justifyContent="space-between" alignItems="flex-start">
                             <YStack flex={1}>
                               <Text fontSize={10} fontWeight="700" color={theme.accentGold} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
-                                Deposit Paid (25%)
+                                {t.budget.depositPaidLabel}
                               </Text>
                               <Text fontSize={36} fontWeight="700" color={theme.accentGold} letterSpacing={-1} style={{ marginTop: 4 }}>
                                 {fmtDeposit}
@@ -1152,7 +1152,7 @@ export default function BudgetDashboardScreen() {
                           <View style={{ width: 4, backgroundColor: isUrgent ? '#F97316' : theme.accentGold }} />
                           <YStack flex={1} padding={20} gap={4}>
                             <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
-                              Amount Due (75%)
+                              {t.budget.amountDue75Label}
                             </Text>
                             <Text fontSize={36} fontWeight="700" color="#F97316" letterSpacing={-1}>
                               {fmtDue}
@@ -1202,7 +1202,7 @@ export default function BudgetDashboardScreen() {
                     <View style={styles.guestRemainingInfo}>
                       <Ionicons name="information-circle-outline" size={18} color={theme.textSecondary} />
                       <Text style={styles.guestRemainingText}>
-                        The remaining {formatCurrencyRounded(budgetStats.pending)} will be paid by the organizer 14 days before the event.
+                        {t.budget.guestRemainingText.replace('{{amount}}', formatCurrencyRounded(budgetStats.pending))}
                       </Text>
                     </View>
                   )
@@ -1383,7 +1383,7 @@ export default function BudgetDashboardScreen() {
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 >
                   <Ionicons name="add-circle-outline" size={16} color={theme.accentGold} />
-                  <Text fontSize={12} fontWeight="500" color={theme.accentGold}>Add</Text>
+                  <Text fontSize={12} fontWeight="500" color={theme.accentGold}>{t.budget.addBtn}</Text>
                 </Pressable>
               </XStack>
               <View style={styles.glassCard}>
@@ -1407,8 +1407,8 @@ export default function BudgetDashboardScreen() {
                             </Text>
                             {catExpenses.length === 0 && item.packageNote && (
                               <>
-                                <Text fontSize={12} color={theme.textTertiary}>Extra cost beyond package</Text>
-                                <Text fontSize={11} color="rgba(156,163,175,0.65)">Pre & post-event</Text>
+                                <Text fontSize={12} color={theme.textTertiary}>{t.budget.extraCostBeyondPackage}</Text>
+                                <Text fontSize={11} color="rgba(156,163,175,0.65)">{t.budget.prePostEvent}</Text>
                               </>
                             )}
                             {catExpenses.length === 0 && !item.packageNote && (
@@ -1468,7 +1468,7 @@ export default function BudgetDashboardScreen() {
                     <Ionicons name="add" size={18} color={theme.textTertiary} />
                   </View>
                   <Text style={{ fontSize: 14, color: theme.textTertiary, flex: 1 }}>
-                    Add custom category
+                    {t.budget.addCustomCategory}
                   </Text>
                   <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                 </Pressable>
@@ -1486,14 +1486,14 @@ export default function BudgetDashboardScreen() {
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 >
                   <Ionicons name="add-circle-outline" size={16} color={theme.accentGold} />
-                  <Text fontSize={12} fontWeight="500" color={theme.accentGold}>Add</Text>
+                  <Text fontSize={12} fontWeight="500" color={theme.accentGold}>{t.budget.addBtn}</Text>
                 </Pressable>
               </XStack>
               <View style={styles.glassCard}>
                 {addedRefunds.length === 0 ? (
                   <Pressable onPress={openRefundModal} style={styles.emptyRefundBox}>
                     <Ionicons name="receipt-outline" size={22} color={theme.textTertiary} />
-                    <Text style={styles.emptyRefundText}>Tap + Add to track a refund</Text>
+                    <Text style={styles.emptyRefundText}>{t.budget.emptyRefundText}</Text>
                   </Pressable>
                 ) : (
                   addedRefunds.map((refund, i) => (
@@ -1554,7 +1554,7 @@ export default function BudgetDashboardScreen() {
                   /* ── Mode 1: Category picker ── */
                   <>
                     <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
-                      <Text style={styles.modalTitle}>Select Category</Text>
+                      <Text style={styles.modalTitle}>{t.budget.selectCategoryTitle}</Text>
                       <Pressable onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
                         <Ionicons name="close" size={22} color={theme.textSecondary} />
                       </Pressable>
@@ -1597,7 +1597,7 @@ export default function BudgetDashboardScreen() {
                       <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
                         <Ionicons name="add" size={18} color={theme.textTertiary} />
                       </View>
-                      <Text style={[styles.templateLabel, { color: theme.textTertiary }]}>Add custom category</Text>
+                      <Text style={[styles.templateLabel, { color: theme.textTertiary }]}>{t.budget.addCustomCategory}</Text>
                       <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                     </Pressable>
                   </>
@@ -1616,7 +1616,7 @@ export default function BudgetDashboardScreen() {
                             <Text style={styles.modalTitle}>
                               {expCat.labelKey in t.budget ? (t.budget as any)[expCat.labelKey] : expCat.labelKey}
                             </Text>
-                            <Text style={styles.modalNote}>{catExpenses.length} expense{catExpenses.length !== 1 ? 's' : ''}</Text>
+                            <Text style={styles.modalNote}>{catExpenses.length === 1 ? t.budget.expenseCountOne : t.budget.expenseCountMany.replace('{{count}}', String(catExpenses.length))}</Text>
                           </YStack>
                           <Pressable onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
                             <Ionicons name="close" size={22} color={theme.textSecondary} />
@@ -1644,8 +1644,8 @@ export default function BudgetDashboardScreen() {
                               <YStack flex={1}>
                                 <Text style={{ fontSize: 14, fontWeight: '500', color: theme.textPrimary }}>{exp.description}</Text>
                                 <Text style={{ fontSize: 11, color: theme.textTertiary }}>
-                                  {exp.paidBy === 'other' ? `Paid by ${exp.paidByPerson || 'someone else'}` : 'Paid by you'}
-                                  {exp.contributors.length > 0 ? ` · ${exp.contributors.length} contributors` : ''}
+                                  {exp.paidBy === 'other' ? t.budget.paidByPersonLabel.replace('{{name}}', exp.paidByPerson || t.budget.paidBySomeoneElse) : t.budget.paidByYou}
+                                  {exp.contributors.length > 0 ? ` · ${t.budget.contributorsSuffix.replace('{{count}}', String(exp.contributors.length))}` : ''}
                                 </Text>
                               </YStack>
                               <Ionicons name="pencil-outline" size={14} color={theme.textTertiary} style={{ marginRight: 6 }} />
@@ -1668,10 +1668,10 @@ export default function BudgetDashboardScreen() {
                           }}
                         >
                           <Ionicons name="add" size={18} color="#FFFFFF" />
-                          <Text style={styles.submitButtonText}>Add Another</Text>
+                          <Text style={styles.submitButtonText}>{t.budget.expenseAddAnother}</Text>
                         </Pressable>
                         <Pressable style={{ marginTop: 12, alignItems: 'center' }} onPress={() => setExpenseModal(prev => ({ ...prev, categoryKey: null }))}>
-                          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>← Change category</Text>
+                          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{t.budget.expenseChangeCategory}</Text>
                         </Pressable>
                       </>
                     );
@@ -1699,16 +1699,16 @@ export default function BudgetDashboardScreen() {
                             <Ionicons name="close" size={22} color={theme.textSecondary} />
                           </Pressable>
                         </XStack>
-                        <Text style={styles.inputLabel}>What was this expense for?</Text>
+                        <Text style={styles.inputLabel}>{t.budget.expenseWhatFor}</Text>
                         <TextInput
                           style={styles.modalInput}
-                          placeholder="e.g. Hotel booking, train tickets..."
+                          placeholder={t.budget.expenseWhatForPlaceholder}
                           placeholderTextColor={theme.textTertiary}
                           value={expenseModal.description}
                           onChangeText={v => setExpenseModal(prev => ({ ...prev, description: v }))}
                           autoCapitalize="sentences"
                         />
-                        <Text style={styles.inputLabel}>Amount (€)</Text>
+                        <Text style={styles.inputLabel}>{t.budget.expenseAmount}</Text>
                         <TextInput
                           style={styles.modalInput}
                           placeholder="0.00"
@@ -1717,7 +1717,7 @@ export default function BudgetDashboardScreen() {
                           onChangeText={v => setExpenseModal(prev => ({ ...prev, amount: v }))}
                           keyboardType="decimal-pad"
                         />
-                        <Text style={styles.inputLabel}>Who paid?</Text>
+                        <Text style={styles.inputLabel}>{t.budget.expenseWhoPaid}</Text>
                         <XStack gap={10} style={{ marginBottom: expenseModal.paidBy === 'other' ? 12 : 20 }}>
                           {(['you', 'other'] as const).map(opt => (
                             <Pressable
@@ -1726,7 +1726,7 @@ export default function BudgetDashboardScreen() {
                               onPress={() => { setExpenseModal(prev => ({ ...prev, paidBy: opt, paidByPerson: opt !== 'other' ? null : prev.paidByPerson })); }}
                             >
                               <Text style={[styles.paidByText, expenseModal.paidBy === opt && styles.paidByTextActive]}>
-                                {opt === 'you' ? 'You' : 'Someone else'}
+                                {opt === 'you' ? t.budget.expenseYou : t.budget.expenseSomeoneElse}
                               </Text>
                             </Pressable>
                           ))}
@@ -1741,8 +1741,8 @@ export default function BudgetDashboardScreen() {
                             >
                               <Text style={[styles.dropdownButtonText, expenseModal.paidByPerson && { color: theme.textPrimary }]}>
                                 {expenseModal.paidByPerson
-                                  ? payerOptions.find(c => c.id === expenseModal.paidByPerson)?.name ?? 'Select person'
-                                  : 'Select person'}
+                                  ? payerOptions.find(c => c.id === expenseModal.paidByPerson)?.name ?? t.budget.expenseSelectPerson
+                                  : t.budget.expenseSelectPerson}
                               </Text>
                               <Ionicons
                                 name={expenseModal.payerDropdownOpen ? 'chevron-up' : 'chevron-down'}
@@ -1790,7 +1790,7 @@ export default function BudgetDashboardScreen() {
                           if (contributorOptions.length === 0) return null;
                           return (
                             <>
-                              <Text style={styles.inputLabel}>Who should contribute?</Text>
+                              <Text style={styles.inputLabel}>{t.budget.expenseWhoShouldContribute}</Text>
                               {contributorOptions.map(contributor => {
                                 const selected = expenseModal.contributors.includes(contributor.id);
                                 return (
@@ -1820,7 +1820,7 @@ export default function BudgetDashboardScreen() {
                           disabled={!expenseModal.description.trim() || !expenseModal.amount.trim()}
                         >
                           <Text style={styles.submitButtonText}>
-                            {expenseModal.editingIndex !== null ? 'Save Changes' : 'Add Expense'}
+                            {expenseModal.editingIndex !== null ? t.budget.expenseSaveChanges : t.budget.expenseAddBtn}
                           </Text>
                         </Pressable>
                         <Pressable
@@ -1834,7 +1834,7 @@ export default function BudgetDashboardScreen() {
                           }}
                         >
                           <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-                            {hasExisting ? '← Back to list' : '← Change category'}
+                            {hasExisting ? t.budget.expenseBackToList : t.budget.expenseChangeCategory}
                           </Text>
                         </Pressable>
                       </>
@@ -1857,7 +1857,7 @@ export default function BudgetDashboardScreen() {
                 <View style={styles.modalDragHandle} />
               </View>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
-                <Text style={styles.modalTitle}>Track a Refund</Text>
+                <Text style={styles.modalTitle}>{t.budget.trackARefund}</Text>
                 <Pressable onPress={() => setRefundModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
                   <Ionicons name="close" size={22} color={theme.textSecondary} />
                 </Pressable>
@@ -1866,22 +1866,25 @@ export default function BudgetDashboardScreen() {
               {!refundModal.templateKey ? (
                 /* Template selection */
                 <>
-                  <Text style={styles.inputLabel}>Choose a refund type</Text>
-                  {REFUND_TEMPLATES.map(tmpl => (
-                    <Pressable
-                      key={tmpl.key}
-                      style={styles.templateRow}
-                      onPress={() => {
-                        setRefundModal(prev => ({ ...prev, templateKey: tmpl.key, description: tmpl.label }));
-                      }}
-                    >
-                      <View style={[styles.refundIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
-                        <Ionicons name={tmpl.icon as any} size={18} color={theme.accentGold} />
-                      </View>
-                      <Text style={styles.templateLabel}>{tmpl.label}</Text>
-                      <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
-                    </Pressable>
-                  ))}
+                  <Text style={styles.inputLabel}>{t.budget.chooseRefundType}</Text>
+                  {REFUND_TEMPLATES.map(tmpl => {
+                    const label = (t.budget as any)[tmpl.labelKey] as string;
+                    return (
+                      <Pressable
+                        key={tmpl.key}
+                        style={styles.templateRow}
+                        onPress={() => {
+                          setRefundModal(prev => ({ ...prev, templateKey: tmpl.key, description: label }));
+                        }}
+                      >
+                        <View style={[styles.refundIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+                          <Ionicons name={tmpl.icon as any} size={18} color={theme.accentGold} />
+                        </View>
+                        <Text style={styles.templateLabel}>{label}</Text>
+                        <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+                      </Pressable>
+                    );
+                  })}
                   {/* Custom refund */}
                   <Pressable
                     style={styles.templateRow}
@@ -1890,21 +1893,21 @@ export default function BudgetDashboardScreen() {
                     <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
                       <Ionicons name="add" size={18} color={theme.textTertiary} />
                     </View>
-                    <Text style={[styles.templateLabel, { color: theme.textTertiary }]}>Custom description</Text>
+                    <Text style={[styles.templateLabel, { color: theme.textTertiary }]}>{t.budget.refundCustomDescription}</Text>
                     <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                   </Pressable>
                 </>
               ) : (
                 /* Refund form */
                 <>
-                  <Text style={styles.inputLabel}>Description</Text>
+                  <Text style={styles.inputLabel}>{t.budget.refundDescription}</Text>
                   <TextInput
                     style={styles.modalInput}
                     value={refundModal.description}
                     onChangeText={v => setRefundModal(prev => ({ ...prev, description: v }))}
                     autoCapitalize="sentences"
                   />
-                  <Text style={styles.inputLabel}>Expected Amount (€)</Text>
+                  <Text style={styles.inputLabel}>{t.budget.refundExpectedAmount}</Text>
                   <TextInput
                     style={styles.modalInput}
                     placeholder="0.00"
@@ -1918,10 +1921,10 @@ export default function BudgetDashboardScreen() {
                     onPress={submitRefund}
                     disabled={!refundModal.description.trim() || !refundModal.amount.trim()}
                   >
-                    <Text style={styles.submitButtonText}>Track Refund</Text>
+                    <Text style={styles.submitButtonText}>{t.budget.refundSubmit}</Text>
                   </Pressable>
                   <Pressable style={{ marginTop: 12, marginBottom: 8, alignItems: 'center' }} onPress={() => setRefundModal(prev => ({ ...prev, templateKey: null }))}>
-                    <Text style={{ color: theme.textSecondary, fontSize: 13 }}>← Change type</Text>
+                    <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{t.budget.refundChangeType}</Text>
                   </Pressable>
                 </>
               )}
@@ -1941,15 +1944,15 @@ export default function BudgetDashboardScreen() {
                 <View style={styles.modalDragHandle} />
               </View>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
-                <Text style={styles.modalTitle}>New Category</Text>
+                <Text style={styles.modalTitle}>{t.budget.newCategoryTitle}</Text>
                 <Pressable onPress={() => setCustomCatModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
                   <Ionicons name="close" size={22} color={theme.textSecondary} />
                 </Pressable>
               </XStack>
-              <Text style={styles.inputLabel}>Category name</Text>
+              <Text style={styles.inputLabel}>{t.budget.categoryNameLabel}</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. Decorations, Photography..."
+                placeholder={t.budget.categoryNamePlaceholder}
                 placeholderTextColor={theme.textTertiary}
                 value={customCatModal.label}
                 onChangeText={v => setCustomCatModal(prev => ({ ...prev, label: v }))}
@@ -1978,7 +1981,7 @@ export default function BudgetDashboardScreen() {
                   setExpenseModal({ visible: true, categoryKey: key, viewMode: 'form', description: '', amount: '', paidBy: 'you', paidByPerson: null, contributors: [], editingIndex: null, payerDropdownOpen: false });
                 }}
               >
-                <Text style={styles.submitButtonText}>Create & Add Expense</Text>
+                <Text style={styles.submitButtonText}>{t.budget.createAndAddExpense}</Text>
               </Pressable>
             </Animated.View>
           </KeyboardAvoidingView>
