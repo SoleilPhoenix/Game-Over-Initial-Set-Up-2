@@ -489,7 +489,7 @@ export default function CommunicationScreen() {
   const pollSheetPan = useRef(makeSheetPan(pollSheetY, () => setPollModalVisible(false))).current;
   const channelSheetPan = useRef(makeSheetPan(channelSheetY, () => setChannelInputModal({ visible: false, category: null }))).current;
   const pollInfoSheetPan = useRef(makeSheetPan(pollInfoSheetY, () => setPollInfoModal(null))).current;
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const COMM_TABS = ['topics', 'voting'] as const;
   const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchTabAnimated } = useSwipeTabs(COMM_TABS, selectedTab, setSelectedTab);
 
@@ -639,10 +639,10 @@ export default function CommunicationScreen() {
 
   // Derived local sections for current event (per-event map)
   const DEFAULT_LOCAL_SECTIONS: LocalChannelSection[] = [
-    { id: 'general', title: 'GENERAL', channels: [] },
-    { id: 'accommodation', title: 'ACCOMMODATION', channels: [] },
-    { id: 'activities', title: 'ACTIVITIES', channels: [] },
-    { id: 'budget', title: 'BUDGET', channels: [] },
+    { id: 'general', title: t.chat.general.toUpperCase(), channels: [] },
+    { id: 'accommodation', title: t.chat.accommodation.toUpperCase(), channels: [] },
+    { id: 'activities', title: t.chat.activities.toUpperCase(), channels: [] },
+    { id: 'budget', title: t.chat.budgetCategory.toUpperCase(), channels: [] },
   ];
   const localSections = localChannelsByEvent[selectedEventId ?? 'none'] ?? DEFAULT_LOCAL_SECTIONS;
 
@@ -700,20 +700,21 @@ export default function CommunicationScreen() {
   };
 
   const handleDeletePoll = (poll: import('@/repositories/polls').PollWithOptions) => {
+    const tr = getTranslation();
     Alert.alert(
-      'Delete Poll',
-      `Delete "${poll.title}"? This cannot be undone.`,
+      (tr.chat as any).deletePollTitle,
+      (tr.chat as any).deletePollMsg.replace('{{title}}', poll.title),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: tr.common.cancel, style: 'cancel' },
         {
-          text: 'Delete',
+          text: tr.common.delete,
           style: 'destructive',
           onPress: async () => {
             setPollInfoModal(null);
             try {
               await deletePollMutation.mutateAsync(poll.id);
             } catch {
-              Alert.alert('Error', 'Could not delete poll.');
+              Alert.alert((tr.chat as any).errorTitle, (tr.chat as any).deletePollFailed);
             }
           },
         },
@@ -810,10 +811,10 @@ export default function CommunicationScreen() {
     const POLL_CATEGORY_CONFIG = POLL_CATEGORY_CONFIG_CONST;
 
     const VOTING_CATEGORIES = [
-      { id: 'general' as const,       label: 'GENERAL',       icon: 'chatbubbles',     color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
-      { id: 'accommodation' as const, label: 'ACCOMMODATION',  icon: 'bed',             color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
-      { id: 'activities' as const,    label: 'ACTIVITIES',     icon: 'game-controller', color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
-      { id: 'budget' as const,        label: 'BUDGET',         icon: 'cash',            color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+      { id: 'general' as const,       label: t.chat.general.toUpperCase(),         icon: 'chatbubbles',     color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+      { id: 'accommodation' as const, label: t.chat.accommodation.toUpperCase(),   icon: 'bed',             color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+      { id: 'activities' as const,    label: t.chat.activities.toUpperCase(),      icon: 'game-controller', color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+      { id: 'budget' as const,        label: t.chat.budgetCategory.toUpperCase(),  icon: 'cash',            color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
     ];
 
     // Denominator: total participants minus the honoree (bachelor/bachelorette)
@@ -847,7 +848,7 @@ export default function CommunicationScreen() {
                     style={styles.newPollButton}
                     hitSlop={8}
                   >
-                    <Text style={[styles.newPollButtonText, { color: cfg.color }]}>New Poll</Text>
+                    <Text style={[styles.newPollButtonText, { color: cfg.color }]}>{(t.chat as any).newPoll}</Text>
                     <Ionicons name="add-circle" size={18} color={cfg.color} />
                   </Pressable>
                 )}
@@ -855,11 +856,11 @@ export default function CommunicationScreen() {
               {catPolls.length === 0 ? (
                 isPastEvent ? (
                   <View style={styles.emptyChannelBox}>
-                    <Text style={styles.emptyChannelText}>No polls were created.</Text>
+                    <Text style={styles.emptyChannelText}>{(t.chat as any).noPollsCreated}</Text>
                   </View>
                 ) : (
                   <Pressable onPress={() => handleCreatePoll(catDef.id)} style={styles.emptyChannelBox}>
-                    <Text style={styles.emptyChannelText}>No polls yet — tap to create</Text>
+                    <Text style={styles.emptyChannelText}>{(t.chat as any).noPollsYet}</Text>
                   </Pressable>
                 )
               ) : (
@@ -886,7 +887,11 @@ export default function CommunicationScreen() {
                           </YStack>
                           <View style={[styles.pollStatusBadge, { backgroundColor: statusBg }]}>
                             <Text style={[styles.pollStatusText, { color: statusColor }]}>
-                              {poll.status === 'closing_soon' ? 'CLOSING SOON' : (poll.status ?? 'ACTIVE').toUpperCase()}
+                              {poll.status === 'closing_soon'
+                                ? (t.chat as any).pollStatusClosingSoon
+                                : poll.status === 'closed'
+                                  ? (t.chat as any).pollStatusClosed
+                                  : (t.chat as any).pollStatusActive}
                             </Text>
                           </View>
                           <Pressable onPress={() => setPollInfoModal(poll)} hitSlop={8}>
@@ -919,10 +924,11 @@ export default function CommunicationScreen() {
                         </YStack>
                         <XStack justifyContent="space-between" alignItems="center">
                           <Text style={styles.pollFooter}>
-                            {totalVotes} of {denominator} voted{poll.ends_at ? ` \u00b7 Ends ${new Date(poll.ends_at).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}` : ''}
+                            {(t.chat as any).pollVotedOf.replace('{{count}}', String(totalVotes)).replace('{{total}}', String(denominator))}
+                            {poll.ends_at ? ` \u00b7 ${(t.chat as any).pollEndsSuffix.replace('{{date}}', new Date(poll.ends_at).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { day: 'numeric', month: 'short' }))}` : ''}
                           </Text>
                           {!userVoted && (
-                            <Text style={[styles.pollFooter, { color: '#C6A75E' }]}>Tap option to vote</Text>
+                            <Text style={[styles.pollFooter, { color: '#C6A75E' }]}>{(t.chat as any).pollTapToVote}</Text>
                           )}
                         </XStack>
                       </View>
@@ -940,7 +946,7 @@ export default function CommunicationScreen() {
             onPress={() => handleCreatePoll('general')}
           >
             <Ionicons name="add-circle-outline" size={24} color="#C6A75E" />
-            <Text style={styles.newTopicText}>Create New Poll</Text>
+            <Text style={styles.newTopicText}>{(t.chat as any).createNewPoll}</Text>
           </Pressable>
         )}
       </>
@@ -1301,22 +1307,22 @@ export default function CommunicationScreen() {
                 <View style={styles.modalHandle} />
               </View>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
-                <Text style={styles.modalTitle}>New Poll</Text>
+                <Text style={styles.modalTitle}>{(t.chat as any).newPoll}</Text>
                 <Pressable onPress={() => setPollModalVisible(false)} hitSlop={10}>
                   <Ionicons name="close" size={22} color={'rgba(255,255,255,0.48)'} />
                 </Pressable>
               </XStack>
               <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-                <Text style={styles.modalLabel}>Question</Text>
+                <Text style={styles.modalLabel}>{(t.chat as any).pollQuestion}</Text>
                 <TextInput
                   style={styles.modalInput}
                   value={pollQuestion}
                   onChangeText={setPollQuestion}
-                  placeholder="What should we decide?"
+                  placeholder={(t.chat as any).pollQuestionPlaceholder}
                   placeholderTextColor={'rgba(255,255,255,0.48)'}
                   multiline={false}
                 />
-                <Text style={styles.modalLabel}>Options</Text>
+                <Text style={styles.modalLabel}>{(t.chat as any).pollOptions}</Text>
                 {pollOptions.map((opt, i) => (
                   <TextInput
                     key={i}
@@ -1328,7 +1334,7 @@ export default function CommunicationScreen() {
                       updated[i] = val;
                       setPollOptions(updated);
                     }}
-                    placeholder={`Option ${i + 1}`}
+                    placeholder={(t.chat as any).pollOptionPlaceholder.replace('{{n}}', String(i + 1))}
                     placeholderTextColor={'rgba(255,255,255,0.48)'}
                   />
                 ))}
@@ -1344,16 +1350,16 @@ export default function CommunicationScreen() {
                   style={[styles.addOptionButton, { marginTop: 8, marginBottom: 0 }]}
                 >
                   <Ionicons name="add-circle-outline" size={18} color="#C6A75E" />
-                  <Text style={styles.addOptionText}>Add Option</Text>
+                  <Text style={styles.addOptionText}>{(t.chat as any).pollAddOption}</Text>
                 </Pressable>
               )}
               {/* Cancel / Create Poll — fixed outside ScrollView so always visible above keyboard */}
               <View style={{ flexDirection: 'row', gap: 10, paddingTop: 12, paddingBottom: 4 }}>
                 <Pressable style={[styles.modalButton, styles.modalButtonCancel]} onPress={() => setPollModalVisible(false)}>
-                  <Text style={styles.modalButtonCancelText}>Cancel</Text>
+                  <Text style={styles.modalButtonCancelText}>{t.common.cancel}</Text>
                 </Pressable>
                 <Pressable style={[styles.modalButton, styles.modalButtonCreate, (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2) && styles.modalButtonCreateDisabled]} onPress={handleSubmitPoll}>
-                  <Text style={styles.modalButtonCreateText}>Create Poll</Text>
+                  <Text style={styles.modalButtonCreateText}>{(t.chat as any).pollCreatePoll}</Text>
                 </Pressable>
               </View>
             </Animated.View>
@@ -1371,7 +1377,7 @@ export default function CommunicationScreen() {
                 <View style={styles.modalHandle} />
               </View>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
-                <Text style={styles.modalTitle}>Poll Info</Text>
+                <Text style={styles.modalTitle}>{(t.chat as any).pollInfoTitle}</Text>
                 <Pressable onPress={() => setPollInfoModal(null)} hitSlop={8}>
                   <Ionicons name="close" size={22} color={'rgba(255,255,255,0.48)'} />
                 </Pressable>
@@ -1396,8 +1402,8 @@ export default function CommunicationScreen() {
                       <Ionicons name="person-outline" size={18} color={catCfg.color} />
                       <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
                         {pollInfoModal.created_by === user?.id
-                          ? (user?.user_metadata?.full_name ?? 'You')
-                          : 'Another member'}
+                          ? (user?.user_metadata?.full_name ?? (t.chat as any).pollYou)
+                          : (t.chat as any).pollAnotherMember}
                       </Text>
                     </XStack>
                     {/* 4. Date */}
@@ -1413,13 +1419,21 @@ export default function CommunicationScreen() {
                     <XStack gap={10} alignItems="center" marginBottom={20}>
                       <Ionicons name="stats-chart-outline" size={18} color={catCfg.color} />
                       <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
-                        {pollInfoModal.total_votes} vote{pollInfoModal.total_votes !== 1 ? 's' : ''} · {(pollInfoModal.status ?? 'active').toUpperCase()}
+                        {(pollInfoModal.total_votes === 1
+                          ? (t.chat as any).pollVoteCountOne
+                          : (t.chat as any).pollVoteCountMany.replace('{{count}}', String(pollInfoModal.total_votes)))}
+                        {' · '}
+                        {pollInfoModal.status === 'closing_soon'
+                          ? (t.chat as any).pollStatusClosingSoon
+                          : pollInfoModal.status === 'closed'
+                            ? (t.chat as any).pollStatusClosed
+                            : (t.chat as any).pollStatusActive}
                       </Text>
                     </XStack>
                     {/* Existing options with delete (owner only) */}
                     {pollInfoModal.options && pollInfoModal.options.length > 0 && (
                       <View style={{ marginBottom: 16 }}>
-                        <Text style={[styles.modalLabel, { marginTop: 0 }]}>Options</Text>
+                        <Text style={[styles.modalLabel, { marginTop: 0 }]}>{(t.chat as any).pollOptions}</Text>
                         {pollInfoModal.options.map(opt => (
                           <View
                             key={opt.id}
@@ -1427,7 +1441,11 @@ export default function CommunicationScreen() {
                           >
                             <View style={{ flex: 1, backgroundColor: '#1A2F47', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
                               <Text style={{ color: '#FFFFFF', fontSize: 14 }}>{opt.label}</Text>
-                              <Text style={{ color: 'rgba(255,255,255,0.48)', fontSize: 11, marginTop: 2 }}>{opt.vote_count ?? 0} vote{(opt.vote_count ?? 0) !== 1 ? 's' : ''}</Text>
+                              <Text style={{ color: 'rgba(255,255,255,0.48)', fontSize: 11, marginTop: 2 }}>
+                                {(opt.vote_count ?? 0) === 1
+                                  ? (t.chat as any).pollVoteCountOne
+                                  : (t.chat as any).pollVoteCountMany.replace('{{count}}', String(opt.vote_count ?? 0))}
+                              </Text>
                             </View>
                             {pollInfoModal.created_by === user?.id && (
                               <Pressable
@@ -1451,11 +1469,11 @@ export default function CommunicationScreen() {
               {/* Add Option row — outside ScrollView so it stays visible when keyboard opens */}
               {pollInfoModal?.created_by === user?.id && (
                 <>
-                  <Text style={[styles.modalLabel, { marginTop: 12, marginBottom: 6 }]}>Add Option</Text>
+                  <Text style={[styles.modalLabel, { marginTop: 12, marginBottom: 6 }]}>{(t.chat as any).pollAddOption}</Text>
                   <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                     <TextInput
                       style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                      placeholder="New option…"
+                      placeholder={(t.chat as any).pollNewOptionPlaceholder}
                       placeholderTextColor={'rgba(255,255,255,0.48)'}
                       value={newOptionText}
                       onChangeText={setNewOptionText}
@@ -1482,7 +1500,7 @@ export default function CommunicationScreen() {
                   onPress={() => handleDeletePoll(pollInfoModal)}
                 >
                   <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                  <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14, marginLeft: 6 }}>Delete Poll</Text>
+                  <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14, marginLeft: 6 }}>{(t.chat as any).deletePollTitle}</Text>
                 </Pressable>
               )}
             </Animated.View>

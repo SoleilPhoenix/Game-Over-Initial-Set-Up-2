@@ -1079,17 +1079,14 @@ export default function BudgetDashboardScreen() {
         <>
           {/* Event Selector — scrolls with content */}
           {renderEventSelector()}
-          {/* Share Invite — organizers only, hidden after event ends */}
+          {/* Share Invite — organizers only, hidden after event ends. Matches Chat's shareEventCard style. */}
           {isOrganizer && !isPackageFrozen && (
-            <View style={{ marginBottom: 16 }}>
-              <GoldButton
-                label={t.budget.shareInviteBanner}
-                fullWidth
-                size="md"
-                onPress={handleInvite}
-                testID="budget-invite-button"
-              />
-            </View>
+            <Pressable style={styles.shareEventCard} onPress={handleInvite} testID="budget-invite-button">
+              <Ionicons name="share-social-outline" size={18} color="#1F2A44" />
+              <Text style={styles.shareEventTitle} numberOfLines={1}>
+                {t.chat.shareInvite} {'—'} {t.chat.inviteFriendsToJoin}
+              </Text>
+            </Pressable>
           )}
           {selectedCategory === 'package' ? (
             <>
@@ -2183,6 +2180,23 @@ const makeRemindStyles = (theme: EditorialTheme) => StyleSheet.create({
 });
 
 const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
+  // Share Invite pill — matches Chat's shareEventCard for a consistent look across tabs
+  shareEventCard: {
+    backgroundColor: '#C6A75E',
+    borderRadius: 999,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  shareEventTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F2A44',
+  },
   container: {
     flex: 1,
     backgroundColor: theme.background,
