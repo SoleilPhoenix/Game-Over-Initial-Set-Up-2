@@ -1293,7 +1293,7 @@ export default function BudgetDashboardScreen() {
                           </Text>
                           {isCurrentUser && (
                             <View style={{ backgroundColor: theme.surfaceHigh, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                              <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textTertiary, letterSpacing: 0.4 }}>YOU</Text>
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textTertiary, letterSpacing: 0.4 }}>{(t.budget as any).youBadge}</Text>
                             </View>
                           )}
                         </XStack>
@@ -1554,7 +1554,7 @@ export default function BudgetDashboardScreen() {
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Animated.View style={[styles.modalSheet, { paddingBottom: insets.bottom + 96, transform: [{ translateY: expenseSheetY }] }]}>
+            <Animated.View style={[styles.modalSheet, { paddingBottom: insets.bottom + 120, transform: [{ translateY: expenseSheetY }] }]}>
               <View {...expenseSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>
@@ -1759,9 +1759,9 @@ export default function BudgetDashboardScreen() {
                                 color={theme.textTertiary}
                               />
                             </Pressable>
-                            {/* Dropdown list — max 4 rows visible, inner scroll for rest */}
+                            {/* Dropdown list — max 3 rows visible, inner scroll for rest (short enough to clear the tab bar overlap) */}
                             {expenseModal.payerDropdownOpen && (
-                              <View style={[styles.dropdownList, { maxHeight: 176 }]}>
+                              <View style={[styles.dropdownList, { maxHeight: 132 }]}>
                                 <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                                 {payerOptions.map((c, i) => {
                                   const sel = expenseModal.paidByPerson === c.id;
@@ -1861,7 +1861,7 @@ export default function BudgetDashboardScreen() {
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setRefundModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Animated.View style={[styles.modalSheet, { paddingBottom: insets.bottom + 96, transform: [{ translateY: refundSheetY }] }]}>
+            <Animated.View style={[styles.modalSheet, { paddingBottom: insets.bottom + 120, transform: [{ translateY: refundSheetY }] }]}>
               <View {...refundSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>
@@ -1948,7 +1948,7 @@ export default function BudgetDashboardScreen() {
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setCustomCatModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Animated.View style={[styles.modalSheet, { paddingBottom: insets.bottom + 96, transform: [{ translateY: customCatSheetY }] }]}>
+            <Animated.View style={[styles.modalSheet, { paddingBottom: insets.bottom + 120, transform: [{ translateY: customCatSheetY }] }]}>
               <View {...customCatSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>

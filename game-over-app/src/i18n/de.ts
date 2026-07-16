@@ -551,6 +551,7 @@ const de: TranslationKeys = {
     groupContributions: 'Gruppenbeiträge',
     remindAll: 'Alle erinnern',
     you: '(Du)',
+    youBadge: 'DU',
     contribution: '{{amount}} bezahlt',
     paid: 'Bezahlt',
     pending: 'Ausstehend',

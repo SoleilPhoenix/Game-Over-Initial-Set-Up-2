@@ -264,18 +264,6 @@ export default function ProfileScreen() {
             </Pressable>
           )}
 
-          {/* Notifications Section */}
-          <MenuSection title={t.profile.notifications}>
-            <MenuItem
-              icon="notifications"
-              iconColor="#C6A75E"
-              iconBgColor="rgba(198, 167, 94, 0.2)"
-              label={t.profile.notificationPreferences}
-              onPress={() => router.push('/profile/notifications')}
-              testID="menu-notifications"
-            />
-          </MenuSection>
-
           {/* Saved Packages Section */}
           {favorites.length > 0 && (
             <YStack marginBottom="$5">
@@ -342,6 +330,15 @@ export default function ProfileScreen() {
               label={t.profile.passwordSecurity}
               onPress={() => router.push('/profile/security')}
               testID="menu-security"
+            />
+            <View style={styles.separator} />
+            <MenuItem
+              icon="notifications"
+              iconColor="#C6A75E"
+              iconBgColor="rgba(198, 167, 94, 0.2)"
+              label={t.profile.notificationPreferences}
+              onPress={() => router.push('/profile/notifications')}
+              testID="menu-notifications"
             />
             <View style={styles.separator} />
             <MenuItem

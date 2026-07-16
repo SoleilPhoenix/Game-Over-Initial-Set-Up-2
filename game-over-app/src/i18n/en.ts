@@ -559,6 +559,7 @@ const en = {
     groupContributions: 'Group Contributions',
     remindAll: 'Remind All',
     you: '(You)',
+    youBadge: 'YOU',
     contribution: '{{amount}} paid',
     paid: 'Paid',
     pending: 'Pending',
