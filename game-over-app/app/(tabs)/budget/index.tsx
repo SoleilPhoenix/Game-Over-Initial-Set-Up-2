@@ -339,6 +339,18 @@ export default function BudgetDashboardScreen() {
     return (events || []).filter((e: EventWithDetails) => e.status === 'booked' || e.status === 'completed');
   }, [events]);
 
+  // Events shown in the selector dropdown: exclude past events — those live in the Events tab.
+  // Uses start-of-today so today's events are still visible.
+  const selectableEvents = useMemo(() => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const cutoff = startOfToday.getTime();
+    return bookedEvents.filter((e: EventWithDetails) => {
+      if (!e.start_date) return true;
+      return new Date(e.start_date).getTime() >= cutoff;
+    });
+  }, [bookedEvents]);
+
   // Check if we have booked events FIRST (before any other queries)
   const hasBookedEvents = bookedEvents.length > 0;
 
@@ -791,7 +803,7 @@ export default function BudgetDashboardScreen() {
       <View style={styles.eventSelectorWrapper}>
         <Pressable
           style={[styles.eventSelectorCard, !eventIdParam && { borderColor: theme.accentGold, borderWidth: 1.5 }]}
-          onPress={() => !eventIdParam && bookedEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
+          onPress={() => !eventIdParam && selectableEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
           testID="budget-event-selector"
         >
           <Image
@@ -814,7 +826,7 @@ export default function BudgetDashboardScreen() {
               </Text>
             )}
           </View>
-          {!eventIdParam && bookedEvents.length > 1 && (
+          {!eventIdParam && selectableEvents.length > 1 && (
             <View style={styles.eventSelectorChevron}>
               <Ionicons
                 name={eventSelectorOpen ? 'chevron-up' : 'chevron-down'}
@@ -827,7 +839,7 @@ export default function BudgetDashboardScreen() {
 
         {!eventIdParam && eventSelectorOpen && (
           <View style={styles.eventDropdown}>
-            {[...bookedEvents]
+            {[...selectableEvents]
               .sort((a, b) => {
                 if (a.id === selectedEventId) return -1;
                 if (b.id === selectedEventId) return 1;
@@ -1545,7 +1557,7 @@ export default function BudgetDashboardScreen() {
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Animated.View style={[styles.modalSheet, { transform: [{ translateY: expenseSheetY }] }]}>
+            <Animated.View style={[styles.modalSheet, { paddingBottom: insets.bottom + 96, transform: [{ translateY: expenseSheetY }] }]}>
               <View {...expenseSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>
@@ -1852,7 +1864,7 @@ export default function BudgetDashboardScreen() {
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setRefundModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Animated.View style={[styles.modalSheet, { transform: [{ translateY: refundSheetY }] }]}>
+            <Animated.View style={[styles.modalSheet, { paddingBottom: insets.bottom + 96, transform: [{ translateY: refundSheetY }] }]}>
               <View {...refundSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>
@@ -1939,7 +1951,7 @@ export default function BudgetDashboardScreen() {
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setCustomCatModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Animated.View style={[styles.modalSheet, { transform: [{ translateY: customCatSheetY }] }]}>
+            <Animated.View style={[styles.modalSheet, { paddingBottom: insets.bottom + 96, transform: [{ translateY: customCatSheetY }] }]}>
               <View {...customCatSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>
@@ -2692,10 +2704,10 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 24,
     paddingTop: 12,
-    paddingBottom: 16,
+    // paddingBottom is set inline (insets.bottom + 96) so the submit button clears the tab bar
     borderTopWidth: 1,
     borderColor: theme.ghostBorder,
-    maxHeight: '85%',
+    maxHeight: '90%',
   },
   modalDragHandle: {
     width: 36,

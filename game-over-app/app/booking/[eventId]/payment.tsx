@@ -435,7 +435,7 @@ export default function PaymentScreen() {
             <Card testID="payment-amount-card" backgroundColor="#12253A" borderColor="rgba(230,220,200,0.15)" borderWidth={1}>
               <YStack alignItems="center" gap="$2">
                 <Text fontSize="$2" color="$textSecondary">
-                  {paramAmountCents > 0 ? 'Remaining Balance' : isFullPayment ? t.booking.totalAmount : t.booking.depositLabel}
+                  {paramAmountCents > 0 ? t.booking.remainingBalance : isFullPayment ? t.booking.totalAmount : t.booking.depositLabel}
                 </Text>
                 <Text fontSize="$9" fontWeight="800" color="$primary">
                   {formatPrice(amountDue)}
@@ -450,7 +450,7 @@ export default function PaymentScreen() {
                     )}
                     <Text fontSize="$2" color="$textSecondary">
                       {paramAmountCents > 0
-                        ? `(${formatPrice(paramTotalCents - paramAmountCents)} = 25% Deposit Already Paid)`
+                        ? t.booking.depositAlreadyPaid.replace('{{amount}}', formatPrice(paramTotalCents - paramAmountCents))
                         : t.booking.perPersonGuests.replace('{{price}}', formatPriceDecimal(activePricing.perPersonCents)).replace('{{count}}', String(activePricing.payingParticipantCount))}
                     </Text>
                   </YStack>
@@ -560,9 +560,9 @@ export default function PaymentScreen() {
                         const dateStr = (event as any).start_date || wizardStartDate;
                         if (!dateStr) return null;
                         const d = new Date(dateStr);
-                        return isNaN(d.getTime()) ? null : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        return isNaN(d.getTime()) ? null : d.toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                       })(),
-                      `${urlParticipantCount || wizardParticipantCount || activePricing.payingParticipantCount || ''} Guests`,
+                      t.booking.guestsSuffix.replace('{{count}}', String(urlParticipantCount || wizardParticipantCount || activePricing.payingParticipantCount || '')),
                     ].filter(Boolean).join(' \u2022 ')}
                   </Text>
                 </YStack>
@@ -620,7 +620,7 @@ export default function PaymentScreen() {
           >
             <Text color="#0D1B2A" fontWeight="700" fontSize="$3">
               {paramAmountCents > 0
-                ? t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(amountDue))
+                ? t.booking.payRemainingButtonLabel.replace('{{amount}}', formatPrice(amountDue))
                 : isFullPayment
                   ? ((t.booking as any).payFullButtonLabel?.replace('{{amount}}', formatPrice(amountDue)) || t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(amountDue)))
                   : t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(depositCents))}

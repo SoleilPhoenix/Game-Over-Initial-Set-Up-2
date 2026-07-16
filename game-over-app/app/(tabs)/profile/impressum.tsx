@@ -58,7 +58,6 @@ const CONTENT = {
     disclaimerText: 'The contents of this app have been created with the utmost care. However, we cannot guarantee the accuracy, completeness, or timeliness of the content. As a service provider, we are responsible for our own content in this app in accordance with § 7 para. 1 DDG and general laws. However, we are not obligated to monitor transmitted or stored third-party information.',
     dataProtectionHeading: 'Data Protection',
     dataProtectionText: 'The use of our app is generally possible without providing personal data. Where personal data is collected, this is always done on a voluntary basis. This data will not be passed on to third parties without your explicit consent. For more information, please see our Privacy Policy.',
-    placeholderNote: 'Placeholder Impressum. Update with complete company details before publication.',
   },
   de: {
     companyHeading: 'Angaben gem. § 5 DDG',
@@ -75,7 +74,6 @@ const CONTENT = {
     disclaimerText: 'Die Inhalte dieser App wurden mit größter Sorgfalt erstellt. Für die Richtigkeit, Vollständigkeit und Aktualität der Inhalte können wir jedoch keine Gewähr übernehmen. Als Diensteanbieter sind wir gemäß § 7 Abs. 1 DDG für eigene Inhalte in dieser App nach den allgemeinen Gesetzen verantwortlich. Eine Verpflichtung zur Überwachung übermittelter oder gespeicherter fremder Informationen besteht jedoch nicht.',
     dataProtectionHeading: 'Datenschutz',
     dataProtectionText: 'Die Nutzung unserer App ist in der Regel ohne Angabe personenbezogener Daten möglich. Soweit personenbezogene Daten erhoben werden, erfolgt dies stets auf freiwilliger Basis. Diese Daten werden ohne Ihre ausdrückliche Zustimmung nicht an Dritte weitergegeben. Weitere Informationen finden Sie in unserer Datenschutzerklärung.',
-    placeholderNote: 'Platzhalter-Impressum. Vor Veröffentlichung mit vollständigen Unternehmensdaten aktualisieren.',
   },
 };
 
@@ -191,19 +189,6 @@ export default function ImpressumScreen() {
           </Text>
         </YStack>
 
-        {/* Placeholder note */}
-        <XStack
-          padding="$3"
-          backgroundColor="rgba(251, 146, 60, 0.1)"
-          borderRadius={12}
-          gap="$2"
-          alignItems="center"
-        >
-          <Ionicons name="warning-outline" size={16} color="#FB923C" />
-          <Text fontSize={12} color={'rgba(255,255,255,0.48)'} flex={1}>
-            {c.placeholderNote}
-          </Text>
-        </XStack>
       </ScrollView>
     </View>
   );

@@ -66,6 +66,8 @@ export function GoldButton({
               TYPE_SCALE.titleMd,
               { color: contentColor, fontFamily: TYPE_SCALE.titleMd.fontFamily },
             ]}
+            numberOfLines={1}
+            adjustsFontSizeToFit
           >
             {label}
           </Text>

@@ -546,6 +546,18 @@ export default function CommunicationScreen() {
     return (events || []).filter(e => e.status === 'booked' || e.status === 'completed');
   }, [events]);
 
+  // Events shown in the selector dropdown: exclude past events — those live in the Events tab.
+  // Uses start-of-today so today's events are still visible.
+  const selectableEvents = useMemo(() => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const cutoff = startOfToday.getTime();
+    return bookedEvents.filter(e => {
+      if (!e.start_date) return true;
+      return new Date(e.start_date).getTime() >= cutoff;
+    });
+  }, [bookedEvents]);
+
   // Load participant count from cache when event changes
   useEffect(() => {
     if (!selectedEventId) return;
@@ -981,7 +993,7 @@ export default function CommunicationScreen() {
       <View style={styles.eventSelectorWrapper}>
         <Pressable
           style={[styles.eventSelectorCard, !eventIdParam && { borderColor: '#C6A75E', borderWidth: 1.5 }]}
-          onPress={() => !eventIdParam && bookedEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
+          onPress={() => !eventIdParam && selectableEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
           testID="event-selector"
         >
           {/* City thumbnail */}
@@ -1005,7 +1017,7 @@ export default function CommunicationScreen() {
               </Text>
             )}
           </YStack>
-          {!eventIdParam && bookedEvents.length > 1 && (
+          {!eventIdParam && selectableEvents.length > 1 && (
             <View style={styles.eventSelectorChevron}>
               <Ionicons
                 name={eventSelectorOpen ? 'chevron-up' : 'chevron-down'}
@@ -1019,7 +1031,7 @@ export default function CommunicationScreen() {
         {/* Dropdown — hidden when locked to single event from Event Summary */}
         {!eventIdParam && eventSelectorOpen && (
           <View style={styles.eventDropdown}>
-            {[...bookedEvents]
+            {[...selectableEvents]
               .sort((a, b) => {
                 // Selected event always first
                 if (a.id === selectedEventId) return -1;
