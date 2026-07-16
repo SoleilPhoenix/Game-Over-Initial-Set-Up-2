@@ -111,7 +111,7 @@ const en = {
     impressum: 'Impressum',
     // FAQ items
     faq1Q: 'How does Game-Over.app work?',
-    faq1A: 'Game-Over.app helps you plan the perfect bachelor or bachelorette party. Create an event, choose a city, select a package that fits your group, and we handle the rest. Invite your friends, split costs fairly, and coordinate everything through the app.',
+    faq1A: 'Game-Over.app helps you plan the perfect Bachelor / Bachelorette Party (JGA / Junggesellenabschied / Junggesellinnenabschied). Create an event, choose a city, select a package that fits your group, and we handle the rest. Invite your friends, split costs fairly, and coordinate everything through the app.',
     faq2Q: 'How do I create an event?',
     faq2A: 'Tap the "+" button on the Events tab or "Start New Plan". Follow the 4-step wizard: enter key details (name, city, party type), set preferences, configure participant options, and choose a package. Your progress is auto-saved as a draft.',
     faq3Q: 'What packages are available?',
@@ -242,11 +242,7 @@ const en = {
     headerTitle: 'Appearance',
     description: 'Choose how Game Over looks. Your preference is saved across sessions.',
     darkLabel: 'Midnight Navy',
-    darkDesc: 'Editorial dark — default, matches mockups',
     lightLabel: 'Ivory Paper',
-    lightDesc: 'Warm off-white — editorial light variant',
-    systemLabel: 'System',
-    systemDesc: 'Follow device appearance setting',
   },
 
   // ─── Create Event Wizard ───────────────────────

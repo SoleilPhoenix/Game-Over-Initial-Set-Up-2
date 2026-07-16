@@ -1,6 +1,6 @@
 /**
  * Appearance Selection Screen
- * Dark / Light / System — mirrors the language.tsx pattern.
+ * Midnight Navy is the only active option; Ivory Paper is planned but not wired up yet.
  * Uses themeStore for persistence and useTheme for live re-render.
  */
 
@@ -17,8 +17,8 @@ import { useTranslation } from '@/i18n';
 interface Option {
   code: ThemeMode;
   label: string;
-  description: string;
   icon: keyof typeof Ionicons.glyphMap;
+  comingSoon?: boolean;
 }
 
 export default function AppearanceScreen() {
@@ -27,24 +27,23 @@ export default function AppearanceScreen() {
   const { theme, mode, setMode } = useTheme();
   const { t } = useTranslation();
 
+  // Ivory Paper is not wired up yet and System mode was removed — anyone previously on
+  // those falls back to dark so the selection UI stays consistent.
+  React.useEffect(() => {
+    if (mode !== 'dark') setMode('dark');
+  }, [mode, setMode]);
+
   const OPTIONS: Option[] = [
     {
       code: 'dark',
       label: t.appearance.darkLabel,
-      description: t.appearance.darkDesc,
       icon: 'moon',
     },
     {
       code: 'light',
       label: t.appearance.lightLabel,
-      description: t.appearance.lightDesc,
       icon: 'sunny',
-    },
-    {
-      code: 'system',
-      label: t.appearance.systemLabel,
-      description: t.appearance.systemDesc,
-      icon: 'phone-portrait',
+      comingSoon: true,
     },
   ];
 
@@ -96,15 +95,17 @@ export default function AppearanceScreen() {
             ]}
           >
             {OPTIONS.map((opt, index) => {
-              const isSelected = mode === opt.code;
+              const isSelected = mode === opt.code && !opt.comingSoon;
+              const isDisabled = opt.comingSoon === true;
               return (
                 <React.Fragment key={opt.code}>
                   {index > 0 && (
                     <View style={[styles.separator, { backgroundColor: theme.ghostBorder }]} />
                   )}
                   <Pressable
-                    style={styles.item}
-                    onPress={() => setMode(opt.code)}
+                    style={[styles.item, isDisabled && styles.itemDisabled]}
+                    onPress={() => { if (!isDisabled) setMode(opt.code); }}
+                    disabled={isDisabled}
                     testID={`appearance-${opt.code}`}
                   >
                     <XStack alignItems="center" gap="$3" flex={1}>
@@ -123,22 +124,24 @@ export default function AppearanceScreen() {
                           color={isSelected ? theme.accentGold : theme.textSecondary}
                         />
                       </View>
-                      <YStack flex={1}>
-                        <Text
-                          fontSize={15}
-                          fontWeight={isSelected ? '700' : '500'}
-                          color={isSelected ? theme.textGold : theme.textPrimary}
-                        >
-                          {opt.label}
-                        </Text>
-                        <Text fontSize={12} color={theme.textTertiary}>
-                          {opt.description}
-                        </Text>
-                      </YStack>
+                      <Text
+                        flex={1}
+                        fontSize={15}
+                        fontWeight={isSelected ? '700' : '500'}
+                        color={isSelected ? theme.textGold : theme.textPrimary}
+                      >
+                        {opt.label}
+                      </Text>
                     </XStack>
-                    {isSelected && (
+                    {isDisabled ? (
+                      <View style={[styles.comingSoonBadge, { backgroundColor: theme.surfaceHigh, borderColor: theme.ghostBorder }]}>
+                        <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={0.5} style={{ textTransform: 'uppercase' }}>
+                          {t.common.comingSoon}
+                        </Text>
+                      </View>
+                    ) : isSelected ? (
                       <Ionicons name="checkmark-circle" size={24} color={theme.accentGold} />
-                    )}
+                    ) : null}
                   </Pressable>
                 </React.Fragment>
               );
@@ -167,6 +170,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     padding: 16,
+  },
+  itemDisabled: {
+    opacity: 0.55,
+  },
+  comingSoonBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: StyleSheet.hairlineWidth,
   },
   iconSlot: {
     width: 36,

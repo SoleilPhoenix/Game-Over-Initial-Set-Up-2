@@ -134,7 +134,7 @@ export default function ImpressumScreen() {
             {c.companyHeading}
           </Text>
 
-          <InfoRow label={c.operator} value="Game-Over.app" />
+          <InfoRow label={c.operator} value="Game Over UG" />
           <InfoRow label={c.owner} value="Soheil Sharqzad" />
           <InfoRow label={c.address} value={c.addressValue} />
           <InfoRow label={c.city} value={c.cityValue} />

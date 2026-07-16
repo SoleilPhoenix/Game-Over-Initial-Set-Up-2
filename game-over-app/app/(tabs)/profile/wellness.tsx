@@ -344,20 +344,15 @@ export default function WellnessScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 100, paddingTop: 24 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero banner */}
+        {/* Hero banner — title is already in the screen header above, so we only show the subtitle here */}
         <View style={styles.heroBanner} marginHorizontal="$4" marginBottom="$6">
           <XStack gap="$3" alignItems="center">
             <View style={styles.heroIconBg}>
               <Ionicons name="heart" size={28} color="#F472B6" />
             </View>
-            <YStack flex={1}>
-              <Text fontSize={16} fontWeight="700" color={'#FFFFFF'}>
-                {t.wellness.title}
-              </Text>
-              <Text fontSize={13} color={'rgba(255,255,255,0.72)'} marginTop={2}>
-                {t.wellness.subtitle}
-              </Text>
-            </YStack>
+            <Text flex={1} fontSize={14} color={'rgba(255,255,255,0.85)'} lineHeight={20}>
+              {t.wellness.subtitle}
+            </Text>
           </XStack>
         </View>
 
