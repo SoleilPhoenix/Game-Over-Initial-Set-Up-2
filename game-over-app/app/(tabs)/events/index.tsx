@@ -287,7 +287,19 @@ export default function EventsScreen() {
     // and events actively being processed through the booking flow
     const visible = deduplicatedEvents.filter((e) => {
       if (e.status === 'draft') return false;
-      if (wizardCreatedEventId && e.id === wizardCreatedEventId) return false;
+      // Hide the freshly-created event ONLY while it is still mid-booking. Once it
+      // reaches 'booked'/'completed' it must always appear — even if createdEventId
+      // was never cleared (e.g. app killed before the confirmation screen, or a
+      // stale persisted value from an earlier session). This is the single source
+      // of "event vanished after booking" bugs, so gate strictly on status.
+      if (
+        wizardCreatedEventId &&
+        e.id === wizardCreatedEventId &&
+        e.status !== 'booked' &&
+        e.status !== 'completed'
+      ) {
+        return false;
+      }
       return true;
     });
     let filtered: EventWithDetails[];

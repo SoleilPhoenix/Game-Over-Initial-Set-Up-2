@@ -215,10 +215,10 @@ export default function NotificationsScreen() {
                   </View>
                   <YStack flex={1}>
                     <Text fontSize={14} fontWeight="500" color={theme.textPrimary}>
-                      Payment Due Alerts
+                      {t.notificationPrefs.paymentDueAlerts}
                     </Text>
                     <Text fontSize={12} color={theme.textSecondary}>
-                      Remind when a balance is due soon
+                      {t.notificationPrefs.paymentDueAlertsDesc}
                     </Text>
                   </YStack>
                 </XStack>
@@ -274,7 +274,7 @@ export default function NotificationsScreen() {
               <Ionicons name="information-circle" size={20} color={theme.textSecondary} />
               <YStack flex={1}>
                 <Text fontSize={13} color={theme.textSecondary}>
-                  You can manage notification permissions in your device settings at any time.
+                  {t.notificationPrefs.manageNotifPermissions}
                 </Text>
               </YStack>
             </XStack>

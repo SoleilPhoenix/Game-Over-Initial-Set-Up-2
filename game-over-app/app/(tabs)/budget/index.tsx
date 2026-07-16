@@ -25,6 +25,7 @@ import { useTabBarStore } from '@/stores/tabBarStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { PastEventBanner } from '@/components/ui/PastEventBanner';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import { loadBudgetInfo, loadDesiredParticipants, loadGuestDetails, type BudgetInfo, type GuestDetail } from '@/lib/participantCountCache';
 import { supabase } from '@/lib/supabase/client';
@@ -1066,8 +1067,8 @@ export default function BudgetDashboardScreen() {
         <>
           {/* Event Selector — scrolls with content */}
           {renderEventSelector()}
-          {/* Share Invite — organizers only, between event card and budget stats */}
-          {isOrganizer && (
+          {/* Share Invite — organizers only, hidden after event ends */}
+          {isOrganizer && !isPackageFrozen && (
             <View style={{ marginBottom: 16 }}>
               <GoldButton
                 label="Share Invite — Invite Friends to Join"
@@ -1080,24 +1081,6 @@ export default function BudgetDashboardScreen() {
           )}
           {selectedCategory === 'package' ? (
             <>
-            {/* Frozen banner — shown when event has ended; package costs are no longer editable */}
-            {isPackageFrozen && (
-              <View
-                style={{
-                  flexDirection: 'row', alignItems: 'center', gap: 8,
-                  paddingVertical: 12, paddingHorizontal: 14,
-                  backgroundColor: 'rgba(230,220,200,0.06)',
-                  borderRadius: 12, borderWidth: 1, borderColor: 'rgba(230,220,200,0.15)',
-                  marginBottom: 12,
-                }}
-                testID="budget-package-frozen-banner"
-              >
-                <Ionicons name="lock-closed-outline" size={16} color={theme.textSecondary} />
-                <Text style={{ flex: 1, fontSize: 13, color: theme.textSecondary }}>
-                  {(t.budget as any).packageFrozen || 'Package costs are locked — the event has already taken place.'}
-                </Text>
-              </View>
-            )}
             {/* Total Budget Cards — two side-by-side standalone cards, no outer wrapper */}
             <YStack gap={12} marginBottom={16}>
                 {budgetStats.percentage >= 100 ? (
@@ -1546,6 +1529,16 @@ export default function BudgetDashboardScreen() {
         </>
       </ScrollView>
       </Animated.View>
+
+      {/* Past-event footer banner — Package tab only, pinned above the bottom tab bar AND the central FAB */}
+      {isPackageFrozen && selectedCategory === 'package' && (
+        <PastEventBanner
+          floating
+          bottomInset={120}
+          testID="budget-package-frozen-banner"
+          message={(t.budget as any).packageFrozen || 'Package costs are locked — the event has already taken place.'}
+        />
+      )}
 
       {/* ─── Expense Popup — inline, no Modal (matches destination.tsx drag pattern) ─── */}
       {expenseModal.visible && (

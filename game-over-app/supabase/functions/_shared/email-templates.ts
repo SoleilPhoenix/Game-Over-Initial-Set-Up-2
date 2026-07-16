@@ -367,118 +367,115 @@ interface GuestInviteEmailParams {
   inviteCode?: string;       // show prominently so guest can type it in the app
 }
 
+/**
+ * Guest invite email — self-contained, on-brand (Midnight Navy #0D1B2A +
+ * Champagne Gold #C6A75E). Copy is benefit-first and conversion-oriented:
+ * a rhetorical pain hook, five sharp benefits, a prominent invite code, and a
+ * single strong CTA. Does NOT use the legacy baseLayout (which is the old blue
+ * palette) — this is the primary outbound email, so it owns its own markup.
+ */
 export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string {
   const { organizerName, honoreeName, inviteUrl, guestFirstName, inviteCode } = params;
-  const greeting = guestFirstName ? `Hi ${guestFirstName},` : 'Hi there,';
+  const greeting = guestFirstName ? `Hi ${guestFirstName},` : 'Hey,';
 
-  const bodyHtml = `
-    <p style="margin:0 0 16px;color:#FFFFFF;font-size:16px;line-height:1.5;">
-      ${greeting}
-    </p>
+  // Brand palette
+  const NAVY = '#0D1B2A';
+  const CARD = '#1A2F47';
+  const GOLD = '#C6A75E';
+  const TEXT = '#E7ECF2';
+  const MUTED = '#AEB9C7';
+  const FAINT = '#7A8699';
+  const BORDER = 'rgba(198,167,94,0.22)';
 
-    <p style="margin:0 0 24px;color:#D1D5DB;font-size:15px;line-height:1.6;">
-      <strong style="color:#FFFFFF;">${organizerName}</strong> is planning something special
-      for <strong style="color:#FFFFFF;">${honoreeName}</strong> and you're on the guest list!
-    </p>
-
-    <!-- Highlight box -->
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
-      <tr>
-        <td style="background:linear-gradient(135deg,rgba(90,126,176,0.2),rgba(139,92,246,0.15));border:1px solid rgba(90,126,176,0.3);border-radius:14px;padding:24px;text-align:center;">
-          <p style="margin:0 0 8px;font-size:32px;">🎉</p>
-          <p style="margin:0 0 6px;color:#FFFFFF;font-size:18px;font-weight:700;">
-            You're invited to celebrate
-          </p>
-          <p style="margin:0;color:#5A7EB0;font-size:22px;font-weight:800;">
-            ${honoreeName}
-          </p>
+  const benefit = (icon: string, bold: string, rest: string) => `
+    <tr><td style="padding:0 0 15px;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+        <td width="28" valign="top" style="font-size:17px;line-height:1.5;">${icon}</td>
+        <td style="color:${MUTED};font-size:14px;line-height:1.55;">
+          <strong style="color:#FFFFFF;">${bold}</strong> — ${rest}
         </td>
-      </tr>
-    </table>
+      </tr></table>
+    </td></tr>`;
 
-    <!-- Why Game Over -->
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:16px;">
-      <tr>
-        <td>
-          <p style="margin:0 0 12px;color:#9CA3AF;font-size:13px;text-align:center;">Why join instead of endless back-and-forth coordination?</p>
-        </td>
-      </tr>
-    </table>
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
-      <tr>
-        <td style="background-color:#23272F;border-radius:12px;padding:24px;">
+  const codeBlock = inviteCode ? `
+    <tr><td style="padding:26px 40px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="background:${NAVY};border:1px solid ${GOLD};border-radius:14px;padding:22px;text-align:center;">
+          <p style="margin:0 0 8px;color:${MUTED};font-size:11px;letter-spacing:2px;font-weight:700;text-transform:uppercase;">Your personal invite code</p>
+          <p style="margin:0;color:${GOLD};font-size:34px;font-weight:800;letter-spacing:8px;font-family:'Courier New',monospace;">${inviteCode}</p>
+        </td></tr>
+      </table>
+    </td></tr>` : '';
+
+  const howToJoin = inviteCode ? `
+    <tr><td style="padding:16px 40px 0;">
+      <p style="margin:0;color:${MUTED};font-size:13px;line-height:1.7;text-align:center;">
+        New here? Download <strong style="color:#FFFFFF;">Game Over</strong> &rarr; tap <em>"Got an invite code?"</em> &rarr; enter <strong style="color:${GOLD};">${inviteCode}</strong>
+      </p>
+    </td></tr>` : '';
+
+  return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>You're invited to ${honoreeName}'s party</title></head>
+<body style="margin:0;padding:0;background:${NAVY};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${NAVY};">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:${CARD};border-radius:20px;overflow:hidden;border:1px solid ${BORDER};">
+
+        <!-- Header -->
+        <tr><td style="padding:34px 40px 26px;text-align:center;border-bottom:1px solid ${BORDER};">
+          <div style="font-size:13px;letter-spacing:6px;color:${GOLD};font-weight:700;">GAME&nbsp;OVER</div>
+          <div style="margin-top:9px;font-size:13px;color:${MUTED};">Invitation from ${organizerName}</div>
+        </td></tr>
+
+        <!-- Hero -->
+        <tr><td style="padding:34px 40px 6px;text-align:center;">
+          <div style="font-size:36px;line-height:1;">🎉</div>
+          <p style="margin:14px 0 0;color:${MUTED};font-size:15px;">You're invited to celebrate</p>
+          <p style="margin:6px 0 0;color:#FFFFFF;font-size:30px;font-weight:800;line-height:1.2;">${honoreeName}</p>
+        </td></tr>
+
+        <!-- Intro + hook -->
+        <tr><td style="padding:22px 40px 0;">
+          <p style="margin:0;color:${TEXT};font-size:15px;line-height:1.6;">${greeting}</p>
+          <p style="margin:12px 0 0;color:${TEXT};font-size:15px;line-height:1.6;"><strong style="color:#FFFFFF;">${organizerName}</strong> is planning something unforgettable — and you're on the guest list.</p>
+          <p style="margin:12px 0 0;color:${MUTED};font-size:15px;line-height:1.6;">Dreading the endless group chat and the "who owes what" spreadsheet? Not this time.</p>
+        </td></tr>
+
+        <!-- Benefits -->
+        <tr><td style="padding:22px 40px 0;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-            <tr>
-              <td style="padding-bottom:14px;">
-                <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
-                  ✅ <strong style="color:#FFFFFF;">Eliminates planning stress</strong> — replaces endless back-and-forth with a simple, guided process
-                </p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-bottom:14px;">
-                <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
-                  💰 <strong style="color:#FFFFFF;">Full budget transparency</strong> — see exactly what you pay for, zero hidden costs or awkward money talks
-                </p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-bottom:14px;">
-                <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
-                  🤖 <strong style="color:#FFFFFF;">AI-curated experiences</strong> — activities matched to what your entire group actually wants
-                </p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding-bottom:14px;">
-                <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
-                  ⚡ <strong style="color:#FFFFFF;">Everything in one place</strong> — plans, chat, payments &amp; RSVP, ready in minutes not weeks
-                </p>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <p style="margin:0;color:#D1D5DB;font-size:14px;line-height:1.5;">
-                  🤝 <strong style="color:#FFFFFF;">Preserves your friendships</strong> — no coordination chaos that strains relationships long after the celebration
-                </p>
-              </td>
-            </tr>
+            <tr><td style="background:${NAVY};border:1px solid ${BORDER};border-radius:14px;padding:22px 22px 7px;">
+              <p style="margin:0 0 16px;color:${GOLD};font-size:11px;letter-spacing:1.5px;font-weight:700;text-transform:uppercase;">Why you'll actually look forward to this</p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                ${benefit('🎯', 'One app for everything', 'plans, chat and payments in a single place')}
+                ${benefit('💸', 'Know what you\'ll pay', 'exact costs up front — no hidden fees, no awkward money chats')}
+                ${benefit('🤖', 'Matched to your group', 'AI picks activities you\'ll actually enjoy, not a random checklist')}
+                ${benefit('⚡', 'Sorted in minutes', 'not weeks of back-and-forth in the group chat')}
+                ${benefit('🤝', 'Just show up', 'the coordination stress is gone — for everyone')}
+              </table>
+            </td></tr>
           </table>
-        </td>
-      </tr>
-    </table>
+        </td></tr>
 
-    ${inviteCode ? `
-    <!-- Invite Code Box -->
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-      <tr>
-        <td style="background-color:#23272F;border-radius:12px;padding:24px;text-align:center;border:1px solid rgba(90,126,176,0.3);">
-          <p style="margin:0 0 6px;color:#9CA3AF;font-size:12px;text-transform:uppercase;letter-spacing:1.5px;font-weight:600;">Your Invite Code</p>
-          <p style="margin:0 0 12px;color:#5A7EB0;font-size:34px;font-weight:800;letter-spacing:6px;font-family:monospace;">${inviteCode}</p>
-          <p style="margin:0 0 10px;color:#D1D5DB;font-size:13px;line-height:1.5;">
-            Open the <strong style="color:#FFFFFF;">Game Over app</strong> &rarr; tap <em>"Got an invite code?"</em> &rarr; enter the code above
+        ${codeBlock}
+
+        <!-- CTA -->
+        <tr><td style="padding:28px 40px 0;text-align:center;">
+          <a href="${inviteUrl}" style="display:inline-block;background:${GOLD};color:${NAVY};text-decoration:none;padding:16px 44px;border-radius:12px;font-size:16px;font-weight:800;">Join ${honoreeName}'s Party &rarr;</a>
+        </td></tr>
+
+        ${howToJoin}
+
+        <!-- Footer -->
+        <tr><td style="padding:26px 40px 34px;text-align:center;">
+          <p style="margin:24px 0 0;color:${FAINT};font-size:12px;line-height:1.6;border-top:1px solid ${BORDER};padding-top:20px;">
+            This invite is personal to you and expires in 30 days.<br>
+            Not expecting this? You can safely ignore it. &middot; <a href="mailto:support@game-over.app" style="color:${GOLD};text-decoration:none;font-weight:600;">support@game-over.app</a>
           </p>
-          <a href="https://game-over.app" style="display:inline-block;color:#5A7EB0;font-size:13px;font-weight:600;text-decoration:underline;">
-            Download at game-over.app &rarr;
-          </a>
-        </td>
-      </tr>
-    </table>
-    ` : ''}
+        </td></tr>
 
-    ${ctaButton("Join the Party 🥂", inviteUrl)}
-
-    <p style="margin:0 0 24px;color:#6B7280;font-size:12px;text-align:center;line-height:1.5;">
-      This invite is personal to you and expires in 30 days.<br>
-      If you did not expect this invitation, you can safely ignore this email.
-    </p>
-
-    ${supportLine()}`;
-
-  return baseLayout({
-    title: `You're invited to celebrate ${honoreeName}!`,
-    subtitle: `Invitation from ${organizerName}`,
-    accentColor: '#5A7EB0',
-    bodyHtml,
-  });
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
 }

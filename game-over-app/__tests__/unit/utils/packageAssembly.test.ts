@@ -73,9 +73,9 @@ describe('assemblePackages', () => {
 
   it('prices match tier definitions', () => {
     const pkgs = assemblePackages(FULL_ANSWERS, 'berlin');
-    expect(pkgs[0].price_per_person_cents).toBe(99_00);
-    expect(pkgs[1].price_per_person_cents).toBe(149_00);
-    expect(pkgs[2].price_per_person_cents).toBe(199_00);
+    expect(pkgs[0].price_per_person_cents).toBe(129_00);
+    expect(pkgs[1].price_per_person_cents).toBe(179_00);
+    expect(pkgs[2].price_per_person_cents).toBe(229_00);
   });
 
   it('all feature strings are non-empty strings', () => {

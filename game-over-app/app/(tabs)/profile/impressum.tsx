@@ -48,7 +48,7 @@ const CONTENT = {
     operator: 'Operator',
     owner: 'Owner',
     address: 'Address',
-    addressValue: 'Address will be updated before launch',
+    addressValue: 'Hagebuttenweg 13, 30657 Hannover',
     city: 'Country',
     cityValue: 'Germany',
     contactHeading: 'Contact',
@@ -65,8 +65,8 @@ const CONTENT = {
     operator: 'Betreiber',
     owner: 'Inhaber',
     address: 'Anschrift',
-    addressValue: 'Adresse wird vor Launch aktualisiert',
-    city: 'Stadt',
+    addressValue: 'Hagebuttenweg 13, 30657 Hannover',
+    city: 'Land',
     cityValue: 'Deutschland',
     contactHeading: 'Kontakt',
     email: 'E-Mail',
@@ -135,7 +135,7 @@ export default function ImpressumScreen() {
           </Text>
 
           <InfoRow label={c.operator} value="Game-Over.app" />
-          <InfoRow label={c.owner} value="Soleil Phoenix" />
+          <InfoRow label={c.owner} value="Soheil Sharqzad" />
           <InfoRow label={c.address} value={c.addressValue} />
           <InfoRow label={c.city} value={c.cityValue} />
         </YStack>

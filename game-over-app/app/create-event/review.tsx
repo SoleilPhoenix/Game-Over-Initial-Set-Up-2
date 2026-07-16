@@ -17,7 +17,8 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 
-import { TIER_DISPLAY_NAME, TIER_PRICE_PER_PERSON_CENTS } from '@/constants/packageTiers';
+import { TIER_DISPLAY_NAME, TIER_PRICE_PER_PERSON_CENTS, getTierName } from '@/constants/packageTiers';
+import { useTranslation } from '@/i18n';
 
 // Fallback package lookup for local IDs that don't exist in DB — names + prices from packageTiers
 const FALLBACK_PKG_MAP: Record<string, { name: string; tier: string; price_per_person_cents: number }> = {
@@ -36,6 +37,7 @@ export default function WizardStep5() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [isCreating, setIsCreating] = useState(false);
+  const { language } = useTranslation();
 
   const wizardState = useWizardStore();
   const { mutateAsync: createEvent } = useCreateEvent();
@@ -187,7 +189,7 @@ export default function WizardStep5() {
 
               <YStack gap="$1">
                 <Text fontSize="$5" fontWeight="700" color="$textPrimary">
-                  {selectedPackage.name}
+                  {getTierName(selectedPackage.tier, language) || selectedPackage.name}
                 </Text>
                 <Text fontSize="$4" fontWeight="700" color="$primary">
                   {formatPrice(perPersonCents)} per person

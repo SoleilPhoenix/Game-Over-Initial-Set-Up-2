@@ -15,6 +15,7 @@ import { usePackage } from '@/hooks/queries/usePackages';
 import { useEventSchedule, scheduleKeys } from '@/hooks/queries/useSchedule';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { getTierName } from '@/constants/packageTiers';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useFavoritesStore } from '@/stores/favoritesStore';
@@ -266,7 +267,7 @@ export default function PackageDetailsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { toggleFavorite, isFavorite } = useFavoritesStore();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { data: dbPkg, isLoading } = usePackage(id);
 
   // Load event budget cache when opened from Event Summary (viewOnly mode)
@@ -327,7 +328,7 @@ export default function PackageDetailsScreen() {
         id,
         name: id,
         tier: tierSlug as 'essential' | 'classic' | 'grand',
-        price_per_person_cents: TIER_PRICE_PER_PERSON[tierSlug] || 149_00,
+        price_per_person_cents: TIER_PRICE_PER_PERSON[tierSlug] || 179_00,
         hero_image_url: getPackageImage(citySlug, tierSlug),
         rating: 4.8,
         review_count: tierSlug === 'classic' ? 127 : tierSlug === 'grand' ? 42 : 89,
@@ -413,15 +414,14 @@ export default function PackageDetailsScreen() {
     ? eventBudget.totalParticipants
     : wizardParticipantCount;
 
-  const perPersonCents = pkg.price_per_person_cents || pkg.base_price_cents || TIER_PRICE_PER_PERSON[tier] || 149_00;
+  const perPersonCents = pkg.price_per_person_cents || pkg.base_price_cents || TIER_PRICE_PER_PERSON[tier] || 179_00;
   // In viewOnly mode, show the actual total paid (from cache) if available
   const totalGroupCents = (isViewOnly && eventBudget?.totalCents)
     ? eventBudget.totalCents
     : perPersonCents * participantCount;
 
-  // Display name without city prefix
-  const tierNames: Record<string, string> = { essential: 'Feier', classic: 'Rausch', grand: 'Legende' };
-  const displayName = tierNames[tier] || tier;
+  // Display name without city prefix (language-aware)
+  const displayName = getTierName(tier, language) || tier;
 
   return (
     <YStack flex={1} backgroundColor="$background">

@@ -18,7 +18,8 @@ import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { LinearGradient } from 'expo-linear-gradient';
 import { setDesiredParticipants, setBudgetInfo } from '@/lib/participantCountCache';
 import { assemblePackages } from '@/utils/packageAssembly';
-import { TIER_DISPLAY_NAME, TIER_SIZE_LABEL } from '@/constants/packageTiers';
+import { TIER_SIZE_LABEL, getTierName } from '@/constants/packageTiers';
+import { useTranslation } from '@/i18n';
 
 // Feature counts by tier: S=3, M=4, L=5
 // Fallback packages when DB returns empty (for Berlin, Hamburg, Hannover)
@@ -68,8 +69,9 @@ function PackageSelectionCard({
   onSelect,
   onViewDetails,
 }: PackageSelectionCardProps) {
+  const { t, language } = useTranslation();
   const tierLabel = TIER_SIZE_LABEL[pkg.tier as keyof typeof TIER_SIZE_LABEL] || '';
-  const tierName = TIER_DISPLAY_NAME[pkg.tier as keyof typeof TIER_DISPLAY_NAME] || pkg.name;
+  const tierName = getTierName(pkg.tier, language) || pkg.name;
   const displayName = tierLabel ? `${tierName} (${tierLabel})` : tierName;
 
   const perPersonCents = pkg.price_per_person_cents || pkg.base_price_cents || 0;
@@ -77,7 +79,9 @@ function PackageSelectionCard({
   const displayPrice = pricingMode === 'per_person'
     ? formatPrice(perPersonCents)
     : formatPrice(totalGroupCents);
-  const priceLabel = pricingMode === 'per_person' ? 'Per Person' : `Total (${participantCount} people)`;
+  const priceLabel = pricingMode === 'per_person'
+    ? t.wizard.pricingPerPerson
+    : t.wizard.pricingTotalWithCount.replace('{{count}}', String(participantCount));
 
   // Feature count by tier: S=3, M=4, L=5
   const featureLimit = pkg.tier === 'grand' ? 5 : pkg.tier === 'classic' ? 4 : 3;
@@ -240,6 +244,7 @@ function PackageSelectionCard({
 
 export default function WizardStep4() {
   const router = useRouter();
+  const { t } = useTranslation();
   const [pricingMode, setPricingMode] = useState<'per_person' | 'total_group'>('per_person');
   const [isCreating, setIsCreating] = useState(false);
 
@@ -361,7 +366,7 @@ export default function WizardStep4() {
         // even after the wizard is cleared post-confirmation.
         const selPkg = packages.find(p => p.id === packageId);
         if (selPkg && Array.isArray(selPkg.features) && selPkg.features.length > 0) {
-          const perPerson = (selPkg as any).price_per_person_cents || 149_00;
+          const perPerson = (selPkg as any).price_per_person_cents || 179_00;
           setBudgetInfo(eventId, {
             totalCents: perPerson * wizParticipants,
             perPersonCents: perPerson,
@@ -429,10 +434,10 @@ export default function WizardStep4() {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 120 }}>
         {/* Title */}
         <Text fontSize={22} fontWeight="700" color="#FFFFFF" marginBottom="$1" textAlign="center" style={{ fontFamily: 'Inter_600SemiBold' }}>
-          Choose Your Experience
+          {t.wizard.chooseExperience}
         </Text>
         <Text fontSize={14} color="rgba(255,255,255,0.55)" marginBottom="$5" textAlign="center" style={{ fontFamily: 'Inter_400Regular' }}>
-          Select a tier that fits your group's vibe.
+          {t.wizard.chooseExperienceSubtitle}
         </Text>
 
         {/* Pricing Toggle */}
@@ -461,7 +466,7 @@ export default function WizardStep4() {
               color={pricingMode === 'per_person' ? '#C6A75E' : 'rgba(255,255,255,0.55)'}
               style={{ fontFamily: 'Inter_600SemiBold' }}
             >
-              Per Person
+              {t.wizard.pricingPerPerson}
             </Text>
           </XStack>
           <XStack
@@ -481,7 +486,7 @@ export default function WizardStep4() {
               color={pricingMode === 'total_group' ? '#C6A75E' : 'rgba(255,255,255,0.55)'}
               style={{ fontFamily: 'Inter_600SemiBold' }}
             >
-              Total Group
+              {t.wizard.pricingTotalGroup}
             </Text>
           </XStack>
         </XStack>

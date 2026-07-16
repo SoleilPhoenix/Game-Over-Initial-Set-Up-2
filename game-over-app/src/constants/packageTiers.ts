@@ -4,19 +4,24 @@
  * Internal tier keys ("essential" | "classic" | "grand") are stable identifiers
  * used in DB, RLS, Stripe metadata, and fallback maps. They MUST NOT change.
  *
- * Display names ("Feier" | "Rausch" | "Legende") are user-facing labels and
- * may evolve. Every screen should read from here, not hardcode.
+ * Display names are language-aware:
+ *   DE: Feier / Rausch / Legende
+ *   EN: Party / Hype / Legend
  *
  * Pricing: final all-in prices per person (no separate service fee).
  */
 
 export type PackageTier = 'essential' | 'classic' | 'grand';
+export type SupportedLanguage = 'de' | 'en';
 
-export const TIER_DISPLAY_NAME: Record<PackageTier, string> = {
-  essential: 'Feier',
-  classic: 'Rausch',
-  grand: 'Legende',
+/** Per-language tier display names. */
+export const TIER_DISPLAY_NAME_BY_LANG: Record<SupportedLanguage, Record<PackageTier, string>> = {
+  de: { essential: 'Feier',  classic: 'Rausch', grand: 'Legende' },
+  en: { essential: 'Party',  classic: 'Hype',   grand: 'Legend' },
 };
+
+/** Backwards-compat default — German (preserved for module-scope fallbacks). */
+export const TIER_DISPLAY_NAME: Record<PackageTier, string> = TIER_DISPLAY_NAME_BY_LANG.de;
 
 export const TIER_SIZE_LABEL: Record<PackageTier, string> = {
   essential: 'S',
@@ -30,16 +35,21 @@ export const TIER_PRICE_PER_PERSON_CENTS: Record<PackageTier, number> = {
   grand: 229_00,
 };
 
-/** "Feier (S)" — used in summary, payment, confirmation headers. */
-export function getTierDisplayLabel(tier: string): string {
-  const name = TIER_DISPLAY_NAME[tier as PackageTier] ?? tier;
+/** Returns the tier name in the requested language ("Feier" / "Party"). */
+export function getTierName(tier: string, language: SupportedLanguage = 'de'): string {
+  return TIER_DISPLAY_NAME_BY_LANG[language]?.[tier as PackageTier] ?? tier;
+}
+
+/** "Feier (S)" / "Party (S)" — used in summary, payment, confirmation headers. */
+export function getTierDisplayLabel(tier: string, language: SupportedLanguage = 'de'): string {
+  const name = getTierName(tier, language);
   const size = TIER_SIZE_LABEL[tier as PackageTier];
   return size ? `${name} (${size})` : name;
 }
 
-/** "Berlin Feier" — used to build fallback package names from city + tier. */
-export function getCityTierName(city: string, tier: string): string {
-  const tierName = TIER_DISPLAY_NAME[tier as PackageTier] ?? tier;
+/** "Berlin Feier" / "Berlin Party" — used to build fallback package names. */
+export function getCityTierName(city: string, tier: string, language: SupportedLanguage = 'de'): string {
+  const tierName = getTierName(tier, language);
   const cityName = city.charAt(0).toUpperCase() + city.slice(1);
   return `${cityName} ${tierName}`;
 }

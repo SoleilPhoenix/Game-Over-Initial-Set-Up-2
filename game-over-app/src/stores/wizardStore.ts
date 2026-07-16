@@ -138,7 +138,7 @@ interface WizardActions {
 
   // Step 4 actions
   setSelectedPackageId: (packageId: string) => void;
-  setCreatedEventId: (eventId: string) => void;
+  setCreatedEventId: (eventId: string | null) => void;
 
   // Navigation
   nextStep: () => void;
@@ -312,7 +312,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       // Step 4 actions
       setSelectedPackageId: (packageId: string) =>
         set({ selectedPackageId: packageId, isDirty: true }),
-      setCreatedEventId: (eventId: string) =>
+      setCreatedEventId: (eventId: string | null) =>
         set({ createdEventId: eventId }),
 
       // Navigation

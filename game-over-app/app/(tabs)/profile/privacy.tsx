@@ -56,7 +56,7 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '6. Your Rights (GDPR)',
-      body: 'Under the General Data Protection Regulation (GDPR), you have the right to: Access the personal data we hold about you; Request correction of inaccurate personal data; Request deletion of your personal data ("right to be forgotten"); Object to processing of your personal data; Request restriction of processing; Data portability (receive your data in a structured, machine-readable format); Withdraw consent at any time. To exercise any of these rights, please contact us at: privacy@game-over.app',
+      body: 'Under the General Data Protection Regulation (GDPR), you have the right to: Access the personal data we hold about you; Request correction of inaccurate personal data; Request deletion of your personal data ("right to be forgotten"); Object to processing of your personal data; Request restriction of processing; Data portability (receive your data in a structured, machine-readable format); Withdraw consent at any time. To exercise any of these rights, please contact us at: support@game-over.app',
     },
     {
       title: '7. Data Retention',
@@ -80,7 +80,7 @@ const SECTIONS: Record<string, SectionData[]> = {
     },
     {
       title: '12. Contact Us',
-      body: 'If you have questions or concerns about this Privacy Policy or our data practices, please contact us at:\n\nEmail: privacy@game-over.app\nGeneral: support@game-over.app\nAddress: See Impressum for postal address',
+      body: 'If you have questions or concerns about this Privacy Policy or our data practices, please contact us at:\n\nEmail: support@game-over.app\nAddress: Hagebuttenweg 13, 30657 Hannover, Germany',
     },
   ],
   de: [

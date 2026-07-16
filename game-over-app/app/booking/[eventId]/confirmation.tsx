@@ -29,17 +29,6 @@ const CITY_NAMES: Record<string, string> = {
   '550e8400-e29b-41d4-a716-446655440102': 'Hamburg',
   '550e8400-e29b-41d4-a716-446655440103': 'Hannover',
 };
-const FALLBACK_PKG_NAMES: Record<string, string> = {
-  'berlin-essential':   getTierDisplayLabel('essential'),
-  'berlin-classic':     getTierDisplayLabel('classic'),
-  'berlin-grand':       getTierDisplayLabel('grand'),
-  'hamburg-essential':  getTierDisplayLabel('essential'),
-  'hamburg-classic':    getTierDisplayLabel('classic'),
-  'hamburg-grand':      getTierDisplayLabel('grand'),
-  'hannover-essential': getTierDisplayLabel('essential'),
-  'hannover-classic':   getTierDisplayLabel('classic'),
-  'hannover-grand':     getTierDisplayLabel('grand'),
-};
 
 export default function BookingConfirmationScreen() {
   const { eventId, packageId, cityId, participants, total, fullTotal, paidNow } = useLocalSearchParams<{
@@ -73,7 +62,7 @@ export default function BookingConfirmationScreen() {
   const isDraft = eventId === 'draft';
   // fullTotal exists only when deposit (25%) was paid — total < fullTotal
   const isDepositOnly = !!(fullTotal && parseInt(fullTotal, 10) > parseInt(total || '0', 10));
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const wizardStartDate = useWizardStore((s) => s.startDate);
 
   // Navigate to the Events tab — dismiss all modal/booking screens back to tabs
@@ -140,8 +129,12 @@ export default function BookingConfirmationScreen() {
   };
 
   const handleViewEvent = () => {
-    const { activeDraftId, deleteDraft } = useWizardStore.getState();
+    const { activeDraftId, deleteDraft, setCreatedEventId } = useWizardStore.getState();
     if (activeDraftId) deleteDraft(activeDraftId);
+    // Release the createdEventId lock so the freshly-booked event shows up on
+    // the Events tab (the tab hides any event whose id matches createdEventId
+    // to prevent flashing a half-created event while the wizard is still open).
+    setCreatedEventId(null);
     queryClient.invalidateQueries({ queryKey: eventKeys.all });
     if (isDraft) {
       goToEventsTab();
@@ -152,8 +145,9 @@ export default function BookingConfirmationScreen() {
   };
 
   const handleGoHome = () => {
-    const { activeDraftId, deleteDraft } = useWizardStore.getState();
+    const { activeDraftId, deleteDraft, setCreatedEventId } = useWizardStore.getState();
     if (activeDraftId) deleteDraft(activeDraftId);
+    setCreatedEventId(null);
     queryClient.invalidateQueries({ queryKey: eventKeys.all });
     goToEventsTab();
   };
@@ -221,13 +215,14 @@ export default function BookingConfirmationScreen() {
             <XStack justifyContent="space-between" alignItems="center">
               <Text color="$textSecondary">{t.booking.packageLabel}</Text>
               <Text fontWeight="600" color="$textPrimary">
-                {isDraft
-                  ? (packageId ? FALLBACK_PKG_NAMES[packageId] || packageId : 'Selected Package')
-                  : (packageId ? FALLBACK_PKG_NAMES[packageId] : null) || (() => {
-                      const bk = booking as any;
-                      const tier = bk?.package?.tier || bk?.tier;
-                      return tier ? getTierDisplayLabel(tier) || event?.title : event?.title;
-                    })() || 'Package'}
+                {(() => {
+                  // Prefer tier from packageId (draft) or booking record, render with current language
+                  const tierFromId = packageId?.split('-').pop();
+                  const tierFromBooking = (booking as any)?.package?.tier || (booking as any)?.tier;
+                  const tier = tierFromId || tierFromBooking;
+                  if (tier) return getTierDisplayLabel(tier, language);
+                  return event?.title || (isDraft ? 'Selected Package' : 'Package');
+                })()}
               </Text>
             </XStack>
 
@@ -247,7 +242,7 @@ export default function BookingConfirmationScreen() {
                 <XStack justifyContent="space-between" alignItems="center">
                   <Text color="$textSecondary">{t.booking.date}</Text>
                   <Text fontWeight="600" color="$textPrimary">
-                    {d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    {d.toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </Text>
                 </XStack>
               );
@@ -255,9 +250,9 @@ export default function BookingConfirmationScreen() {
 
             {participants && (
               <XStack justifyContent="space-between" alignItems="center">
-                <Text color="$textSecondary">Participants</Text>
+                <Text color="$textSecondary">{t.booking.participants}</Text>
                 <Text fontWeight="600" color="$textPrimary">
-                  {participants} Guests
+                  {participants} {t.booking.guestsPlain}
                 </Text>
               </XStack>
             )}
@@ -284,20 +279,20 @@ export default function BookingConfirmationScreen() {
               // Remaining balance paid — show full payment breakdown
               <>
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text color="$textSecondary">Total Paid (75%)</Text>
+                  <Text color="$textSecondary">{t.booking.totalPaidPct}</Text>
                   <Text fontSize="$5" fontWeight="800" color="$primary">
                     {formatPrice(parseInt(paidNow, 10))}
                   </Text>
                 </XStack>
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text color="$textSecondary">Previously Paid (25%)</Text>
+                  <Text color="$textSecondary">{t.booking.previouslyPaid}</Text>
                   <Text fontWeight="600" color="$textSecondary">
                     {total ? formatPrice(parseInt(total, 10) - parseInt(paidNow, 10)) : '---'}
                   </Text>
                 </XStack>
                 <YStack height={1} backgroundColor="$borderColor" />
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text color="$textSecondary">Total Group Cost</Text>
+                  <Text color="$textSecondary">{t.booking.totalGroupCost}</Text>
                   <Text fontSize="$5" fontWeight="800" color="$primary">
                     {total ? formatPrice(parseInt(total, 10)) : '---'}
                   </Text>
@@ -312,7 +307,7 @@ export default function BookingConfirmationScreen() {
                   </Text>
                   {fullTotal && (
                     <Text fontSize="$5" fontWeight="800" color="$textTertiary">
-                      {' '}of {formatPrice(parseInt(fullTotal, 10))}
+                      {' '}{t.booking.ofAmount.replace('{{amount}}', formatPrice(parseInt(fullTotal, 10)))}
                     </Text>
                   )}
                 </XStack>

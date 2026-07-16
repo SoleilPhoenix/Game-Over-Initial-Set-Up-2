@@ -107,12 +107,6 @@ function MenuSection({ title, children }: MenuSectionProps) {
   );
 }
 
-const TIER_LABELS: Record<string, string> = {
-  essential: getTierDisplayLabel('essential'),
-  classic:   getTierDisplayLabel('classic'),
-  grand:     getTierDisplayLabel('grand'),
-};
-
 const LANGUAGE_LABELS: Record<string, string> = { en: 'English', de: 'Deutsch' };
 
 export default function ProfileScreen() {
@@ -315,7 +309,7 @@ export default function ProfileScreen() {
                         </View>
                         <YStack flex={1}>
                           <Text color={'#FFFFFF'} fontSize={14} fontWeight="500">
-                            {fav.cityName} {TIER_LABELS[fav.tier] || fav.name}
+                            {fav.cityName} {getTierDisplayLabel(fav.tier, language) || fav.name}
                           </Text>
                           <Text color={'rgba(255,255,255,0.72)'} fontSize={11}>
                             {'\u20AC'}{(fav.pricePerPersonCents / 100).toFixed(0)} {t.profile.perPerson}

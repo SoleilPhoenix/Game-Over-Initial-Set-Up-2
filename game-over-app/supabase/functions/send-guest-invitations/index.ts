@@ -22,7 +22,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { sendEmail } from '../_shared/email.ts';
 import { getGuestInviteEmailHtml } from '../_shared/email-templates.ts';
-import { sendSMS, sendWhatsApp } from '../_shared/twilio.ts';
+import { sendWhatsApp } from '../_shared/twilio.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,7 +31,7 @@ const corsHeaders = {
 
 // ─── Types ───────────────────────────────────────────────────
 
-type Channel = 'email' | 'sms' | 'whatsapp';
+type Channel = 'email' | 'whatsapp';
 type SendStatus = 'sent' | 'failed' | 'invalid';
 
 interface GuestSlot {
@@ -151,13 +151,15 @@ serve(async (req: Request) => {
     });
   }
   const userToken = authHeader.replace('Bearer ', '');
-  // Use the top-level createClient (static import) with anon key + user JWT header
+  // Pass the JWT explicitly to getUser(). With supabase-js v2, getUser() WITHOUT
+  // an argument looks for a stored session (absent in an edge function) and fails
+  // with "Auth session missing!" even for a valid token — the global-header
+  // pattern does NOT feed getUser(). This was the cause of every 401 here.
   const userSupabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_ANON_KEY')!,
-    { global: { headers: { Authorization: `Bearer ${userToken}` } } }
   );
-  const { data: { user }, error: authError } = await userSupabase.auth.getUser();
+  const { data: { user }, error: authError } = await userSupabase.auth.getUser(userToken);
   if (authError || !user) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), {
       status: 401,
@@ -183,9 +185,9 @@ serve(async (req: Request) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
-    if (!['email', 'sms', 'whatsapp'].includes(channel)) {
+    if (!['email', 'whatsapp'].includes(channel)) {
       return new Response(
-        JSON.stringify({ error: 'channel must be email, sms, or whatsapp' }),
+        JSON.stringify({ error: 'channel must be email or whatsapp' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
@@ -340,30 +342,26 @@ serve(async (req: Request) => {
       const inviteUrl = `${appBaseUrl}/invite/${code}`;
 
       // 3. Build message body
+      // Link-first: the tappable invite URL is the primary CTA on every channel
+      // (same link the email uses). On a phone it opens the app directly via the
+      // universal/app link and lands the guest on the invite wizard; in a browser
+      // it shows the invite preview with an "Open in app" / store fallback.
+      // The invite code is kept only as a manual fallback if the link can't be tapped.
       const guestName = guest.firstName ?? '';
       const greeting = guestName ? `${guestName}, you're` : `You're`;
-      const smsBody =
+      const messageBody =
         `🎉 ${greeting} invited to ${honoreeName}'s ${partyTypeLabel}!\n\n` +
-        `${organizerName} is planning the ultimate celebration on Game-Over.app 🥂\n\n` +
-        `Why join instead of endless back-and-forth coordination?\n` +
-        `✅ Eliminates planning stress — simple, guided & stress-free\n` +
-        `💰 Full budget transparency — zero hidden costs or awkward money talk\n` +
-        `🤖 AI-curated experiences matched to what YOUR group actually wants\n` +
-        `⚡ Everything in one place — plans, chat & payments, ready in minutes\n` +
-        `🤝 Preserves your friendships — no coordination chaos after the event\n\n` +
-        `━━━━━━━━━━━━━━━━━\n` +
-        `YOUR INVITE CODE:\n` +
-        `👉 ${code}\n` +
-        `━━━━━━━━━━━━━━━━━\n\n` +
-        `How to join:\n` +
-        `1. Download the app: https://game-over.app\n` +
-        `2. Tap "Got an invite code?"\n` +
-        `3. Enter code: ${code}\n\n` +
+        `${organizerName} is planning the celebration on Game Over 🥂\n\n` +
+        `👉 Tap to join:\n${inviteUrl}\n\n` +
+        `The link takes you straight to your invite — just create your account and you're in. ` +
+        `Everything in one place: plans, group chat, polls & payments.\n\n` +
+        `If you're asked for it, your invite code is: ${code}\n\n` +
         `Reply STOP to opt out.`;
 
-      // 4. Send
+      // 4. Send — only Email (SendGrid) and WhatsApp (Twilio) are supported channels.
+      // Regular SMS has been intentionally removed as a channel; a failed WhatsApp send
+      // is reported back so the organizer can retry or invite via email instead.
       let sendResult: { success: boolean; error?: string; twilioCode?: number };
-      let actualChannel: Channel = channel;
 
       if (channel === 'email') {
         const html = getGuestInviteEmailHtml({
@@ -376,21 +374,9 @@ serve(async (req: Request) => {
         const subject = `You're invited to ${honoreeName}'s ${partyTypeLabel}! 🎉`;
         sendResult = await sendEmail({ to: contact, subject, html });
 
-      } else if (channel === 'sms') {
-        sendResult = await sendSMS(contact, smsBody);
-
       } else {
         // WhatsApp
-        sendResult = await sendWhatsApp(contact, smsBody);
-
-        // Error 63016 = outside 24-hour session window (recipient hasn't messaged us recently).
-        // Error 63007 = WhatsApp number not registered (common in sandbox testing).
-        // Both are permanent WhatsApp failures — fall back to SMS automatically.
-        if (!sendResult.success && (sendResult.twilioCode === 63016 || sendResult.twilioCode === 63007)) {
-          console.log(`[whatsapp] code=${sendResult.twilioCode} — falling back to SMS for slot=${guest.slotIndex}`);
-          sendResult = await sendSMS(contact, smsBody);
-          actualChannel = 'sms';
-        }
+        sendResult = await sendWhatsApp(contact, messageBody);
       }
 
       // 5. Record result
@@ -408,7 +394,7 @@ serve(async (req: Request) => {
       supabase.from('guest_invitations').insert({
         event_id: eventId,
         slot_index: guest.slotIndex,
-        channel: actualChannel,
+        channel,
         recipient: contact,
         status,
         error: sendResult.error ?? null,
@@ -417,7 +403,7 @@ serve(async (req: Request) => {
         if (error) console.warn('[guest_invitations] insert failed (sent):', error.message);
       });
 
-      console.log(`[${actualChannel}] slot=${guest.slotIndex} status=${status}`);
+      console.log(`[${channel}] slot=${guest.slotIndex} status=${status}`);
     }
 
     return new Response(

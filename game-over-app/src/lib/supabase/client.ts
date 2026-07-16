@@ -3,6 +3,7 @@
  * Game-Over App
  */
 
+import { AppState } from 'react-native';
 import { createClient } from '@supabase/supabase-js';
 import { createStorage } from '../storage';
 import type { Database } from './types';
@@ -37,6 +38,25 @@ export const supabase = createClient<Database>(
     },
   }
 );
+
+// Keep access tokens fresh while the app is foregrounded.
+//
+// React Native / Expo does NOT reliably fire supabase-js's internal auto-refresh
+// timer (it's tuned for browsers). Without an AppState hook the access token
+// silently expires after ~1h, and every authenticated call — especially edge
+// functions (getUser() returns 401) — starts failing until the user logs out and
+// back in. This was the root cause of "Unauthorized" on booking + invitations.
+AppState.addEventListener('change', (state) => {
+  if (state === 'active') {
+    supabase.auth.startAutoRefresh();
+  } else {
+    supabase.auth.stopAutoRefresh();
+  }
+});
+// Kick off immediately for the current (foreground) state at launch.
+if (AppState.currentState === 'active') {
+  supabase.auth.startAutoRefresh();
+}
 
 // Helper to check if Supabase is properly configured
 export function isSupabaseConfigured(): boolean {

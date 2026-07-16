@@ -50,13 +50,16 @@ serve(async (req: Request) => {
     });
   }
   if (authHeader !== `Bearer ${serviceRoleKey}`) {
+    const token = authHeader.replace('Bearer ', '');
     const { createClient: createUserClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.3');
+    // Pass the JWT explicitly to getUser(). With supabase-js v2, getUser() WITHOUT
+    // an argument looks for a stored session (absent in an edge function) and fails
+    // with "Auth session missing!" even for a valid token.
     const userSupabase = createUserClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_ANON_KEY')!,
-      { global: { headers: { Authorization: authHeader } } }
     );
-    const { error: authError } = await userSupabase.auth.getUser();
+    const { error: authError } = await userSupabase.auth.getUser(token);
     if (authError) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,

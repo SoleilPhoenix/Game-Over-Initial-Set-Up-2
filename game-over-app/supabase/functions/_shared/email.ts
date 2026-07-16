@@ -1,7 +1,15 @@
 /**
- * Shared email module using Twilio SendGrid REST API.
- * Replaces the previous Resend integration.
- * Gracefully skips if SENDGRID_API_KEY is not configured.
+ * Shared email module using the Resend REST API.
+ *
+ * Configure with these Supabase secrets:
+ *   RESEND_API_KEY  — from https://resend.com/api-keys (required)
+ *   RESEND_FROM     — optional sender override, e.g. "Game Over <hello@game-over.app>".
+ *                     Defaults to DEFAULT_FROM. The sender DOMAIN must be verified
+ *                     in Resend (resend.com/domains). For quick testing before your
+ *                     domain is verified, set RESEND_FROM to "Game Over <onboarding@resend.dev>".
+ *
+ * Gracefully returns a failure result (never throws) if RESEND_API_KEY is not
+ * configured, so a missing key can't crash the invitation flow.
  */
 
 interface SendEmailParams {
@@ -17,49 +25,52 @@ interface SendEmailResult {
   error?: string;
 }
 
-const SENDGRID_API_URL = 'https://api.sendgrid.com/v3/mail/send';
+const RESEND_API_URL = 'https://api.resend.com/emails';
 const DEFAULT_FROM = 'Game Over <support@game-over.app>';
 
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
-  const apiKey = Deno.env.get('SENDGRID_API_KEY');
+  const apiKey = Deno.env.get('RESEND_API_KEY');
 
   if (!apiKey) {
-    console.log('SENDGRID_API_KEY not configured — skipping email send');
-    return { success: false, error: 'SENDGRID_API_KEY not configured' };
+    console.log('RESEND_API_KEY not configured — skipping email send');
+    return { success: false, error: 'RESEND_API_KEY not configured' };
   }
 
-  const fromRaw = params.from ?? DEFAULT_FROM;
-  // Parse "Name <email>" format into SendGrid's { name, email } object
-  const fromMatch = fromRaw.match(/^(.+)\s<(.+)>$/);
-  const fromObj = fromMatch
-    ? { name: fromMatch[1].trim(), email: fromMatch[2].trim() }
-    : { email: fromRaw.trim() };
+  // Resend accepts the "Name <email>" string directly in `from`.
+  const from = params.from ?? Deno.env.get('RESEND_FROM') ?? DEFAULT_FROM;
 
   try {
-    const response = await fetch(SENDGRID_API_URL, {
+    const response = await fetch(RESEND_API_URL, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        personalizations: [{ to: [{ email: params.to }] }],
-        from: fromObj,
+        from,
+        to: [params.to],
         subject: params.subject,
-        content: [{ type: 'text/html', value: params.html }],
+        html: params.html,
       }),
     });
 
-    // SendGrid returns 202 Accepted on success (no body)
-    if (response.status === 202) {
-      // X-Message-Id header is the SendGrid message ID
-      const messageId = response.headers.get('X-Message-Id') ?? undefined;
-      return { success: true, messageId };
+    // Resend returns 200 with { id } on success.
+    if (response.ok) {
+      const data = await response.json().catch(() => ({}));
+      return { success: true, messageId: data?.id };
     }
 
+    // Error body is typically { name, message } or { statusCode, name, message }.
     const errorBody = await response.text();
-    console.error('SendGrid API error:', response.status, errorBody);
-    return { success: false, error: `SendGrid API ${response.status}: ${errorBody}` };
+    let detail = errorBody;
+    try {
+      const parsed = JSON.parse(errorBody);
+      detail = parsed?.message ?? parsed?.name ?? errorBody;
+    } catch {
+      // keep raw text
+    }
+    console.error('Resend API error:', response.status, detail);
+    return { success: false, error: `Resend API ${response.status}: ${detail}` };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unknown error';
     console.error('Email send failed:', message);

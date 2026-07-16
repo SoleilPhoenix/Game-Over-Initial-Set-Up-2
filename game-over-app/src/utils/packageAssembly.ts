@@ -156,9 +156,9 @@ function barName(name: string): string {
 // --- Tier config ---
 
 const TIER_PRICE: Record<string, number> = {
-  essential: 99_00,
-  classic:  149_00,
-  grand:    199_00,
+  essential: 129_00,
+  classic:  179_00,
+  grand:    229_00,
 };
 
 const TIER_META = {

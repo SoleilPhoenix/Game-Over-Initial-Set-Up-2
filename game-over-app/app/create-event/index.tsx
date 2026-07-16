@@ -72,7 +72,7 @@ function SectionHeader({ number, title }: { number: string; title: string }) {
 // ─── Component ─────────────────────────────────────────────────────────────
 export default function WizardStep1() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { resolvedMode } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   // 2-col grid: screen minus container padding (20×2) minus gap between columns (10)
@@ -270,8 +270,8 @@ export default function WizardStep1() {
                 style={StyleSheet.absoluteFillObject}
               />
               <Ionicons name="location-outline" size={28} color="rgba(198,167,94,0.35)" />
-              <Text style={styles.comingSoonTitle}>More Cities</Text>
-              <Text style={styles.comingSoonSub}>Coming Soon</Text>
+              <Text style={styles.comingSoonTitle}>{t.wizard.moreCities}</Text>
+              <Text style={styles.comingSoonSub}>{t.profile.comingSoon}</Text>
             </View>
           </View>
 
@@ -332,6 +332,7 @@ export default function WizardStep1() {
                 maximumDate={maxDate}
                 onChange={handleDateChange}
                 themeVariant={resolvedMode}
+                locale={language === 'de' ? 'de-DE' : 'en-US'}
                 testID="date-picker"
               />
               {Platform.OS === 'ios' && (

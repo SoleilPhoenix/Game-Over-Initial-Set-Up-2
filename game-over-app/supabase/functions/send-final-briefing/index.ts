@@ -18,7 +18,7 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-import { sendWhatsApp, sendSMS } from '../_shared/twilio.ts';
+import { sendWhatsApp } from '../_shared/twilio.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -156,13 +156,9 @@ serve(async (req) => {
         bookingReference: bookingRef,
       });
 
-      let result = await sendWhatsApp(phone, message);
-      // 63016 = outside 24h session window, 63007 = number not registered on WhatsApp
-      // Both are permanent WhatsApp failures — fall back to SMS automatically
-      if (!result.success && (result.twilioCode === 63016 || result.twilioCode === 63007)) {
-        console.log(`WhatsApp code=${result.twilioCode} for ${phone} — falling back to SMS`);
-        result = await sendSMS(phone, message);
-      }
+      // WhatsApp only — regular SMS has been removed as a channel.
+      // A failed WhatsApp briefing is counted as failed (no silent SMS fallback).
+      const result = await sendWhatsApp(phone, message);
       if (result.success) {
         sent++;
       } else {

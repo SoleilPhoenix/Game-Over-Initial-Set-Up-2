@@ -59,7 +59,7 @@ export default function PaymentScreen() {
   const insets = useSafeAreaInsets();
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('ready');
   const isDraft = eventId === 'draft';
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   // Wizard store data for draft mode
   const wizardCityId = useWizardStore((s) => s.cityId);
@@ -195,14 +195,37 @@ export default function PaymentScreen() {
         setPaymentStep('processing_payment');
         await new Promise(resolve => setTimeout(resolve, 1200));
 
-        // If we have a real event in DB, update its status to 'booked'
+        // If we have a real event in DB, mark it 'booked' via the server. The
+        // `enforce_event_status_integrity` DB trigger blocks clients from setting
+        // status = 'booked' directly (payment-integrity guard), so a client-side
+        // .update() is silently rejected. The confirm-demo-booking edge function
+        // performs the transition with the service role, which the trigger allows.
         if (!isDraft) {
-          const { error: updateError } = await supabase
-            .from('events')
-            .update({ status: 'booked' })
-            .eq('id', eventId);
-          if (updateError) {
-            console.warn('Event status update failed (non-blocking):', updateError.message);
+          // Force a fresh access token before hitting the edge function. A lapsed
+          // token makes the function's getUser() return 401 ("Unauthorized").
+          await supabase.auth.refreshSession().catch(() => {});
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) {
+            Alert.alert('Session expired', 'Please log out and log back in, then try booking again.');
+            setPaymentStep('ready');
+            return;
+          }
+          const { data: bookingData, error: bookingError } = await supabase.functions.invoke(
+            'confirm-demo-booking',
+            { body: { eventId }, headers: { Authorization: `Bearer ${session.access_token}` } },
+          );
+          if (bookingError || !(bookingData as any)?.success) {
+            // Surface the failure instead of swallowing it — a silent failure here
+            // is exactly what caused booked events to vanish from the Events list.
+            let detail = bookingError?.message ?? 'Could not confirm your booking.';
+            try {
+              const ctx = (bookingError as any)?.context;
+              const text = await ctx?.text?.();
+              if (text) { const b = JSON.parse(text); if (b?.error) detail = b.error; }
+            } catch { /* keep default */ }
+            Alert.alert('Booking not confirmed', detail);
+            setPaymentStep('ready');
+            return;
           }
           // Cache desired participant count + budget info for event summary/budget screens
           // Skip when paying remaining balance — count was already stored during first payment
@@ -475,7 +498,7 @@ export default function PaymentScreen() {
                   <Ionicons name="logo-apple" size={22} color="white" />
                   <YStack flex={1}>
                     <Text fontSize="$3" fontWeight="600" color="$textPrimary">Apple Pay</Text>
-                    <Text fontSize="$1" color="$textSecondary">Coming Soon</Text>
+                    <Text fontSize="$1" color="$textSecondary">{t.profile.comingSoon}</Text>
                   </YStack>
                 </XStack>
 
@@ -491,7 +514,7 @@ export default function PaymentScreen() {
                   <Ionicons name="logo-google" size={22} color="#4285F4" />
                   <YStack flex={1}>
                     <Text fontSize="$3" fontWeight="600" color="$textPrimary">Google Pay</Text>
-                    <Text fontSize="$1" color="$textSecondary">Coming Soon</Text>
+                    <Text fontSize="$1" color="$textSecondary">{t.profile.comingSoon}</Text>
                   </YStack>
                 </XStack>
 
@@ -507,7 +530,7 @@ export default function PaymentScreen() {
                   <Ionicons name="logo-paypal" size={22} color="#009CDE" />
                   <YStack flex={1}>
                     <Text fontSize="$3" fontWeight="600" color="$textPrimary">PayPal</Text>
-                    <Text fontSize="$1" color="$textSecondary">Coming Soon</Text>
+                    <Text fontSize="$1" color="$textSecondary">{t.profile.comingSoon}</Text>
                   </YStack>
                 </XStack>
               </YStack>
@@ -528,7 +551,7 @@ export default function PaymentScreen() {
                 </YStack>
                 <YStack flex={1}>
                   <Text fontWeight="600" color="$textPrimary">
-                    {activePkg.tier ? getTierDisplayLabel(activePkg.tier) : activePkg.name}
+                    {activePkg.tier ? getTierDisplayLabel(activePkg.tier, language) : activePkg.name}
                   </Text>
                   <Text fontSize="$2" color="$textSecondary">
                     {[

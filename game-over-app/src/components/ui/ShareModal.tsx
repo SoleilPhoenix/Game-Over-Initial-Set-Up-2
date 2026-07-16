@@ -1,9 +1,10 @@
-import React from 'react';
-import { Modal, View, Pressable, Share, Linking, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Modal, View, Pressable, Share, Linking, Alert, ActivityIndicator } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
+import { useCreateInvite } from '@/hooks/queries/useInvites';
 
 const PLATFORMS = [
   { id: 'whatsapp',  label: 'WhatsApp',    icon: 'logo-whatsapp',  color: '#25D366', bg: 'rgba(37,211,102,0.15)' },
@@ -40,10 +41,35 @@ const APP_FALLBACKS: Record<string, string> = {
 
 export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModalProps) {
   const { theme } = useTheme();
-  const shareUrl  = `https://game-over.app/invite/${eventId ?? ''}`;
+  const createInvite = useCreateInvite();
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
+
+  // Generate a fresh, shareable invite code each time the sheet opens.
+  // `eventId` is the real event id — it must NEVER go into the link directly
+  // (an event id is not a valid invite code and renders a dead "/invite/…" link).
+  useEffect(() => {
+    if (!visible || !eventId) {
+      setInviteCode(null);
+      return;
+    }
+    let cancelled = false;
+    setGenerating(true);
+    createInvite
+      .mutateAsync({ eventId })
+      .then(invite => { if (!cancelled) setInviteCode(invite.code); })
+      .catch(() => { if (!cancelled) setInviteCode(null); })
+      .finally(() => { if (!cancelled) setGenerating(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- createInvite is stable; regenerate only when the sheet opens or the event changes
+  }, [visible, eventId]);
+
+  const linkReady = !!inviteCode;
+  const shareUrl  = inviteCode ? `https://game-over.app/invite/${inviteCode}` : '';
   const shareMsg  = `Join us for ${eventTitle ?? 'an unforgettable event'}! 🎉 ${shareUrl}`;
 
   const handlePlatform = async (id: PlatformId) => {
+    if (!linkReady) return;
     try {
       if (CLIPBOARD_OPEN_PLATFORMS.includes(id)) {
         // Copy link to clipboard, then open the app (user pastes in-app)
@@ -83,6 +109,7 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
   };
 
   const handleCopyLink = async () => {
+    if (!linkReady) return;
     await Clipboard.setStringAsync(shareUrl).catch(() => {});
     onClose();
     Alert.alert('Link copied!', 'Paste it anywhere to share.');
@@ -112,11 +139,13 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
             Invite friends via your favourite platform
           </Text>
 
-          {/* Platform grid — 3×2, icons fill available width */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between', marginBottom: 20 }}>
+          {/* Platform grid — 3×2, icons fill available width.
+              Disabled until the invite link is ready so we never share a dead link. */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'space-between', marginBottom: 20, opacity: linkReady ? 1 : 0.4 }}>
             {PLATFORMS.map(p => (
               <Pressable
                 key={p.id}
+                disabled={!linkReady}
                 onPress={() => handlePlatform(p.id)}
                 style={({ pressed }) => ({ alignItems: 'center', gap: 7, width: '30%', opacity: pressed ? 0.75 : 1 })}
               >
@@ -136,21 +165,29 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
             ))}
           </View>
 
-          {/* Copy link — compact, filigree */}
-          <Pressable
-            onPress={handleCopyLink}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 7,
-              opacity: pressed ? 0.65 : 1,
-              paddingVertical: 8,
-            })}
-          >
-            <Ionicons name="copy-outline" size={14} color={theme.textTertiary} />
-            <Text style={{ fontSize: 12, fontWeight: '500', color: theme.textTertiary }}>Copy link</Text>
-          </Pressable>
+          {/* Copy link — compact, filigree. Shows a preparing state while the code generates. */}
+          {generating ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 8 }}>
+              <ActivityIndicator size="small" color={theme.textTertiary} />
+              <Text style={{ fontSize: 12, fontWeight: '500', color: theme.textTertiary }}>Preparing invite link…</Text>
+            </View>
+          ) : (
+            <Pressable
+              onPress={handleCopyLink}
+              disabled={!linkReady}
+              style={({ pressed }) => ({
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 7,
+                opacity: pressed ? 0.65 : 1,
+                paddingVertical: 8,
+              })}
+            >
+              <Ionicons name="copy-outline" size={14} color={theme.textTertiary} />
+              <Text style={{ fontSize: 12, fontWeight: '500', color: theme.textTertiary }}>Copy link</Text>
+            </Pressable>
+          )}
         </View>
       </View>
     </Modal>

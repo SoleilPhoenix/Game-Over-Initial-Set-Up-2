@@ -69,7 +69,7 @@ export default function BookingSummaryScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const isDraft = eventId === 'draft';
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   // For real events, use the booking flow hook (pass URL participant count as override)
   const urlParticipantCount = paramParticipants ? parseInt(paramParticipants, 10) : undefined;
@@ -151,7 +151,7 @@ export default function BookingSummaryScreen() {
     router.push(`/booking/${eventId}/payment${qs}`);
   };
 
-  const tierLabel = pkg.tier ? getTierDisplayLabel(pkg.tier) : pkg.name;
+  const tierLabel = pkg.tier ? getTierDisplayLabel(pkg.tier, language) : pkg.name;
   const heroImage = pkg.hero_image_url || null;
 
   // City name: event data > URL params > wizard store
@@ -242,9 +242,9 @@ export default function BookingSummaryScreen() {
           </XStack>
         </YStack>
 
-        {/* Cost Breakdown */}
+        {/* Cost Overview */}
         <Text fontSize={11} fontWeight="700" color={'rgba(255,255,255,0.72)'} textTransform="uppercase" letterSpacing={1} marginBottom="$2" marginLeft="$1">
-          Cost Breakdown
+          {(t.booking as any).costOverview ?? 'Cost Overview'}
         </Text>
         <YStack
           backgroundColor={'#1A2F47'}
@@ -255,15 +255,6 @@ export default function BookingSummaryScreen() {
           borderColor={'rgba(230,220,200,0.15)'}
           testID="cost-breakdown-card"
         >
-          <XStack justifyContent="space-between" marginBottom="$3">
-            <Text fontSize={14} color={'rgba(255,255,255,0.72)'}>Package Base</Text>
-            <Text fontSize={14} fontWeight="600" color="white">
-              {formatPriceWhole(Math.round(pricing.packagePriceCents / 100))}
-            </Text>
-          </XStack>
-
-          <YStack height={1} backgroundColor={'rgba(230,220,200,0.15)'} marginVertical="$2" />
-
           <XStack justifyContent="space-between">
             <Text fontSize={15} fontWeight="600" color="white">{t.booking.totalGroupCost}</Text>
             <Text fontSize={16} fontWeight="800" color={'#C6A75E'}>
@@ -307,7 +298,7 @@ export default function BookingSummaryScreen() {
                 </XStack>
                 {/* Secondary: remaining due date */}
                 <Text fontSize={12} color={'rgba(255,255,255,0.48)'}>
-                  {formatPriceWhole(remainingEuros)} due 14 days before event
+                  {(t.booking as any).payOptionDepositSub.replace('{{amount}}', formatPriceWhole(remainingEuros))}
                 </Text>
               </YStack>
             </XStack>
@@ -342,7 +333,7 @@ export default function BookingSummaryScreen() {
                 </XStack>
                 {/* Secondary: one combined sentence */}
                 <Text fontSize={12} color={'rgba(255,255,255,0.48)'}>
-                  No further payments and reminders
+                  {(t.booking as any).payOptionFullSub}
                 </Text>
               </YStack>
             </XStack>

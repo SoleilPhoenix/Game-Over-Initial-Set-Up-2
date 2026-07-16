@@ -13,7 +13,8 @@ import { Card } from '../ui/Card';
 import { OptimizedImage } from '../ui/OptimizedImage';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 
-import { TIER_DISPLAY_NAME } from '@/constants/packageTiers';
+import { getTierName } from '@/constants/packageTiers';
+import { useTranslation } from '@/i18n';
 
 const BestMatchBadge = styled(XStack, {
   position: 'absolute',
@@ -43,10 +44,10 @@ export interface PackageCardProps {
   testID?: string;
 }
 
-const tierConfig = {
-  essential: { label: TIER_DISPLAY_NAME.essential, color: '$textSecondary' },
-  classic: { label: TIER_DISPLAY_NAME.classic, color: '$primary' },
-  grand: { label: TIER_DISPLAY_NAME.grand, color: '$warning' },
+const TIER_COLOR: Record<string, string> = {
+  essential: '$textSecondary',
+  classic:   '$primary',
+  grand:     '$warning',
 };
 
 export const PackageCard = memo(function PackageCard({
@@ -62,7 +63,8 @@ export const PackageCard = memo(function PackageCard({
   onPress,
   testID,
 }: PackageCardProps) {
-  const tierInfo = tierConfig[tier];
+  const { language } = useTranslation();
+  const tierInfo = { label: getTierName(tier, language), color: TIER_COLOR[tier] || '$textSecondary' };
   const formattedPrice = (basePriceCents / 100).toLocaleString('en-US', {
     style: 'currency',
     currency: 'EUR',

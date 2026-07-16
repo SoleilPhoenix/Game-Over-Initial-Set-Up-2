@@ -18,6 +18,8 @@ import { useChannels, useCreateChannel } from '@/hooks/queries/useChat';
 import { usePolls, useCreatePoll, useVote, useDeletePoll, useAddPollOption, useDeletePollOption } from '@/hooks/queries/usePolls';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
+import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { PastEventBanner } from '@/components/ui/PastEventBanner';
 import { useUser } from '@/stores/authStore';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
@@ -792,7 +794,6 @@ export default function CommunicationScreen() {
         </View>
       );
     }
-
     // Category config — same as POLL_CATEGORY_CONFIG defined at component scope
     const POLL_CATEGORY_CONFIG = POLL_CATEGORY_CONFIG_CONST;
 
@@ -827,19 +828,28 @@ export default function CommunicationScreen() {
             <View key={catDef.id + catDef.label} style={styles.channelSection}>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={12}>
                 <Text style={styles.sectionTitle}>{catDef.label}</Text>
-                <Pressable
-                  onPress={() => handleCreatePoll(catDef.id)}
-                  style={styles.newPollButton}
-                  hitSlop={8}
-                >
-                  <Text style={[styles.newPollButtonText, { color: cfg.color }]}>New Poll</Text>
-                  <Ionicons name="add-circle" size={18} color={cfg.color} />
-                </Pressable>
+                {/* New-poll button hidden after event ends */}
+                {!isPastEvent && (
+                  <Pressable
+                    onPress={() => handleCreatePoll(catDef.id)}
+                    style={styles.newPollButton}
+                    hitSlop={8}
+                  >
+                    <Text style={[styles.newPollButtonText, { color: cfg.color }]}>New Poll</Text>
+                    <Ionicons name="add-circle" size={18} color={cfg.color} />
+                  </Pressable>
+                )}
               </XStack>
               {catPolls.length === 0 ? (
-                <Pressable onPress={() => handleCreatePoll(catDef.id)} style={styles.emptyChannelBox}>
-                  <Text style={styles.emptyChannelText}>No polls yet — tap to create</Text>
-                </Pressable>
+                isPastEvent ? (
+                  <View style={styles.emptyChannelBox}>
+                    <Text style={styles.emptyChannelText}>No polls were created.</Text>
+                  </View>
+                ) : (
+                  <Pressable onPress={() => handleCreatePoll(catDef.id)} style={styles.emptyChannelBox}>
+                    <Text style={styles.emptyChannelText}>No polls yet — tap to create</Text>
+                  </Pressable>
+                )
               ) : (
                 <YStack gap={12}>
                   {catPolls.map(poll => {
@@ -880,7 +890,9 @@ export default function CommunicationScreen() {
                               <Pressable
                                 key={opt.id}
                                 style={[styles.pollOption, isSelected && { ...styles.pollOptionSelected, borderColor: cfg.color }]}
-                                onPress={() => handleVote(poll.id, opt.id)}
+                                // Past events: existing votes stay visible but cannot be changed
+                                onPress={isPastEvent ? undefined : () => handleVote(poll.id, opt.id)}
+                                disabled={isPastEvent}
                               >
                                 <View style={[styles.pollRadio, isSelected && { borderColor: cfg.color }]}>
                                   {isSelected && <View style={[styles.pollRadioDot, { backgroundColor: cfg.color }]} />}
@@ -909,13 +921,16 @@ export default function CommunicationScreen() {
             </View>
           );
         })}
-        <Pressable
-          style={styles.newTopicButton}
-          onPress={() => handleCreatePoll('general')}
-        >
-          <Ionicons name="add-circle-outline" size={24} color="#C6A75E" />
-          <Text style={styles.newTopicText}>Create New Poll</Text>
-        </Pressable>
+        {/* Bottom "Create New Poll" CTA — hidden after event ends */}
+        {!isPastEvent && (
+          <Pressable
+            style={styles.newTopicButton}
+            onPress={() => handleCreatePoll('general')}
+          >
+            <Ionicons name="add-circle-outline" size={24} color="#C6A75E" />
+            <Text style={styles.newTopicText}>Create New Poll</Text>
+          </Pressable>
+        )}
       </>
     );
   };
@@ -949,6 +964,8 @@ export default function CommunicationScreen() {
 
   // Selected event display name
   const selectedEvent = bookedEvents.find(e => e.id === selectedEventId);
+  // Past events become read-only: voting locked, no new channels/topics, share-invite hidden
+  const isPastEvent = selectedEvent ? isReadOnlyEvent(selectedEvent) : false;
   const selectedEventName = selectedEvent
     ? (selectedEvent.title || (selectedEvent.honoree_name ? `${selectedEvent.honoree_name}'s Event` : 'Event'))
     : ((t as any).chatSelector?.selectEvent || 'Select Event');
@@ -1079,6 +1096,7 @@ export default function CommunicationScreen() {
       <View key={category} style={styles.channelSection}>
         <XStack justifyContent="space-between" alignItems="center" marginBottom={12}>
           <Text style={styles.sectionTitle}>{title}</Text>
+          {/* Topics tab: new-channel creation remains available even after event ends */}
           <Pressable
             onPress={() => handleAddChannel(category)}
             style={styles.newPollButton}
@@ -1196,8 +1214,8 @@ export default function CommunicationScreen() {
       >
         {/* Event Selector — scrolls with content */}
         {renderEventSelector()}
-        {/* Share Event Card — organizers only */}
-        {selectedEvent?.created_by === user?.id && renderShareEventCard()}
+        {/* Share Event Card — organizers only, hidden once event has ended */}
+        {selectedEvent?.created_by === user?.id && !isPastEvent && renderShareEventCard()}
 
         {selectedTab === 'topics' ? (
           /* Topics tab */
@@ -1216,6 +1234,7 @@ export default function CommunicationScreen() {
               {renderChannelSection('activities', t.chat.activities.toUpperCase())}
               {renderChannelSection('budget', t.chat.budgetCategory.toUpperCase())}
 
+              {/* New-topic button remains available in Topics tab even after event ends */}
               <View style={styles.channelSection}>
                 <Text style={styles.sectionTitle}>{t.chat.newTopics}</Text>
                 <Pressable style={styles.newTopicButton} onPress={handleCreateNewTopic}>
@@ -1233,6 +1252,7 @@ export default function CommunicationScreen() {
               {renderChannelSection('activities', t.chat.activities.toUpperCase())}
               {renderChannelSection('budget', t.chat.budgetCategory.toUpperCase())}
 
+              {/* New-topic button remains available in Topics tab even after event ends */}
               <View style={styles.channelSection}>
                 <Text style={styles.sectionTitle}>{t.chat.newTopics}</Text>
                 <Pressable style={styles.newTopicButton} onPress={handleCreateNewTopic}>
@@ -1248,6 +1268,16 @@ export default function CommunicationScreen() {
         )}
       </ScrollView>
       </Animated.View>
+
+      {/* Past-event footer banner — Voting tab only, pinned above the bottom tab bar AND the central FAB */}
+      {isPastEvent && selectedTab === 'voting' && (
+        <PastEventBanner
+          floating
+          bottomInset={120}
+          testID="chat-voting-closed-banner"
+          message={(t.chat as any).votingClosed || 'Voting is closed — the event has already taken place.'}
+        />
+      )}
 
       {/* Poll Creation Popup — inline, no Modal (matches destination.tsx drag pattern) */}
       {pollModalVisible && (

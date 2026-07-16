@@ -17,11 +17,11 @@ import { useEvent, useUpdateEvent } from '@/hooks/queries/useEvents';
 import { useParticipants } from '@/hooks/queries/useParticipants';
 import { useAuthStore } from '@/stores/authStore';
 import { useBooking } from '@/hooks/queries/useBookings';
-import { useCreateInvite } from '@/hooks/queries/useInvites';
 import { useTranslation } from '@/i18n';
 import { useTheme } from '@/hooks/useTheme';
 import { RADII, TYPE_SCALE, ambientShadow, type EditorialTheme } from '@/constants/designSystem';
 import { DisplayHeading, GoldButton } from '@/components/ui/editorial';
+import { isReadOnlyEvent } from '@/utils/eventLifecycle';
 import { ShareModal } from '@/components/ui/ShareModal';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import {
@@ -62,7 +62,6 @@ export default function EventSummaryScreen() {
   const currentParticipant = participants?.find(p => p.user_id === currentUserId);
   const isGuest = roleParam === 'guest' || (!roleParam && currentParticipant?.role === 'guest');
   const updateEvent = useUpdateEvent();
-  const createInvite = useCreateInvite();
 
   const [cachedParticipants, setCachedParticipants] = useState<number | undefined>(undefined);
   const [localChecklist, setLocalChecklist] = useState<Record<string, boolean>>({});
@@ -88,7 +87,6 @@ export default function EventSummaryScreen() {
 
   // ─── Social share modal state ───────────────────
   const [shareModalVisible, setShareModalVisible] = useState(false);
-  const [shareInviteCode, setShareInviteCode] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isGuest || !firstVisit || !currentUserId || !id) return;
@@ -142,6 +140,8 @@ export default function EventSummaryScreen() {
 
   const completedCount = getCompletedCount(planningSteps);
   const isBooked = event?.status === 'booked' || event?.status === 'completed';
+  // Past events: no more invitations — hide the Share Invite CTA
+  const isPastReadOnly = event ? isReadOnlyEvent(event) : false;
 
   const isBudgetUrgent = useMemo(() => {
     if (!event?.start_date || !cachedBudget) return false;
@@ -176,11 +176,6 @@ export default function EventSummaryScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
   }, [event, booking, cachedBudget]);
 
-  const handleGenerateInvite = async (): Promise<string> => {
-    const invite = await createInvite.mutateAsync({ eventId: id! })
-      .catch(error => { console.error('[handleGenerateInvite]', error); throw error; });
-    return invite.code;
-  };
 
   useEffect(() => {
     if (!id || !planningSteps.length) return;
@@ -310,23 +305,15 @@ export default function EventSummaryScreen() {
           </View>
         </View>
 
-        {/* ─── Share Invite (gold CTA per mockup) ── */}
-        {!isGuest && (
+        {/* ─── Share Invite (gold CTA per mockup) — hidden once event has ended ── */}
+        {!isGuest && !isPastReadOnly && (
           <View style={{ marginBottom: 28 }}>
             <GoldButton
               label="Share Invite — Invite Friends to Join"
               fullWidth
               size="md"
               leftIcon={<Ionicons name="share-social" size={18} color={theme.textOnPrimary} />}
-              onPress={async () => {
-                try {
-                  const code = await handleGenerateInvite();
-                  setShareInviteCode(code);
-                  setShareModalVisible(true);
-                } catch (e: any) {
-                  Alert.alert(t.common.error, e?.message || t.events.loadError);
-                }
-              }}
+              onPress={() => setShareModalVisible(true)}
               testID="share-invite-button"
             />
           </View>
@@ -510,7 +497,7 @@ export default function EventSummaryScreen() {
       <ShareModal
         visible={shareModalVisible}
         onClose={() => setShareModalVisible(false)}
-        eventId={shareInviteCode ?? id}
+        eventId={id}
         eventTitle={eventTitle}
       />
     </View>

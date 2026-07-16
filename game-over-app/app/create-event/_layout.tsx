@@ -103,7 +103,10 @@ export default function CreateEventLayout() {
           {/* Center: step counter + label */}
           <View style={styles.headerCenter}>
             <Text style={styles.stepCounter}>
-              STEP {currentStep} OF {STEPS.length}
+              {t.wizard.stepOf
+                .replace('{{current}}', String(currentStep))
+                .replace('{{total}}', String(STEPS.length))
+                .toUpperCase()}
             </Text>
             <Text style={styles.heading}>{currentStepLabel}</Text>
           </View>

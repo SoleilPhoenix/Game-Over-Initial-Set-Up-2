@@ -19,12 +19,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useParticipants } from '@/hooks/queries/useParticipants';
-import { useInviteGuests } from '@/hooks/queries/useInvites';
+import { useInviteGuests, useCreateInvite } from '@/hooks/queries/useInvites';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { useUser } from '@/stores/authStore';
 import { useTranslation } from '@/i18n';
 import { useTheme } from '@/hooks/useTheme';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { PastEventBanner } from '@/components/ui/PastEventBanner';
 import { ambientShadow, type EditorialTheme } from '@/constants/designSystem';
 import { GoldButton } from '@/components/ui/editorial';
 import type { ParticipantWithProfile } from '@/repositories';
@@ -56,6 +57,18 @@ function formatGermanPhone(text: string): string {
 
   const prefix = hasPlus ? '+' : '';
   return prefix + digits.slice(0, 15);
+}
+
+/** Normalise a phone number to a comparable E.164-ish key so that "0177…",
+ *  "+49 177…" and "0049177…" all collapse to the same value. Empty when blank. */
+function normalizePhoneKey(phone: string): string {
+  if (!phone) return '';
+  let s = phone.replace(/[^\d+]/g, '');
+  if (!s) return '';
+  if (s.startsWith('00')) s = '+' + s.slice(2);
+  if (s.startsWith('0')) return '+49' + s.slice(1);
+  if (s.startsWith('+')) return s;
+  return '+' + s;
 }
 
 // ─── Email Autocomplete ────────────────────────
@@ -100,7 +113,7 @@ export default function ManageInvitationsScreen() {
   const { id, role: roleParam } = useLocalSearchParams<{ id: string; role?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { theme } = useTheme();
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const user = useUser();
@@ -109,6 +122,23 @@ export default function ManageInvitationsScreen() {
   const { data: event, isLoading: eventLoading } = useEvent(id);
   const { data: participants } = useParticipants(id);
   const { data: booking } = useBooking(id);
+
+  // Keyboard avoidance: iOS does not auto-scroll a focused TextInput above the
+  // keyboard inside a ScrollView. We record each slot card's Y offset (via
+  // onLayout, which is already in ScrollView-content coordinates) and, on input
+  // focus, scroll that card near the top so its edit form clears the keyboard.
+  const scrollViewRef = useRef<ScrollView>(null);
+  const slotYRef = useRef<Record<number, number>>({});
+  const handleInputFocus = useCallback((slotIndex: number) => {
+    // Delay so the keyboard has begun animating and layout is settled.
+    setTimeout(() => {
+      const y = slotYRef.current[slotIndex];
+      if (y != null) {
+        scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+      }
+    }, 250);
+  }, []);
+
   const currentParticipant = participants?.find(p => p.user_id === user?.id);
   // Use role param from navigation (known immediately) — fallback to participants query
   const isGuest = roleParam === 'guest' || (!roleParam && currentParticipant?.role === 'guest');
@@ -126,7 +156,7 @@ export default function ManageInvitationsScreen() {
   type GuestResult = { slotIndex: number; status: 'sent' | 'failed' | 'invalid'; recipient: string; error?: string };
   const [inviteSendStatus, setInviteSendStatus] = useState<InviteSendStatus>('idle');
   const [inviteResults, setInviteResults] = useState<GuestResult[]>([]);
-  const [activeChannel, setActiveChannel] = useState<'email' | 'sms' | 'whatsapp' | null>(null);
+  const [activeChannel, setActiveChannel] = useState<'email' | 'whatsapp' | null>(null);
   const [activeEmailSlot, setActiveEmailSlot] = useState<number | null>(null);
   const [showHonoreeInfo, setShowHonoreeInfo] = useState(false);
   const [emailSuggestions, setEmailSuggestions] = useState<string[]>([]);
@@ -149,6 +179,7 @@ export default function ManageInvitationsScreen() {
   // Fetch invite_codes to resolve names for registered guests
   // (organizer-entered data is the source of truth)
   const { data: rawInviteGuests = [] } = useInviteGuests(id ?? null);
+  const createInvite = useCreateInvite();
   const invitesByEmail = useMemo(() => {
     const map: Record<string, { phone: string; firstName: string; lastName: string }> = {};
     for (const ic of rawInviteGuests) {
@@ -311,6 +342,37 @@ export default function ManageInvitationsScreen() {
   const confirmedCount = slots.filter(s => s.status === 'confirmed').length;
   const pendingCount = slots.filter(s => s.status === 'pending').length;
 
+  // A phone number OR email address may appear at most once WITHIN a single
+  // event (organizer, guests and honoree share one namespace). Across different
+  // events the same contact is fine. Compute the slot indexes whose phone/email
+  // collides with another slot so we can flag them inline AND block confirming.
+  const buildDupSet = (getKey: (s: Slot) => string) => {
+    const byKey = new Map<string, number[]>();
+    for (const s of slots) {
+      const key = getKey(s);
+      if (!key) continue;
+      const arr = byKey.get(key) ?? [];
+      arr.push(s.index);
+      byKey.set(key, arr);
+    }
+    const dup = new Set<number>();
+    for (const idxs of byKey.values()) {
+      if (idxs.length > 1) idxs.forEach(i => dup.add(i));
+    }
+    return dup;
+  };
+  const duplicatePhoneSlots = useMemo(() => buildDupSet(s => normalizePhoneKey(s.phone)), [slots]);
+  const duplicateEmailSlots = useMemo(() => buildDupSet(s => s.email.trim().toLowerCase()), [slots]);
+  const hasDuplicates = duplicatePhoneSlots.size > 0 || duplicateEmailSlots.size > 0;
+  const dupPhoneMsg = (t.manageInvitations as any).duplicatePhone
+    ?? (language === 'de'
+      ? 'Diese Telefonnummer ist bereits einem anderen Teilnehmer in diesem Event zugewiesen.'
+      : 'This phone number is already used by another participant in this event.');
+  const dupEmailMsg = (t.manageInvitations as any).duplicateEmail
+    ?? (language === 'de'
+      ? 'Diese E-Mail-Adresse ist bereits einem anderen Teilnehmer in diesem Event zugewiesen.'
+      : 'This email address is already used by another participant in this event.');
+
   const updateGuestDetail = (slotIndex: number, field: keyof GuestDetails, value: string) => {
     const formatted = field === 'phone' ? formatGermanPhone(value) : value;
     setGuestDetails(prev => {
@@ -365,7 +427,16 @@ export default function ManageInvitationsScreen() {
   const emailCount = invitableGuests.filter(s => s.email).length;
   const phoneCount = invitableGuests.filter(s => s.phone).length;
 
-  const handleSendViaChannel = async (channel: 'email' | 'sms' | 'whatsapp') => {
+  const handleSendViaChannel = async (channel: 'email' | 'whatsapp') => {
+    // Block sending while any phone/email is duplicated within this event —
+    // otherwise two slots would resolve to the same recipient.
+    if (hasDuplicates) {
+      Alert.alert(
+        language === 'de' ? 'Doppelter Kontakt' : 'Duplicate contact',
+        duplicatePhoneSlots.size > 0 ? dupPhoneMsg : dupEmailMsg,
+      );
+      return;
+    }
     setActiveChannel(channel);
     setInviteSendStatus('sending');
 
@@ -392,7 +463,12 @@ export default function ManageInvitationsScreen() {
       }));
 
     const { data, error } = await supabase.functions.invoke('send-guest-invitations', {
-      body: { eventId: id, channel, guests },
+      // `language` drives the invite copy (German primary, English when the
+      // organizer's app is set to EN).
+      body: { eventId: id, channel, guests, language },
+      // Pass the refreshed token explicitly so the edge function's getUser()
+      // always sees the current session (not a stale/anon token).
+      headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
     });
 
     if (error) {
@@ -431,9 +507,15 @@ export default function ManageInvitationsScreen() {
   };
 
   const handleShareFallback = async () => {
-    const inviteLink = `https://game-over.app/invite/${id}`;
-    const msg = `🎉 You're invited to celebrate ${event?.honoree_name || 'the party'}!\n\nJoin us on Game Over:\n${inviteLink}`;
-    try { await Share.share({ message: msg, title: 'Game Over Invitation' }); } catch {}
+    // Generate a real invite code — the link must point at /invite/{code}, never the event id.
+    try {
+      const invite = await createInvite.mutateAsync({ eventId: id! });
+      const inviteLink = `https://game-over.app/invite/${invite.code}`;
+      const msg = `🎉 You're invited to celebrate ${event?.honoree_name || 'the party'}!\n\nJoin us on Game Over:\n${inviteLink}`;
+      await Share.share({ message: msg, title: 'Game Over Invitation' });
+    } catch {
+      Alert.alert(t.common.error, t.events.loadError);
+    }
   };
 
   const handleInviteAll = () => {
@@ -484,11 +566,14 @@ export default function ManageInvitationsScreen() {
       ? (ownProfile?.avatar_url || user?.user_metadata?.avatar_url || null)
       : (slot.participant?.profile?.avatar_url || null);
 
+    // Past events: slots become fully read-only (no expansion, no edit form)
+    const slotCanEdit = slot.isEditable && !isReadOnly;
     return (
       <Pressable
         key={`${slot.role}-${slot.index}`}
-        style={[styles.slotCard, isEmpty && styles.slotCardEmpty]}
-        onPress={!isGuest && slot.isEditable ? () => setExpandedSlot(slot.isExpanded ? null : slot.index) : undefined}
+        style={[styles.slotCard, isEmpty && !isReadOnly && styles.slotCardEmpty]}
+        onLayout={(e) => { slotYRef.current[slot.index] = e.nativeEvent.layout.y; }}
+        onPress={!isGuest && slotCanEdit ? () => setExpandedSlot(slot.isExpanded ? null : slot.index) : undefined}
       >
         <XStack alignItems="center" gap={12}>
           {/* Avatar with gold ring (organizer + honoree always, others get muted ring) */}
@@ -545,11 +630,11 @@ export default function ManageInvitationsScreen() {
             )}
 
             {/* Empty slot hint */}
-            {isEmpty && !slot.isExpanded && (
+            {isEmpty && !slot.isExpanded && !isReadOnly && (
               <Text style={styles.fillHint}>{t.manageInvitations.fillDetails}</Text>
             )}
-            {/* Contact info hint for organizer/honoree */}
-            {needsContactInfo && !slot.isExpanded && (
+            {/* Contact info hint for organizer/honoree — hidden after event ends */}
+            {needsContactInfo && !slot.isExpanded && !isReadOnly && (
               <Text style={styles.fillHint}>
                 {slot.role === 'organizer' ? 'Tap to add phone number' : 'Tap to add contact details'}
               </Text>
@@ -600,21 +685,27 @@ export default function ManageInvitationsScreen() {
           </XStack>
         )}
 
-        {/* Expanded edit form */}
-        {slot.isEditable && slot.isExpanded && (
+        {/* Expanded edit form — fully suppressed when event is read-only (past) */}
+        {slotCanEdit && slot.isExpanded && (
           <YStack gap={10} marginTop={14} paddingTop={14} borderTopWidth={1} borderTopColor={theme.ghostBorder}>
             {/* Organizer: only phone field */}
             {slot.role === 'organizer' && (
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder={t.manageInvitations.phone}
-                  placeholderTextColor={theme.textTertiary}
-                  value={guestDetails[-1]?.phone || ''}
-                  onChangeText={(v) => updateGuestDetail(-1, 'phone', v)}
-                  keyboardType="phone-pad"
-                />
-              </View>
+              <>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder={t.manageInvitations.phone}
+                    placeholderTextColor={theme.textTertiary}
+                    value={guestDetails[-1]?.phone || ''}
+                    onChangeText={(v) => updateGuestDetail(-1, 'phone', v)}
+                    onFocus={() => handleInputFocus(slot.index)}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                {duplicatePhoneSlots.has(slot.index) && (
+                  <Text style={styles.dupError}>{dupPhoneMsg}</Text>
+                )}
+              </>
             )}
             {/* Honoree: email + phone (name comes from wizard) */}
             {slot.role === 'honoree' && (
@@ -627,7 +718,7 @@ export default function ManageInvitationsScreen() {
                       placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.email || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'email', v)}
-                      onFocus={() => handleEmailFocus(slot.index, guestDetails[slot.index]?.email || '')}
+                      onFocus={() => { handleEmailFocus(slot.index, guestDetails[slot.index]?.email || ''); handleInputFocus(slot.index); }}
                       onBlur={handleEmailBlur}
                       keyboardType="email-address"
                       autoCapitalize="none"
@@ -647,6 +738,9 @@ export default function ManageInvitationsScreen() {
                       ))}
                     </View>
                   )}
+                  {duplicateEmailSlots.has(slot.index) && (
+                    <Text style={styles.dupError}>{dupEmailMsg}</Text>
+                  )}
                 </View>
                 <View style={styles.inputContainer}>
                   <TextInput
@@ -655,9 +749,13 @@ export default function ManageInvitationsScreen() {
                     placeholderTextColor={theme.textTertiary}
                     value={guestDetails[slot.index]?.phone || ''}
                     onChangeText={(v) => updateGuestDetail(slot.index, 'phone', v)}
+                    onFocus={() => handleInputFocus(slot.index)}
                     keyboardType="phone-pad"
                   />
                 </View>
+                {duplicatePhoneSlots.has(slot.index) && (
+                  <Text style={styles.dupError}>{dupPhoneMsg}</Text>
+                )}
               </>
             )}
             {/* Guest: full form (name + email + phone) */}
@@ -671,6 +769,7 @@ export default function ManageInvitationsScreen() {
                       placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.firstName || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'firstName', v)}
+                      onFocus={() => handleInputFocus(slot.index)}
                       autoCapitalize="words"
                     />
                   </View>
@@ -681,6 +780,7 @@ export default function ManageInvitationsScreen() {
                       placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.lastName || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'lastName', v)}
+                      onFocus={() => handleInputFocus(slot.index)}
                       autoCapitalize="words"
                     />
                   </View>
@@ -693,7 +793,7 @@ export default function ManageInvitationsScreen() {
                       placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.email || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'email', v)}
-                      onFocus={() => handleEmailFocus(slot.index, guestDetails[slot.index]?.email || '')}
+                      onFocus={() => { handleEmailFocus(slot.index, guestDetails[slot.index]?.email || ''); handleInputFocus(slot.index); }}
                       onBlur={handleEmailBlur}
                       keyboardType="email-address"
                       autoCapitalize="none"
@@ -713,6 +813,9 @@ export default function ManageInvitationsScreen() {
                       ))}
                     </View>
                   )}
+                  {duplicateEmailSlots.has(slot.index) && (
+                    <Text style={styles.dupError}>{dupEmailMsg}</Text>
+                  )}
                 </View>
                 <View style={styles.inputContainer}>
                   <TextInput
@@ -721,20 +824,31 @@ export default function ManageInvitationsScreen() {
                     placeholderTextColor={theme.textTertiary}
                     value={guestDetails[slot.index]?.phone || ''}
                     onChangeText={(v) => updateGuestDetail(slot.index, 'phone', v)}
+                    onFocus={() => handleInputFocus(slot.index)}
                     keyboardType="phone-pad"
                   />
                 </View>
+                {duplicatePhoneSlots.has(slot.index) && (
+                  <Text style={styles.dupError}>{dupPhoneMsg}</Text>
+                )}
               </>
             )}
 
-            {/* Confirm button */}
-            <Pressable
-              style={styles.confirmButton}
-              onPress={() => setExpandedSlot(null)}
-            >
-              <Ionicons name="checkmark-circle" size={18} color={theme.textOnPrimary} />
-              <Text style={styles.confirmButtonText}>Confirm</Text>
-            </Pressable>
+            {/* Confirm button — disabled while this slot has a duplicate phone or
+                email, so a colliding contact can never be finalised. */}
+            {(() => {
+              const slotHasDuplicate = duplicatePhoneSlots.has(slot.index) || duplicateEmailSlots.has(slot.index);
+              return (
+                <Pressable
+                  style={[styles.confirmButton, slotHasDuplicate && styles.confirmButtonDisabled]}
+                  disabled={slotHasDuplicate}
+                  onPress={() => setExpandedSlot(null)}
+                >
+                  <Ionicons name="checkmark-circle" size={18} color={theme.textOnPrimary} />
+                  <Text style={styles.confirmButtonText}>Confirm</Text>
+                </Pressable>
+              );
+            })()}
           </YStack>
         )}
       </Pressable>
@@ -753,9 +867,13 @@ export default function ManageInvitationsScreen() {
 
   return (
     <>
+    {/* On iOS the ScrollView's automaticallyAdjustKeyboardInsets handles keyboard
+        avoidance AND auto-scrolls the focused input into view — using 'padding'
+        here as well would double-count and push content too far. Android keeps
+        the 'height' behavior since it has no equivalent inset adjustment. */}
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'android' ? 'height' : undefined}
       keyboardVerticalOffset={0}
     >
       {/* Header */}
@@ -770,11 +888,13 @@ export default function ManageInvitationsScreen() {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 320 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets={true}
       >
         {/* Stats Row */}
         <XStack gap={12} marginBottom={20}>
@@ -822,13 +942,11 @@ export default function ManageInvitationsScreen() {
         </View>
       )}
       {!isGuest && isReadOnly && (
-        <View style={[styles.footer, { paddingBottom: insets.bottom }]}>
-          <View style={styles.readOnlyBanner} testID="invitations-readonly-banner">
-            <Ionicons name="lock-closed-outline" size={16} color={theme.textSecondary} />
-            <Text style={styles.readOnlyBannerText}>
-              {(t.manageInvitations as any).pastEventReadOnly || 'Invitations are closed — the event has already taken place.'}
-            </Text>
-          </View>
+        <View style={[styles.footer, { paddingBottom: insets.bottom, paddingHorizontal: 16 }]}>
+          <PastEventBanner
+            testID="invitations-readonly-banner"
+            message={(t.manageInvitations as any).pastEventReadOnly || 'Invitations are closed — the event has already taken place.'}
+          />
         </View>
       )}
 
@@ -1101,6 +1219,15 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     color: theme.textTertiary,
     fontStyle: 'italic',
     marginTop: 2,
+  },
+  dupError: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginTop: 6,
+    lineHeight: 16,
+  },
+  confirmButtonDisabled: {
+    opacity: 0.4,
   },
   inputContainer: {
     backgroundColor: theme.surfaceHigh,
