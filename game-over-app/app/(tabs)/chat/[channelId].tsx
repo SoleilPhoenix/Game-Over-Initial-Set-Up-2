@@ -112,13 +112,14 @@ export default function ChatChannelScreen() {
   const deleteChannelMutation = useDeleteChannel();
 
   const handleDeleteChannel = () => {
+    const tr = getTranslation();
     Alert.alert(
-      'Delete Channel',
-      `Are you sure you want to delete "${channelDisplayName}"? This cannot be undone.`,
+      (tr.chat as any).channelDeleteTitle,
+      (tr.chat as any).channelDeleteMsg.replace('{{name}}', channelDisplayName),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: tr.common.cancel, style: 'cancel' },
         {
-          text: 'Delete',
+          text: tr.common.delete,
           style: 'destructive',
           onPress: async () => {
             setInfoModalVisible(false);
@@ -144,7 +145,7 @@ export default function ChatChannelScreen() {
                 await deleteChannelMutation.mutateAsync(channelId!);
                 router.back();
               } catch {
-                Alert.alert('Error', 'Could not delete channel.');
+                Alert.alert((tr.chat as any).errorTitle, (tr.chat as any).channelDeleteFailed);
               }
             }
           },
@@ -473,7 +474,7 @@ export default function ChatChannelScreen() {
             </View>
             {/* Header row: title + close */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '700' }}>Channel Info</Text>
+              <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '700' }}>{(t.chat as any).channelInfoTitle}</Text>
               <Pressable onPress={() => setInfoModalVisible(false)} hitSlop={8}>
                 <Ionicons name="close" size={22} color="rgba(255,255,255,0.48)" />
               </Pressable>
@@ -482,7 +483,13 @@ export default function ChatChannelScreen() {
             {/* 1. Category — text only */}
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 10 }}>
               <Text style={{ color: headerColor, fontSize: 13, fontWeight: '700', letterSpacing: 0.5 }}>
-                {channelDisplayCategory.toUpperCase()}
+                {channelDisplayCategory === 'accommodation'
+                  ? t.chat.accommodation.toUpperCase()
+                  : channelDisplayCategory === 'activities'
+                    ? t.chat.activities.toUpperCase()
+                    : channelDisplayCategory === 'budget'
+                      ? t.chat.budgetCategory.toUpperCase()
+                      : t.chat.general.toUpperCase()}
               </Text>
             </View>
 
@@ -499,7 +506,7 @@ export default function ChatChannelScreen() {
               <Ionicons name="person-outline" size={18} color={headerColor} />
               <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
                 {!isDbChannel
-                  ? (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You')
+                  ? (user?.user_metadata?.full_name || user?.email?.split('@')[0] || (t.chat as any).pollYou)
                   : '—'}
               </Text>
             </View>
@@ -522,7 +529,7 @@ export default function ChatChannelScreen() {
               onPress={handleDeleteChannel}
             >
               <Ionicons name="trash-outline" size={16} color="#EF4444" />
-              <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14 }}>Delete Channel</Text>
+              <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14 }}>{(t.chat as any).channelDeleteTitle}</Text>
             </Pressable>
           </Animated.View>
           </Pressable>

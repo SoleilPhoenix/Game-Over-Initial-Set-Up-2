@@ -724,6 +724,18 @@ const de: TranslationKeys = {
     deletePollMsg: '„{{title}}" löschen? Dies kann nicht rückgängig gemacht werden.',
     deletePollFailed: 'Umfrage konnte nicht gelöscht werden.',
     errorTitle: 'Fehler',
+    // ─── Channel detail (chat/[channelId]) ─────
+    channelInfoTitle: 'Kanal-Info',
+    channelDeleteTitle: 'Kanal löschen',
+    channelDeleteMsg: 'Möchtest du „{{name}}" wirklich löschen? Dies kann nicht rückgängig gemacht werden.',
+    channelDeleteFailed: 'Kanal konnte nicht gelöscht werden.',
+    // ─── Share Modal ───────────────────────────
+    shareEventTitle: 'Event teilen',
+    shareEventSubtitleModal: 'Lade Freunde über deine bevorzugte Plattform ein',
+    sharePreparingLink: 'Einladungslink wird vorbereitet …',
+    shareCopyLink: 'Link kopieren',
+    shareLinkCopiedTitle: 'Link kopiert!',
+    shareLinkCopiedMsg: 'Füg ihn ein, wo du willst.',
   },
 
   // ─── Notifications Screen ────────────────────

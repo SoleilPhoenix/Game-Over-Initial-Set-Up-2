@@ -2587,7 +2587,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
   eventSelectorWrapper: {
     paddingHorizontal: 0,
     paddingTop: 0,
-    marginBottom: 16,
+    marginBottom: 20,
     zIndex: 10,
   },
   eventSelectorCard: {

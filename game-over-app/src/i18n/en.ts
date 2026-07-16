@@ -732,6 +732,18 @@ const en = {
     deletePollMsg: 'Delete "{{title}}"? This cannot be undone.',
     deletePollFailed: 'Could not delete poll.',
     errorTitle: 'Error',
+    // ─── Channel detail (chat/[channelId]) ─────
+    channelInfoTitle: 'Channel Info',
+    channelDeleteTitle: 'Delete Channel',
+    channelDeleteMsg: 'Are you sure you want to delete "{{name}}"? This cannot be undone.',
+    channelDeleteFailed: 'Could not delete channel.',
+    // ─── Share Modal ───────────────────────────
+    shareEventTitle: 'Share Event',
+    shareEventSubtitleModal: 'Invite friends via your favourite platform',
+    sharePreparingLink: 'Preparing invite link…',
+    shareCopyLink: 'Copy link',
+    shareLinkCopiedTitle: 'Link copied!',
+    shareLinkCopiedMsg: 'Paste it anywhere to share.',
   },
 
   // ─── Notifications Screen ────────────────────

@@ -5,6 +5,7 @@ import { Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
 import { useCreateInvite } from '@/hooks/queries/useInvites';
+import { useTranslation } from '@/i18n';
 
 const PLATFORMS = [
   { id: 'whatsapp',  label: 'WhatsApp',    icon: 'logo-whatsapp',  color: '#25D366', bg: 'rgba(37,211,102,0.15)' },
@@ -41,6 +42,7 @@ const APP_FALLBACKS: Record<string, string> = {
 
 export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModalProps) {
   const { theme } = useTheme();
+  const { t } = useTranslation();
   const createInvite = useCreateInvite();
   const [inviteCode, setInviteCode] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
@@ -112,7 +114,7 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
     if (!linkReady) return;
     await Clipboard.setStringAsync(shareUrl).catch(() => {});
     onClose();
-    Alert.alert('Link copied!', 'Paste it anywhere to share.');
+    Alert.alert((t.chat as any).shareLinkCopiedTitle, (t.chat as any).shareLinkCopiedMsg);
   };
 
   return (
@@ -133,10 +135,10 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: theme.ghostBorder, alignSelf: 'center', marginBottom: 20 }} />
 
           <Text style={{ fontSize: 17, fontWeight: '700', color: theme.accentGold, textAlign: 'center', marginBottom: 8, fontFamily: 'Inter_600SemiBold' }}>
-            Share Event
+            {(t.chat as any).shareEventTitle}
           </Text>
           <Text style={{ fontSize: 13, color: theme.textTertiary, textAlign: 'center', marginBottom: 28 }}>
-            Invite friends via your favourite platform
+            {(t.chat as any).shareEventSubtitleModal}
           </Text>
 
           {/* Platform grid — 3×2, icons fill available width.
@@ -169,7 +171,7 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
           {generating ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingVertical: 8 }}>
               <ActivityIndicator size="small" color={theme.textTertiary} />
-              <Text style={{ fontSize: 12, fontWeight: '500', color: theme.textTertiary }}>Preparing invite link…</Text>
+              <Text style={{ fontSize: 12, fontWeight: '500', color: theme.textTertiary }}>{(t.chat as any).sharePreparingLink}</Text>
             </View>
           ) : (
             <Pressable
@@ -185,7 +187,7 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
               })}
             >
               <Ionicons name="copy-outline" size={14} color={theme.textTertiary} />
-              <Text style={{ fontSize: 12, fontWeight: '500', color: theme.textTertiary }}>Copy link</Text>
+              <Text style={{ fontSize: 12, fontWeight: '500', color: theme.textTertiary }}>{(t.chat as any).shareCopyLink}</Text>
             </Pressable>
           )}
         </View>
