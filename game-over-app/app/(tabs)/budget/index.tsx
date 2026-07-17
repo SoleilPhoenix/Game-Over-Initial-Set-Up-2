@@ -1218,9 +1218,16 @@ export default function BudgetDashboardScreen() {
                                   )}
                                 </YStack>
                                 {canPay && (
-                                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(249,115,22,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-                                    <Ionicons name="chevron-forward" size={20} color="#F97316" />
-                                  </View>
+                                  // "Pay balance" label under the chevron so the affordance is
+                                  // discoverable — chevron alone left users guessing.
+                                  <YStack alignItems="center" gap={6}>
+                                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(249,115,22,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                                      <Ionicons name="chevron-forward" size={20} color="#F97316" />
+                                    </View>
+                                    <Text fontSize={10} fontWeight="700" color="#F97316" letterSpacing={0.4} style={{ textTransform: 'uppercase', textAlign: 'center' }}>
+                                      {(t.budget as any).payRemainingBtn}
+                                    </Text>
+                                  </YStack>
                                 )}
                               </XStack>
                             </>

@@ -186,7 +186,7 @@ export default function NotificationsScreen() {
                     <Text fontSize={14} fontWeight="500" color={theme.textPrimary} numberOfLines={1}>
                       {t.notificationPrefs.enablePush}
                     </Text>
-                    <Text fontSize={11} color={theme.textSecondary} numberOfLines={1}>
+                    <Text fontSize={11} color={theme.textSecondary} numberOfLines={2}>
                       {t.notificationPrefs.enablePushDesc}
                     </Text>
                   </YStack>
@@ -217,7 +217,7 @@ export default function NotificationsScreen() {
                     <Text fontSize={14} fontWeight="500" color={theme.textPrimary} numberOfLines={1}>
                       {t.notificationPrefs.paymentDueAlerts}
                     </Text>
-                    <Text fontSize={11} color={theme.textSecondary} numberOfLines={1}>
+                    <Text fontSize={11} color={theme.textSecondary} numberOfLines={2}>
                       {t.notificationPrefs.paymentDueAlertsDesc}
                     </Text>
                   </YStack>
@@ -253,7 +253,7 @@ export default function NotificationsScreen() {
                     <Text fontSize={14} fontWeight="500" color={theme.textPrimary} numberOfLines={1}>
                       {t.notificationPrefs.eventUpdates}
                     </Text>
-                    <Text fontSize={11} color={theme.textSecondary} numberOfLines={1}>
+                    <Text fontSize={11} color={theme.textSecondary} numberOfLines={2}>
                       {t.notificationPrefs.eventUpdatesDesc}
                     </Text>
                   </YStack>
