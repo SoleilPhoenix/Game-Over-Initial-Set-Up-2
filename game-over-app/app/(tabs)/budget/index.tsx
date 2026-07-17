@@ -1166,65 +1166,76 @@ export default function BudgetDashboardScreen() {
                             </View>
                           </XStack>
                         </View>
-                        {/* Card 2 — Amount Due non-zero → orange amount */}
-                        <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, overflow: 'hidden', flexDirection: 'row', borderWidth: 1, borderColor: isUrgent ? 'rgba(249,115,22,0.35)' : theme.ghostBorder }}>
-                          <View style={{ width: 4, backgroundColor: isUrgent ? '#F97316' : theme.accentGold }} />
-                          <YStack flex={1} padding={20} gap={4}>
-                            <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
-                              {t.budget.amountDue75Label}
-                            </Text>
-                            <Text fontSize={36} fontWeight="700" color="#F97316" letterSpacing={-1}>
-                              {fmtDue}
-                            </Text>
-                            {daysUntilEvent !== null && daysUntilEvent > 0 && (
-                              <Text fontSize={12} fontWeight="600" color={isUrgent ? '#F97316' : theme.textTertiary} letterSpacing={0.2}>
-                                {(t.budget as any).dueInDays.replace('{{count}}', String(daysUntilEvent))}
-                              </Text>
-                            )}
-                          </YStack>
-                        </View>
+                        {/* Card 2 — Amount Due (merged with the "pay" CTA):
+                            the card itself is tappable for organizers, so the amount and
+                            "in X days" only render once and the chevron signals the action.
+                            Guests get the same card without the tap target. */}
+                        {(() => {
+                          const canPay = budgetStats.percentage < 100 && budgetStats.pending > 0 && !isPackageFrozen && isOrganizer;
+                          const handlePayRemaining = () => {
+                            if (!selectedEventId) return;
+                            const packageIdForPayment = cachedBudget?.packageId || (booking as any)?.package_id;
+                            const participantsForPayment = cachedBudget?.payingCount;
+                            const params = new URLSearchParams({ payFull: '1' });
+                            if (packageIdForPayment) params.set('packageId', packageIdForPayment);
+                            if (participantsForPayment) params.set('participants', String(participantsForPayment + 1));
+                            if (selectedEvent?.city_id) params.set('cityId', selectedEvent.city_id);
+                            params.set('amountCents', String(budgetStats.pending));
+                            params.set('totalCents', String(budgetStats.totalBudget));
+                            router.push(`/booking/${selectedEventId}/payment?${params.toString()}` as any);
+                          };
+                          const cardStyle = { backgroundColor: theme.surfaceCard, borderRadius: 16, overflow: 'hidden' as const, flexDirection: 'row' as const, borderWidth: 1, borderColor: isUrgent ? 'rgba(249,115,22,0.35)' : theme.ghostBorder };
+                          const cardInner = (
+                            <>
+                              <View style={{ width: 4, backgroundColor: isUrgent ? '#F97316' : theme.accentGold }} />
+                              <XStack flex={1} padding={20} alignItems="center" gap={12}>
+                                <YStack flex={1} gap={4}>
+                                  <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
+                                    {t.budget.amountDue75Label}
+                                  </Text>
+                                  <Text fontSize={36} fontWeight="700" color="#F97316" letterSpacing={-1}>
+                                    {fmtDue}
+                                  </Text>
+                                  {daysUntilEvent !== null && daysUntilEvent > 0 && (
+                                    <Text fontSize={12} fontWeight="600" color={isUrgent ? '#F97316' : theme.textTertiary} letterSpacing={0.2}>
+                                      {(t.budget as any).dueInDays.replace('{{count}}', String(daysUntilEvent))}
+                                    </Text>
+                                  )}
+                                </YStack>
+                                {canPay && (
+                                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(249,115,22,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                                    <Ionicons name="chevron-forward" size={20} color="#F97316" />
+                                  </View>
+                                )}
+                              </XStack>
+                            </>
+                          );
+                          return canPay ? (
+                            <Pressable
+                              onPress={handlePayRemaining}
+                              accessibilityRole="button"
+                              accessibilityLabel={(t.budget as any).payRemainingBtn}
+                              style={({ pressed }) => [cardStyle, pressed && { opacity: 0.85 }]}
+                            >
+                              {cardInner}
+                            </Pressable>
+                          ) : (
+                            <View style={cardStyle}>{cardInner}</View>
+                          );
+                        })()}
                       </>
                     );
                   })()
                 )}
 
-                {/* Pay Remaining Balance — organizers only, hidden if package is frozen (event ended) */}
-                {budgetStats.percentage < 100 && budgetStats.pending > 0 && !isPackageFrozen && (
-                  isOrganizer ? (
-                    <Pressable
-                      style={[styles.payRemainingButton, { marginHorizontal: 0, marginBottom: 0, borderRadius: 12 }]}
-                      onPress={() => {
-                        if (!selectedEventId) return;
-                        const packageIdForPayment = cachedBudget?.packageId || (booking as any)?.package_id;
-                        const participantsForPayment = cachedBudget?.payingCount;
-                        const params = new URLSearchParams({ payFull: '1' });
-                        if (packageIdForPayment) params.set('packageId', packageIdForPayment);
-                        if (participantsForPayment) params.set('participants', String(participantsForPayment + 1));
-                        if (selectedEvent?.city_id) params.set('cityId', selectedEvent.city_id);
-                        params.set('amountCents', String(budgetStats.pending));
-                        params.set('totalCents', String(budgetStats.totalBudget));
-                        router.push(`/booking/${selectedEventId}/payment?${params.toString()}` as any);
-                      }}
-                    >
-                      <View style={styles.payRemainingIcon}>
-                        <Ionicons name="card-outline" size={20} color="#F97316" />
-                      </View>
-                      <YStack flex={1}>
-                        <Text style={styles.payRemainingTitle}>{(t.budget as any).payRemainingBtn}</Text>
-                        <Text style={styles.payRemainingSubtitleText}>
-                          {formatCurrencyRounded(budgetStats.pending)} · {(t.budget as any).payRemainingSubtitle}
-                        </Text>
-                      </YStack>
-                      <Ionicons name="chevron-forward" size={18} color={theme.textTertiary} />
-                    </Pressable>
-                  ) : (
-                    <View style={styles.guestRemainingInfo}>
-                      <Ionicons name="information-circle-outline" size={18} color={theme.textSecondary} />
-                      <Text style={styles.guestRemainingText}>
-                        {t.budget.guestRemainingText.replace('{{amount}}', formatCurrencyRounded(budgetStats.pending))}
-                      </Text>
-                    </View>
-                  )
+                {/* Guest info line — only for non-organizers when a balance is still owed */}
+                {budgetStats.percentage < 100 && budgetStats.pending > 0 && !isPackageFrozen && !isOrganizer && (
+                  <View style={styles.guestRemainingInfo}>
+                    <Ionicons name="information-circle-outline" size={18} color={theme.textSecondary} />
+                    <Text style={styles.guestRemainingText}>
+                      {t.budget.guestRemainingText.replace('{{amount}}', formatCurrencyRounded(budgetStats.pending))}
+                    </Text>
+                  </View>
                 )}
             </YStack>
 

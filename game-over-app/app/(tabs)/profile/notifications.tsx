@@ -183,10 +183,10 @@ export default function NotificationsScreen() {
                     <Ionicons name="notifications" size={18} color="#C6A75E" />
                   </View>
                   <YStack flex={1}>
-                    <Text fontSize={14} fontWeight="500" color={theme.textPrimary}>
+                    <Text fontSize={14} fontWeight="500" color={theme.textPrimary} numberOfLines={1}>
                       {t.notificationPrefs.enablePush}
                     </Text>
-                    <Text fontSize={12} color={theme.textSecondary}>
+                    <Text fontSize={11} color={theme.textSecondary} numberOfLines={1}>
                       {t.notificationPrefs.enablePushDesc}
                     </Text>
                   </YStack>
@@ -214,10 +214,10 @@ export default function NotificationsScreen() {
                     <Ionicons name="warning" size={18} color="#F97316" />
                   </View>
                   <YStack flex={1}>
-                    <Text fontSize={14} fontWeight="500" color={theme.textPrimary}>
+                    <Text fontSize={14} fontWeight="500" color={theme.textPrimary} numberOfLines={1}>
                       {t.notificationPrefs.paymentDueAlerts}
                     </Text>
-                    <Text fontSize={12} color={theme.textSecondary}>
+                    <Text fontSize={11} color={theme.textSecondary} numberOfLines={1}>
                       {t.notificationPrefs.paymentDueAlertsDesc}
                     </Text>
                   </YStack>
@@ -250,10 +250,10 @@ export default function NotificationsScreen() {
                     <Ionicons name="mail" size={18} color="#C6A75E" />
                   </View>
                   <YStack flex={1}>
-                    <Text fontSize={14} fontWeight="500" color={theme.textPrimary}>
+                    <Text fontSize={14} fontWeight="500" color={theme.textPrimary} numberOfLines={1}>
                       {t.notificationPrefs.eventUpdates}
                     </Text>
-                    <Text fontSize={12} color={theme.textSecondary}>
+                    <Text fontSize={11} color={theme.textSecondary} numberOfLines={1}>
                       {t.notificationPrefs.eventUpdatesDesc}
                     </Text>
                   </YStack>

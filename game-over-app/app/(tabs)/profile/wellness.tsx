@@ -249,7 +249,16 @@ function GroupPledge() {
           alignItems="center"
         >
           <Ionicons name="heart" size={16} color="#C6A75E" />
-          <Text fontSize={12} color="#C6A75E" fontWeight="600">
+          {/* Fits on one line so the 🎉 in the string stays visible. */}
+          <Text
+            flex={1}
+            fontSize={11}
+            color="#C6A75E"
+            fontWeight="600"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.85}
+          >
             {t.wellness.groupReady}
           </Text>
         </XStack>
@@ -282,7 +291,7 @@ function FriendshipInsights() {
       {insights.map((insight, i) => {
         const cfg = INSIGHT_CONFIGS[i];
         return (
-          <View key={i} style={[styles.insightCard, { borderLeftColor: cfg.color }]}>
+          <View key={i} style={[styles.insightCard, { borderLeftColor: cfg.color, borderRightColor: cfg.color }]}>
             <XStack gap="$3" alignItems="flex-start">
               <View
                 width={36}
@@ -497,7 +506,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: 'rgba(230,220,200,0.15)',
+    // Gold accent on BOTH sides — the actual color is set inline per card
     borderLeftWidth: 3,
+    borderRightWidth: 3,
     padding: 16,
   },
 });
