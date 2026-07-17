@@ -22,6 +22,7 @@ import { type EditorialTheme } from '@/constants/designSystem';
 import { GoldButton } from '@/components/ui/editorial';
 import { ShareModal } from '@/components/ui/ShareModal';
 import { useTabBarStore } from '@/stores/tabBarStore';
+import { useActiveEventStore } from '@/stores/activeEventStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
@@ -145,7 +146,11 @@ export default function BudgetDashboardScreen() {
   const eventIdParam = rawEventIdParam || pathId;
   const insets = useSafeAreaInsets();
   const user = useUser();
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(eventIdParam || null);
+  // Selected event is shared with the Chat tab via useActiveEventStore so that
+  // picking an event in either tab updates the other. A deep-link eventIdParam
+  // still wins on mount (handled below in a focus effect).
+  const selectedEventId = useActiveEventStore((s) => s.activeEventId);
+  const setSelectedEventId = useActiveEventStore((s) => s.setActiveEventId);
   const [markingPaidUserId, setMarkingPaidUserId] = useState<string | null>(null);
   const [manualRefreshing, setManualRefreshing] = useState(false);
   // Derived: is the current user the organizer of the selected event?
@@ -379,10 +384,20 @@ export default function BudgetDashboardScreen() {
     }
   }, [refetchEvents]);
 
-  // Auto-select nearest booked event (skip if opened from Event Summary)
+  // Deep-link: if the screen was opened with an eventIdParam, that wins and
+  // seeds the shared store so the Chat tab lands on the same event too.
+  useEffect(() => {
+    if (eventIdParam && eventIdParam !== selectedEventId) {
+      setSelectedEventId(eventIdParam);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on eventIdParam change
+  }, [eventIdParam]);
+
+  // Auto-select nearest booked event only when there's no active selection yet
+  // (skip if opened via eventIdParam, or if Chat/Budget already picked one).
   const hasAutoSelected = React.useRef(false);
   useEffect(() => {
-    if (hasAutoSelected.current || bookedEvents.length === 0 || eventIdParam) return;
+    if (hasAutoSelected.current || bookedEvents.length === 0 || eventIdParam || selectedEventId) return;
     hasAutoSelected.current = true;
     const now = Date.now();
     const sorted = [...bookedEvents].sort((a, b) => {
@@ -394,7 +409,7 @@ export default function BudgetDashboardScreen() {
       return aDate - bDate;
     });
     setSelectedEventId(sorted[0].id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally ignores eventIdParam; auto-select runs only when bookedEvents list changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally ignores eventIdParam and selectedEventId; auto-select runs only when bookedEvents list changes
   }, [bookedEvents]);
 
   // ONLY fetch booking if we have booked events (prevent unnecessary queries)
@@ -2052,7 +2067,9 @@ export default function BudgetDashboardScreen() {
                   )}
                 </XStack>
 
-                {/* idle: horizontal 3 channel buttons */}
+                {/* idle: horizontal channel buttons — SMS intentionally omitted;
+                    guest reminder channels are Email + WhatsApp only, matching the
+                    invite-channel policy (see send-guest-invitations edge fn). */}
                 {remindModal.sendStatus === 'idle' && (
                   <>
                     <Text style={remindStyles.inviteSectionLabel}>SEND PAYMENT REMINDER VIA</Text>
@@ -2064,14 +2081,6 @@ export default function BudgetDashboardScreen() {
                         <Ionicons name="mail-outline" size={22} color={hasEmails ? '#3B82F6' : theme.textTertiary} />
                         <Text style={[remindStyles.inviteChannelLabel, { color: hasEmails ? '#3B82F6' : theme.textTertiary }]}>Email</Text>
                         <Text style={remindStyles.inviteChannelCount}>{emailCount} guest{emailCount !== 1 ? 's' : ''}</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[remindStyles.inviteChannelBtn, !hasPhones && remindStyles.inviteChannelBtnDisabled]}
-                        onPress={() => hasPhones && handleRemindViaChannel('sms')}
-                      >
-                        <Ionicons name="chatbubble-outline" size={22} color={hasPhones ? '#10B981' : theme.textTertiary} />
-                        <Text style={[remindStyles.inviteChannelLabel, { color: hasPhones ? '#10B981' : theme.textTertiary }]}>SMS</Text>
-                        <Text style={remindStyles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
                       </Pressable>
                       <Pressable
                         style={[remindStyles.inviteChannelBtn, !hasPhones && remindStyles.inviteChannelBtnDisabled]}

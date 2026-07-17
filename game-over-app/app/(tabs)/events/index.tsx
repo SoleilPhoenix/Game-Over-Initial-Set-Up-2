@@ -456,19 +456,20 @@ export default function EventsScreen() {
     return event.created_by === user?.id ? 'organizer' : 'guest';
   };
 
-  const getPaymentStatus = (event: EventWithDetails): string | null => {
+  const getPaymentStatus = (event: EventWithDetails): { label: string; fullyPaid: boolean } | null => {
     const formatPct = (pct: number) => (t.events as any).paidPct.replace('{{pct}}', String(pct));
-    // Hide the payment badge entirely once fully paid — no more "100% bezahlt" clutter.
-    if (event.status === 'completed') return null;
+    if (event.status === 'completed') {
+      return { label: formatPct(100), fullyPaid: true };
+    }
     if (event.status === 'booked') {
       const budget = budgetInfos[event.id];
       if (budget && budget.totalCents > 0) {
         const paid = budget.paidAmountCents || 0;
-        if (paid >= budget.totalCents) return null;
+        if (paid >= budget.totalCents) return { label: formatPct(100), fullyPaid: true };
         const pct = Math.round((paid / budget.totalCents) * 100);
-        return formatPct(pct);
+        return { label: formatPct(pct), fullyPaid: false };
       }
-      return formatPct(25);
+      return { label: formatPct(25), fullyPaid: false };
     }
     return null;
   };
@@ -601,7 +602,9 @@ export default function EventsScreen() {
               <Text style={styles.dateText}>{dateRange}</Text>
             </XStack>
 
-            {/* Days left + payment status row — orange when urgent (≤14 days & unpaid) */}
+            {/* Days left + payment status row.
+                - Orange when urgent (≤14 days & unpaid)
+                - Green pill with checkmark when fully paid — read at a glance */}
             {(daysLeft || paymentStatus) && (
               <XStack alignItems="center" gap={8} marginTop={6}>
                 {daysLeft && (
@@ -610,11 +613,20 @@ export default function EventsScreen() {
                   </Text>
                 )}
                 {paymentStatus && (
-                  <View style={[styles.paymentBadge, urgent && !isReadOnly && styles.paymentBadgeUrgent]}>
-                    <Text style={[styles.paymentBadgeText, urgent && !isReadOnly && styles.paymentBadgeTextUrgent]}>
-                      {paymentStatus}
-                    </Text>
-                  </View>
+                  paymentStatus.fullyPaid ? (
+                    <View style={[styles.paymentBadge, styles.paymentBadgePaid]}>
+                      <Ionicons name="checkmark-circle" size={12} color="#10B981" style={{ marginRight: 4 }} />
+                      <Text style={[styles.paymentBadgeText, styles.paymentBadgeTextPaid]}>
+                        {paymentStatus.label}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.paymentBadge, urgent && !isReadOnly && styles.paymentBadgeUrgent]}>
+                      <Text style={[styles.paymentBadgeText, urgent && !isReadOnly && styles.paymentBadgeTextUrgent]}>
+                        {paymentStatus.label}
+                      </Text>
+                    </View>
+                  )
                 )}
               </XStack>
             )}
@@ -1255,6 +1267,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   paymentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(198, 167, 94, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -1263,6 +1277,9 @@ const styles = StyleSheet.create({
   paymentBadgeUrgent: {
     backgroundColor: 'rgba(249, 115, 22, 0.15)',
   },
+  paymentBadgePaid: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+  },
   paymentBadgeText: {
     fontSize: 11,
     fontWeight: '600',
@@ -1270,6 +1287,9 @@ const styles = StyleSheet.create({
   },
   paymentBadgeTextUrgent: {
     color: '#F97316',
+  },
+  paymentBadgeTextPaid: {
+    color: '#10B981',
   },
   progressSection: {
     marginTop: 14,

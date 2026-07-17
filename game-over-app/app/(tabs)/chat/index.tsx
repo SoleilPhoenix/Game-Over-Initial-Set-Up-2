@@ -22,6 +22,7 @@ import { isReadOnlyEvent } from '@/utils/eventLifecycle';
 import { PastEventBanner } from '@/components/ui/PastEventBanner';
 import { useUser } from '@/stores/authStore';
 import { useTabBarStore } from '@/stores/tabBarStore';
+import { useActiveEventStore } from '@/stores/activeEventStore';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import type { Database } from '@/lib/supabase/types';
 
@@ -454,7 +455,9 @@ export default function CommunicationScreen() {
   const user = useUser();
   const [selectedTab, setSelectedTab] = useState<CommunicationTab>('topics');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(eventIdParam || null);
+  // Shared with Budget tab — see useActiveEventStore
+  const selectedEventId = useActiveEventStore((s) => s.activeEventId);
+  const setSelectedEventId = useActiveEventStore((s) => s.setActiveEventId);
   const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
   const [pollModalVisible, setPollModalVisible] = useState(false);
   const [pollModalCategory, setPollModalCategory] = useState<ChannelCategory>('general');
@@ -566,16 +569,13 @@ export default function CommunicationScreen() {
     });
   }, [selectedEventId]);
 
-  // When returning to Chat via tab bar (eventIdParam gone), reset to auto-select
-  const prevEventIdParam = useRef(eventIdParam);
+  // Deep-link: when the tab is opened with an eventIdParam, that wins and
+  // seeds the shared store so Budget lands on the same event.
   useEffect(() => {
-    const wasSet = !!prevEventIdParam.current;
-    const isNowClear = !eventIdParam;
-    prevEventIdParam.current = eventIdParam;
-    if (wasSet && isNowClear) {
-      setSelectedEventId(null);
-      hasAutoSelected.current = false;
+    if (eventIdParam && eventIdParam !== selectedEventId) {
+      setSelectedEventId(eventIdParam);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on eventIdParam change
   }, [eventIdParam]);
 
   // Left-edge swipe to go back when opened from Event Summary
@@ -589,10 +589,11 @@ export default function CommunicationScreen() {
     })
   ).current;
 
-  // Auto-select nearest upcoming booked event on first load (skip if opened from Event Summary)
+  // Auto-select nearest upcoming booked event on first load (skip if opened
+  // from Event Summary, or if the shared store already holds a selection)
   const hasAutoSelected = useRef(false);
   useEffect(() => {
-    if (hasAutoSelected.current || bookedEvents.length === 0 || eventIdParam) return;
+    if (hasAutoSelected.current || bookedEvents.length === 0 || eventIdParam || selectedEventId) return;
     hasAutoSelected.current = true;
 
     const now = Date.now();
