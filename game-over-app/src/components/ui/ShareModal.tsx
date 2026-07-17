@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Modal, View, Pressable, Share, Linking, Alert, ActivityIndicator } from 'react-native';
+import { Modal, View, Pressable, Share, Linking, ActivityIndicator } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -113,9 +113,23 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
   const shareUrl  = inviteCode ? `https://game-over.app/invite/${inviteCode}` : '';
   const shareMsg  = `Join us for ${eventTitle ?? 'an unforgettable event'}! 🎉 ${shareUrl}`;
 
-  // Reset queued action + local invite when the sheet closes.
+  // Inline confirmation banner (replaces the intrusive OS Alert). Auto-clears.
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showFeedback = (msg: string) => {
+    setFeedback(msg);
+    if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
+    feedbackTimer.current = setTimeout(() => setFeedback(null), 4000);
+  };
+  useEffect(() => () => { if (feedbackTimer.current) clearTimeout(feedbackTimer.current); }, []);
+
+  // Reset queued action + feedback when the sheet closes.
   useEffect(() => {
-    if (!visible) setPendingAction(null);
+    if (!visible) {
+      setPendingAction(null);
+      setFeedback(null);
+      if (feedbackTimer.current) clearTimeout(feedbackTimer.current);
+    }
   }, [visible]);
 
   const handlePlatform = async (id: PlatformId) => {
@@ -123,6 +137,7 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
       setPendingAction(id);
       return;
     }
+    const appName = PLATFORMS.find(p => p.id === id)?.label ?? id;
     try {
       if (CLIPBOARD_OPEN_PLATFORMS.includes(id)) {
         // Copy link to clipboard, then open the app (user pastes in-app)
@@ -131,9 +146,9 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
         const fallback = APP_FALLBACKS[id];
         const canOpen  = await Linking.canOpenURL(scheme).catch(() => false);
         await Linking.openURL(canOpen ? scheme : fallback).catch(() => {});
-        onClose();
-        const appName = PLATFORMS.find(p => p.id === id)?.label ?? id;
-        Alert.alert('Link copied!', `Paste it in ${appName} to share.`);
+        // Inline confirmation instead of a native alert; keep the sheet open
+        // so it's visible when the user returns from the other app.
+        showFeedback((t.chat as any).shareSwitchedTo.replace('{{platform}}', appName));
         return;
       }
 
@@ -155,10 +170,10 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
           break;
         }
       }
+      showFeedback((t.chat as any).shareSwitchedTo.replace('{{platform}}', appName));
     } catch {
       await Share.share({ message: shareMsg, url: shareUrl }).catch(() => {});
     }
-    onClose();
   };
 
   const handleCopyLink = async () => {
@@ -167,8 +182,7 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
       return;
     }
     await Clipboard.setStringAsync(shareUrl).catch(() => {});
-    onClose();
-    Alert.alert((t.chat as any).shareLinkCopiedTitle, (t.chat as any).shareLinkCopiedMsg);
+    showFeedback((t.chat as any).shareLinkCopiedInline);
   };
 
   // As soon as the link resolves, auto-execute whatever the user tapped while waiting.
@@ -248,6 +262,20 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
               );
             })}
           </View>
+
+          {/* Inline confirmation banner — discreet, replaces the OS alert */}
+          {feedback && (
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
+              backgroundColor: 'rgba(16,185,129,0.12)', borderRadius: 12,
+              paddingVertical: 10, paddingHorizontal: 14, marginBottom: 12,
+            }}>
+              <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+              <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#10B981', flexShrink: 1 }}>
+                {feedback}
+              </Text>
+            </View>
+          )}
 
           {/* Copy link — always tappable. If the link isn't ready yet the tap
               is queued and copies as soon as the code arrives. */}

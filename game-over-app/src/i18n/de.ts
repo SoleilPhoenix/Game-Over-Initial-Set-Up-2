@@ -740,6 +740,8 @@ const de: TranslationKeys = {
     shareCopyLink: 'Link kopieren',
     shareLinkCopiedTitle: 'Link kopiert!',
     shareLinkCopiedMsg: 'Füg ihn ein, wo du willst.',
+    shareLinkCopiedInline: 'Link kopiert — füg ihn ein, wo du willst',
+    shareSwitchedTo: '{{platform}} wird geöffnet — Link kopiert',
   },
 
   // ─── Notifications Screen ────────────────────

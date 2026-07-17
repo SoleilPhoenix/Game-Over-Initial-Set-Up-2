@@ -748,6 +748,8 @@ const en = {
     shareCopyLink: 'Copy link',
     shareLinkCopiedTitle: 'Link copied!',
     shareLinkCopiedMsg: 'Paste it anywhere to share.',
+    shareLinkCopiedInline: 'Link copied — paste it anywhere',
+    shareSwitchedTo: 'Opening {{platform}} — link copied',
   },
 
   // ─── Notifications Screen ────────────────────

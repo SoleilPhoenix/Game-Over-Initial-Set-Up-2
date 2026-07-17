@@ -166,7 +166,7 @@ export default function BookingSummaryScreen() {
     const raw = isDraft ? wizardStartDate : ((bookingFlow.event as any)?.start_date || wizardStartDate);
     if (!raw) return null;
     const d = new Date(raw);
-    return isNaN(d.getTime()) ? null : d.toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return isNaN(d.getTime()) ? null : d.toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' });
   })();
 
   // Guest count: URL params always take precedence (wizard passes intended group size)

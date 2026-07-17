@@ -41,6 +41,18 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           CFBundleURLSchemes: ['gameover'],
         },
       ],
+      // Required so Linking.canOpenURL() can detect these apps on iOS.
+      // Without this, canOpenURL() always returns false and share deep-links
+      // silently fall back to opening the website in Safari instead of the app.
+      LSApplicationQueriesSchemes: [
+        'whatsapp',
+        'instagram',
+        'instagram-stories',
+        'tiktok',
+        'snapchat',
+        'fb',
+        'twitter',
+      ],
     },
   },
   android: {
