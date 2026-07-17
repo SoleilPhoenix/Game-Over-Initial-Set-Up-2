@@ -18,6 +18,7 @@ import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { LinearGradient } from 'expo-linear-gradient';
 import { setDesiredParticipants, setBudgetInfo } from '@/lib/participantCountCache';
 import { assemblePackages } from '@/utils/packageAssembly';
+import { translateFeature } from '@/i18n/packageContent';
 import { TIER_SIZE_LABEL, getTierName } from '@/constants/packageTiers';
 import { useTranslation } from '@/i18n';
 
@@ -115,7 +116,7 @@ function PackageSelectionCard({
                 fontWeight="700"
                 letterSpacing={0.3}
               >
-                Recommendation based on preferences
+                {t.packageDetail.recommendationBadge}
               </Text>
             </XStack>
           )}
@@ -136,7 +137,7 @@ function PackageSelectionCard({
                 {(pkg.rating || 4.5).toFixed(1)}
               </Text>
               <Text fontSize={13} color="rgba(255,255,255,0.7)">
-                ({pkg.review_count || 0} reviews)
+                {(t.packageDetail as any).reviewsCount.replace('{{count}}', String(pkg.review_count || 0))}
               </Text>
             </XStack>
           </YStack>
@@ -155,7 +156,7 @@ function PackageSelectionCard({
           {features.map((feature: string, i: number) => (
             <XStack key={i} alignItems="center" gap="$2">
               <Ionicons name="checkmark-circle" size={16} color="#C6A75E" />
-              <Text fontSize={14} color="rgba(255,255,255,0.9)">{feature}</Text>
+              <Text fontSize={14} color="rgba(255,255,255,0.9)">{translateFeature(feature)}</Text>
             </XStack>
           ))}
         </YStack>
@@ -181,7 +182,7 @@ function PackageSelectionCard({
               fontWeight: isSelected ? '700' : '600',
               fontFamily: 'Inter_600SemiBold',
             }}>
-              {isSelected ? 'Selected' : 'Select Package'}
+              {isSelected ? (t.wizard as any).packageSelected : t.wizard.selectPackage}
             </RNText>
           </Pressable>
           <XStack
@@ -519,7 +520,7 @@ export default function WizardStep4() {
       <WizardFooter
         onBack={handleBack}
         onNext={handleNext}
-        nextLabel={isCreating ? 'Creating...' : 'Proceed to Booking'}
+        nextLabel={isCreating ? (t.wizard as any).creatingEvent : (t.wizard as any).proceedToBooking}
         nextDisabled={!canProceed || isCreating}
       />
     </YStack>

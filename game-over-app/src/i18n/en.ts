@@ -355,6 +355,9 @@ const en = {
     aiRecommended: 'AI Recommended',
     selectPackage: 'Select Package',
     selectRecommended: 'Select Recommended Package',
+    packageSelected: 'Selected',
+    proceedToBooking: 'Proceed to Booking',
+    creatingEvent: 'Creating…',
     disputeFreePayment: 'Dispute-free payment splitting available',
     // Draft dialog
     existingDraftTitle: 'Existing Draft',
@@ -385,6 +388,7 @@ const en = {
     recommendationBadge: 'Recommendation based on preferences',
     totalPeople: 'Total ({{count}} people)',
     selectThisPackage: 'Select This Package',
+    reviewsCount: '({{count}} reviews)',
   },
 
   // ─── Booking ───────────────────────────────────

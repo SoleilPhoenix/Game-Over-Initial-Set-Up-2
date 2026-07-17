@@ -350,6 +350,9 @@ const de: TranslationKeys = {
     aiRecommended: 'KI-Empfehlung',
     selectPackage: 'Paket wählen',
     selectRecommended: 'Empfohlenes Paket wählen',
+    packageSelected: 'Ausgewählt',
+    proceedToBooking: 'Weiter zur Buchung',
+    creatingEvent: 'Wird erstellt …',
     disputeFreePayment: 'Streitfreie Kostenteilung verfügbar',
     // Draft dialog
     existingDraftTitle: 'Vorhandener Entwurf',
@@ -380,6 +383,7 @@ const de: TranslationKeys = {
     recommendationBadge: 'Empfehlung basierend auf Präferenzen',
     totalPeople: 'Gesamt ({{count}} Personen)',
     selectThisPackage: 'Dieses Paket wählen',
+    reviewsCount: '({{count}} Bewertungen)',
   },
 
   // ─── Booking ───────────────────────────────────

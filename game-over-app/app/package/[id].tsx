@@ -21,7 +21,8 @@ import { useAuthStore } from '@/stores/authStore';
 import { useFavoritesStore } from '@/stores/favoritesStore';
 import { Button } from '@/components/ui/Button';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
-import { useTranslation } from '@/i18n';
+import { useTranslation, getCurrentLanguage } from '@/i18n';
+import { translateFeature, translateFeatureSub, translatePackageDescription } from '@/i18n/packageContent';
 import { assemblePackages } from '@/utils/packageAssembly';
 import { loadBudgetInfo, type BudgetInfo } from '@/lib/participantCountCache';
 import { scheduleRepository } from '@/repositories';
@@ -110,36 +111,39 @@ function featureIcon(name: string): string {
 }
 
 function featureSub(name: string): string {
-  if (DINING_FEATURES.has(name)) return 'Group dinner included';
-  if (BAR_FEATURES.has(name)) return 'Evening entertainment included';
-  return 'Group activity included';
+  // Icon/category logic keys off the canonical English name; only the visible
+  // label is translated.
+  if (DINING_FEATURES.has(name)) return translateFeatureSub('Group dinner included');
+  if (BAR_FEATURES.has(name)) return translateFeatureSub('Evening entertainment included');
+  return translateFeatureSub('Group activity included');
 }
 
 function buildHighlights(features: string[]): { icon: string; label: string; sub: string }[] {
   if (features.length === 0) return [];
   const top = features[0];
-  return [{ icon: featureIcon(top), label: top, sub: '' }];
+  return [{ icon: featureIcon(top), label: translateFeature(top), sub: '' }];
 }
 
 function buildIncludes(features: string[]): { icon: string; title: string; sub: string }[] {
-  return features.map(f => ({ icon: featureIcon(f), title: f, sub: featureSub(f) }));
+  return features.map(f => ({ icon: featureIcon(f), title: translateFeature(f), sub: featureSub(f) }));
 }
 
-// 2-3 reviews per tier
-const MOCK_REVIEWS: Record<string, { initials: string; color: string; name: string; rating: number; text: string }[]> = {
+// 2-3 demo reviews per tier. Bilingual: `text` is EN, `textDe` is DE — the
+// render picks based on the active language.
+const MOCK_REVIEWS: Record<string, { initials: string; color: string; name: string; rating: number; text: string; textDe: string }[]> = {
   essential: [
-    { initials: 'SJ', color: '#22C55E', name: 'Sarah J.', rating: 4, text: "This was the best bang for our buck. We didn't need the fancy extras, just a solid plan and a ride. The Essential tier delivered exactly that." },
-    { initials: 'LC', color: '#3B82F6', name: 'Laura C.', rating: 4, text: "Great for a budget-friendly party. The bar hopping tour was well organized and the concierge helped with last-minute changes. Would recommend!" },
+    { initials: 'SJ', color: '#22C55E', name: 'Sarah J.', rating: 4, text: "This was the best bang for our buck. We didn't need the fancy extras, just a solid plan and a ride. The Essential tier delivered exactly that.", textDe: 'Das war das beste Preis-Leistungs-Verhältnis. Wir brauchten keinen Schnickschnack, nur einen soliden Plan und einen Transfer. Genau das hat die Feier-Stufe geliefert.' },
+    { initials: 'LC', color: '#3B82F6', name: 'Laura C.', rating: 4, text: "Great for a budget-friendly party. The bar hopping tour was well organized and the concierge helped with last-minute changes. Would recommend!", textDe: 'Super für eine budgetfreundliche Party. Die Bar-Tour war gut organisiert und der Concierge half bei kurzfristigen Änderungen. Sehr empfehlenswert!' },
   ],
   classic: [
-    { initials: 'MT', color: '#EF4444', name: 'Mike T.', rating: 5, text: "Honestly, the private wine tasting was the highlight. We didn't have to worry about transport or bookings. The Classic tier was the perfect middle ground." },
-    { initials: 'JD', color: '#14B8A6', name: 'James D.', rating: 5, text: "The party bus alone was worth it. Everyone was together, the photographer captured amazing shots, and VIP access meant zero waiting." },
-    { initials: 'KW', color: '#EC4899', name: 'Kate W.', rating: 4, text: "Planned my best friend's bachelorette. The Classic package took all the stress away. Everyone loved the VIP experience!" },
+    { initials: 'MT', color: '#EF4444', name: 'Mike T.', rating: 5, text: "Honestly, the private wine tasting was the highlight. We didn't have to worry about transport or bookings. The Classic tier was the perfect middle ground.", textDe: 'Ehrlich, die private Weinverkostung war das Highlight. Wir mussten uns um nichts kümmern – weder Transport noch Buchungen. Die Rausch-Stufe war der perfekte Mittelweg.' },
+    { initials: 'JD', color: '#14B8A6', name: 'James D.', rating: 5, text: "The party bus alone was worth it. Everyone was together, the photographer captured amazing shots, and VIP access meant zero waiting.", textDe: 'Allein der Party-Bus war es wert. Alle waren zusammen, der Fotograf hat großartige Aufnahmen gemacht und dank VIP-Zugang gab es keine Wartezeiten.' },
+    { initials: 'KW', color: '#EC4899', name: 'Kate W.', rating: 4, text: "Planned my best friend's bachelorette. The Classic package took all the stress away. Everyone loved the VIP experience!", textDe: 'Habe den JGA meiner besten Freundin geplant. Das Rausch-Paket hat den ganzen Stress abgenommen. Alle waren vom VIP-Erlebnis begeistert!' },
   ],
   grand: [
-    { initials: 'RK', color: '#F59E0B', name: 'Ryan K.', rating: 5, text: "The VIP access was legit. No waiting in lines anywhere, and the penthouse was incredible. Best bachelor weekend hands down." },
-    { initials: 'TM', color: '#8B5CF6', name: 'Tyler M.', rating: 5, text: "Everything was handled for us. We just showed up and had a blast. The private chef dinner was a highlight for sure." },
-    { initials: 'AP', color: '#22C55E', name: 'Alex P.', rating: 5, text: "The spa recovery session the next morning was genius. Whoever thought of that deserves an award. Absolutely premium from start to finish." },
+    { initials: 'RK', color: '#F59E0B', name: 'Ryan K.', rating: 5, text: "The VIP access was legit. No waiting in lines anywhere, and the penthouse was incredible. Best bachelor weekend hands down.", textDe: 'Der VIP-Zugang war top. Nirgends Schlangestehen und das Penthouse war unglaublich. Ganz klar das beste JGA-Wochenende.' },
+    { initials: 'TM', color: '#8B5CF6', name: 'Tyler M.', rating: 5, text: "Everything was handled for us. We just showed up and had a blast. The private chef dinner was a highlight for sure.", textDe: 'Alles wurde für uns organisiert. Wir sind einfach aufgetaucht und hatten eine Riesengaudi. Das private Chefkoch-Dinner war definitiv ein Highlight.' },
+    { initials: 'AP', color: '#22C55E', name: 'Alex P.', rating: 5, text: "The spa recovery session the next morning was genius. Whoever thought of that deserves an award. Absolutely premium from start to finish.", textDe: 'Die Spa-Erholung am nächsten Morgen war genial. Wer sich das ausgedacht hat, verdient einen Preis. Von Anfang bis Ende absolut premium.' },
   ],
 };
 
@@ -553,7 +557,7 @@ export default function PackageDetailsScreen() {
                   {(pkg.rating || 4.5).toFixed(1)}
                 </Text>
                 <Text fontSize={14} color="$textTertiary">
-                  ({pkg.review_count || 0} reviews)
+                  {(t.packageDetail as any).reviewsCount.replace('{{count}}', String(pkg.review_count || 0))}
                 </Text>
               </XStack>
             </YStack>
@@ -568,7 +572,7 @@ export default function PackageDetailsScreen() {
           {/* Description */}
           {pkg.description && (
             <Text fontSize={14} color="$textSecondary" lineHeight={22} marginBottom="$4">
-              {pkg.description}
+              {translatePackageDescription(pkg.description)}
             </Text>
           )}
 
@@ -663,7 +667,7 @@ export default function PackageDetailsScreen() {
                 color={review.color}
                 name={review.name}
                 rating={review.rating}
-                text={review.text}
+                text={getCurrentLanguage() === 'de' ? review.textDe : review.text}
               />
             ))}
           </YStack>
