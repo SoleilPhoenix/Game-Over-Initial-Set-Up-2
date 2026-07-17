@@ -778,24 +778,22 @@ export default function CommunicationScreen() {
     setPollModalVisible(true);
   };
 
-  const handleSubmitPoll = async () => {
+  const handleSubmitPoll = () => {
     if (!pollQuestion.trim() || !selectedEventId) return;
     const validOptions = pollOptions.filter(o => o.trim());
     if (validOptions.length < 2) return;
-    try {
-      await createPollMutation.mutateAsync({
-        poll: {
-          event_id: selectedEventId,
-          title: pollQuestion.trim(),
-          category: pollModalCategory,
-          status: 'active',
-        },
-        options: validOptions,
-      });
-      setPollModalVisible(false);
-    } catch (err) {
-      console.error('Failed to create poll:', err);
-    }
+    // Fire-and-forget: optimistic update in useCreatePoll adds the poll to the list
+    // instantly, so we can close the modal without waiting for the server round-trip.
+    createPollMutation.mutate({
+      poll: {
+        event_id: selectedEventId,
+        title: pollQuestion.trim(),
+        category: pollModalCategory,
+        status: 'active',
+      },
+      options: validOptions,
+    });
+    setPollModalVisible(false);
   };
 
   const renderVotingTab = () => {

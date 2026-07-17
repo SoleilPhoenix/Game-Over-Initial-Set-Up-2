@@ -359,7 +359,7 @@ export default function EventSummaryScreen() {
                 <Ionicons
                   name={tool.icon as any}
                   size={36}
-                  color={isUrgentBudgetTool ? theme.error : theme.accentGold}
+                  color={isUrgentBudgetTool ? '#F97316' : theme.accentGold}
                 />
                 <Text style={styles.toolLabel}>{toolLabel}</Text>
               </Pressable>
@@ -759,8 +759,10 @@ function makeStyles(theme: EditorialTheme) {
       transform: [{ scale: 0.98 }],
     },
     toolCardUrgent: {
-      borderColor: theme.error,
-      borderWidth: 1.5,
+      // Match the exact orange used on urgent event cards in the events list (#F97316).
+      // theme.error is a different red-orange and looked mismatched next to the list card.
+      borderColor: '#F97316',
+      borderWidth: 2,
     },
     toolLabel: {
       fontSize: 15,

@@ -166,12 +166,13 @@ const formatDateRange = (startDate?: string, endDate?: string): string => {
   const tr = getTranslation();
   const locale = getCurrentLanguage() === 'de' ? 'de-DE' : 'en-US';
   if (!startDate) return tr.events.noDateLabel;
+  // Use full month names ("Juli", "August") for consistency — mixing 'short' produced "Juli" and "Aug."
   const start = new Date(startDate);
-  const startStr = start.toLocaleDateString(locale, { month: 'short', day: '2-digit' });
+  const startStr = start.toLocaleDateString(locale, { month: 'long', day: '2-digit' });
 
   if (!endDate || endDate === startDate) return startStr;
   const end = new Date(endDate);
-  const endStr = end.toLocaleDateString(locale, { month: 'short', day: '2-digit' });
+  const endStr = end.toLocaleDateString(locale, { month: 'long', day: '2-digit' });
   return `${startStr} - ${endStr}`;
 };
 
@@ -457,14 +458,13 @@ export default function EventsScreen() {
 
   const getPaymentStatus = (event: EventWithDetails): string | null => {
     const formatPct = (pct: number) => (t.events as any).paidPct.replace('{{pct}}', String(pct));
-    if (event.status === 'completed') {
-      return formatPct(100);
-    }
+    // Hide the payment badge entirely once fully paid — no more "100% bezahlt" clutter.
+    if (event.status === 'completed') return null;
     if (event.status === 'booked') {
       const budget = budgetInfos[event.id];
       if (budget && budget.totalCents > 0) {
         const paid = budget.paidAmountCents || 0;
-        if (paid >= budget.totalCents) return formatPct(100);
+        if (paid >= budget.totalCents) return null;
         const pct = Math.round((paid / budget.totalCents) * 100);
         return formatPct(pct);
       }
@@ -601,15 +601,19 @@ export default function EventsScreen() {
               <Text style={styles.dateText}>{dateRange}</Text>
             </XStack>
 
-            {/* Days left + payment status row */}
+            {/* Days left + payment status row — orange when urgent (≤14 days & unpaid) */}
             {(daysLeft || paymentStatus) && (
               <XStack alignItems="center" gap={8} marginTop={6}>
                 {daysLeft && (
-                  <Text style={styles.statusText}>{daysLeft}</Text>
+                  <Text style={[styles.statusText, urgent && !isReadOnly && styles.statusTextUrgent]}>
+                    {daysLeft}
+                  </Text>
                 )}
                 {paymentStatus && (
-                  <View style={styles.paymentBadge}>
-                    <Text style={styles.paymentBadgeText}>{paymentStatus}</Text>
+                  <View style={[styles.paymentBadge, urgent && !isReadOnly && styles.paymentBadgeUrgent]}>
+                    <Text style={[styles.paymentBadgeText, urgent && !isReadOnly && styles.paymentBadgeTextUrgent]}>
+                      {paymentStatus}
+                    </Text>
                   </View>
                 )}
               </XStack>
@@ -627,6 +631,7 @@ export default function EventsScreen() {
                 color={progress.color}
               />
               {progress.isBooked && progress.nextStepLabel ? (
+                // Booked events: compact "Schritt N/8 · label" on one line, no trailing percentage
                 <Text style={[styles.progressLabel, { color: progress.color }]} numberOfLines={1} flex={1}>
                   {(t.events as any).nextStepOf.replace('{{n}}', String(progress.nextStepNum)).replace('{{total}}', '8')} · {progress.nextStepLabel}
                 </Text>
@@ -636,9 +641,12 @@ export default function EventsScreen() {
                 </Text>
               )}
             </XStack>
-            <Text style={[styles.progressPercentage, { color: progress.color }]}>
-              {progress.percentage}%
-            </Text>
+            {/* Percentage only for non-booked (planning) events; booked events use the segmented bar for progress */}
+            {!(progress.isBooked && progress.nextStepLabel) && (
+              <Text style={[styles.progressPercentage, { color: progress.color }]}>
+                {progress.percentage}%
+              </Text>
+            )}
           </XStack>
           {progress.isBooked ? (
             renderSegmentedProgress(progress.completedSteps, progress.color)
@@ -876,7 +884,9 @@ export default function EventsScreen() {
     );
   };
 
-  // Drafts section rendered BELOW booked events with visual separator
+  // Drafts section rendered BELOW booked events with visual separator.
+  // Layout order: (1) "Start New Plan" button directly under active events,
+  // (2) "Drafts" separator, (3) draft cards.
   const renderDraftSection = () => {
     if (activeFilter === 'attending') return null;
     // Don't show device-level wizard drafts if this user has no organizing events in DB.
@@ -886,20 +896,24 @@ export default function EventsScreen() {
     const showDrafts = hasDrafts;
     return (
       <View>
-        {/* Separator between booked events and drafts */}
-        <View style={styles.draftSectionSeparator}>
-          <View style={styles.draftSectionLine} />
-          <Text style={styles.draftSectionLabel}>Drafts & Planning</Text>
-          <View style={styles.draftSectionLine} />
-        </View>
-
-        {/* Start New Plan button — visually highlighted */}
+        {/* Start New Plan button — sits under active events, above the drafts separator */}
         <View style={{ paddingHorizontal: 0, marginBottom: 12 }}>
           {renderStartNewPlanButton()}
         </View>
 
-        {/* Draft cards */}
-        {showDrafts && allDrafts.map(renderSingleDraftCard)}
+        {/* Separator only if there are actual draft cards below to introduce */}
+        {showDrafts && (
+          <>
+            <View style={styles.draftSectionSeparator}>
+              <View style={styles.draftSectionLine} />
+              <Text style={styles.draftSectionLabel}>
+                {(t.events as any).draftsSection}
+              </Text>
+              <View style={styles.draftSectionLine} />
+            </View>
+            {allDrafts.map(renderSingleDraftCard)}
+          </>
+        )}
       </View>
     );
   };
@@ -1236,16 +1250,26 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255,255,255,0.72)',
   },
+  statusTextUrgent: {
+    color: '#F97316',
+    fontWeight: '600',
+  },
   paymentBadge: {
     backgroundColor: 'rgba(198, 167, 94, 0.15)',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 6,
   },
+  paymentBadgeUrgent: {
+    backgroundColor: 'rgba(249, 115, 22, 0.15)',
+  },
   paymentBadgeText: {
     fontSize: 11,
     fontWeight: '600',
     color: '#C6A75E',
+  },
+  paymentBadgeTextUrgent: {
+    color: '#F97316',
   },
   progressSection: {
     marginTop: 14,
