@@ -47,6 +47,9 @@ const en = {
     draftStep: "Draft — Step {{current}}/{{total}}",
     noAttendingTitle: "No Invitations Yet",
     noAttendingSubtitle: "When someone invites you to an event, it will appear here.",
+    nextStepOf: 'Next Step {{n}} of {{total}}',
+    guestBadge: 'Guest',
+    paidPct: '{{pct}}% Paid',
   },
 
   // ─── Profile Screen ────────────────────────────
@@ -760,6 +763,36 @@ const en = {
     notYet: 'Not yet',
     yesPaid: "Yes, I've Paid",
     errorConfirmPayment: 'Could not confirm payment. Please try again.',
+    // Urgent-payment cards on Notifications screen
+    contributionConfirmed: 'Contribution Confirmed',
+    contributionConfirmedMsg: 'Your payment has been confirmed. The organizer has been notified.',
+    contributionDue: 'Contribution Due',
+    yourEventFallback: 'Your Event',
+    honoreeEventFallback: "{{name}}'s Event",
+    honoreePartyFallback: "{{name}}'s Party",
+    urgentBadge: 'URGENT',
+    guestPleaseTransfer: 'Please transfer your share to {{name}}. Payment is due 14 days before the event.',
+    paymentConfirmedNotified: 'Payment confirmed — organizer notified',
+    confirming: 'Confirming…',
+    ivePaidConfirm: "I've Paid — Confirm",
+    paymentComplete: 'Payment Complete',
+    paymentOutstanding: 'Payment Outstanding',
+    organizerFallback: 'the organizer',
+    todayShort: 'today',
+    dayLeftShort: '1 day left',
+    daysLeftShort: '{{count}} days left',
+    // Time deltas used by NotificationItem
+    timeJustNow: 'Just now',
+    timeMinutesAgo: '{{n}}m ago',
+    timeHoursAgo: '{{n}}h ago',
+    timeDaysAgo: '{{n}}d ago',
+    // Action labels for the notification cards
+    actionViewInsights: 'View Insights',
+    actionResolveVoting: 'Resolve in Voting Tab',
+    actionPayNow: 'Pay Now',
+    actionVoteNow: 'Vote Now',
+    actionViewResults: 'View Results',
+    actionViewEvent: 'View Event',
   },
 
   // ─── Event Detail ─────────────────────────────

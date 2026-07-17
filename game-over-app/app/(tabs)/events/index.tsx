@@ -33,7 +33,7 @@ import { bookingsRepository } from '@/repositories';
 import { useUser } from '@/stores/authStore';
 import { useWizardStore, type DraftSnapshot } from '@/stores/wizardStore';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
-import { useTranslation, getTranslation } from '@/i18n';
+import { useTranslation, getTranslation, getCurrentLanguage } from '@/i18n';
 import { getCurrentPhaseLabel } from '@/utils/planningProgress';
 import type { BudgetInfo } from '@/lib/participantCountCache';
 import { useUrgentPayment } from '@/hooks/useUrgentPayment';
@@ -156,19 +156,22 @@ const getDaysLeft = (startDate?: string): string | null => {
   const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const diffDays = Math.round((startMidnight.getTime() - nowMidnight.getTime()) / (1000 * 60 * 60 * 24));
   if (diffDays < 0) return null;
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return '1 day left';
-  return `${diffDays} days left`;
+  const tr = getTranslation();
+  if (diffDays === 0) return tr.events.today;
+  if (diffDays === 1) return tr.events.dayLeft;
+  return tr.events.daysLeft.replace('{{count}}', String(diffDays));
 };
 
 const formatDateRange = (startDate?: string, endDate?: string): string => {
-  if (!startDate) return 'TBD';
+  const tr = getTranslation();
+  const locale = getCurrentLanguage() === 'de' ? 'de-DE' : 'en-US';
+  if (!startDate) return tr.events.noDateLabel;
   const start = new Date(startDate);
-  const startStr = start.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+  const startStr = start.toLocaleDateString(locale, { month: 'short', day: '2-digit' });
 
   if (!endDate || endDate === startDate) return startStr;
   const end = new Date(endDate);
-  const endStr = end.toLocaleDateString('en-US', { month: 'short', day: '2-digit' });
+  const endStr = end.toLocaleDateString(locale, { month: 'short', day: '2-digit' });
   return `${startStr} - ${endStr}`;
 };
 
@@ -453,18 +456,19 @@ export default function EventsScreen() {
   };
 
   const getPaymentStatus = (event: EventWithDetails): string | null => {
+    const formatPct = (pct: number) => (t.events as any).paidPct.replace('{{pct}}', String(pct));
     if (event.status === 'completed') {
-      return '100% Paid';
+      return formatPct(100);
     }
     if (event.status === 'booked') {
       const budget = budgetInfos[event.id];
       if (budget && budget.totalCents > 0) {
         const paid = budget.paidAmountCents || 0;
-        if (paid >= budget.totalCents) return '100% Paid';
+        if (paid >= budget.totalCents) return formatPct(100);
         const pct = Math.round((paid / budget.totalCents) * 100);
-        return `${pct}% Paid`;
+        return formatPct(pct);
       }
-      return '25% Paid';
+      return formatPct(25);
     }
     return null;
   };
@@ -547,7 +551,7 @@ export default function EventsScreen() {
             borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
             zIndex: 1,
           }}>
-            <Text style={{ fontSize: 11, color: 'white', fontWeight: '600' }}>Guest</Text>
+            <Text style={{ fontSize: 11, color: 'white', fontWeight: '600' }}>{(t.events as any).guestBadge}</Text>
           </View>
         )}
         <XStack flex={1}>
@@ -624,7 +628,7 @@ export default function EventsScreen() {
               />
               {progress.isBooked && progress.nextStepLabel ? (
                 <Text style={[styles.progressLabel, { color: progress.color }]} numberOfLines={1} flex={1}>
-                  {'Next Step '}{progress.nextStepNum}{' of 8 · '}{progress.nextStepLabel}
+                  {(t.events as any).nextStepOf.replace('{{n}}', String(progress.nextStepNum)).replace('{{total}}', '8')} · {progress.nextStepLabel}
                 </Text>
               ) : (
                 <Text style={[styles.progressLabel, { color: progress.color }]}>

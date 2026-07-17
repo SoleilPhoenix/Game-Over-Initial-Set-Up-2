@@ -10,8 +10,21 @@ import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { Database } from '@/lib/supabase/types';
+import { useTranslation, getCurrentLanguage } from '@/i18n';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
+
+// Maps a notification type to the i18n key used for its action-button label.
+// Kept as a plain lookup so NOTIFICATION_CONFIG below can stay a static const.
+const ACTION_LABEL_KEYS: Record<string, string> = {
+  relationship_health: 'actionViewInsights',
+  conflict_detected: 'actionResolveVoting',
+  payment_reminder: 'actionPayNow',
+  poll_created: 'actionVoteNow',
+  poll_closing: 'actionVoteNow',
+  poll_closed: 'actionViewResults',
+  event_update: 'actionViewEvent',
+};
 
 // Dark theme colors
 // Notification type configuration with colors
@@ -181,7 +194,10 @@ export function NotificationItem({
   testID,
 }: NotificationItemProps) {
   const router = useRouter();
+  const { t } = useTranslation();
   const config = NOTIFICATION_CONFIG[notification.type] || NOTIFICATION_CONFIG.default;
+  const actionLabelKey = ACTION_LABEL_KEYS[notification.type];
+  const actionLabel = actionLabelKey ? (t.notifications as any)[actionLabelKey] : undefined;
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -191,11 +207,12 @@ export function NotificationItem({
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (diffMins < 1) return (t.notifications as any).timeJustNow;
+    if (diffMins < 60) return (t.notifications as any).timeMinutesAgo.replace('{{n}}', String(diffMins));
+    if (diffHours < 24) return (t.notifications as any).timeHoursAgo.replace('{{n}}', String(diffHours));
+    if (diffDays < 7) return (t.notifications as any).timeDaysAgo.replace('{{n}}', String(diffDays));
+    const locale = getCurrentLanguage() === 'de' ? 'de-DE' : 'en-US';
+    return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
   };
 
   const handlePress = () => {
@@ -283,14 +300,14 @@ export function NotificationItem({
                 <XStack alignItems="center" gap="$2" flex={1}>
                   <Ionicons name="hand-left" size={16} color={config.color} />
                   <Text fontSize={11} fontWeight="600" color={`${config.color}EE`} flex={1}>
-                    {config.actionLabel}
+                    {actionLabel ?? config.actionLabel}
                   </Text>
                   <Ionicons name="chevron-forward" size={14} color={config.color} />
                 </XStack>
               ) : (
                 <XStack alignItems="center" gap="$1">
                   <Text fontSize={10} fontWeight="700" color={config.color} textTransform="uppercase" letterSpacing={0.5}>
-                    {config.actionLabel}
+                    {actionLabel ?? config.actionLabel}
                   </Text>
                   <Ionicons name="arrow-forward" size={12} color={config.color} />
                 </XStack>

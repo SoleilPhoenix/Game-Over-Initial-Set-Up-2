@@ -28,5 +28,14 @@ export function getTranslation() {
   return translations[language];
 }
 
+/**
+ * Returns the current language code (e.g. 'de', 'en') without loading
+ * the translations bundle. Handy for locale-dependent helpers like
+ * `toLocaleDateString`.
+ */
+export function getCurrentLanguage(): Language {
+  return useLanguageStore.getState().language;
+}
+
 export { type Language } from '@/stores/languageStore';
 export { type TranslationKeys } from './en';

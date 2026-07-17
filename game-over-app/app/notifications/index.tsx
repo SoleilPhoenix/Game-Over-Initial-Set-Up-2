@@ -62,7 +62,7 @@ export default function NotificationsScreen() {
 
   // Load participants for the guest's urgent event (to show organizer name)
   const { data: guestEventParticipants } = useParticipants(guestUrgentEvent?.id);
-  const organizerName = guestEventParticipants?.find(p => p.role === 'organizer')?.profile?.full_name ?? 'the organizer';
+  const organizerName = guestEventParticipants?.find(p => p.role === 'organizer')?.profile?.full_name ?? (t.notifications as any).organizerFallback;
 
   const handleGuestMarkAsPaid = () => {
     Alert.alert(
@@ -274,16 +274,16 @@ export default function NotificationsScreen() {
                       </View>
                       <YStack flex={1}>
                         <Text style={{ fontSize: 14, fontWeight: '700', color: '#34D399' }}>
-                          Contribution Confirmed
+                          {(t.notifications as any).contributionConfirmed}
                         </Text>
                         <Text style={{ fontSize: 12, color: theme.textSecondary }} numberOfLines={1}>
-                          {guestPaidRecentEvent?.title || (guestPaidRecentEvent?.honoree_name ? `${guestPaidRecentEvent.honoree_name}'s Event` : 'Your Event')}
+                          {guestPaidRecentEvent?.title || (guestPaidRecentEvent?.honoree_name ? (t.notifications as any).honoreeEventFallback.replace('{{name}}', guestPaidRecentEvent.honoree_name) : (t.notifications as any).yourEventFallback)}
                         </Text>
                       </YStack>
                       <Ionicons name="checkmark-circle" size={20} color="#34D399" />
                     </XStack>
                     <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 20, marginTop: 10 }}>
-                      Your payment has been confirmed. The organizer has been notified.
+                      {(t.notifications as any).contributionConfirmedMsg}
                     </Text>
                   </View>
                 )}
@@ -297,26 +297,28 @@ export default function NotificationsScreen() {
                       </View>
                       <YStack flex={1}>
                         <Text style={{ fontSize: 14, fontWeight: '700', color: '#F97316' }}>
-                          Contribution Due
+                          {(t.notifications as any).contributionDue}
                         </Text>
                         <Text style={{ fontSize: 12, color: theme.textSecondary }} numberOfLines={1}>
-                          {guestUrgentEvent.title || `${guestUrgentEvent.honoree_name}'s Event`}
+                          {guestUrgentEvent.title || (t.notifications as any).honoreeEventFallback.replace('{{name}}', guestUrgentEvent.honoree_name || '')}
                         </Text>
                       </YStack>
                       <View style={styles.urgencyBadge}>
-                        <Text style={styles.urgencyBadgeText}>URGENT</Text>
+                        <Text style={styles.urgencyBadgeText}>{(t.notifications as any).urgentBadge}</Text>
                       </View>
                     </XStack>
                     <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 20, marginBottom: 12 }}>
-                      Please transfer your share to{' '}
-                      <Text style={{ color: theme.textPrimary, fontWeight: '600' }}>{organizerName}</Text>.
-                      {' '}Payment is due 14 days before the event.
+                      {((t.notifications as any).guestPleaseTransfer as string)
+                        .split('{{name}}')
+                        .flatMap((part, i, arr) => i < arr.length - 1
+                          ? [part, <Text key={i} style={{ color: theme.textPrimary, fontWeight: '600' }}>{organizerName}</Text>]
+                          : [part])}
                     </Text>
                     {guestPayConfirmed ? (
                       <XStack alignItems="center" gap={8} justifyContent="center">
                         <Ionicons name="checkmark-circle" size={18} color="#10B981" />
                         <Text style={{ fontSize: 14, fontWeight: '600', color: '#10B981' }}>
-                          Payment confirmed — organizer notified
+                          {(t.notifications as any).paymentConfirmedNotified}
                         </Text>
                       </XStack>
                     ) : (
@@ -327,7 +329,7 @@ export default function NotificationsScreen() {
                       >
                         <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />
                         <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>
-                          {guestPayConfirming ? 'Confirming…' : "I've Paid — Confirm"}
+                          {guestPayConfirming ? (t.notifications as any).confirming : (t.notifications as any).ivePaidConfirm}
                         </Text>
                       </Pressable>
                     )}
@@ -352,41 +354,35 @@ export default function NotificationsScreen() {
 
                       {/* Text — unpaid: status on top; paid: event name on top */}
                       <YStack flex={1} gap={2}>
-                        {info.isPaid ? (
-                          // Paid: event name prominent on top, status label below
-                          <>
-                            <Text fontSize={14} fontWeight="700" color={theme.textPrimary} numberOfLines={1}>
-                              {info.event.title || `${info.event.honoree_name}'s Party`}
-                              {` · ${
-                                info.daysLeft === 0
-                                  ? 'today'
-                                  : info.daysLeft === 1
-                                  ? '1 day left'
-                                  : `${info.daysLeft} days left`
-                              }`}
-                            </Text>
-                            <Text fontSize={12} color={theme.textSecondary}>
-                              Payment Complete
-                            </Text>
-                          </>
-                        ) : (
-                          // Unpaid: status label prominent on top, event name below
-                          <>
-                            <Text fontSize={14} fontWeight="700" color="#F97316">
-                              Payment Outstanding
-                            </Text>
-                            <Text fontSize={12} color={theme.textSecondary} numberOfLines={1}>
-                              {info.event.title || `${info.event.honoree_name}'s Party`}
-                              {` · ${
-                                info.daysLeft === 0
-                                  ? 'today'
-                                  : info.daysLeft === 1
-                                  ? '1 day left'
-                                  : `${info.daysLeft} days left`
-                              }`}
-                            </Text>
-                          </>
-                        )}
+                        {(() => {
+                          const eventName = info.event.title || (t.notifications as any).honoreePartyFallback.replace('{{name}}', info.event.honoree_name || '');
+                          const daysStr = info.daysLeft === 0
+                            ? (t.notifications as any).todayShort
+                            : info.daysLeft === 1
+                              ? (t.notifications as any).dayLeftShort
+                              : (t.notifications as any).daysLeftShort.replace('{{count}}', String(info.daysLeft));
+                          return info.isPaid ? (
+                            // Paid: event name prominent on top, status label below
+                            <>
+                              <Text fontSize={14} fontWeight="700" color={theme.textPrimary} numberOfLines={1}>
+                                {eventName}{` · ${daysStr}`}
+                              </Text>
+                              <Text fontSize={12} color={theme.textSecondary}>
+                                {(t.notifications as any).paymentComplete}
+                              </Text>
+                            </>
+                          ) : (
+                            // Unpaid: status label prominent on top, event name below
+                            <>
+                              <Text fontSize={14} fontWeight="700" color="#F97316">
+                                {(t.notifications as any).paymentOutstanding}
+                              </Text>
+                              <Text fontSize={12} color={theme.textSecondary} numberOfLines={1}>
+                                {eventName}{` · ${daysStr}`}
+                              </Text>
+                            </>
+                          );
+                        })()}
                       </YStack>
 
                       {/* Right indicator: green checkmark if paid, orange dot if unpaid */}

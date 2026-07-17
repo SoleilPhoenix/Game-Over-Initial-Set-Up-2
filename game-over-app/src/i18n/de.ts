@@ -45,6 +45,9 @@ const de: TranslationKeys = {
     draftStep: 'Entwurf — Schritt {{current}}/{{total}}',
     noAttendingTitle: 'Noch keine Einladungen',
     noAttendingSubtitle: 'Wenn dich jemand zu einem Event einlädt, erscheint es hier.',
+    nextStepOf: 'Nächster Schritt {{n}} von {{total}}',
+    guestBadge: 'Gast',
+    paidPct: '{{pct}}% bezahlt',
   },
 
   // ─── Profile Screen ────────────────────────────
@@ -752,6 +755,36 @@ const de: TranslationKeys = {
     notYet: 'Noch nicht',
     yesPaid: 'Ja, ich habe bezahlt',
     errorConfirmPayment: 'Zahlung konnte nicht bestätigt werden. Bitte versuche es erneut.',
+    // Urgent-payment cards on Notifications screen
+    contributionConfirmed: 'Beitrag bestätigt',
+    contributionConfirmedMsg: 'Deine Zahlung wurde bestätigt. Der Organisator wurde informiert.',
+    contributionDue: 'Beitrag fällig',
+    yourEventFallback: 'Dein Event',
+    honoreeEventFallback: 'Event von {{name}}',
+    honoreePartyFallback: 'Party von {{name}}',
+    urgentBadge: 'DRINGEND',
+    guestPleaseTransfer: 'Bitte überweise deinen Anteil an {{name}}. Die Zahlung ist 14 Tage vor dem Event fällig.',
+    paymentConfirmedNotified: 'Zahlung bestätigt — Organisator informiert',
+    confirming: 'Wird bestätigt …',
+    ivePaidConfirm: 'Ich habe gezahlt — bestätigen',
+    paymentComplete: 'Zahlung abgeschlossen',
+    paymentOutstanding: 'Zahlung ausstehend',
+    organizerFallback: 'dem Organisator',
+    todayShort: 'heute',
+    dayLeftShort: '1 Tag übrig',
+    daysLeftShort: '{{count}} Tage übrig',
+    // Time deltas used by NotificationItem
+    timeJustNow: 'Gerade eben',
+    timeMinutesAgo: 'vor {{n}} Min.',
+    timeHoursAgo: 'vor {{n}} Std.',
+    timeDaysAgo: 'vor {{n}} T.',
+    // Action labels for the notification cards
+    actionViewInsights: 'Details ansehen',
+    actionResolveVoting: 'Im Abstimmungs-Tab klären',
+    actionPayNow: 'Jetzt bezahlen',
+    actionVoteNow: 'Jetzt abstimmen',
+    actionViewResults: 'Ergebnisse ansehen',
+    actionViewEvent: 'Event ansehen',
   },
 
   // ─── Event Detail ─────────────────────────────
