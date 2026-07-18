@@ -182,8 +182,17 @@ export default function WizardStep1() {
             })}
           </View>
 
-          {/* ── 02 Honoree's Name ──────────────────── */}
-          <SectionHeader number="02" title={t.wizard.honoreeName} />
+          {/* ── 02 Honoree's Name (Bachelor/Bachelorette per party type) ── */}
+          <SectionHeader
+            number="02"
+            title={
+              partyType === 'bachelorette'
+                ? (t.wizard as any).honoreeNameBachelorette
+                : partyType === 'bachelor'
+                  ? (t.wizard as any).honoreeNameBachelor
+                  : t.wizard.honoreeName
+            }
+          />
           <View style={styles.nameRow}>
             {/* First name */}
             <View style={styles.nameCol}>

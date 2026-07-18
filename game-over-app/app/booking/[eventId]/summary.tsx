@@ -79,6 +79,24 @@ export default function BookingSummaryScreen() {
   const wizardCityId = useWizardStore((s) => s.cityId);
   const wizardParticipantCount = useWizardStore((s) => s.participantCount);
   const wizardStartDate = useWizardStore((s) => s.startDate);
+  const wizardPartyType = useWizardStore((s) => s.partyType);
+
+  // Party type drives the Bachelor/Bachelorette wording. Prefer the wizard
+  // store (draft flow), fall back to the loaded event.
+  const partyType: 'bachelor' | 'bachelorette' | null =
+    wizardPartyType || ((bookingFlow.event as any)?.party_type ?? null);
+  const excludeHonoreeText =
+    partyType === 'bachelorette'
+      ? (t.booking as any).excludeHonoreeLabelBachelorette
+      : partyType === 'bachelor'
+        ? (t.booking as any).excludeHonoreeLabelBachelor
+        : t.booking.excludeHonoreeLabel;
+  const honoreePaysKey =
+    partyType === 'bachelorette'
+      ? (t.booking as any).honoreePaysBachelorette
+      : partyType === 'bachelor'
+        ? (t.booking as any).honoreePaysBachelor
+        : t.booking.honoreePays;
 
   // Resolve package data
   const draftPkg = packageId ? FALLBACK_PKG[packageId] : null;
@@ -353,10 +371,10 @@ export default function BookingSummaryScreen() {
           <XStack justifyContent="space-between" alignItems="center">
             <YStack flex={1}>
               <Text fontSize={15} fontWeight="600" color="white">
-                {t.booking.excludeHonoreeLabel}
+                {excludeHonoreeText}
               </Text>
               <Text fontSize={13} color={'rgba(255,255,255,0.72)'}>
-                {t.booking.honoreePays.replace('{{amount}}', formatPrice(honoreePaysCents))}
+                {honoreePaysKey.replace('{{amount}}', formatPrice(honoreePaysCents))}
               </Text>
             </YStack>
             <Switch
