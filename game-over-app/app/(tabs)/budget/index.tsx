@@ -19,7 +19,6 @@ import { useInviteGuests } from '@/hooks/queries/useInvites';
 import { useUser } from '@/stores/authStore';
 import { useTheme } from '@/hooks/useTheme';
 import { type EditorialTheme } from '@/constants/designSystem';
-import { GoldButton } from '@/components/ui/editorial';
 import { ShareModal } from '@/components/ui/ShareModal';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useActiveEventStore } from '@/stores/activeEventStore';
