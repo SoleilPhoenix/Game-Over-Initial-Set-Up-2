@@ -5,7 +5,7 @@
  * Step 3: Profile Completion (phone + optional photo)
  * → navigates to event on completion
  */
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View, ScrollView, KeyboardAvoidingView, Platform,
   Pressable, Alert, StyleSheet, Image, Linking,
@@ -23,6 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
 import { useLanguageStore } from '@/stores/languageStore';
+import { useTranslation } from '@/i18n';
 import { usePublicInvitePreview, useAcceptInvite } from '@/hooks/queries/useInvites';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
@@ -33,27 +34,14 @@ import { Button } from '@/components/ui/Button';
 // ─── Types ───────────────────────────────────────────────────
 type WizardStep = 'preview' | 'signup' | 'profile';
 
-const signupSchema = z.object({
-  firstName: z.string().min(1, 'Required'),
-  lastName: z.string().min(1, 'Required'),
-  email: z.string().email('Please enter a valid email'),
-  password: z.string()
-    .min(8, 'Password must be at least 8 characters')
-    .regex(/[A-Z]/, 'Must contain an uppercase letter')
-    .regex(/[a-z]/, 'Must contain a lowercase letter')
-    .regex(/[0-9]/, 'Must contain a number'),
-  confirmPassword: z.string(),
-}).refine(d => d.password === d.confirmPassword, {
-  message: 'Passwords do not match',
-  path: ['confirmPassword'],
-});
-
-const profileSchema = z.object({
-  phone: z.string().min(7, 'Please enter a valid phone number').optional().or(z.literal('')),
-});
-
-type SignupForm = z.infer<typeof signupSchema>;
-type ProfileForm = z.infer<typeof profileSchema>;
+type SignupForm = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  password: string;
+  confirmPassword: string;
+};
+type ProfileForm = { phone?: string };
 
 // ─── Main Component ──────────────────────────────────────────
 export default function InviteWizardScreen() {
@@ -62,6 +50,27 @@ export default function InviteWizardScreen() {
   const insets = useSafeAreaInsets();
   const user = useAuthStore(s => s.user);
   const language = useLanguageStore(s => s.language);
+  const { t } = useTranslation();
+
+  // Schemas are built inside the component so validation messages are localized.
+  const signupSchema = useMemo(() => z.object({
+    firstName: z.string().min(1, t.invite.valRequired),
+    lastName: z.string().min(1, t.invite.valRequired),
+    email: z.string().email(t.invite.valInvalidEmail),
+    password: z.string()
+      .min(8, t.invite.valPasswordMin)
+      .regex(/[A-Z]/, t.invite.valPasswordUpper)
+      .regex(/[a-z]/, t.invite.valPasswordLower)
+      .regex(/[0-9]/, t.invite.valPasswordNumber),
+    confirmPassword: z.string(),
+  }).refine(d => d.password === d.confirmPassword, {
+    message: t.invite.valPasswordsNoMatch,
+    path: ['confirmPassword'],
+  }), [t]);
+
+  const profileSchema = useMemo(() => z.object({
+    phone: z.string().min(7, t.invite.valPhoneInvalid).optional().or(z.literal('')),
+  }), [t]);
 
   const [step, setStep] = useState<WizardStep>('preview');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -83,7 +92,7 @@ export default function InviteWizardScreen() {
       // Get fresh session from Supabase directly (auth store may lag after signUp)
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
-        Alert.alert('Error', 'Authentication failed. Please try again.');
+        Alert.alert(t.invite.errorTitle, t.invite.authFailed);
         return;
       }
 
@@ -110,7 +119,7 @@ export default function InviteWizardScreen() {
       try {
         const result = await acceptInvite.mutateAsync({ code: code!, userId: currentUser.id });
         if (!result.eventId) {
-          Alert.alert('Error', result.error || 'Could not join event.');
+          Alert.alert(t.invite.errorTitle, result.error || t.invite.couldNotJoin);
           return;
         }
 
@@ -139,13 +148,13 @@ export default function InviteWizardScreen() {
 
         router.replace(`/event/${result.eventId}?firstVisit=1`);
       } catch {
-        Alert.alert('Error', 'Failed to join event. Please try again.');
+        Alert.alert(t.invite.errorTitle, t.invite.joinFailed);
       }
     } finally {
       isAcceptingRef.current = false;
       setIsAccepting(false);
     }
-  }, [acceptInvite, code, router]);
+  }, [acceptInvite, code, router, t]);
 
   // ── Step 1 handlers ─────────────────────────────────────────
   const handleAcceptPressed = async () => {
@@ -192,7 +201,7 @@ export default function InviteWizardScreen() {
         if (signUpError.message.toLowerCase().includes('already registered') ||
             signUpError.message.toLowerCase().includes('user_already_exists')) {
           signupForm.setError('email', {
-            message: 'An account with this email already exists — tap "Log in instead" below',
+            message: t.invite.emailExists,
           });
           return;
         }
@@ -206,11 +215,12 @@ export default function InviteWizardScreen() {
           password: data.password,
         });
         if (signInError) {
-          // Truly needs email confirmation — show friendly message
+          // Confirmation truly required — route back into THIS invite via login redirect,
+          // so the guest is not stranded after confirming their email.
           Alert.alert(
-            'Almost there!',
-            'Check your inbox for a confirmation email, then tap "Log in instead" below.',
-            [{ text: 'OK' }]
+            t.invite.confirmEmailTitle,
+            t.invite.confirmEmailBody,
+            [{ text: t.invite.confirmEmailCta, onPress: () => router.push(`/(auth)/login?redirect=/invite/${code}`) }],
           );
           return;
         }
@@ -219,7 +229,7 @@ export default function InviteWizardScreen() {
       setSignupCompleted(true);
       setStep('profile');
     } catch (e: any) {
-      Alert.alert('Signup failed', e.message || 'Please try again.');
+      Alert.alert(t.invite.signupFailedTitle, e.message || t.invite.tryAgain);
     } finally {
       setIsSubmitting(false);
     }
@@ -259,17 +269,17 @@ export default function InviteWizardScreen() {
     const phoneValue = profileForm.getValues('phone');
     if (phoneValue && phoneValue.length > 0) {
       Alert.alert(
-        'Skip profile?',
-        "Your phone number won't be saved. You can add it later in profile settings.",
+        t.invite.skipProfileTitle,
+        t.invite.skipProfileBody,
         [
-          { text: 'Stay', style: 'cancel' },
-          { text: 'Skip', onPress: () => doAcceptInvite() },
+          { text: t.invite.stay, style: 'cancel' },
+          { text: t.invite.skip, onPress: () => doAcceptInvite() },
         ]
       );
     } else {
       await doAcceptInvite();
     }
-  }, [doAcceptInvite, profileForm]);
+  }, [doAcceptInvite, profileForm, t]);
 
   const handleProfileComplete = async (data: ProfileForm) => {
     setIsSubmitting(true);
@@ -288,11 +298,11 @@ export default function InviteWizardScreen() {
         const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
         if (!ALLOWED_MIME_TYPES.includes(blob.type)) {
-          Alert.alert('Invalid file', 'Please select a JPEG, PNG, or WebP image.');
+          Alert.alert(t.invite.invalidFileTitle, t.invite.invalidFileBody);
           return;
         }
         if (blob.size > MAX_FILE_SIZE_BYTES) {
-          Alert.alert('File too large', 'Please select an image under 5 MB.');
+          Alert.alert(t.invite.fileTooLargeTitle, t.invite.fileTooLargeBody);
           return;
         }
 
@@ -306,7 +316,24 @@ export default function InviteWizardScreen() {
         const { error: uploadError } = await supabase.storage
           .from('avatars')
           .upload(path, blob, { upsert: true });
-        if (!uploadError) {
+        if (uploadError) {
+          // Bug 1 fix: never silently drop the photo. Let the guest decide.
+          const proceed = await new Promise<boolean>((resolve) => {
+            Alert.alert(
+              t.invite.uploadFailedTitle,
+              t.invite.uploadFailedBody,
+              [
+                { text: t.invite.uploadFailedRetry, style: 'cancel', onPress: () => resolve(false) },
+                { text: t.invite.uploadFailedContinue, onPress: () => resolve(true) },
+              ],
+            );
+          });
+          if (!proceed) {
+            setIsSubmitting(false);
+            return; // Guest wants to retry — do not continue the flow
+          }
+          // Guest chose to continue without a photo: avatarUrl stays null
+        } else {
           const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
           avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
         }
@@ -314,7 +341,7 @@ export default function InviteWizardScreen() {
 
       await doAcceptInvite(data.phone, avatarUrl ?? undefined);
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to complete profile.');
+      Alert.alert(t.invite.errorTitle, e.message || t.invite.completeProfileError);
     } finally {
       setIsSubmitting(false);
     }
@@ -335,8 +362,8 @@ export default function InviteWizardScreen() {
     >
       <View style={styles.webBannerInner}>
         <Ionicons name="phone-portrait-outline" size={18} color="#FFFFFF" />
-        <Text style={styles.webBannerText}>Already have the app? </Text>
-        <Text style={styles.webBannerLink}>Open in Game Over →</Text>
+        <Text style={styles.webBannerText}>{t.invite.webBannerHave}</Text>
+        <Text style={styles.webBannerLink}>{t.invite.webBannerOpen}</Text>
       </View>
     </Pressable>
   ) : null;
@@ -357,12 +384,12 @@ export default function InviteWizardScreen() {
         backgroundColor="$background" paddingHorizontal="$6" gap="$4">
         <Ionicons name="link-outline" size={48} color={'rgba(255,255,255,0.48)'} />
         <Text fontSize={18} fontWeight="700" color="$textPrimary" textAlign="center">
-          This invite link is no longer valid
+          {t.invite.invalidTitle}
         </Text>
         <Text fontSize={14} color="$textTertiary" textAlign="center">
-          The link may have expired, already been used, or been revoked. Ask the organizer for a new one.
+          {t.invite.invalidBody}
         </Text>
-        <Button onPress={() => router.replace('/(tabs)/events')}>Go to App</Button>
+        <Button onPress={() => router.replace('/(tabs)/events')}>{t.invite.goToApp}</Button>
       </YStack>
     );
   }
@@ -398,13 +425,13 @@ export default function InviteWizardScreen() {
               <XStack gap="$2" alignItems="center">
                 <Ionicons name="person-circle-outline" size={18} color={'rgba(255,255,255,0.48)'} />
                 <Text fontSize={14} color="$textTertiary">
-                  Invited by <Text fontWeight="700" color="$textPrimary">{preview.organizerName}</Text>
+                  {t.invite.invitedBy} <Text fontWeight="700" color="$textPrimary">{preview.organizerName}</Text>
                 </Text>
               </XStack>
             </YStack>
 
             <Button onPress={handleAcceptPressed} loading={isAccepting} testID="accept-invite-button">
-              Accept Invitation →
+              {t.invite.accept}
             </Button>
 
             <Pressable
@@ -418,7 +445,7 @@ export default function InviteWizardScreen() {
               style={{ alignItems: 'center', paddingVertical: 8 }}
               testID="decline-invite-button"
             >
-              <Text fontSize={13} color="$textTertiary">Decline</Text>
+              <Text fontSize={13} color="$textTertiary">{t.invite.decline}</Text>
             </Pressable>
           </YStack>
         </ScrollView>
@@ -436,8 +463,8 @@ export default function InviteWizardScreen() {
               <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
             </Pressable>
             <YStack flex={1}>
-              <Text fontSize={11} color="$textTertiary">Joining: {preview.eventName}</Text>
-              <Text fontSize={16} fontWeight="700" color="$textPrimary">Create your account</Text>
+              <Text fontSize={11} color="$textTertiary">{t.invite.joining.replace('{{event}}', preview.eventName)}</Text>
+              <Text fontSize={16} fontWeight="700" color="$textPrimary">{t.invite.createAccount}</Text>
             </YStack>
           </XStack>
 
@@ -452,7 +479,7 @@ export default function InviteWizardScreen() {
                   name="firstName"
                   render={({ field: { value, onChange, onBlur } }) => (
                     <Input
-                      label="First Name"
+                      label={t.invite.firstName}
                       value={value}
                       onChangeText={onChange}
                       onBlur={onBlur}
@@ -469,7 +496,7 @@ export default function InviteWizardScreen() {
                   name="lastName"
                   render={({ field: { value, onChange, onBlur } }) => (
                     <Input
-                      label="Last Name"
+                      label={t.invite.lastName}
                       value={value}
                       onChangeText={onChange}
                       onBlur={onBlur}
@@ -486,7 +513,7 @@ export default function InviteWizardScreen() {
               name="email"
               render={({ field: { value, onChange, onBlur } }) => (
                 <Input
-                  label="Email"
+                  label={t.invite.email}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -503,7 +530,7 @@ export default function InviteWizardScreen() {
               name="password"
               render={({ field: { value, onChange, onBlur } }) => (
                 <Input
-                  label="Password"
+                  label={t.invite.password}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -518,7 +545,7 @@ export default function InviteWizardScreen() {
               name="confirmPassword"
               render={({ field: { value, onChange, onBlur } }) => (
                 <Input
-                  label="Confirm Password"
+                  label={t.invite.confirmPassword}
                   value={value}
                   onChangeText={onChange}
                   onBlur={onBlur}
@@ -534,7 +561,7 @@ export default function InviteWizardScreen() {
               testID="signup-submit-button"
               marginTop="$2"
             >
-              Create Account →
+              {t.invite.createAccountCta}
             </Button>
 
             {/* Persistent link — visible before any error occurs */}
@@ -544,9 +571,9 @@ export default function InviteWizardScreen() {
               testID="login-instead-link"
             >
               <Text fontSize={13} color={'rgba(255,255,255,0.48)'}>
-                Already have an account?{' '}
+                {t.invite.alreadyHaveAccount}
                 <Text color={'#C6A75E'} textDecorationLine="underline">
-                  Log in instead →
+                  {t.invite.loginInstead}
                 </Text>
               </Text>
             </Pressable>
@@ -568,8 +595,8 @@ export default function InviteWizardScreen() {
           )}
           {signupCompleted && <View style={{ width: 24 }} />}
           <YStack flex={1}>
-            <Text fontSize={11} color="$textTertiary">Almost there</Text>
-            <Text fontSize={16} fontWeight="700" color="$textPrimary">Complete your profile</Text>
+            <Text fontSize={11} color="$textTertiary">{t.invite.almostThere}</Text>
+            <Text fontSize={16} fontWeight="700" color="$textPrimary">{t.invite.completeProfile}</Text>
           </YStack>
         </XStack>
 
@@ -589,7 +616,7 @@ export default function InviteWizardScreen() {
                 </View>
               )}
             </Pressable>
-            <Text fontSize={13} color="$textTertiary">Profile photo (optional)</Text>
+            <Text fontSize={13} color="$textTertiary">{t.invite.profilePhotoOptional}</Text>
           </YStack>
 
           <Controller
@@ -597,12 +624,12 @@ export default function InviteWizardScreen() {
             name="phone"
             render={({ field: { value, onChange, onBlur } }) => (
               <Input
-                label="Phone Number"
+                label={t.invite.phone}
                 value={value}
                 onChangeText={onChange}
                 onBlur={onBlur}
                 keyboardType="phone-pad"
-                placeholder="+49 151 1234567"
+                placeholder={t.invite.phonePlaceholder}
                 error={profileForm.formState.errors.phone?.message}
                 testID="profile-phone"
               />
@@ -614,7 +641,7 @@ export default function InviteWizardScreen() {
             loading={isSubmitting}
             testID="profile-continue-button"
           >
-            Continue →
+            {t.invite.continueCta}
           </Button>
 
           <Pressable
@@ -622,7 +649,7 @@ export default function InviteWizardScreen() {
             style={{ alignItems: 'center', paddingVertical: 8 }}
             testID="skip-photo-button"
           >
-            <Text fontSize={13} color="$textTertiary">Skip this step →</Text>
+            <Text fontSize={13} color="$textTertiary">{t.invite.skipStep}</Text>
           </Pressable>
         </ScrollView>
       </YStack>
