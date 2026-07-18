@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import type { Database } from '@/lib/supabase/types';
 import { useTranslation, getCurrentLanguage } from '@/i18n';
+import { isGuestDataChangedMeta, formatGuestChanges } from '@/utils/guestDataChange';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
@@ -24,6 +25,7 @@ const ACTION_LABEL_KEYS: Record<string, string> = {
   poll_closing: 'actionVoteNow',
   poll_closed: 'actionViewResults',
   event_update: 'actionViewEvent',
+  guest_data_changed: 'actionViewParticipants',
 };
 
 // Dark theme colors
@@ -173,6 +175,13 @@ const NOTIFICATION_CONFIG: Record<
     color: '#8B5CF6',
     bgColor: 'rgba(139, 92, 246, 0.2)',
   },
+  guest_data_changed: {
+    icon: 'create',
+    color: '#C6A75E',
+    bgColor: 'rgba(198, 167, 94, 0.2)',
+    hasAction: true,
+    actionLabel: 'View Guests',
+  },
 
   // Default
   default: {
@@ -198,6 +207,24 @@ export function NotificationItem({
   const config = NOTIFICATION_CONFIG[notification.type] || NOTIFICATION_CONFIG.default;
   const actionLabelKey = ACTION_LABEL_KEYS[notification.type];
   const actionLabel = actionLabelKey ? (t.notifications as any)[actionLabelKey] : undefined;
+
+  // guest_data_changed carries a structured diff in `metadata` so the text can be
+  // localized to the organizer's language at render time (it was created in the
+  // guest's language). Falls back to the stored title/body for any other type.
+  let displayTitle = notification.title;
+  let displayBody = notification.body;
+  if (notification.type === 'guest_data_changed' && isGuestDataChangedMeta(notification.metadata)) {
+    const meta = notification.metadata;
+    displayTitle = (t.notifications as any).guestDataChangedTitle;
+    const changesText = formatGuestChanges(meta.changes, {
+      name: (t.notifications as any).fieldName,
+      email: (t.notifications as any).fieldEmail,
+      phone: (t.notifications as any).fieldPhone,
+    });
+    displayBody = ((t.notifications as any).guestDataChangedBody as string)
+      .replace('{{guest}}', meta.guestName)
+      .replace('{{changes}}', changesText);
+  }
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -269,21 +296,21 @@ export function NotificationItem({
               flex={1}
               marginRight="$2"
             >
-              {notification.title}
+              {displayTitle}
             </Text>
             <Text fontSize={10} color={'rgba(255,255,255,0.48)'} fontWeight="500">
               {notification.created_at && formatTime(notification.created_at)}
             </Text>
           </XStack>
 
-          {notification.body && (
+          {displayBody && (
             <Text
               fontSize={12}
               color={'rgba(255,255,255,0.72)'}
               numberOfLines={2}
               lineHeight={18}
             >
-              {notification.body}
+              {displayBody}
             </Text>
           )}
 

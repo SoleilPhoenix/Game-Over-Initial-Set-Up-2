@@ -798,6 +798,13 @@ const de: TranslationKeys = {
     actionVoteNow: 'Jetzt abstimmen',
     actionViewResults: 'Ergebnisse ansehen',
     actionViewEvent: 'Event ansehen',
+    actionViewParticipants: 'Gäste ansehen',
+    // Gast-Datenänderung (für Organisator)
+    guestDataChangedTitle: 'Gast hat Angaben geändert',
+    guestDataChangedBody: '{{guest}} ist mit anderen Angaben beigetreten als von dir eingetragen — {{changes}}. Diese gelten jetzt automatisch.',
+    fieldName: 'Name',
+    fieldEmail: 'E-Mail',
+    fieldPhone: 'Telefon',
   },
 
   // ─── Event Detail ─────────────────────────────
@@ -916,6 +923,7 @@ const de: TranslationKeys = {
     guestUnit: 'Gast',
     guestUnitPlural: 'Gäste',
     duplicateTitle: 'Doppelter Kontakt',
+    guestAdjusted: 'Vom Gast angepasst',
   },
 
   // ─── Guest Invite Wizard ─────────────────────────

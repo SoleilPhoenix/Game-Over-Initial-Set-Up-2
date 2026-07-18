@@ -806,6 +806,13 @@ const en = {
     actionVoteNow: 'Vote Now',
     actionViewResults: 'View Results',
     actionViewEvent: 'View Event',
+    actionViewParticipants: 'View Guests',
+    // Guest data-change notification (organizer-facing)
+    guestDataChangedTitle: 'Guest updated their details',
+    guestDataChangedBody: '{{guest}} joined with different details than you entered — {{changes}}. These now apply automatically.',
+    fieldName: 'Name',
+    fieldEmail: 'Email',
+    fieldPhone: 'Phone',
   },
 
   // ─── Event Detail ─────────────────────────────
@@ -932,6 +939,7 @@ const en = {
     guestUnit: 'guest',
     guestUnitPlural: 'guests',
     duplicateTitle: 'Duplicate contact',
+    guestAdjusted: 'Adjusted by guest',
   },
 
   // ─── Guest Invite Wizard ─────────────────────────

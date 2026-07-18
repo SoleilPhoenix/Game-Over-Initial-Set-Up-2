@@ -31,6 +31,7 @@ import { GoldButton } from '@/components/ui/editorial';
 import type { ParticipantWithProfile } from '@/repositories';
 import { loadDesiredParticipants, loadBudgetInfo, loadGuestDetails, saveGuestDetails, setInvitedCount, type GuestDetail } from '@/lib/participantCountCache';
 import { resolveGuestDisplay } from '@/utils/guestDisplay';
+import { formatGuestChanges, type GuestDataChange } from '@/utils/guestDataChange';
 import { supabase } from '@/lib/supabase/client';
 
 // ─── Phone Formatting ──────────────────────────
@@ -108,6 +109,8 @@ interface Slot {
   isEditable: boolean;
   isExpanded: boolean;
   participant?: ParticipantWithProfile;
+  // Fields a registered guest changed relative to the organizer's invite entry.
+  changed?: { name?: { from: string; to: string }; phone?: { from: string; to: string } };
 }
 
 export default function ManageInvitationsScreen() {
@@ -305,6 +308,7 @@ export default function ManageInvitationsScreen() {
           isEditable: false,
           isExpanded: false,
           participant: dbGuest,
+          changed: display.changedFromInvite,
         });
       } else {
         result.push({
@@ -630,6 +634,22 @@ export default function ManageInvitationsScreen() {
                   </XStack>
                 ) : null}
               </YStack>
+            )}
+
+            {/* Guest adjusted their details vs the organizer's invite entry */}
+            {slot.changed && (slot.changed.name || slot.changed.phone) && (
+              <XStack alignItems="flex-start" gap={6} marginTop={4}>
+                <Ionicons name="information-circle-outline" size={13} color={theme.accentGold} style={{ marginTop: 1 }} />
+                <Text style={styles.adjustedHint} numberOfLines={3}>
+                  {t.manageInvitations.guestAdjusted}: {formatGuestChanges(
+                    ([
+                      slot.changed.name && { field: 'name', ...slot.changed.name },
+                      slot.changed.phone && { field: 'phone', ...slot.changed.phone },
+                    ].filter(Boolean) as GuestDataChange[]),
+                    { name: t.notifications.fieldName, email: t.notifications.fieldEmail, phone: t.notifications.fieldPhone },
+                  )}
+                </Text>
+              </XStack>
             )}
 
             {/* Empty slot hint */}
@@ -1224,6 +1244,12 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     color: theme.textTertiary,
     fontStyle: 'italic',
     marginTop: 2,
+  },
+  adjustedHint: {
+    flex: 1,
+    fontSize: 11,
+    color: theme.accentGold,
+    lineHeight: 15,
   },
   dupError: {
     fontSize: 12,

@@ -21,6 +21,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { supabase } from '@/lib/supabase/client';
+import type { Json } from '@/lib/supabase/types';
+import { normalizePhoneKey } from '@/utils/guestDisplay';
+import { formatGuestChanges, type GuestDataChange } from '@/utils/guestDataChange';
 import { useAuthStore } from '@/stores/authStore';
 import { useLanguageStore } from '@/stores/languageStore';
 import { useTranslation } from '@/i18n';
@@ -123,28 +126,73 @@ export default function InviteWizardScreen() {
           return;
         }
 
-        // Notify organizer that the guest joined (non-blocking)
-        void (async () => {
-          try {
-            if (!result.eventId) return;
-            const { data: eventData } = await supabase
-              .from('events')
-              .select('created_by')
-              .eq('id', result.eventId)
-              .single();
-            if (!eventData?.created_by) return;
-            const guestName = currentUser.user_metadata?.full_name || currentUser.email || 'A guest';
-            await supabase.from('notifications').insert({
-              event_id: result.eventId,
-              title: 'Guest Joined',
-              body: `${guestName} has joined your event.`,
-              type: 'guest_joined',
-              user_id: eventData.created_by,
-            });
-          } catch {
-            // Non-blocking — ignore notification errors
-          }
-        })();
+        // Notify organizer (non-blocking). Only on a genuine first join — when the
+        // guest re-opens the link, accept() returns an `error` string, and we must
+        // not re-fire notifications.
+        if (!result.error) {
+          const joinedEventId = result.eventId;
+          void (async () => {
+            try {
+              const { data: eventData } = await supabase
+                .from('events')
+                .select('created_by')
+                .eq('id', joinedEventId)
+                .single();
+              if (!eventData?.created_by) return;
+
+              const guestFullName = currentUser.user_metadata?.full_name || currentUser.email || 'A guest';
+              await supabase.from('notifications').insert({
+                event_id: joinedEventId,
+                title: 'Guest Joined',
+                body: `${guestFullName} has joined your event.`,
+                type: 'guest_joined',
+                user_id: eventData.created_by,
+              });
+
+              // Detect any divergence from what the organizer originally entered.
+              const organizerName = [preview?.guestFirstName, preview?.guestLastName]
+                .filter(Boolean).join(' ').trim();
+              const selfName = currentUser.user_metadata?.full_name || '';
+              const selfEmail = currentUser.email || '';
+              const changes: GuestDataChange[] = [];
+              if (organizerName && selfName && organizerName.toLowerCase() !== selfName.toLowerCase()) {
+                changes.push({ field: 'name', from: organizerName, to: selfName });
+              }
+              const organizerEmail = preview?.guestEmail || '';
+              if (organizerEmail && selfEmail && organizerEmail.toLowerCase() !== selfEmail.toLowerCase()) {
+                changes.push({ field: 'email', from: organizerEmail, to: selfEmail });
+              }
+              const organizerPhone = preview?.guestPhone || '';
+              const selfPhone = phone || '';
+              if (organizerPhone && selfPhone && normalizePhoneKey(organizerPhone) !== normalizePhoneKey(selfPhone)) {
+                changes.push({ field: 'phone', from: organizerPhone, to: selfPhone });
+              }
+
+              if (changes.length > 0) {
+                const changesText = formatGuestChanges(changes, {
+                  name: t.notifications.fieldName,
+                  email: t.notifications.fieldEmail,
+                  phone: t.notifications.fieldPhone,
+                });
+                await supabase.from('notifications').insert({
+                  event_id: joinedEventId,
+                  type: 'guest_data_changed',
+                  user_id: eventData.created_by,
+                  // Fallback text (guest's language) — NotificationItem re-renders it
+                  // in the organizer's language from `metadata`.
+                  title: t.notifications.guestDataChangedTitle,
+                  body: t.notifications.guestDataChangedBody
+                    .replace('{{guest}}', selfName || selfEmail)
+                    .replace('{{changes}}', changesText),
+                  action_url: `/event/${joinedEventId}/participants`,
+                  metadata: ({ guestName: selfName || selfEmail, changes } as unknown) as Json,
+                });
+              }
+            } catch {
+              // Non-blocking — ignore notification errors
+            }
+          })();
+        }
 
         router.replace(`/event/${result.eventId}?firstVisit=1`);
       } catch {
@@ -154,7 +202,7 @@ export default function InviteWizardScreen() {
       isAcceptingRef.current = false;
       setIsAccepting(false);
     }
-  }, [acceptInvite, code, router, t]);
+  }, [acceptInvite, code, router, t, preview]);
 
   // ── Step 1 handlers ─────────────────────────────────────────
   const handleAcceptPressed = async () => {
