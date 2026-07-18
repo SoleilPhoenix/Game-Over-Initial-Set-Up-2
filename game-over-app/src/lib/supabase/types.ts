@@ -508,6 +508,7 @@ export type Database = {
           event_id: string | null
           id: string
           is_read: boolean | null
+          metadata: Json | null
           title: string
           type: string
           user_id: string
@@ -519,6 +520,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           is_read?: boolean | null
+          metadata?: Json | null
           title: string
           type: string
           user_id: string
@@ -530,6 +532,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           is_read?: boolean | null
+          metadata?: Json | null
           title?: string
           type?: string
           user_id?: string
