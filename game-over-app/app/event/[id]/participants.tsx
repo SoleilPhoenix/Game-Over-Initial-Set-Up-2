@@ -30,6 +30,7 @@ import { ambientShadow, type EditorialTheme } from '@/constants/designSystem';
 import { GoldButton } from '@/components/ui/editorial';
 import type { ParticipantWithProfile } from '@/repositories';
 import { loadDesiredParticipants, loadBudgetInfo, loadGuestDetails, saveGuestDetails, setInvitedCount, type GuestDetail } from '@/lib/participantCountCache';
+import { resolveGuestDisplay } from '@/utils/guestDisplay';
 import { supabase } from '@/lib/supabase/client';
 
 // ─── Phone Formatting ──────────────────────────
@@ -277,27 +278,29 @@ export default function ManageInvitationsScreen() {
       const localDetails = guestDetails[slotIdx];
 
       if (dbGuest) {
-        // When the current user IS this guest, prefer their own (potentially updated) profile data
+        // Option B (2026-07-18): once a slot is registered, the guest's OWN
+        // profile data wins over the organizer-entered invite_codes data.
         const isCurrentUserGuest = dbGuest.user_id === user?.id;
         const guestEmail = dbGuest.profile?.email || (dbGuest as any)?.email || '';
-        // Name: prefer organizer-entered data from invite_codes (source of truth)
-        // so the name shown matches what the organizer entered, not what the guest typed
         const inviteData = invitesByEmail[guestEmail.toLowerCase()];
-        const inviteName = inviteData
-          ? [inviteData.firstName, inviteData.lastName].filter(Boolean).join(' ')
-          : '';
-        const guestName = inviteName
-          || (isCurrentUserGuest
-            ? (ownProfile?.full_name || dbGuest.profile?.full_name || user?.user_metadata?.full_name || 'Guest')
-            : (dbGuest.profile?.full_name || 'Guest'));
-        // Phone: prefer invite_codes data (organizer-entered) over profile.phone
-        const guestPhone = inviteData?.phone || (dbGuest.profile as any)?.phone || '';
+        const selfName = isCurrentUserGuest
+          ? (ownProfile?.full_name || dbGuest.profile?.full_name || user?.user_metadata?.full_name || null)
+          : (dbGuest.profile?.full_name || null);
+        const display = resolveGuestDisplay({
+          isRegistered: !!dbGuest.user_id,
+          profileFullName: selfName,
+          profilePhone: (dbGuest.profile as any)?.phone ?? null,
+          inviteFirstName: inviteData?.firstName || '',
+          inviteLastName: inviteData?.lastName || '',
+          invitePhone: inviteData?.phone || '',
+        });
         result.push({
           index: i + 1,
           role: 'guest',
-          name: guestName,
+          // Empty name falls back to the localized "Gast #n" in renderSlotCard.
+          name: display.name,
           email: guestEmail,
-          phone: guestPhone,
+          phone: display.phone,
           status: dbGuest.confirmed_at ? 'confirmed' : (dbGuest.user_id ? 'pending' : 'not_invited'),
           isEditable: false,
           isExpanded: false,
@@ -346,7 +349,7 @@ export default function ManageInvitationsScreen() {
   // event (organizer, guests and honoree share one namespace). Across different
   // events the same contact is fine. Compute the slot indexes whose phone/email
   // collides with another slot so we can flag them inline AND block confirming.
-  const buildDupSet = (getKey: (s: Slot) => string) => {
+  const buildDupSet = useCallback((getKey: (s: Slot) => string) => {
     const byKey = new Map<string, number[]>();
     for (const s of slots) {
       const key = getKey(s);
@@ -360,9 +363,9 @@ export default function ManageInvitationsScreen() {
       if (idxs.length > 1) idxs.forEach(i => dup.add(i));
     }
     return dup;
-  };
-  const duplicatePhoneSlots = useMemo(() => buildDupSet(s => normalizePhoneKey(s.phone)), [slots]);
-  const duplicateEmailSlots = useMemo(() => buildDupSet(s => s.email.trim().toLowerCase()), [slots]);
+  }, [slots]);
+  const duplicatePhoneSlots = useMemo(() => buildDupSet(s => normalizePhoneKey(s.phone)), [buildDupSet]);
+  const duplicateEmailSlots = useMemo(() => buildDupSet(s => s.email.trim().toLowerCase()), [buildDupSet]);
   const hasDuplicates = duplicatePhoneSlots.size > 0 || duplicateEmailSlots.size > 0;
   const dupPhoneMsg = (t.manageInvitations as any).duplicatePhone
     ?? (language === 'de'
@@ -432,7 +435,7 @@ export default function ManageInvitationsScreen() {
     // otherwise two slots would resolve to the same recipient.
     if (hasDuplicates) {
       Alert.alert(
-        language === 'de' ? 'Doppelter Kontakt' : 'Duplicate contact',
+        t.manageInvitations.duplicateTitle,
         duplicatePhoneSlots.size > 0 ? dupPhoneMsg : dupEmailMsg,
       );
       return;
@@ -636,7 +639,7 @@ export default function ManageInvitationsScreen() {
             {/* Contact info hint for organizer/honoree — hidden after event ends */}
             {needsContactInfo && !slot.isExpanded && !isReadOnly && (
               <Text style={styles.fillHint}>
-                {slot.role === 'organizer' ? 'Tap to add phone number' : 'Tap to add contact details'}
+                {slot.role === 'organizer' ? t.manageInvitations.tapAddPhone : t.manageInvitations.tapAddContact}
               </Text>
             )}
           </YStack>
@@ -845,7 +848,7 @@ export default function ManageInvitationsScreen() {
                   onPress={() => setExpandedSlot(null)}
                 >
                   <Ionicons name="checkmark-circle" size={18} color={theme.textOnPrimary} />
-                  <Text style={styles.confirmButtonText}>Confirm</Text>
+                  <Text style={styles.confirmButtonText}>{t.manageInvitations.confirmSlot}</Text>
                 </Pressable>
               );
             })()}
@@ -908,7 +911,7 @@ export default function ManageInvitationsScreen() {
           </View>
           <View style={[styles.statCard, { flex: 1 }]}>
             <Text style={[styles.statNumber, { color: theme.accentGold }]}>{totalSlots}</Text>
-            <Text style={styles.statLabel}>Total</Text>
+            <Text style={styles.statLabel}>{t.manageInvitations.total}</Text>
           </View>
         </XStack>
 
@@ -1001,8 +1004,8 @@ export default function ManageInvitationsScreen() {
                 inviteSendStatus === 'done' && { color: theme.accentGold },
               ]}>
                 {inviteSendStatus === 'done'
-                  ? `${activeChannel === 'email' ? 'Email' : 'WhatsApp'} Sent`
-                  : 'Invite All Guests'}
+                  ? (activeChannel === 'email' ? t.manageInvitations.emailSent : t.manageInvitations.whatsappSent)
+                  : t.manageInvitations.inviteAllGuests}
               </Text>
             </View>
             {inviteSendStatus !== 'sending' && (
@@ -1019,7 +1022,7 @@ export default function ManageInvitationsScreen() {
             {inviteSendStatus === 'idle' && (
               <>
                 <Text style={[styles.inviteSectionLabel, { textAlign: 'center', marginBottom: 16 }]}>
-                  SEND FROM GAME OVER
+                  {t.manageInvitations.sendFromGameOver}
                 </Text>
                 <XStack gap={12} marginBottom={20}>
                   <Pressable
@@ -1027,8 +1030,8 @@ export default function ManageInvitationsScreen() {
                     onPress={() => hasEmails && handleSendViaChannel('email')}
                   >
                     <Ionicons name="mail-outline" size={24} color={hasEmails ? '#C6A75E' : theme.textTertiary} />
-                    <Text style={[styles.inviteChannelLabel, { color: hasEmails ? '#C6A75E' : theme.textTertiary }]}>Email</Text>
-                    <Text style={styles.inviteChannelCount}>{emailCount} guest{emailCount !== 1 ? 's' : ''}</Text>
+                    <Text style={[styles.inviteChannelLabel, { color: hasEmails ? '#C6A75E' : theme.textTertiary }]}>{t.manageInvitations.email}</Text>
+                    <Text style={styles.inviteChannelCount}>{emailCount} {emailCount === 1 ? t.manageInvitations.guestUnit : t.manageInvitations.guestUnitPlural}</Text>
                   </Pressable>
                   <Pressable
                     style={[styles.inviteChannelBtn, !hasPhones && styles.inviteChannelBtnDisabled]}
@@ -1036,11 +1039,11 @@ export default function ManageInvitationsScreen() {
                   >
                     <Ionicons name="logo-whatsapp" size={24} color={hasPhones ? '#C6A75E' : theme.textTertiary} />
                     <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#C6A75E' : theme.textTertiary }]}>WhatsApp</Text>
-                    <Text style={styles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
+                    <Text style={styles.inviteChannelCount}>{phoneCount} {phoneCount === 1 ? t.manageInvitations.guestUnit : t.manageInvitations.guestUnitPlural}</Text>
                   </Pressable>
                 </XStack>
                 <Pressable style={{ alignItems: 'center', paddingVertical: 8 }} onPress={handleShareFallback}>
-                  <Text style={{ fontSize: 13, color: theme.textTertiary }}>Or share invite link via other apps →</Text>
+                  <Text style={{ fontSize: 13, color: theme.textTertiary }}>{t.manageInvitations.shareOther}</Text>
                 </Pressable>
               </>
             )}
@@ -1050,10 +1053,12 @@ export default function ManageInvitationsScreen() {
               <View style={{ alignItems: 'center', paddingVertical: 32, gap: 16 }}>
                 <ActivityIndicator size="large" color={theme.accentGold} />
                 <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textPrimary }}>
-                  Sending {activeChannel === 'email' ? 'email' : 'WhatsApp'} invitations…
+                  {activeChannel === 'email' ? t.manageInvitations.sendingEmail : t.manageInvitations.sendingWhatsapp}
                 </Text>
                 <Text style={{ fontSize: 13, color: theme.textTertiary }}>
-                  Validating and sending to {activeChannel === 'email' ? emailCount : phoneCount} guest{(activeChannel === 'email' ? emailCount : phoneCount) !== 1 ? 's' : ''}
+                  {t.manageInvitations.sendingSubtitle
+                    .replace('{{count}}', String(activeChannel === 'email' ? emailCount : phoneCount))
+                    .replace('{{unit}}', (activeChannel === 'email' ? emailCount : phoneCount) === 1 ? t.manageInvitations.guestUnit : t.manageInvitations.guestUnitPlural)}
                 </Text>
               </View>
             )}
@@ -1062,11 +1067,11 @@ export default function ManageInvitationsScreen() {
             {inviteSendStatus === 'done' && (
               <>
                 <Text style={{ fontSize: 13, color: theme.textTertiary, textAlign: 'center', marginBottom: 12 }}>
-                  {inviteResults.filter(r => r.status === 'sent').length} sent
+                  {t.manageInvitations.sentSummary.replace('{{sent}}', String(inviteResults.filter(r => r.status === 'sent').length))}
                   {inviteResults.filter(r => r.status === 'failed').length > 0
-                    ? ` · ${inviteResults.filter(r => r.status === 'failed').length} failed` : ''}
+                    ? ` · ${inviteResults.filter(r => r.status === 'failed').length} ${t.manageInvitations.failedSuffix}` : ''}
                   {inviteResults.filter(r => r.status === 'invalid').length > 0
-                    ? ` · ${inviteResults.filter(r => r.status === 'invalid').length} invalid` : ''}
+                    ? ` · ${inviteResults.filter(r => r.status === 'invalid').length} ${t.manageInvitations.invalidSuffix}` : ''}
                 </Text>
                 <View style={{ backgroundColor: theme.surfaceHigh, borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
                   {inviteResults.map((r, i) => {
@@ -1100,7 +1105,7 @@ export default function ManageInvitationsScreen() {
                   style={[styles.inviteChannelBtn, { flex: 0, paddingHorizontal: 20, marginBottom: 10 }]}
                   onPress={() => { setInviteSendStatus('idle'); setInviteResults([]); setActiveChannel(null); }}
                 >
-                  <Text style={[styles.inviteChannelLabel, { color: theme.accentGold }]}>Send another channel</Text>
+                  <Text style={[styles.inviteChannelLabel, { color: theme.accentGold }]}>{t.manageInvitations.sendAnotherChannel}</Text>
                 </Pressable>
               </>
             )}
