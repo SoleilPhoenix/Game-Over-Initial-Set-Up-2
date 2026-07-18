@@ -904,6 +904,35 @@ Danach superpowers:finishing-a-development-branch für Merge/PR-Entscheidung.
 
 ---
 
+## Phase 5: Organisator über Gast-Datenänderung informieren (A + B + Migration)
+
+### Task 11: Migration - `notifications.metadata jsonb`
+
+- Migration-Datei `supabase/migrations/2026-07-18_notifications_metadata.sql`: `alter table public.notifications add column if not exists metadata jsonb;`
+- Auf Remote anwenden (Supabase MCP `apply_migration`).
+- `src/lib/supabase/types.ts`: `metadata: Json | null` in Row/Insert/Update von `notifications` ergänzen.
+
+### Task 12: `resolveGuestDisplay` um Änderungs-Erkennung erweitern (TDD)
+
+- Rückgabe erhält `changedFromInvite: { name?: {from,to}; phone?: {from,to} }` (nur wenn registriert und abweichend).
+- Tests für name-changed, phone-changed, keine Änderung, nicht registriert.
+
+### Task 13: Notification beim Beitritt (`invite/[code].tsx`)
+
+- In `doAcceptInvite`: Organisator-Daten (aus `preview`) mit Gast-Selbstangabe (name/email/phone) vergleichen.
+- Bei Abweichung `guest_data_changed`-Notification mit `metadata` (guestName + changes[]) einfügen.
+- Nur beim echten Erstbeitritt (`!result.error`); dieselbe Abgrenzung auch für die bestehende `guest_joined`.
+
+### Task 14: Rendern + Inline-Hinweis + i18n
+
+- `NotificationItem`: für `type==='guest_data_changed'` Titel/Text aus `metadata` + i18n bauen; Config-Eintrag (Icon/Farbe/Action).
+- `participants.tsx`: Inline-Hinweis "Vom Gast angepasst" mit den Änderungen (aus `resolveGuestDisplay().changedFromInvite`).
+- i18n-Keys (EN+DE) für Notification-Text und Inline-Hinweis.
+
+### Task 15: Verifikation
+
+- `npm run typecheck`, `npm run lint`, `npx vitest run` grün; Parität-Test grün.
+
 ## Self-Review-Notiz
 
 - Spec-Abdeckung: Bug 1 (Task 3), Bug 2 (Task 4), Bug 3/Option B (Task 5+6), i18n Invite (Task 1+2), i18n participants (Task 1+7), Edge Cases (Task 9 + Task 10 Step 3), Datenfluss-Verifikation (Task 0 + Task 10 Step 4), Parität (Task 8). Alle Spec-Punkte abgedeckt.

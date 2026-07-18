@@ -79,6 +79,27 @@ Fix (Option B): Sobald ein Slot einem registrierten Teilnehmer zugeordnet ist (`
 Der `invite_codes`-Name bleibt nur die Quelle für noch nicht registrierte Slots (Platzhalter bis zur Registrierung).
 Analog für die Telefonnummer prüfen: bei registriertem Gast `profiles.phone` (Selbstangabe) statt der Organisator-Eingabe bevorzugen, damit Selbstangaben konsistent gewinnen.
 
+## Erweiterung: Organisator über Gast-Datenänderung informieren
+
+Entschieden (2026-07-18): Wenn ein Gast bei der Registrierung von den Organisator-Eingaben abweichende Daten angibt (Name, E-Mail oder Telefon), wird der Organisator aktiv informiert - inklusive Was-zu-Was.
+Konsistent mit Option B bleibt die Selbstangabe des Gastes die maßgebliche Info; die Benachrichtigung informiert nur über die Änderung.
+
+Erkennungspunkt: der Beitritt auf dem Gast-Gerät (`invite/[code].tsx`, `doAcceptInvite`).
+Dort liegen beide Datensätze zuverlässig vor - die Organisator-Eingabe (aus `invite_codes` via Preview) und die Selbstangabe des Gastes.
+Das ist der einzige Punkt, der auch einen **E-Mail-Wechsel** erkennt, weil die Organisator-Ansicht Gast↔Einladung sonst über die E-Mail verknüpft (Verknüpfung bricht bei E-Mail-Wechsel).
+
+Zwei Oberflächen:
+
+- A - Proaktive Benachrichtigung: `guest_data_changed`-Notification an den Organisator beim Beitritt.
+  Wird lokalisiert in der Sprache des Organisators gerendert (nicht der Gast-Sprache).
+  Dafür bekommt `notifications` ein `metadata jsonb`-Feld; `NotificationItem` baut Titel/Text zur Render-Zeit aus `metadata` + i18n.
+  Die bestehende hart-englische "Guest Joined"-Notification kann später dasselbe Muster nutzen.
+- B - Persistenter Inline-Hinweis: dezenter Hinweis im Gäste-verwalten-Slot ("Vom Gast angepasst" + Änderungen), sichtbar auch nachdem die Push-Meldung weg ist.
+  Reicht für Name/Telefon (E-Mail-Wechsel deckt Oberfläche A ab).
+
+RLS: Die vorhandene Policy "Participants can notify event organizer" erlaubt dem Gast (nach dem Beitritt Teilnehmer) das Insert für den Organisator - kein Policy-Change nötig.
+Duplikate: Benachrichtigungen feuern nur beim echten Erstbeitritt (nicht beim erneuten Öffnen des Links) - wird über das `already a participant`-Ergebnis von `accept()` abgegrenzt.
+
 ## Testplan Gäste-Flow
 
 ### Happy Path
