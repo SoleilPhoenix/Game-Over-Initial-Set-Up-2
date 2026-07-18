@@ -17,6 +17,7 @@ import {
   TEST_USER,
 } from '../utils/testHelpers';
 // navigation helpers unused in current test set
+import en from '../../src/i18n/en';
 
 // Test invite codes for various scenarios
 const TEST_INVITE_CODES = {
@@ -701,6 +702,47 @@ describe('Invite System', () => {
 
       // Should navigate to events list
       await waitForElement('events-list', 5000);
+    });
+  });
+
+  describe('Guest Registration via Invite', () => {
+    beforeEach(async () => {
+      await device.reloadReactNative();
+    });
+
+    it('walks an unauthenticated guest from preview through signup and profile to the event', async () => {
+      const unique = Date.now();
+      const guestEmail = `guest+${unique}@example.com`;
+
+      // Deep-link straight into the invite preview (public, no auth)
+      await device.openURL({ url: `gameover://invite/${TEST_INVITE_CODES.valid}` });
+      await waitForElement('accept-invite-button', 15000);
+
+      // Step 1 -> signup
+      await tap('accept-invite-button');
+      await waitForElement('signup-submit-button', 10000);
+      await typeInInput('signup-firstname', 'E2E');
+      await typeInInput('signup-lastname', 'Guest');
+      await typeInInput('signup-email', guestEmail);
+      await typeInInput('signup-password', 'Passw0rd!');
+      await typeInInput('signup-confirm-password', 'Passw0rd!');
+      await dismissKeyboard();
+      await tap('signup-submit-button');
+
+      // Step 3 profile -> add phone, skip photo
+      await waitForElement('profile-continue-button', 15000);
+      await typeInInput('profile-phone', '+49 170 1234567');
+      await dismissKeyboard();
+      await tap('profile-continue-button');
+
+      // Lands on the event screen as a confirmed participant
+      await waitForElement('event-summary-screen', 20000);
+    });
+
+    it('shows an invalid-invite state for a revoked code', async () => {
+      await device.openURL({ url: `gameover://invite/${TEST_INVITE_CODES.revoked}` });
+      // Current wizard renders the invalid-invite copy (localized source string)
+      await assertTextVisible(en.invite.invalidTitle);
     });
   });
 });
