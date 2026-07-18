@@ -40,6 +40,31 @@ Die passenden Bachelor/-ette-i18n-Varianten für `planSurpriseDesc` liegen berei
 - Party-Typ: `partyType: 'bachelor' | 'bachelorette'` im Wizard-Store (`src/stores/wizardStore.ts`); bei bestehenden Events `event.party_type`.
 - ShareModal: `src/components/ui/ShareModal.tsx`; iOS-App-Schemas in `app.config.ts` (`LSApplicationQueriesSchemes`).
 
+## Test-Loop: Änderungen live aufs iPhone
+
+Der Mac dient als Metro-Host; die iPhone-Claude-App (Cloud) pusht nach GitHub `main`, der Mac zieht automatisch nach.
+
+Auf dem Mac (in einem eigenen Terminal, offen lassen):
+
+```bash
+cd ~/Desktop/GameOver
+./scripts/mac-preview.sh
+```
+
+Das bündelt drei Dinge und räumt beim Beenden (Ctrl-C) alles auf:
+- `caffeinate` hält den Mac wach (nur am Netzteil zuverlässig; auf Akku greift `-s` nicht).
+- `scripts/mac-autopull.sh` pollt `main` alle 15 s und macht `git pull --ff-only` (nie `reset`/`clean`/`stash`, verwirft also nie lokale Arbeit).
+- `expo start --tunnel` startet Metro im Tunnel-Modus und zeigt QR + `exp://…ngrok-free.dev`.
+
+Auf dem iPhone: **Expo Go** öffnen, QR scannen (oder die `exp://`-URL eingeben).
+Ablauf: iPhone-Claude editiert → Push → Mac-Auto-Pull → Metro **Fast Refresh**; falls nötig iPhone **schütteln → „Reload"**.
+
+Grenzen des Loops:
+- Nur **JS/TS/i18n** hot-reloaden. **Native-/Config-Änderungen** (z. B. `app.config.ts`, `LSApplicationQueriesSchemes`) brauchen einen echten **Dev-Build** (`eas build` / `expo run:ios`) — geht nicht per Fast Refresh.
+- **Free-ngrok erlaubt nur EINEN Tunnel gleichzeitig**: läuft parallel noch ein Metro/Tunnel (z. B. aus einer anderen Session), scheitert der zweite mit `ERR_NGROK_334`. Dann den alten Metro stoppen und neu starten.
+- Die Free-ngrok-URL kann sich beim Neustart ändern — dann neuen QR/URL nutzen.
+- Voraussetzung: `@expo/ngrok` ist installiert (einmalig global via `npm install -g @expo/ngrok@^4.1.0`).
+
 ## Bekannte Umgebungs-Hinweise
 
 Supabase-Projekt `stdbvehmjpmqbjyiodqg` pausiert automatisch auf INACTIVE — vor Edge-Function-Deploy/Test erst `restore_project` (MCP) oder im Dashboard reaktivieren.
