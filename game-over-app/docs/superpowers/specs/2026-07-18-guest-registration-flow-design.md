@@ -38,6 +38,12 @@ Supabase (Projekt `stdbvehmjpmqbjyiodqg`, ACTIVE_HEALTHY):
 - Storage-Bucket `avatars` existiert und ist `public`; RLS-Policies für INSERT/UPDATE/DELETE existieren für `authenticated`.
 - E-Mail-Bestätigung ist historisch auf Auto-Confirm (mehrere `email_confirmed_at` ~6 ms nach `created_at`) - der Flow läuft ohne echtes Postfach durch. Aktueller Setting-Zustand wird im Live-Lauf final bestätigt.
 
+Datenketten-Verifikation (2026-07-18, real geprüft):
+
+- Organisator → `invite_codes`: Beim Einladen werden `guest_first_name`, `guest_last_name`, `guest_email`, `guest_phone` vollständig befüllt (bestätigt an realen Datensätzen).
+- Gast → `event_participants`/`profiles`: Registrierte Gäste haben `full_name` **und** `phone` **und** `avatar_url` gesetzt (2 von 3 Stichproben; der dritte übersprang den Profilschritt → nur Name). Name, Telefon und Foto werden also im Happy Path sauber übertragen.
+- Fazit: Die Bugs betreffen Edge Cases (stiller Upload-Fehler, Confirmation-Sackgasse) und die Anzeige-Präferenz (Option B), nicht die grundsätzliche Übertragung.
+
 ## Datenfluss der Gast-Informationen (Kernfrage "sauber übertragen?")
 
 | Information | Eingabe | Speicherort | Anzeige beim Organisator |
