@@ -429,7 +429,8 @@ export default function InviteWizardScreen() {
   if (!preview) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center"
-        backgroundColor="$background" paddingHorizontal="$6" gap="$4">
+        backgroundColor="$background" paddingHorizontal="$6" gap="$4"
+        testID="invite-error-screen">
         <Ionicons name="link-outline" size={48} color={'rgba(255,255,255,0.48)'} />
         <Text fontSize={18} fontWeight="700" color="$textPrimary" textAlign="center">
           {t.invite.invalidTitle}
@@ -446,7 +447,7 @@ export default function InviteWizardScreen() {
   if (step === 'preview') {
     const citySlug = CITY_UUID_TO_SLUG[preview.cityId] ?? preview.cityName.toLowerCase();
     return (
-      <YStack flex={1} backgroundColor="$background">
+      <YStack flex={1} backgroundColor="$background" testID="invite-preview-screen">
         {WebAppBanner}
         <View style={{ height: 280 + insets.top }}>
           <KenBurnsImage

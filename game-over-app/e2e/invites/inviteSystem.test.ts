@@ -716,7 +716,8 @@ describe('Invite System', () => {
 
       // Deep-link straight into the invite preview (public, no auth)
       await device.openURL({ url: `gameover://invite/${TEST_INVITE_CODES.valid}` });
-      await waitForElement('accept-invite-button', 15000);
+      await waitForElement('invite-preview-screen', 15000);
+      await assertVisible('accept-invite-button');
 
       // Step 1 -> signup
       await tap('accept-invite-button');
@@ -741,7 +742,7 @@ describe('Invite System', () => {
 
     it('shows an invalid-invite state for a revoked code', async () => {
       await device.openURL({ url: `gameover://invite/${TEST_INVITE_CODES.revoked}` });
-      // Current wizard renders the invalid-invite copy (localized source string)
+      await waitForElement('invite-error-screen', 10000);
       await assertTextVisible(en.invite.invalidTitle);
     });
   });
