@@ -159,7 +159,7 @@ export default function BudgetDashboardScreen() {
   const [cachedBudget, setCachedBudget] = useState<BudgetInfo | null>(null);
   const [cachedParticipantCount, setCachedParticipantCount] = useState<number | null>(null);
   const [cachedGuests, setCachedGuests] = useState<Record<number, GuestDetail>>({});
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const setTabBarHidden = useTabBarStore((s) => s.setHidden);
 
   const [shareModalVisible, setShareModalVisible] = useState(false);
@@ -178,9 +178,14 @@ export default function BudgetDashboardScreen() {
   const [remindModal, setRemindModal] = useState<{
     visible: boolean;
     sendStatus: 'idle' | 'sending' | 'done';
-    activeChannel: 'email' | 'sms' | 'whatsapp' | null;
+    activeChannel: 'email' | 'whatsapp' | null;
     results: { status: string; recipient: string; error?: string }[];
   }>({ visible: false, sendStatus: 'idle', activeChannel: null, results: [] });
+  // Payment-reminder copy tone: A = playful, B = friendly (A/B while we compare)
+  const [reminderVariant, setReminderVariant] = useState<'A' | 'B'>('A');
+  // Latest reminder recipients, kept in a ref so the send handler (declared before
+  // the recipients memo) always reads the current list.
+  const reminderRecipientsRef = useRef<{ firstName?: string; email?: string; phone?: string; amountCents: number }[]>([]);
 
   // Expense modal
   const [expenseModal, setExpenseModal] = useState<{
@@ -565,22 +570,29 @@ export default function BudgetDashboardScreen() {
     setRemindModal({ visible: true, sendStatus: 'idle', activeChannel: null, results: [] });
   }, []);
 
-  // Send reminder via chosen channel using the guest-invitations edge function
-  const handleRemindViaChannel = useCallback(async (channel: 'email' | 'sms' | 'whatsapp') => {
+  // Send a PAYMENT reminder (not an invitation) to registered guests with an
+  // open balance, via the dedicated send-payment-reminders edge function.
+  const handleRemindViaChannel = useCallback(async (channel: 'email' | 'whatsapp') => {
     if (!selectedEventId) return;
     setRemindModal(prev => ({ ...prev, activeChannel: channel, sendStatus: 'sending' }));
     try {
       await supabase.auth.refreshSession().catch(() => {});
-      const guestDetailsMap = await loadGuestDetails(selectedEventId);
-      const guests = Object.entries(guestDetailsMap).map(([, g]) => ({
-        firstName: g.firstName,
-        lastName: g.lastName,
-        email: g.email,
-        phone: g.phone,
-      })).filter(g => g.email || g.phone);
+      const { data: sessionData } = await supabase.auth.getSession();
 
-      const { data, error } = await supabase.functions.invoke('send-guest-invitations', {
-        body: { eventId: selectedEventId, channel, guests },
+      const recipients = reminderRecipientsRef.current
+        .filter(r => (channel === 'email' ? r.email : r.phone))
+        .map(r => ({
+          firstName: r.firstName,
+          email: r.email,
+          phone: r.phone,
+          amount: formatCurrency(r.amountCents),
+        }));
+
+      const { data, error } = await supabase.functions.invoke('send-payment-reminders', {
+        body: { eventId: selectedEventId, channel, variant: reminderVariant, language, recipients },
+        headers: sessionData.session
+          ? { Authorization: `Bearer ${sessionData.session.access_token}` }
+          : undefined,
       });
       if (error) {
         let detail = error.message ?? 'Unknown error';
@@ -598,7 +610,7 @@ export default function BudgetDashboardScreen() {
       setRemindModal(prev => ({ ...prev, sendStatus: 'idle' }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
-  }, [selectedEventId]);
+  }, [selectedEventId, reminderVariant, language]);
 
   // Navigate back — always use router.back(); when accessed via /event/[id]/budget
   // the stack correctly returns to Event Summary without any loops
@@ -720,6 +732,26 @@ export default function BudgetDashboardScreen() {
   const registeredEmailSet = useMemo(() => new Set(
     (sortedParticipants || []).map(p => p.profile?.email?.toLowerCase()).filter(Boolean) as string[]
   ), [sortedParticipants]);
+
+  // Payment-reminder recipients: only REGISTERED guests (role 'guest' excludes
+  // organizer AND honoree) whose balance is still open. Non-registered invitees
+  // are never reminded — we don't know they owe anything.
+  const reminderRecipients = useMemo(() => {
+    return (sortedParticipants || [])
+      .filter(p => p.role === 'guest' && !!p.user_id && p.payment_status !== 'paid')
+      .map(p => {
+        const fullName = p.profile?.full_name || '';
+        return {
+          firstName: fullName.split(' ')[0] || undefined,
+          email: p.profile?.email || undefined,
+          phone: (p.profile as any)?.phone || undefined,
+          amountCents: p.contribution_amount_cents || budgetStats.perPerson || 0,
+        };
+      })
+      .filter(r => r.email || r.phone);
+  }, [sortedParticipants, budgetStats.perPerson]);
+  // Keep the ref in sync so the send handler always sees the latest recipients.
+  reminderRecipientsRef.current = reminderRecipients;
 
   // Non-registered invited guests to show in Group Contributions
   // Includes both invite_codes (sent invitations) AND locally-cached guests (entered but not yet sent)
@@ -2041,9 +2073,8 @@ export default function BudgetDashboardScreen() {
 
       {/* ─── Remind All Channel Picker (matches Manage Invitations UX) ── */}
       {remindModal.visible && (() => {
-        const guestList = Object.values(cachedGuests);
-        const emailCount = guestList.filter(g => g.email).length;
-        const phoneCount = guestList.filter(g => g.phone).length;
+        const emailCount = reminderRecipients.filter(r => r.email).length;
+        const phoneCount = reminderRecipients.filter(r => r.phone).length;
         const hasEmails = emailCount > 0;
         const hasPhones = phoneCount > 0;
         return (
@@ -2063,8 +2094,8 @@ export default function BudgetDashboardScreen() {
                 <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
                   <Text style={remindStyles.inviteTitle}>
                     {remindModal.sendStatus === 'done'
-                      ? `${remindModal.activeChannel === 'email' ? 'Email' : remindModal.activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} sent`
-                      : 'Remind All Guests'}
+                      ? (remindModal.activeChannel === 'email' ? t.budget.reminderEmailSent : t.budget.reminderWhatsappSent)
+                      : t.budget.remindAllTitle}
                   </Text>
                   {remindModal.sendStatus !== 'sending' && (
                     <Pressable onPress={() => setRemindModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
@@ -2078,15 +2109,38 @@ export default function BudgetDashboardScreen() {
                     invite-channel policy (see send-guest-invitations edge fn). */}
                 {remindModal.sendStatus === 'idle' && (
                   <>
-                    <Text style={remindStyles.inviteSectionLabel}>SEND PAYMENT REMINDER VIA</Text>
+                    {/* Tone toggle — compare playful (A) vs friendly (B) copy */}
+                    <XStack alignItems="center" gap={10} marginBottom={14}>
+                      <Text style={remindStyles.inviteSectionLabel}>{t.budget.reminderToneLabel}</Text>
+                      <XStack gap={6}>
+                        {(['A', 'B'] as const).map((v) => (
+                          <Pressable
+                            key={v}
+                            onPress={() => setReminderVariant(v)}
+                            style={[remindStyles.toneChip, reminderVariant === v && remindStyles.toneChipActive]}
+                          >
+                            <Text style={[remindStyles.toneChipText, reminderVariant === v && remindStyles.toneChipTextActive]}>
+                              {v === 'A' ? t.budget.reminderTonePlayful : t.budget.reminderToneFriendly}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </XStack>
+                    </XStack>
+
+                    <Text style={remindStyles.inviteSectionLabel}>{t.budget.sendReminderVia}</Text>
+                    {emailCount === 0 && phoneCount === 0 && (
+                      <Text style={{ fontSize: 13, color: theme.textTertiary, marginBottom: 12 }}>
+                        {t.budget.noReminderRecipients}
+                      </Text>
+                    )}
                     <XStack gap={10} marginBottom={20}>
                       <Pressable
                         style={[remindStyles.inviteChannelBtn, !hasEmails && remindStyles.inviteChannelBtnDisabled]}
                         onPress={() => hasEmails && handleRemindViaChannel('email')}
                       >
                         <Ionicons name="mail-outline" size={22} color={hasEmails ? '#3B82F6' : theme.textTertiary} />
-                        <Text style={[remindStyles.inviteChannelLabel, { color: hasEmails ? '#3B82F6' : theme.textTertiary }]}>Email</Text>
-                        <Text style={remindStyles.inviteChannelCount}>{emailCount} guest{emailCount !== 1 ? 's' : ''}</Text>
+                        <Text style={[remindStyles.inviteChannelLabel, { color: hasEmails ? '#3B82F6' : theme.textTertiary }]}>{t.budget.channelEmail}</Text>
+                        <Text style={remindStyles.inviteChannelCount}>{emailCount} {emailCount === 1 ? t.budget.reminderGuest : t.budget.reminderGuests}</Text>
                       </Pressable>
                       <Pressable
                         style={[remindStyles.inviteChannelBtn, !hasPhones && remindStyles.inviteChannelBtnDisabled]}
@@ -2094,7 +2148,7 @@ export default function BudgetDashboardScreen() {
                       >
                         <Ionicons name="logo-whatsapp" size={22} color={hasPhones ? '#25D366' : theme.textTertiary} />
                         <Text style={[remindStyles.inviteChannelLabel, { color: hasPhones ? '#25D366' : theme.textTertiary }]}>WhatsApp</Text>
-                        <Text style={remindStyles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
+                        <Text style={remindStyles.inviteChannelCount}>{phoneCount} {phoneCount === 1 ? t.budget.reminderGuest : t.budget.reminderGuests}</Text>
                       </Pressable>
                     </XStack>
                   </>
@@ -2105,7 +2159,7 @@ export default function BudgetDashboardScreen() {
                   <View style={{ alignItems: 'center', paddingVertical: 32, gap: 16 }}>
                     <ActivityIndicator size="large" color={theme.accentGold} />
                     <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textPrimary }}>
-                      Sending {remindModal.activeChannel === 'email' ? 'email' : remindModal.activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} reminders…
+                      {t.budget.sendingReminders}
                     </Text>
                   </View>
                 )}
@@ -2115,8 +2169,9 @@ export default function BudgetDashboardScreen() {
                   <>
                     <View style={{ backgroundColor: theme.surfaceHigh, borderRadius: 12, padding: 12, marginBottom: 16 }}>
                       <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 8 }}>
-                        {remindModal.results.filter(r => r.status === 'sent').length} sent ·{' '}
-                        {remindModal.results.filter(r => r.status === 'failed').length} failed
+                        {t.budget.reminderResultSummary
+                          .replace('{{sent}}', String(remindModal.results.filter(r => r.status === 'sent').length))
+                          .replace('{{failed}}', String(remindModal.results.filter(r => r.status === 'failed').length))}
                       </Text>
                       {remindModal.results.map((r, i) => (
                         <XStack key={i} alignItems="center" gap={10} paddingVertical={6}
@@ -2136,7 +2191,7 @@ export default function BudgetDashboardScreen() {
                       style={[remindStyles.inviteChannelBtn, { flex: 0, paddingHorizontal: 20 }]}
                       onPress={() => { setRemindModal(prev => ({ ...prev, sendStatus: 'idle', results: [], activeChannel: null })); }}
                     >
-                      <Text style={[remindStyles.inviteChannelLabel, { color: theme.accentGold }]}>Send via another channel</Text>
+                      <Text style={[remindStyles.inviteChannelLabel, { color: theme.accentGold }]}>{t.budget.sendAnotherChannel}</Text>
                     </Pressable>
                   </>
                 )}
@@ -2212,6 +2267,26 @@ const makeRemindStyles = (theme: EditorialTheme) => StyleSheet.create({
   inviteChannelCount: {
     fontSize: 11,
     color: theme.textTertiary,
+  },
+  toneChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: theme.surfaceCard,
+  },
+  toneChipActive: {
+    borderColor: theme.accentGold,
+    backgroundColor: 'rgba(198,167,94,0.14)',
+  },
+  toneChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textTertiary,
+  },
+  toneChipTextActive: {
+    color: theme.accentGold,
   },
 });
 
