@@ -22,7 +22,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SocialButton } from '@/components/ui/SocialButton';
-import { Logo } from '@/components/brand/Logo';
+import { AnimatedLogo } from '@/components/brand/AnimatedLogo';
 import { useTranslation } from '@/i18n';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
@@ -194,7 +194,7 @@ export default function WelcomeScreen() {
         >
           {/* Top: brand logo */}
           <View style={[styles.topBar, { paddingTop: insets.top + 24 }]}>
-            <Logo width={150} height={150} testID="welcome-logo" />
+            <AnimatedLogo size={150} testID="welcome-logo" />
           </View>
 
           {/* Bold claim (concept 3) */}
