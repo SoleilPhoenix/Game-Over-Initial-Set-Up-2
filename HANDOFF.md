@@ -1,7 +1,28 @@
 # Handoff — Game Over App
 
 Kurzer Übergabestand, damit eine neue Session (z. B. von der iPhone-Claude-Code-App) nahtlos anknüpfen kann.
-Letzte Aktualisierung: 2026-07-18.
+Letzte Aktualisierung: 2026-07-19.
+
+## Aktueller Stand (2026-07-19) — Gäste-Flow, Zahlungserinnerung, Welcome-Redesign
+
+Arbeitsstrom aus dem Live-Test vom 18.07. (10-Punkte-Backlog). Alles unten ist auf `main` gepusht (dein iPhone zieht `main`).
+Neueste Session-Details liegen im lokalen Auto-Memory `guest-flow-backlog.md` (reist nicht über git mit).
+
+Fertig + live auf main:
+- Bug A: Foto-Upload repariert (base64/decode statt RN-kaputtem fetch().blob()) — `game-over-app/app/invite/[code].tsx`.
+- Bug B: reine Gäste landen auf dem „Attending"-Tab; eigentlicher Blocker war Bug A — `game-over-app/app/(tabs)/events/index.tsx`.
+- Bug C: `send-guest-invitations` verwendet den bestehenden Invite-Code wieder (kein neuer pro Erinnerung). DEPLOYED.
+- Punkt 4: neue Edge Function `send-payment-reminders` + Budget „Alle erinnern" = echte Zahlungserinnerung (A/B-Ton, DE/EN), nur angemeldete Gäste mit offenem Betrag (ohne Ehrengast). DEPLOYED + live.
+- Punkt 5+6: Einladungs-Mail/WhatsApp/Betreff zweisprachig (`supabase/functions/_shared/email-templates.ts` mit language+partyType); Genitiv „von {Name}" statt „Sally Joness"; Support-Link Gold. DEPLOYED.
+- Punkt 7: Code-Eingabefeld im Welcome nicht mehr von Tastatur verdeckt.
+
+Offen / als Nächstes (HIER weitermachen):
+- Punkt 8 (Welcome + Logo + Intro): Schritt 1 FERTIG (Welcome Konzept 3, Navy, Bold-Claim, echtes Vektor-Logo in Designsystem-Farben; `game-over-app/assets/brand/logo.svg`, `src/components/brand/Logo.tsx`+`logoSvg.ts`). NÄCHSTES: **Schritt 2 = Logo-Reveal-Animation** (Strich zeichnet sich → Cross-Fade in scharfen Vektor → Wortmarke + Glow; react-native-reanimated ist da). Schritt 3 = Launch-Intro: User liefert 10-15s-mp4 → expo-av-Player (Symbol-Stamp → Video → Logo-Aufbau + Claim → Anmelden), danach animiertes Logo-Reveal als Extra-Asset.
+- Punkt 10: entschieden (invite_codes-PII 30 Tage nach Event anonymisieren; Konten bleiben bis Selbst-Löschung). Migration/pg_cron-Job VORBEREITET, aber NOCH NICHT ANGEWENDET — auf User-OK warten.
+- Punkt 9: User hat Supabase „Confirm email" AUS geschaltet — beim nächsten Signup prüfen (email_confirmed_at sofort gesetzt).
+- Offener Chip: veraltete Phantom-E2E-Tests in `game-over-app/e2e/invites/inviteSystem.test.ts` neu schreiben/entfernen.
+
+Neue Session startet also bei: **Punkt 8 Schritt 2 (Logo-Animation)**, dann Punkt 10 anwenden (nach OK), dann Device-Re-Test verifizieren.
 
 ## Arbeitsweise (wichtig)
 
