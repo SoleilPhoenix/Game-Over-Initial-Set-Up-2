@@ -225,7 +225,7 @@ serve(async (req: Request) => {
     // resolve a profiles:created_by(...) join. Two separate queries required.
     const { data: event, error: eventError } = await supabase
       .from('events')
-      .select('id, title, honoree_name, created_by, party_type')
+      .select('id, title, honoree_name, created_by, party_type, start_date')
       .eq('id', eventId)
       .single();
 
@@ -320,23 +320,62 @@ serve(async (req: Request) => {
         continue;
       }
 
-      // 2. Generate unique invite code and store it with guest contact details
-      const code = generateCode();
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      const { error: codeInsertError } = await supabase.from('invite_codes').insert({
-        event_id: eventId,
-        code,
-        created_by: event.created_by,  // organizer's user id — required NOT NULL field
-        max_uses: 1,
-        expires_at: expiresAt,
-        guest_first_name: guest.firstName ?? null,
-        guest_last_name: guest.lastName ?? null,
-        guest_email: channel === 'email' ? contact : (guest.email ?? null),
-        guest_phone: channel !== 'email' ? contact : (guest.phone ?? null),
-      });
-      if (codeInsertError) {
-        console.error('[invite_codes] insert failed:', codeInsertError.message, 'code=', code);
-        // Non-critical for sending the message, but log clearly
+      // 2. Reuse the guest's existing active invite code for this event if one
+      //    exists — a person keeps ONE personal code until the event. Re-invites
+      //    and reminders must NOT mint a new code each time. Match on the guest's
+      //    email OR phone so either channel resolves to the same person.
+      const emailKey = (channel === 'email' ? contact : (guest.email ?? '')).toLowerCase();
+      const phoneKey = channel !== 'email' ? contact : (guest.phone ? normalisePhone(guest.phone) : '');
+
+      // Keep the code valid until the day after the event (fallback: 30 days out).
+      const eventStart = event.start_date ? new Date(event.start_date) : null;
+      const expiresAt = (eventStart && eventStart.getTime() > Date.now()
+        ? new Date(eventStart.getTime() + 24 * 60 * 60 * 1000)
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      ).toISOString();
+
+      const { data: eventCodes } = await supabase
+        .from('invite_codes')
+        .select('id, code, guest_email, guest_phone')
+        .eq('event_id', eventId)
+        .eq('is_active', true);
+
+      const existing = (eventCodes ?? []).find((c) =>
+        (emailKey && (c.guest_email ?? '').toLowerCase() === emailKey) ||
+        (phoneKey && (c.guest_phone ?? '') === phoneKey)
+      );
+
+      let code: string;
+      if (existing?.code) {
+        // Same code — just refresh contact details and keep it alive until the event.
+        code = existing.code;
+        const { error: codeUpdateError } = await supabase.from('invite_codes').update({
+          expires_at: expiresAt,
+          guest_first_name: guest.firstName ?? null,
+          guest_last_name: guest.lastName ?? null,
+          guest_email: channel === 'email' ? contact : (guest.email ?? null),
+          guest_phone: channel !== 'email' ? contact : (guest.phone ?? null),
+        }).eq('id', existing.id);
+        if (codeUpdateError) {
+          console.error('[invite_codes] reuse update failed:', codeUpdateError.message, 'code=', code);
+        }
+      } else {
+        code = generateCode();
+        const { error: codeInsertError } = await supabase.from('invite_codes').insert({
+          event_id: eventId,
+          code,
+          created_by: event.created_by,  // organizer's user id — required NOT NULL field
+          max_uses: 1,
+          expires_at: expiresAt,
+          guest_first_name: guest.firstName ?? null,
+          guest_last_name: guest.lastName ?? null,
+          guest_email: channel === 'email' ? contact : (guest.email ?? null),
+          guest_phone: channel !== 'email' ? contact : (guest.phone ?? null),
+        });
+        if (codeInsertError) {
+          console.error('[invite_codes] insert failed:', codeInsertError.message, 'code=', code);
+          // Non-critical for sending the message, but log clearly
+        }
       }
       const appBaseUrl = Deno.env.get('APP_BASE_URL') ?? 'https://game-over.app';
       const inviteUrl = `${appBaseUrl}/invite/${code}`;
