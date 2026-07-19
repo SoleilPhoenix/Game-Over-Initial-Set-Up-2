@@ -195,7 +195,7 @@ export default function WelcomeScreen() {
         {/* Content */}
         <KeyboardAvoidingView
           style={styles.content}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          behavior={Platform.OS === 'android' ? 'height' : undefined}
           keyboardVerticalOffset={0}
         >
           {/* Top App Bar */}
@@ -213,6 +213,8 @@ export default function WelcomeScreen() {
           <ScrollView
             contentContainerStyle={[styles.bottomArea, { paddingBottom: insets.bottom + 16 }]}
             keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="interactive"
+            automaticallyAdjustKeyboardInsets={true}
             showsVerticalScrollIndicator={false}
           >
             {/* Glassmorphic Action Card */}
