@@ -10,7 +10,6 @@ import {
   Text,
   StyleSheet,
   StatusBar,
-  ImageBackground,
   Pressable,
   TextInput,
   KeyboardAvoidingView,
@@ -23,6 +22,7 @@ import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SocialButton } from '@/components/ui/SocialButton';
+import { Logo } from '@/components/brand/Logo';
 import { useTranslation } from '@/i18n';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
@@ -177,18 +177,12 @@ export default function WelcomeScreen() {
     <View style={styles.container} testID="welcome-screen">
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Background Hero Image with Gradient Overlay */}
-      <ImageBackground
-        source={{
-          uri: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&q=80',
-        }}
-        style={styles.heroImage}
-        resizeMode="cover"
-      >
-        {/* Gradient Overlay */}
+      {/* Solid navy backdrop (concept 3). The launch intro video is a separate screen. */}
+      <View style={styles.heroImage}>
+        {/* Subtle depth gradient over navy */}
         <LinearGradient
-          colors={['rgba(0,0,0,0.4)', 'transparent', '#0D1B2A']}
-          locations={[0, 0.4, 1]}
+          colors={['#132539', '#0D1B2A']}
+          locations={[0, 0.55]}
           style={styles.gradientOverlay}
         />
 
@@ -198,16 +192,18 @@ export default function WelcomeScreen() {
           behavior={Platform.OS === 'android' ? 'height' : undefined}
           keyboardVerticalOffset={0}
         >
-          {/* Top App Bar */}
-          <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
-            <View style={styles.logoBadge}>
-              <Ionicons name="game-controller" size={20} color={'#C6A75E'} />
-              <Text style={styles.logoText}>Game-Over.app</Text>
-            </View>
+          {/* Top: brand logo */}
+          <View style={[styles.topBar, { paddingTop: insets.top + 24 }]}>
+            <Logo width={150} height={150} testID="welcome-logo" />
           </View>
 
-          {/* Spacer */}
-          <View style={styles.spacer} />
+          {/* Bold claim (concept 3) */}
+          <View style={styles.claimBlock}>
+            <Text style={styles.claimLine}>{t.auth.claim1}</Text>
+            <Text style={styles.claimLine}>{t.auth.claim2}</Text>
+            <Text style={[styles.claimLine, styles.claimAccent]}>{t.auth.claim3}</Text>
+            <Text style={styles.claimSub}>{t.auth.claimSub}</Text>
+          </View>
 
           {/* Bottom Action Area */}
           <ScrollView
@@ -220,16 +216,6 @@ export default function WelcomeScreen() {
             {/* Glassmorphic Action Card */}
             <BlurView intensity={20} tint="dark" style={styles.glassCard}>
               <View style={styles.glassCardInner}>
-                {/* Headlines */}
-                <View style={styles.headlines}>
-                  <Text style={styles.title}>
-                    {t.auth.welcomeHeadline}
-                  </Text>
-                  <Text style={styles.subtitle}>
-                    {t.auth.welcomeBody}
-                  </Text>
-                </View>
-
                 {/* Social Sign-In Buttons */}
                 <View style={styles.socialButtons}>
                   <SocialButton
@@ -271,7 +257,7 @@ export default function WelcomeScreen() {
                   onPress={handleGetStarted}
                   testID="get-started-button"
                 >
-                  <Text style={styles.primaryButtonText}>{t.auth.getStarted}</Text>
+                  <Text style={styles.primaryButtonText}>{t.auth.planParty}</Text>
                   <Ionicons name="arrow-forward" size={18} color="#0D1B2A" />
                 </Pressable>
 
@@ -283,7 +269,7 @@ export default function WelcomeScreen() {
 
                 {showCodeEntry ? (
                   <View style={styles.codeEntrySection}>
-                    <Text style={styles.codeEntryLabel}>Enter your invite code</Text>
+                    <Text style={styles.codeEntryLabel}>{t.auth.enterInviteCode}</Text>
                     <View style={styles.codeEntryRow}>
                       <TextInput
                         style={styles.codeInput}
@@ -306,7 +292,7 @@ export default function WelcomeScreen() {
                         onPress={handleJoinWithCode}
                         disabled={!inviteCode.trim()}
                       >
-                        <Text style={styles.codeJoinButtonText}>Join →</Text>
+                        <Text style={styles.codeJoinButtonText}>{t.auth.joinShort} →</Text>
                       </Pressable>
                     </View>
                   </View>
@@ -320,7 +306,7 @@ export default function WelcomeScreen() {
                     testID="invite-code-link"
                   >
                     <Ionicons name="ticket-outline" size={16} color={'#C6A75E'} />
-                    <Text style={styles.inviteCodeButtonText}>Got an invite? Enter code</Text>
+                    <Text style={styles.inviteCodeButtonText}>{t.auth.gotInviteCode}</Text>
                     <Ionicons name="chevron-forward" size={14} color={'#C6A75E'} />
                   </Pressable>
                 )}
@@ -345,7 +331,7 @@ export default function WelcomeScreen() {
             </Text>
           </ScrollView>
         </KeyboardAvoidingView>
-      </ImageBackground>
+      </View>
     </View>
   );
 }
@@ -367,10 +353,31 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   topBar: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 24,
+  },
+  claimBlock: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 30,
+    gap: 2,
+  },
+  claimLine: {
+    color: '#FFFFFF',
+    fontSize: 34,
+    fontWeight: '800',
+    lineHeight: 40,
+    letterSpacing: -0.8,
+  },
+  claimAccent: {
+    color: '#C6A75E',
+  },
+  claimSub: {
+    color: 'rgba(255,255,255,0.62)',
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 16,
   },
   logoBadge: {
     flexDirection: 'row',
