@@ -173,11 +173,14 @@ serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // ── Parse & validate request (parse body once — req.json() consumes the stream) ──
-    const { eventId, channel, guests: guestsRaw } = await req.json() as {
+    const { eventId, channel, guests: guestsRaw, language: langRaw } = await req.json() as {
       eventId: string;
       channel: Channel;
       guests: GuestSlot[];
+      language?: string;
     };
+    // German-primary app: default to 'de' when the client didn't pass a language.
+    const language: 'de' | 'en' = langRaw === 'en' ? 'en' : 'de';
 
     if (!eventId || !channel) {
       return new Response(
@@ -251,7 +254,9 @@ serve(async (req: Request) => {
 
     const organizerName: string = authFullName || profile?.full_name || 'Your friend';
     const honoreeName: string = event.honoree_name ?? 'the guest of honour';
-    const partyTypeLabel: string = event.party_type === 'bachelorette' ? 'Bachelorette Party' : 'Bachelor Party';
+    const partyTypeLabel: string = language === 'de'
+      ? (event.party_type === 'bachelor' ? 'Junggesellenabschied' : 'Junggesellinnenabschied')
+      : (event.party_type === 'bachelorette' ? 'Bachelorette Party' : 'Bachelor Party');
 
     // ── Guests were already parsed from the request body above ──
     const guests: GuestSlot[] = guestsRaw ?? [];
@@ -387,15 +392,21 @@ serve(async (req: Request) => {
       // it shows the invite preview with an "Open in app" / store fallback.
       // The invite code is kept only as a manual fallback if the link can't be tapped.
       const guestName = guest.firstName ?? '';
-      const greeting = guestName ? `${guestName}, you're` : `You're`;
-      const messageBody =
-        `🎉 ${greeting} invited to ${honoreeName}'s ${partyTypeLabel}!\n\n` +
-        `${organizerName} is planning the celebration on Game Over 🥂\n\n` +
-        `👉 Tap to join:\n${inviteUrl}\n\n` +
-        `The link takes you straight to your invite — just create your account and you're in. ` +
-        `Everything in one place: plans, group chat, polls & payments.\n\n` +
-        `If you're asked for it, your invite code is: ${code}\n\n` +
-        `Reply STOP to opt out.`;
+      const messageBody = language === 'de'
+        ? `🎉 ${guestName ? guestName + ', du bist' : 'Du bist'} zum ${partyTypeLabel} von ${honoreeName} eingeladen!\n\n` +
+          `${organizerName} plant die Feier auf Game Over 🥂\n\n` +
+          `👉 Zum Beitreten tippen:\n${inviteUrl}\n\n` +
+          `Der Link bringt dich direkt zu deiner Einladung — einfach Konto erstellen und du bist dabei. ` +
+          `Alles an einem Ort: Planung, Gruppenchat, Abstimmungen & Zahlungen.\n\n` +
+          `Falls du danach gefragt wirst, dein Einladungscode: ${code}\n\n` +
+          `Antworte mit STOP zum Abmelden.`
+        : `🎉 ${guestName ? guestName + ", you're" : "You're"} invited to ${honoreeName}'s ${partyTypeLabel}!\n\n` +
+          `${organizerName} is planning the celebration on Game Over 🥂\n\n` +
+          `👉 Tap to join:\n${inviteUrl}\n\n` +
+          `The link takes you straight to your invite — just create your account and you're in. ` +
+          `Everything in one place: plans, group chat, polls & payments.\n\n` +
+          `If you're asked for it, your invite code is: ${code}\n\n` +
+          `Reply STOP to opt out.`;
 
       // 4. Send — only Email (SendGrid) and WhatsApp (Twilio) are supported channels.
       // Regular SMS has been intentionally removed as a channel; a failed WhatsApp send
@@ -409,8 +420,13 @@ serve(async (req: Request) => {
           inviteUrl,
           guestFirstName: guest.firstName,
           inviteCode: code,
+          language,
+          partyType: (event.party_type === 'bachelor' || event.party_type === 'bachelorette')
+            ? event.party_type : undefined,
         });
-        const subject = `You're invited to ${honoreeName}'s ${partyTypeLabel}! 🎉`;
+        const subject = language === 'de'
+          ? `Du bist zum ${partyTypeLabel} von ${honoreeName} eingeladen! 🎉`
+          : `You're invited to ${honoreeName}'s ${partyTypeLabel}! 🎉`;
         sendResult = await sendEmail({ to: contact, subject, html });
 
       } else {

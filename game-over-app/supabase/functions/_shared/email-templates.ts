@@ -365,6 +365,8 @@ interface GuestInviteEmailParams {
   inviteUrl: string;         // https://game-over.app/invite/{code}
   guestFirstName?: string;   // personalise greeting if known
   inviteCode?: string;       // show prominently so guest can type it in the app
+  language?: 'de' | 'en';    // organizer's app language drives the copy
+  partyType?: 'bachelor' | 'bachelorette';
 }
 
 /**
@@ -375,8 +377,8 @@ interface GuestInviteEmailParams {
  * palette) — this is the primary outbound email, so it owns its own markup.
  */
 export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string {
-  const { organizerName, honoreeName, inviteUrl, guestFirstName, inviteCode } = params;
-  const greeting = guestFirstName ? `Hi ${guestFirstName},` : 'Hey,';
+  const { organizerName, honoreeName, inviteUrl, guestFirstName, inviteCode, language, partyType } = params;
+  const isDe = language === 'de';
 
   // Brand palette
   const NAVY = '#0D1B2A';
@@ -386,6 +388,53 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
   const MUTED = '#AEB9C7';
   const FAINT = '#7A8699';
   const BORDER = 'rgba(198,167,94,0.22)';
+
+  // Party wording follows party_type. German avoids the genitive-s pitfall
+  // (e.g. "Sally Jones" → wrong "Sally Joness") by always using "von {name}".
+  const partyDe = partyType === 'bachelor' ? 'Junggesellenabschied' : 'Junggesellinnenabschied';
+  const partyEn = partyType === 'bachelor' ? 'Bachelor Party' : 'Bachelorette Party';
+
+  const C = isDe ? {
+    lang: 'de',
+    title: `Du bist zum ${partyDe} von ${honoreeName} eingeladen`,
+    invitationFrom: `Einladung von ${organizerName}`,
+    celebrate: 'Du bist eingeladen zu feiern',
+    greeting: guestFirstName ? `Hallo ${guestFirstName},` : 'Hallo,',
+    intro: `<strong style="color:#FFFFFF;">${organizerName}</strong> plant etwas Unvergessliches — und du stehst auf der Gästeliste.`,
+    hook: 'Keine Lust auf endlose Gruppenchats und die „Wer schuldet was"-Tabelle? Diesmal nicht.',
+    benefitsTitle: 'Warum du dich wirklich darauf freust',
+    benefits: [
+      ['🎯', 'Alles in einer App', 'Planung, Chat und Zahlungen an einem Ort'],
+      ['💸', 'Du weißt, was du zahlst', 'exakte Kosten vorab — keine versteckten Gebühren, keine unangenehmen Geldgespräche'],
+      ['🤖', 'Auf eure Gruppe abgestimmt', 'KI wählt Aktivitäten, die euch wirklich Spaß machen — keine Zufalls-Checkliste'],
+      ['⚡', 'In Minuten geregelt', 'statt wochenlangem Hin und Her im Gruppenchat'],
+      ['🤝', 'Einfach hingehen', 'der Koordinationsstress ist weg — für alle'],
+    ],
+    codeLabel: 'Dein persönlicher Einladungscode',
+    cta: `Zur Party von ${honoreeName} &rarr;`,
+    howToJoin: `Neu hier? Lade <strong style="color:#FFFFFF;">Game Over</strong> &rarr; tippe auf <em>„Einladungscode?"</em> &rarr; gib <strong style="color:${GOLD};">${inviteCode}</strong> ein`,
+    footer: 'Diese Einladung ist persönlich für dich und läuft in 30 Tagen ab.<br>Nicht erwartet? Ignoriere sie einfach.',
+  } : {
+    lang: 'en',
+    title: `You're invited to ${honoreeName}'s ${partyEn}`,
+    invitationFrom: `Invitation from ${organizerName}`,
+    celebrate: "You're invited to celebrate",
+    greeting: guestFirstName ? `Hi ${guestFirstName},` : 'Hey,',
+    intro: `<strong style="color:#FFFFFF;">${organizerName}</strong> is planning something unforgettable — and you're on the guest list.`,
+    hook: 'Dreading the endless group chat and the "who owes what" spreadsheet? Not this time.',
+    benefitsTitle: "Why you'll actually look forward to this",
+    benefits: [
+      ['🎯', 'One app for everything', 'plans, chat and payments in a single place'],
+      ['💸', "Know what you'll pay", 'exact costs up front — no hidden fees, no awkward money chats'],
+      ['🤖', 'Matched to your group', "AI picks activities you'll actually enjoy — not a random checklist"],
+      ['⚡', 'Sorted in minutes', 'not weeks of back-and-forth in the group chat'],
+      ['🤝', 'Just show up', 'the coordination stress is gone — for everyone'],
+    ],
+    codeLabel: 'Your personal invite code',
+    cta: `Join ${honoreeName}'s ${partyEn} &rarr;`,
+    howToJoin: `New here? Download <strong style="color:#FFFFFF;">Game Over</strong> &rarr; tap <em>"Got an invite code?"</em> &rarr; enter <strong style="color:${GOLD};">${inviteCode}</strong>`,
+    footer: 'This invite is personal to you and expires in 30 days.<br>Not expecting this? You can safely ignore it.',
+  };
 
   const benefit = (icon: string, bold: string, rest: string) => `
     <tr><td style="padding:0 0 15px;">
@@ -401,7 +450,7 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
     <tr><td style="padding:26px 40px 0;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
         <tr><td style="background:${NAVY};border:1px solid ${GOLD};border-radius:14px;padding:22px;text-align:center;">
-          <p style="margin:0 0 8px;color:${MUTED};font-size:11px;letter-spacing:2px;font-weight:700;text-transform:uppercase;">Your personal invite code</p>
+          <p style="margin:0 0 8px;color:${MUTED};font-size:11px;letter-spacing:2px;font-weight:700;text-transform:uppercase;">${C.codeLabel}</p>
           <p style="margin:0;color:${GOLD};font-size:34px;font-weight:800;letter-spacing:8px;font-family:'Courier New',monospace;">${inviteCode}</p>
         </td></tr>
       </table>
@@ -409,13 +458,11 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
 
   const howToJoin = inviteCode ? `
     <tr><td style="padding:16px 40px 0;">
-      <p style="margin:0;color:${MUTED};font-size:13px;line-height:1.7;text-align:center;">
-        New here? Download <strong style="color:#FFFFFF;">Game Over</strong> &rarr; tap <em>"Got an invite code?"</em> &rarr; enter <strong style="color:${GOLD};">${inviteCode}</strong>
-      </p>
+      <p style="margin:0;color:${MUTED};font-size:13px;line-height:1.7;text-align:center;">${C.howToJoin}</p>
     </td></tr>` : '';
 
   return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>You're invited to ${honoreeName}'s party</title></head>
+<html lang="${C.lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${C.title}</title></head>
 <body style="margin:0;padding:0;background:${NAVY};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${NAVY};">
     <tr><td align="center" style="padding:32px 16px;">
@@ -424,34 +471,30 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
         <!-- Header -->
         <tr><td style="padding:34px 40px 26px;text-align:center;border-bottom:1px solid ${BORDER};">
           <div style="font-size:13px;letter-spacing:6px;color:${GOLD};font-weight:700;">GAME&nbsp;OVER</div>
-          <div style="margin-top:9px;font-size:13px;color:${MUTED};">Invitation from ${organizerName}</div>
+          <div style="margin-top:9px;font-size:13px;color:${MUTED};">${C.invitationFrom}</div>
         </td></tr>
 
         <!-- Hero -->
         <tr><td style="padding:34px 40px 6px;text-align:center;">
           <div style="font-size:36px;line-height:1;">🎉</div>
-          <p style="margin:14px 0 0;color:${MUTED};font-size:15px;">You're invited to celebrate</p>
+          <p style="margin:14px 0 0;color:${MUTED};font-size:15px;">${C.celebrate}</p>
           <p style="margin:6px 0 0;color:#FFFFFF;font-size:30px;font-weight:800;line-height:1.2;">${honoreeName}</p>
         </td></tr>
 
         <!-- Intro + hook -->
         <tr><td style="padding:22px 40px 0;">
-          <p style="margin:0;color:${TEXT};font-size:15px;line-height:1.6;">${greeting}</p>
-          <p style="margin:12px 0 0;color:${TEXT};font-size:15px;line-height:1.6;"><strong style="color:#FFFFFF;">${organizerName}</strong> is planning something unforgettable — and you're on the guest list.</p>
-          <p style="margin:12px 0 0;color:${MUTED};font-size:15px;line-height:1.6;">Dreading the endless group chat and the "who owes what" spreadsheet? Not this time.</p>
+          <p style="margin:0;color:${TEXT};font-size:15px;line-height:1.6;">${C.greeting}</p>
+          <p style="margin:12px 0 0;color:${TEXT};font-size:15px;line-height:1.6;">${C.intro}</p>
+          <p style="margin:12px 0 0;color:${MUTED};font-size:15px;line-height:1.6;">${C.hook}</p>
         </td></tr>
 
         <!-- Benefits -->
         <tr><td style="padding:22px 40px 0;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             <tr><td style="background:${NAVY};border:1px solid ${BORDER};border-radius:14px;padding:22px 22px 7px;">
-              <p style="margin:0 0 16px;color:${GOLD};font-size:11px;letter-spacing:1.5px;font-weight:700;text-transform:uppercase;">Why you'll actually look forward to this</p>
+              <p style="margin:0 0 16px;color:${GOLD};font-size:11px;letter-spacing:1.5px;font-weight:700;text-transform:uppercase;">${C.benefitsTitle}</p>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                ${benefit('🎯', 'One app for everything', 'plans, chat and payments in a single place')}
-                ${benefit('💸', 'Know what you\'ll pay', 'exact costs up front — no hidden fees, no awkward money chats')}
-                ${benefit('🤖', 'Matched to your group', 'AI picks activities you\'ll actually enjoy, not a random checklist')}
-                ${benefit('⚡', 'Sorted in minutes', 'not weeks of back-and-forth in the group chat')}
-                ${benefit('🤝', 'Just show up', 'the coordination stress is gone — for everyone')}
+                ${C.benefits.map((b) => benefit(b[0], b[1], b[2])).join('')}
               </table>
             </td></tr>
           </table>
@@ -461,7 +504,7 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
 
         <!-- CTA -->
         <tr><td style="padding:28px 40px 0;text-align:center;">
-          <a href="${inviteUrl}" style="display:inline-block;background:${GOLD};color:${NAVY};text-decoration:none;padding:16px 44px;border-radius:12px;font-size:16px;font-weight:800;">Join ${honoreeName}'s Party &rarr;</a>
+          <a href="${inviteUrl}" style="display:inline-block;background:${GOLD};color:${NAVY};text-decoration:none;padding:16px 44px;border-radius:12px;font-size:16px;font-weight:800;">${C.cta}</a>
         </td></tr>
 
         ${howToJoin}
@@ -469,8 +512,7 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
         <!-- Footer -->
         <tr><td style="padding:26px 40px 34px;text-align:center;">
           <p style="margin:24px 0 0;color:${FAINT};font-size:12px;line-height:1.6;border-top:1px solid ${BORDER};padding-top:20px;">
-            This invite is personal to you and expires in 30 days.<br>
-            Not expecting this? You can safely ignore it. &middot; <a href="mailto:support@game-over.app" style="color:${GOLD};text-decoration:none;font-weight:600;">support@game-over.app</a>
+            ${C.footer} &middot; <a href="mailto:support@game-over.app" style="color:${GOLD};text-decoration:none;font-weight:600;">support@game-over.app</a>
           </p>
         </td></tr>
 
