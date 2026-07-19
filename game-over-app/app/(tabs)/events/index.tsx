@@ -4,7 +4,7 @@
  * Matches UI mockup: Avatar header, filter tabs, card layout with thumbnails
  */
 
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
@@ -235,6 +235,18 @@ export default function EventsScreen() {
     if (!events?.length) return;
     loadEventCaches(events.map(e => e.id));
   }, [events, loadEventCaches]);
+
+  // A pure guest (only attending events, none organized) should land on the
+  // "attending" tab so their invited event is visible without hunting for it.
+  // Runs once, before any manual tab switch, so it never overrides the user.
+  const didInitFilterRef = useRef(false);
+  useEffect(() => {
+    if (didInitFilterRef.current || !events || events.length === 0) return;
+    didInitFilterRef.current = true;
+    const hasOrganizing = events.some((e) => e.created_by === user?.id && e.status !== 'draft');
+    const hasAttending = events.some((e) => e.created_by !== user?.id && e.status !== 'draft');
+    if (!hasOrganizing && hasAttending) setActiveFilter('attending');
+  }, [events, user?.id]);
 
   // Compute urgency: event ≤14 days away + unpaid balance
   const getDaysLeftNum = (startDate?: string): number | null => {
