@@ -65,26 +65,54 @@ const polar = (r: number, deg: number) => {
   return { x: CX + r * Math.cos(rad), y: CY + r * Math.sin(rad) };
 };
 
-/** Total sweep of one ring: the full circle minus the gap it leaves at the top. */
-const CIRCUIT_DEG = 360 - 2 * GAP_HALF_DEG;
+/** Sweep of one lap: the full circle minus the gap it leaves at the top. */
+const LAP_DEG = 360 - 2 * GAP_HALF_DEG;
+
+/** The two edges of the top gap, where every lap starts and ends. */
+const RIGHT_EDGE = -90 + GAP_HALF_DEG;
+const LEFT_EDGE = -90 - GAP_HALF_DEG;
 
 /**
- * One ring as a single unbroken stroke. It starts just right of the top gap,
- * runs down the right side, around the bottom and back up the left side to the
- * other edge of the gap - so the line travels from the top all the way round and
- * returns to the top.
+ * All three rings as ONE unbroken stroke, so the reveal can trace them with a
+ * single dash animation and the joins happen by themselves.
  *
- * Drawn as one path rather than two meeting halves: the reveal traces each ring
- * as one continuous gesture and then carries outward to the next, which reads as
- * a circuit being closed. It also removes the seam the two-half version had at
- * 6 o'clock, where both strokes ended on the same point.
+ * The line starts at the right edge of the top gap on the innermost ring and
+ * runs clockwise - down the right, around the bottom, up the left - arriving at
+ * the left edge of the gap. A short radial hop carries it outward onto the middle
+ * ring, which it traces *counter-clockwise*, so it comes back up on the right and
+ * can hop outward again onto the outer ring, traced clockwise like the first.
+ *
+ * The alternating direction is what makes this work: each lap has to finish on
+ * the opposite edge of the gap from where it started, otherwise the line would
+ * have to jump across the gap to reach the next ring.
+ *
+ * The two radial hops exist only while the line is being drawn - the real asset
+ * has three separate rings - so they disappear with the stroke layer during the
+ * handover.
  */
-export function ringCircuitPath(r: number): string {
-  const start = polar(r, -90 + GAP_HALF_DEG);
-  const end = polar(r, -90 - GAP_HALF_DEG);
-  // largeArc=1 because the sweep is well over 180 degrees; sweep=1 runs clockwise.
-  return `M ${start.x} ${start.y} A ${r} ${r} 0 1 1 ${end.x} ${end.y}`;
-}
+export function buildRingCircuit(): { d: string; length: number } {
+  // Innermost first: RING_RADII is ordered outermost-first.
+  const radii = [...RING_RADII].reverse();
 
-/** Arc length of one ring - the dash length the draw-on animates against. */
-export const ringCircuitLength = (r: number) => (r * CIRCUIT_DEG * Math.PI) / 180;
+  const start = polar(radii[0], RIGHT_EDGE);
+  let d = `M ${start.x} ${start.y}`;
+  let length = 0;
+
+  radii.forEach((r, i) => {
+    const clockwise = i % 2 === 0;
+    const end = polar(r, clockwise ? LEFT_EDGE : RIGHT_EDGE);
+    // largeArc=1 because a lap is well over 180 degrees.
+    d += ` A ${r} ${r} 0 1 ${clockwise ? 1 : 0} ${end.x} ${end.y}`;
+    length += (r * LAP_DEG * Math.PI) / 180;
+
+    const next = radii[i + 1];
+    if (next !== undefined) {
+      // Radial hop outward, on the gap edge this lap just ended on.
+      const hop = polar(next, clockwise ? LEFT_EDGE : RIGHT_EDGE);
+      d += ` L ${hop.x} ${hop.y}`;
+      length += next - r;
+    }
+  });
+
+  return { d, length };
+}

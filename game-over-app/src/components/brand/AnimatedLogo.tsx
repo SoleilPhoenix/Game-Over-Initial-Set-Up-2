@@ -2,12 +2,12 @@
  * Game Over logo reveal.
  *
  * Choreography, in order:
- *   1. a single line traces the innermost ring out of the top gap, down and all
- *      the way back up to the top, then carries outward onto the middle ring and
- *      finally the outer one - one continuous circuit spiralling outward,
- *   2. they hand over to the real vector asset,
- *   3. the stem falls from the gem down to the centre,
- *   4. the wordmark rises in from below,
+ *   1. one unbroken line traces all three rings - innermost clockwise, middle
+ *      counter-clockwise, outer clockwise - hopping outward at the top gap so the
+ *      ring ends run into each other and close a single circuit,
+ *   2. the drawn line hands over to the real vector asset,
+ *   3. the stem drops from the gem down to the centre,
+ *   4. the wordmark rises in and a light sweeps across it,
  *   5. the gem comes down from above and seats flush on the stem,
  *   with a gold bloom that fades out over the finale.
  *
@@ -31,51 +31,51 @@ import Animated, {
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle, Defs, Path, RadialGradient, Stop } from 'react-native-svg';
 import { Logo } from './Logo';
 import {
   GEM_BAND,
   GOLD,
   NAVY,
-  RING_RADII,
   RINGS_BAND,
   STEM_STRIP,
   STROKE_W,
   VIEWBOX,
   WORD_BAND,
-  ringCircuitLength,
-  ringCircuitPath,
+  buildRingCircuit,
 } from './logoGeometry';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
+/** Fixed for the lifetime of the module - the geometry never changes. */
+const CIRCUIT = buildRingCircuit();
+
 /**
  * Phase choreography, in milliseconds from the start of the reveal.
  *
- * Each phase starts as its predecessor eases out, so the reveal reads as one
- * continuous gesture rather than a checklist. Total runtime 3.0s.
+ * Budget: 2s for the rings, 0.5s for the stem, 1s for the wordmark, 0.5s for the
+ * gem. Each phase starts as its predecessor eases out, so the reveal reads as one
+ * continuous gesture rather than a checklist. Total runtime 4.0s.
  */
 const T = {
-  /** One full lap around a ring, top to bottom and back to the top. */
-  ringDuration: 480,
-  /**
-   * Inner, middle, outer. The next lap starts just before the previous one
-   * closes, so the line appears to carry outward onto the next ring rather than
-   * three laps running in parallel. Ring window = 480 + 2 x 420 = 1320ms.
-   */
-  ringStagger: 420,
-  /** The drawn rings hand over to the real asset. */
-  settleStart: 1340,
-  settleDuration: 180,
-  stemStart: 1560,
-  stemDuration: 320,
-  wordStart: 1920,
-  wordDuration: 500,
-  gemStart: 2450,
-  gemDuration: 400,
+  /** One pass over all three rings and both hops between them. */
+  circuitDuration: 2000,
+  /** The drawn line hands over to the real asset. */
+  settleStart: 1950,
+  settleDuration: 200,
+  stemStart: 2150,
+  stemDuration: 500,
+  wordStart: 2650,
+  wordDuration: 1000,
+  /** Light sweeping across the wordmark, once it is mostly in. */
+  shineStart: 2950,
+  shineDuration: 700,
+  gemStart: 3500,
+  gemDuration: 500,
   /** Peaks as the gem seats, and is fully gone by the end. */
-  glowStart: 2550,
-  glowDuration: 450,
+  glowStart: 3600,
+  glowDuration: 400,
 } as const;
 
 /** How far above its resting place the gem starts, as a fraction of the logo size. */
@@ -91,41 +91,24 @@ export function resetLogoRevealSession() {
   hasPlayedThisSession = false;
 }
 
-interface DrawnPathProps {
-  d: string;
-  length: number;
-  progress: SharedValue<number>;
-}
-
-function DrawnPath({ d, length, progress }: DrawnPathProps) {
+function DrawnCircuit({ progress }: { progress: SharedValue<number> }) {
   const animatedProps = useAnimatedProps(() => ({
-    strokeDashoffset: length * (1 - progress.value),
+    strokeDashoffset: CIRCUIT.length * (1 - progress.value),
   }));
 
   return (
     <AnimatedPath
-      d={d}
+      d={CIRCUIT.d}
       fill="none"
       stroke={GOLD}
       strokeWidth={STROKE_W}
-      // Butt caps, not round: the two ring halves both end at 6 o'clock with a
-      // horizontal tangent, so flat ends meet flush there instead of stacking two
-      // rounded caps into a visible bump. It also matches the real asset, whose
-      // line ends are square, and keeps the top gap exactly as wide as measured.
+      // Butt caps and mitre joins keep the radial hops flush against the arcs;
+      // it also matches the real asset, whose line ends are square, and keeps the
+      // top gap exactly as wide as measured.
       strokeLinecap="butt"
-      strokeDasharray={length}
+      strokeLinejoin="miter"
+      strokeDasharray={CIRCUIT.length}
       animatedProps={animatedProps}
-    />
-  );
-}
-
-/** One ring, traced as a single unbroken stroke out of the top gap. */
-function Ring({ radius, progress }: { radius: number; progress: SharedValue<number> }) {
-  return (
-    <DrawnPath
-      d={ringCircuitPath(radius)}
-      length={ringCircuitLength(radius)}
-      progress={progress}
     />
   );
 }
@@ -134,13 +117,14 @@ interface CutoutProps {
   size: number;
   region: { top: number; bottom: number };
   style?: ViewStyle;
+  children?: React.ReactNode;
 }
 
 /**
  * Shows one horizontal slice of the real logo by rendering it full size inside a
  * clipped window and offsetting it back up by the same amount.
  */
-function Cutout({ size, region, style }: CutoutProps) {
+function Cutout({ size, region, style, children }: CutoutProps) {
   const scale = size / VIEWBOX;
   const top = region.top * scale;
   const height = (region.bottom - region.top) * scale;
@@ -156,6 +140,7 @@ function Cutout({ size, region, style }: CutoutProps) {
       <View style={{ position: 'absolute', left: 0, top: -top }}>
         <Logo size={size} />
       </View>
+      {children}
     </Animated.View>
   );
 }
@@ -173,12 +158,13 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
   // Decided once on mount so a re-render mid-reveal cannot swap us to the static logo.
   const [skip] = useState(() => hasPlayedThisSession && !force);
 
-  const rings = [useSharedValue(0), useSharedValue(0), useSharedValue(0)];
+  const circuit = useSharedValue(0);
   const settled = useSharedValue(0);
   /** 1 = stem fully covered, 0 = fully uncovered. */
   const stemCover = useSharedValue(1);
   const wordOpacity = useSharedValue(0);
   const wordShift = useSharedValue(1);
+  const shine = useSharedValue(0);
   const gemOpacity = useSharedValue(0);
   /** 1 = gem held above the stem, 0 = seated on it. */
   const gemDrop = useSharedValue(1);
@@ -186,6 +172,7 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
 
   const scale = size / VIEWBOX;
   const stripHeight = (STEM_STRIP.bottom - STEM_STRIP.top) * scale;
+  const shineWidth = size * 0.42;
 
   // All hooks run unconditionally - the `skip` branch returns further down.
   const strokeLayerStyle = useAnimatedStyle(() => ({ opacity: 1 - settled.value }));
@@ -194,6 +181,11 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
   const wordStyle = useAnimatedStyle(() => ({
     opacity: wordOpacity.value,
     transform: [{ translateY: size * WORD_RISE * wordShift.value }],
+  }));
+  // Travels from just off the left edge to just off the right; the band's own
+  // clipping hides it at both ends, so it needs no opacity ramp.
+  const shineStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -shineWidth + shine.value * (size + shineWidth) }],
   }));
   const gemStyle = useAnimatedStyle(() => ({
     opacity: gemOpacity.value,
@@ -212,14 +204,11 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
       return;
     }
 
-    rings.forEach((ring, i) => {
-      // RING_RADII is ordered outermost-first, so invert the index: the innermost
-      // ring starts the circuit and the outermost one closes it.
-      const delay = (RING_RADII.length - 1 - i) * T.ringStagger;
-      ring.value = withDelay(
-        delay,
-        withTiming(1, { duration: T.ringDuration, easing: Easing.inOut(Easing.cubic) })
-      );
+    // Gentle S-curve: eases in and out but stays close to constant speed in
+    // between, so the line does not race through the middle ring.
+    circuit.value = withTiming(1, {
+      duration: T.circuitDuration,
+      easing: Easing.inOut(Easing.sin),
     });
 
     settled.value = withDelay(
@@ -227,18 +216,23 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
       withTiming(1, { duration: T.settleDuration, easing: Easing.inOut(Easing.quad) })
     );
 
+    // Accelerating, like something falling: the stem drops rather than glides.
     stemCover.value = withDelay(
       T.stemStart,
-      withTiming(0, { duration: T.stemDuration, easing: Easing.out(Easing.cubic) })
+      withTiming(0, { duration: T.stemDuration, easing: Easing.in(Easing.quad) })
     );
 
     wordOpacity.value = withDelay(
       T.wordStart,
-      withTiming(1, { duration: T.wordDuration * 0.7, easing: Easing.out(Easing.quad) })
+      withTiming(1, { duration: T.wordDuration * 0.55, easing: Easing.out(Easing.quad) })
     );
     wordShift.value = withDelay(
       T.wordStart,
       withTiming(0, { duration: T.wordDuration, easing: Easing.out(Easing.cubic) })
+    );
+    shine.value = withDelay(
+      T.shineStart,
+      withTiming(1, { duration: T.shineDuration, easing: Easing.inOut(Easing.quad) })
     );
 
     gemOpacity.value = withDelay(
@@ -273,12 +267,10 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
 
   return (
     <View style={{ width: size, height: size, backgroundColor: NAVY }} testID={testID}>
-      {/* The rings while they draw themselves. */}
+      {/* The circuit while it draws itself. */}
       <Animated.View style={[StyleSheet.absoluteFill, strokeLayerStyle]} pointerEvents="none">
         <Svg width={size} height={size} viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`}>
-          {RING_RADII.map((radius, i) => (
-            <Ring key={radius} radius={radius} progress={rings[i]} />
-          ))}
+          <DrawnCircuit progress={circuit} />
         </Svg>
       </Animated.View>
 
@@ -302,7 +294,24 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
         <Animated.View style={[{ backgroundColor: NAVY }, stemCoverStyle]} />
       </View>
 
-      <Cutout size={size} region={WORD_BAND} style={wordStyle} />
+      <Cutout size={size} region={WORD_BAND} style={wordStyle}>
+        {/* Light sweeping across the wordmark, clipped to its band. */}
+        <Animated.View
+          style={[
+            { position: 'absolute', top: 0, bottom: 0, left: 0, width: shineWidth },
+            shineStyle,
+          ]}
+          pointerEvents="none"
+        >
+          <LinearGradient
+            colors={['rgba(255,255,255,0)', 'rgba(255,245,220,0.22)', 'rgba(255,255,255,0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
+      </Cutout>
+
       <Cutout size={size} region={GEM_BAND} style={gemStyle} />
 
       {/* Gold bloom, above everything so the asset's navy tile cannot mask it. */}
