@@ -78,3 +78,18 @@ yarn-error.log*
 *.temp
 .cache/
 .worktrees/
+
+# Lokaler Werkzeug-Zustand (aus skills-lock.json wiederherstellbar bzw. Sitzungsartefakte)
+.agents/
+.superpowers/
+.playwright-mcp/
+.claude/settings.local.json
+
+# Geheimnisse gehoeren in den Passwortmanager, nie ins Repo
+*recovery_code*
+*.secret
+
+# Skills: nur die eigenen Projekt-Skills tracken.
+# Der Rest sind Symlinks nach .agents/skills (aus skills-lock.json installierbar).
+.claude/skills/*
+!.claude/skills/gameover-*/
