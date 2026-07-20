@@ -2,9 +2,9 @@
  * Game Over logo reveal.
  *
  * Choreography, in order:
- *   1. the three rings draw themselves out of the top gap and close at the
- *      bottom, rippling outward from the innermost so the outermost closes the
- *      circuit,
+ *   1. a single line traces the innermost ring out of the top gap, down and all
+ *      the way back up to the top, then carries outward onto the middle ring and
+ *      finally the outer one - one continuous circuit spiralling outward,
  *   2. they hand over to the real vector asset,
  *   3. the stem falls from the gem down to the centre,
  *   4. the wordmark rises in from below,
@@ -43,8 +43,8 @@ import {
   STROKE_W,
   VIEWBOX,
   WORD_BAND,
-  ringHalfLength,
-  ringHalfPath,
+  ringCircuitLength,
+  ringCircuitPath,
 } from './logoGeometry';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -56,21 +56,26 @@ const AnimatedPath = Animated.createAnimatedComponent(Path);
  * continuous gesture rather than a checklist. Total runtime 3.0s.
  */
 const T = {
-  ringDuration: 500,
-  /** Innermost ring leads, the outermost one closes the circuit. */
-  ringStagger: 70,
+  /** One full lap around a ring, top to bottom and back to the top. */
+  ringDuration: 480,
+  /**
+   * Inner, middle, outer. The next lap starts just before the previous one
+   * closes, so the line appears to carry outward onto the next ring rather than
+   * three laps running in parallel. Ring window = 480 + 2 x 420 = 1320ms.
+   */
+  ringStagger: 420,
   /** The drawn rings hand over to the real asset. */
-  settleStart: 660,
-  settleDuration: 250,
-  stemStart: 950,
-  stemDuration: 400,
-  wordStart: 1420,
-  wordDuration: 700,
-  gemStart: 2250,
-  gemDuration: 500,
+  settleStart: 1340,
+  settleDuration: 180,
+  stemStart: 1560,
+  stemDuration: 320,
+  wordStart: 1920,
+  wordDuration: 500,
+  gemStart: 2450,
+  gemDuration: 400,
   /** Peaks as the gem seats, and is fully gone by the end. */
-  glowStart: 2400,
-  glowDuration: 600,
+  glowStart: 2550,
+  glowDuration: 450,
 } as const;
 
 /** How far above its resting place the gem starts, as a fraction of the logo size. */
@@ -114,14 +119,14 @@ function DrawnPath({ d, length, progress }: DrawnPathProps) {
   );
 }
 
-/** Both halves of one ring, drawn simultaneously from the top gap. */
+/** One ring, traced as a single unbroken stroke out of the top gap. */
 function Ring({ radius, progress }: { radius: number; progress: SharedValue<number> }) {
-  const length = ringHalfLength(radius);
   return (
-    <>
-      <DrawnPath d={ringHalfPath(radius, 'right')} length={length} progress={progress} />
-      <DrawnPath d={ringHalfPath(radius, 'left')} length={length} progress={progress} />
-    </>
+    <DrawnPath
+      d={ringCircuitPath(radius)}
+      length={ringCircuitLength(radius)}
+      progress={progress}
+    />
   );
 }
 

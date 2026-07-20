@@ -65,17 +65,26 @@ const polar = (r: number, deg: number) => {
   return { x: CX + r * Math.cos(rad), y: CY + r * Math.sin(rad) };
 };
 
+/** Total sweep of one ring: the full circle minus the gap it leaves at the top. */
+const CIRCUIT_DEG = 360 - 2 * GAP_HALF_DEG;
+
 /**
- * One half of a ring: starts at the edge of the top gap and sweeps down to the
- * 6 o'clock position. Drawing both halves at once makes the ring close at the
- * bottom, which reads more deliberate than a single arc racing all the way round.
+ * One ring as a single unbroken stroke. It starts just right of the top gap,
+ * runs down the right side, around the bottom and back up the left side to the
+ * other edge of the gap - so the line travels from the top all the way round and
+ * returns to the top.
+ *
+ * Drawn as one path rather than two meeting halves: the reveal traces each ring
+ * as one continuous gesture and then carries outward to the next, which reads as
+ * a circuit being closed. It also removes the seam the two-half version had at
+ * 6 o'clock, where both strokes ended on the same point.
  */
-export function ringHalfPath(r: number, side: 'left' | 'right'): string {
-  const start = polar(r, side === 'right' ? -90 + GAP_HALF_DEG : -90 - GAP_HALF_DEG);
-  const end = polar(r, 90);
-  const sweep = side === 'right' ? 1 : 0;
-  return `M ${start.x} ${start.y} A ${r} ${r} 0 0 ${sweep} ${end.x} ${end.y}`;
+export function ringCircuitPath(r: number): string {
+  const start = polar(r, -90 + GAP_HALF_DEG);
+  const end = polar(r, -90 - GAP_HALF_DEG);
+  // largeArc=1 because the sweep is well over 180 degrees; sweep=1 runs clockwise.
+  return `M ${start.x} ${start.y} A ${r} ${r} 0 1 1 ${end.x} ${end.y}`;
 }
 
-/** Arc length of one ring half - the dash length the draw-on animates against. */
-export const ringHalfLength = (r: number) => (r * (180 - GAP_HALF_DEG) * Math.PI) / 180;
+/** Arc length of one ring - the dash length the draw-on animates against. */
+export const ringCircuitLength = (r: number) => (r * CIRCUIT_DEG * Math.PI) / 180;
