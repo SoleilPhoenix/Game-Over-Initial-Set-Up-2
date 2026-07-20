@@ -519,6 +519,9 @@ const de: TranslationKeys = {
     continueWithGoogle: 'Weiter mit Google',
     continueWithApple: 'Weiter mit Apple',
     continueWithFacebook: 'Weiter mit Facebook',
+    continueTitle: 'Lass uns deine Party planen',
+    continueSubtitle: 'Wähle, wie du weitermachen möchtest.',
+    continueWithEmail: 'Mit E-Mail fortfahren',
     // Welcome screen
     welcomeHeadline: 'Junggesellenabschiede ohne Drama.',
     claim1: 'Einer heiratet.',

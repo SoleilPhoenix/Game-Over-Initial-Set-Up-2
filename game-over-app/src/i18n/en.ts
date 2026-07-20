@@ -527,6 +527,9 @@ const en = {
     continueWithGoogle: 'Continue with Google',
     continueWithApple: 'Continue with Apple',
     continueWithFacebook: 'Continue with Facebook',
+    continueTitle: 'Let\'s plan your party',
+    continueSubtitle: 'Choose how you want to continue.',
+    continueWithEmail: 'Continue with email',
     // Welcome screen
     welcomeHeadline: 'Bachelor parties without the drama.',
     welcomeBody: 'Let AI plan an unforgettable night that everyone enjoys\u2014and remembers fondly.',
