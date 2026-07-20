@@ -93,3 +93,9 @@ yarn-error.log*
 # Der Rest sind Symlinks nach .agents/skills (aus skills-lock.json installierbar).
 .claude/skills/*
 !.claude/skills/gameover-*/
+
+# Lokale Claude-Konfiguration - Werkzeug, kein Projektinhalt
+.claude/settings.json
+.claude/launch.json
+.claude/claude-security-guidance.md
+.claude/security-patterns.yaml
