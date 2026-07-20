@@ -8,7 +8,7 @@ import * as Sentry from '@sentry/react-native';
 import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Image, LogBox, StyleSheet } from 'react-native';
+import { LogBox, StyleSheet } from 'react-native';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
@@ -26,6 +26,7 @@ import { preloadPackageImages } from '@/constants/packageImages';
 import { preloadSportLogos, preloadShareImages } from '@/constants/sportLogos';
 import { initBudgetCache } from '@/lib/participantCountCache';
 import { useEditorialFonts } from '@/hooks/useEditorialFonts';
+import { Logo } from '@/components/brand/Logo';
 import config from '../tamagui.config';
 
 Sentry.init({
@@ -164,12 +165,9 @@ function RootLayoutNav() {
           colors={['#1A2F47', '#0D1B2A']}
           style={StyleSheet.absoluteFill}
         />
-        {/* Game Over Logo */}
-        <Image
-          source={require('../assets/icon.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        {/* Game Over Logo - Vektor statt des App-Icons. Es wird hier nur 150pt
+            gross gezeigt, das 1024er PNG kostete dafuer 752 KB im Bundle. */}
+        <Logo size={150} />
         {/* Loading Spinner below logo */}
         <Spinner size="large" color={'#C6A75E'} style={{ marginTop: 24 }} />
       </YStack>
@@ -198,13 +196,6 @@ function RootLayoutNav() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  logo: {
-    width: 150,
-    height: 150,
-  },
-});
 
 function RootLayout() {
   // Game Over is a dark-mode-only app
