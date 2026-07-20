@@ -22,7 +22,8 @@ import { BlurView } from 'expo-blur';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SocialButton } from '@/components/ui/SocialButton';
-import { AnimatedLogo } from '@/components/brand/AnimatedLogo';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { AnimatedLogo, willPlayLogoReveal } from '@/components/brand/AnimatedLogo';
 import { useTranslation } from '@/i18n';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
@@ -48,6 +49,11 @@ export default function WelcomeScreen() {
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
   const [showCodeEntry, setShowCodeEntry] = React.useState(false);
   const [inviteCode, setInviteCode] = React.useState('');
+  // Read once, before AnimatedLogo mounts - mounting it flips the session flag.
+  // On a repeat visit the reveal is skipped, so nothing should be delayed either.
+  const [revealPlays] = React.useState(() => willPlayLogoReveal());
+  const claimEntrance = revealPlays ? FadeInDown.delay(2000).duration(600) : undefined;
+  const cardEntrance = revealPlays ? FadeInDown.delay(3000).duration(600) : undefined;
   const insets = useSafeAreaInsets();
   const setError = useAuthStore((state) => state.setError);
   const { t } = useTranslation();
@@ -179,10 +185,12 @@ export default function WelcomeScreen() {
 
       {/* Solid navy backdrop (concept 3). The launch intro video is a separate screen. */}
       <View style={styles.heroImage}>
-        {/* Subtle depth gradient over navy */}
+        {/* Subtle depth gradient. The top 45% stays exactly #0D1B2A because the
+            logo asset carries its own navy tile of that colour - any lighter
+            shade behind it makes the logo read as a dark rectangle. */}
         <LinearGradient
-          colors={['#132539', '#0D1B2A']}
-          locations={[0, 0.55]}
+          colors={['#0D1B2A', '#132539']}
+          locations={[0.45, 1]}
           style={styles.gradientOverlay}
         />
 
@@ -192,27 +200,39 @@ export default function WelcomeScreen() {
           behavior={Platform.OS === 'android' ? 'height' : undefined}
           keyboardVerticalOffset={0}
         >
-          {/* Top: brand logo */}
-          <View style={[styles.topBar, { paddingTop: insets.top + 24 }]}>
-            <AnimatedLogo size={150} testID="welcome-logo" />
-          </View>
-
-          {/* Bold claim (concept 3) */}
-          <View style={styles.claimBlock}>
-            <Text style={styles.claimLine}>{t.auth.claim1}</Text>
-            <Text style={styles.claimLine}>{t.auth.claim2}</Text>
-            <Text style={[styles.claimLine, styles.claimAccent]}>{t.auth.claim3}</Text>
-            <Text style={styles.claimSub}>{t.auth.claimSub}</Text>
-          </View>
-
-          {/* Bottom Action Area */}
+          {/* Logo, claim and action area all scroll together. They used to be
+              siblings of fixed height, and the claim block was the only one with
+              flex - so on shorter screens it was the only thing that could give,
+              got squeezed to half its height, and its text spilled over the logo
+              above and behind the card below. */}
           <ScrollView
-            contentContainerStyle={[styles.bottomArea, { paddingBottom: insets.bottom + 16 }]}
+            contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 16 }]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="interactive"
             automaticallyAdjustKeyboardInsets={true}
             showsVerticalScrollIndicator={false}
           >
+            {/* Top: brand logo */}
+            <View style={[styles.topBar, { paddingTop: insets.top + 24 }]}>
+              <AnimatedLogo size={150} testID="welcome-logo" />
+            </View>
+
+            {/* Bold claim (concept 3) */}
+            <Animated.View style={styles.claimBlock} entering={claimEntrance}>
+              <Text style={styles.claimLine}>{t.auth.claim1}</Text>
+              <Text style={styles.claimLine}>{t.auth.claim2}</Text>
+              <Text style={[styles.claimLine, styles.claimAccent]}>{t.auth.claim3}</Text>
+              <Text style={styles.claimSub}>{t.auth.claimSub}</Text>
+            </Animated.View>
+
+            {/* Pushes the action area down when there is room and collapses to
+                nothing when there is not, so the page scrolls instead of
+                anything overlapping. */}
+            <View style={styles.flexSpacer} />
+
+            {/* Bottom Action Area - waits for the logo reveal so the brand can
+                build up first, then the card comes in underneath it. */}
+            <Animated.View style={styles.bottomArea} entering={cardEntrance}>
             {/* Glassmorphic Action Card */}
             <BlurView intensity={20} tint="dark" style={styles.glassCard}>
               <View style={styles.glassCardInner}>
@@ -329,6 +349,7 @@ export default function WelcomeScreen() {
               <Text style={styles.termsLink}>{t.auth.termsOfService}</Text> {t.auth.and}{' '}
               <Text style={styles.termsLink}>{t.auth.privacyPolicy}</Text>
             </Text>
+            </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
       </View>
@@ -357,11 +378,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
+  scrollContent: {
+    // Lets the spacer below expand on tall screens while still allowing the
+    // content to grow past the viewport and scroll on short ones.
+    flexGrow: 1,
+  },
   claimBlock: {
-    flex: 1,
-    justifyContent: 'center',
+    // Deliberately no flex: the claim must keep its natural height. Giving it
+    // flex made it the only shrinkable block, and text does not shrink with it.
     paddingHorizontal: 30,
+    paddingTop: 28,
     gap: 2,
+  },
+  flexSpacer: {
+    flex: 1,
+    minHeight: 24,
   },
   claimLine: {
     color: '#FFFFFF',

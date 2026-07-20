@@ -83,8 +83,20 @@ const GEM_RISE = 0.09;
 /** How far below its resting place the wordmark starts, same units. */
 const WORD_RISE = 0.055;
 
+/** Total runtime of the reveal in ms - the glow is the last phase to finish. */
+export const LOGO_REVEAL_DURATION = T.glowStart + T.glowDuration;
+
 /** Reveal runs once per app session; later mounts show the static logo instantly. */
 let hasPlayedThisSession = false;
+
+/**
+ * Whether a freshly mounted `AnimatedLogo` would actually animate. Lets a screen
+ * schedule its own entrance against the reveal instead of guessing. Read it
+ * before rendering the logo - mounting it flips the flag.
+ */
+export function willPlayLogoReveal(): boolean {
+  return !hasPlayedThisSession;
+}
 
 /** Test seam - lets a test (or a debug menu) replay the reveal. */
 export function resetLogoRevealSession() {
