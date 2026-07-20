@@ -8,7 +8,7 @@ export const SPORT_LOGO_ASSETS = [
   require('./Sportclubs_Visuals/Berlin/1._FC_Union_Berlin.png'),
   require('./Sportclubs_Visuals/Berlin/ALBA_Berlin.png'),
   // eslint-disable-next-line import/no-unresolved
-  require('./Sportclubs_Visuals/Berlin/Eisbären_Berlin.png'),
+  require('./Sportclubs_Visuals/Berlin/Eisbären_Berlin.jpeg'),
   // eslint-disable-next-line import/no-unresolved
   require('./Sportclubs_Visuals/Berlin/Füchse_Berlin.png'),
   require('./Sportclubs_Visuals/Berlin/Hertha_BSC.png'),

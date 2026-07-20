@@ -6,7 +6,7 @@
 import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { XStack, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useTranslation } from '@/i18n';
 

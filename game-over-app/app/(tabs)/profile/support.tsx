@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, ScrollView, Linking } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, View } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { useTranslation } from '@/i18n';

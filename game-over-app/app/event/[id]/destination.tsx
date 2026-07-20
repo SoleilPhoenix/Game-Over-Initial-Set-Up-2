@@ -7,7 +7,7 @@ import React, { useState, useRef } from 'react';
 import { ScrollView, Linking, Platform, Pressable, StyleSheet, View, PanResponder, Animated, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useEvent } from '@/hooks/queries/useEvents';
@@ -374,7 +374,7 @@ const TEAM_LOGO_MAP: Record<string, any> = {
   '1. FC Union Berlin':       require('../../../src/constants/Sportclubs_Visuals/Berlin/1._FC_Union_Berlin.png'),
   'Alba Berlin':              require('../../../src/constants/Sportclubs_Visuals/Berlin/ALBA_Berlin.png'),
   'Füchse Berlin':            require('../../../src/constants/Sportclubs_Visuals/Berlin/Füchse_Berlin.png'),
-  'Eisbären Berlin':          require('../../../src/constants/Sportclubs_Visuals/Berlin/Eisbären_Berlin.png'),
+  'Eisbären Berlin':          require('../../../src/constants/Sportclubs_Visuals/Berlin/Eisbären_Berlin.jpeg'),
   'Wasserfreunde Spandau 04': require('../../../src/constants/Sportclubs_Visuals/Berlin/Wasserfreunde_Spandau_04.png'),
   // Hamburg
   'Hamburger SV':             require('../../../src/constants/Sportclubs_Visuals/Hamburg/Hamburger_SV.png'),

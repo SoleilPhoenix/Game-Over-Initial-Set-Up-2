@@ -9,7 +9,7 @@ import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useMatchedPackages } from '@/hooks/queries/usePackages';
 import { useCreateEvent } from '@/hooks/queries/useEvents';

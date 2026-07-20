@@ -8,7 +8,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { FlatList, RefreshControl, Pressable, StyleSheet, Alert, SectionList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useChannels } from '@/hooks/queries/useChat';
 import { usePolls, useCreatePoll, useVote } from '@/hooks/queries/usePolls';

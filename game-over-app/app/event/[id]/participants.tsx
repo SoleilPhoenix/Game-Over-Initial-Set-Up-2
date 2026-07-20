@@ -15,7 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useQueryClient } from '@tanstack/react-query';
 import { participantKeys } from '@/hooks/queries/useParticipants';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useParticipants } from '@/hooks/queries/useParticipants';

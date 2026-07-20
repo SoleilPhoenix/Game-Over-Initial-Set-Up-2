@@ -6,7 +6,7 @@
 
 import React from 'react';
 import { XStack, YStack, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 export interface OptionBlockProps {
   label: string;

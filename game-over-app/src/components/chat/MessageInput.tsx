@@ -6,7 +6,7 @@
 import React, { useState, useCallback } from 'react';
 import { TextInput, StyleSheet, Platform } from 'react-native';
 import { XStack, YStack, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 interface MessageInputProps {
   onSend: (message: string) => void;

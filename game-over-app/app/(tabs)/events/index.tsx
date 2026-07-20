@@ -21,7 +21,7 @@ import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents, eventKeys } from '@/hooks/queries/useEvents';
 import { participantKeys } from '@/hooks/queries/useParticipants';

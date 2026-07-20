@@ -8,7 +8,7 @@ import React, { useState, useMemo } from 'react';
 import { ScrollView, Image, Pressable, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner, Switch } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBookingFlow } from '@/hooks/useBookingFlow';
 import { useWizardStore } from '@/stores/wizardStore';

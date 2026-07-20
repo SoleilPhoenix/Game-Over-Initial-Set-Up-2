@@ -8,7 +8,7 @@ import { Tabs, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Alert, View, StyleSheet, Pressable, Platform, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';

@@ -21,7 +21,7 @@ import { Image as ExpoImage } from 'expo-image';
 import { ValidationToast } from '@/components/ui/ValidationToast';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import Slider from '@react-native-community/slider';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useWizardStore } from '@/stores/wizardStore';

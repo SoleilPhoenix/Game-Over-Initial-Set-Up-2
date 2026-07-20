@@ -5,7 +5,7 @@
 
 import React from 'react';
 import { styled, XStack, Text, GetProps } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 const StyledChip = styled(XStack, {
   name: 'Chip',

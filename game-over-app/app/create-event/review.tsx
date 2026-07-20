@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useCreateEvent } from '@/hooks/queries/useEvents';

@@ -7,7 +7,7 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { View, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';

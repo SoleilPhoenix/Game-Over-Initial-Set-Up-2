@@ -9,7 +9,7 @@ import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 
 import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { useQueryClient } from '@tanstack/react-query';

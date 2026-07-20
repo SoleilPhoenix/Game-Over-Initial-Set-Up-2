@@ -6,7 +6,7 @@
 import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { XStack, YStack, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import type { Database } from '@/lib/supabase/types';
 
 type ChatChannel = Database['public']['Tables']['chat_channels']['Row'];

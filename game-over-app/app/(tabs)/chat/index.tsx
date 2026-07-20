@@ -10,7 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadDesiredParticipants } from '@/lib/participantCountCache';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { Image as ExpoImage } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { ShareModal } from '@/components/ui/ShareModal';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';

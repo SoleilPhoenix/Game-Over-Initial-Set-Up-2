@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 interface ValidationToastProps {
   fields: string[];

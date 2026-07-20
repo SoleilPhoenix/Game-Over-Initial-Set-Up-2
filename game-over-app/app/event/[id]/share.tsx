@@ -8,7 +8,7 @@ import { Pressable, StyleSheet, Linking, Alert, Share, ScrollView, View, Image a
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useCreateInvite } from '@/hooks/queries/useInvites';

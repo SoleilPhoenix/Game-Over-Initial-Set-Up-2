@@ -19,7 +19,7 @@ import {
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SocialButton } from '@/components/ui/SocialButton';
 import { AnimatedLogo } from '@/components/brand/AnimatedLogo';

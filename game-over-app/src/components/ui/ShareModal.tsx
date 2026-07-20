@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Modal, View, Pressable, Share, Linking, ActivityIndicator } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useTheme } from '@/hooks/useTheme';
 import { useCreateInvite, useInvitesByEvent } from '@/hooks/queries/useInvites';
 import { useTranslation } from '@/i18n';

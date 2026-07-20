@@ -7,7 +7,7 @@
 import React, { memo } from 'react';
 import { ImageSourcePropType } from 'react-native';
 import { styled, YStack, XStack, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
 import { OptimizedImage } from '../ui/OptimizedImage';
