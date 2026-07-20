@@ -36,12 +36,29 @@ export const STEM_TOP = 282;
 export const STEM_BOTTOM = 499.5;
 
 /**
- * Horizontal bands used to crop the real logo asset into its parts. The mark and
- * the wordmark are separated by empty space (rings end at y≈701, wordmark starts
- * at y≈771), so a band cut is enough - no path-level splitting required.
+ * Regions used to cut the real logo asset into the parts the reveal animates.
+ * They tile the artwork without gaps or overlap, so showing all of them at once
+ * reproduces the asset exactly:
+ *
+ *   y 196–288  gem          y 288–712  rings + stem
+ *   y 712–745  empty        y 745–872  wordmark
+ *
+ * No path-level splitting is needed - the parts are separated by empty space
+ * (the gem's culet ends at y≈282, rings span y≈296–701, the wordmark starts at
+ * y≈771), so plain rectangular cuts are enough.
  */
-export const GEM_BAND = { top: 196, bottom: 292 } as const;
+export const GEM_BAND = { top: 196, bottom: 288 } as const;
+export const RINGS_BAND = { top: 288, bottom: 712 } as const;
 export const WORD_BAND = { top: 745, bottom: 872 } as const;
+
+/**
+ * The stem is not redrawn as a stroke. Instead a navy shade covers exactly this
+ * strip inside the rings band and retreats downwards, uncovering the real stem
+ * from top to bottom. The strip is safe to blank out because the rings leave a
+ * gap at 12 o'clock - they do not cross x≈512 above the centre, so nothing but
+ * the stem lives in here.
+ */
+export const STEM_STRIP = { left: 500, right: 525, top: STEM_TOP, bottom: 505 } as const;
 
 const polar = (r: number, deg: number) => {
   const rad = (deg * Math.PI) / 180;
@@ -62,6 +79,3 @@ export function ringHalfPath(r: number, side: 'left' | 'right'): string {
 
 /** Arc length of one ring half - the dash length the draw-on animates against. */
 export const ringHalfLength = (r: number) => (r * (180 - GAP_HALF_DEG) * Math.PI) / 180;
-
-export const STEM_PATH = `M ${STEM_X} ${STEM_TOP} L ${STEM_X} ${STEM_BOTTOM}`;
-export const STEM_LENGTH = STEM_BOTTOM - STEM_TOP;
