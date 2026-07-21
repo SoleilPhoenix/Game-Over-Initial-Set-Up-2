@@ -21,6 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SocialButton } from '@/components/ui/SocialButton';
+import { InviteCodeEntry } from '@/components/auth/InviteCodeEntry';
 import { Logo } from '@/components/brand/Logo';
 import { useSocialAuth } from '@/hooks/useSocialAuth';
 import { useTranslation } from '@/i18n';
@@ -60,7 +61,7 @@ export default function ContinueScreen() {
         </Pressable>
 
         <View style={styles.header}>
-          <Logo size={104} />
+          <Logo size={150} />
           <Text style={styles.title}>{t.auth.continueTitle}</Text>
           <Text style={styles.subtitle}>{t.auth.continueSubtitle}</Text>
         </View>
@@ -116,6 +117,11 @@ export default function ContinueScreen() {
             <Text style={styles.loginText}>{t.auth.hasAccount} </Text>
             <Text style={styles.loginLinkText}>{t.auth.logIn}</Text>
           </Pressable>
+
+          {/* Same escape hatch as on the welcome screen. A guest who did not
+              notice it there lands here facing three sign-in providers they do
+              not need, so the way out has to be offered a second time. */}
+          <InviteCodeEntry testIDPrefix="continue-invite-code" />
 
           <Text style={styles.terms}>
             {t.auth.termsPrefix}{' '}
@@ -198,7 +204,7 @@ const styles = StyleSheet.create({
   },
   emailButtonText: {
     color: '#0D1B2A',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '700',
   },
   loginLink: {
@@ -206,12 +212,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loginText: {
-    color: 'rgba(255,255,255,0.62)',
-    fontSize: 14,
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 16,
   },
   loginLinkText: {
     color: '#C6A75E',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '700',
   },
   terms: {

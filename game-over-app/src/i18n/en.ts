@@ -527,8 +527,11 @@ const en = {
     continueWithGoogle: 'Continue with Google',
     continueWithApple: 'Continue with Apple',
     continueWithFacebook: 'Continue with Facebook',
-    continueTitle: 'Let\'s plan your party',
-    continueSubtitle: 'Choose how you want to continue.',
+    // Deliberately not a second "plan your party" - the user just pressed that
+    // button on the welcome screen. This screen is friction, so it names the
+    // progress instead of repeating the promise.
+    continueTitle: 'One more step',
+    continueSubtitle: 'Then we get to the fun part.',
     continueWithEmail: 'Continue with email',
     // Welcome screen
     welcomeHeadline: 'Bachelor parties without the drama.',
@@ -538,8 +541,10 @@ const en = {
     claim3: 'Nobody stresses.',
     claimSub: 'From the first idea to the final bill - your whole bachelor party in one app.',
     planParty: 'Plan the party',
+    skipIntro: 'Skip',
     enterInviteCode: 'Enter your invite code',
     gotInviteCode: 'Got an invite? Enter code',
+    inviteCodePlaceholder: 'e.g. 5H1D5U00',
     joinShort: 'Join',
     or: 'or',
     logIn: 'Log In',

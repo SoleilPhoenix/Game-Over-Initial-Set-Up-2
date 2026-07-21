@@ -17,7 +17,6 @@ import {
   StyleSheet,
   StatusBar,
   Pressable,
-  TextInput,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -28,11 +27,10 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { AnimatedLogo, willPlayLogoReveal } from '@/components/brand/AnimatedLogo';
+import { InviteCodeEntry } from '@/components/auth/InviteCodeEntry';
 import { useTranslation } from '@/i18n';
 
 export default function WelcomeScreen() {
-  const [showCodeEntry, setShowCodeEntry] = React.useState(false);
-  const [inviteCode, setInviteCode] = React.useState('');
   // Read once, before AnimatedLogo mounts - mounting it flips the session flag.
   // On a repeat visit the reveal is skipped, so nothing should be delayed either.
   const [revealPlays] = React.useState(() => willPlayLogoReveal());
@@ -40,12 +38,6 @@ export default function WelcomeScreen() {
   const actionsEntrance = revealPlays ? FadeInDown.delay(3000).duration(600) : undefined;
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-
-  const handleJoinWithCode = () => {
-    const code = inviteCode.trim().toUpperCase();
-    if (!code) return;
-    router.push(`/invite/${code}`);
-  };
 
   return (
     <View style={styles.container} testID="welcome-screen">
@@ -77,7 +69,11 @@ export default function WelcomeScreen() {
           automaticallyAdjustKeyboardInsets={true}
           showsVerticalScrollIndicator={false}
         >
-          <AnimatedLogo size={150} testID="welcome-logo" />
+          {/* AnimatedLogo is a fixed-size box, so without a centring parent it
+              sat flush against the left padding edge. */}
+          <View style={styles.logoRow}>
+            <AnimatedLogo size={190} testID="welcome-logo" />
+          </View>
 
           <Animated.View style={styles.claimBlock} entering={claimEntrance}>
             <Text style={styles.claimLine}>{t.auth.claim1}</Text>
@@ -109,47 +105,8 @@ export default function WelcomeScreen() {
             </Pressable>
 
             {/* Guests arrive with a code and should not have to go through
-                "plan the party" first - kept here, but deliberately quiet. */}
-            {showCodeEntry ? (
-              <View style={styles.codeEntry}>
-                <View style={styles.codeEntryRow}>
-                  <TextInput
-                    style={styles.codeInput}
-                    value={inviteCode}
-                    onChangeText={setInviteCode}
-                    placeholder="e.g. 5H1D5U00"
-                    placeholderTextColor={'rgba(255,255,255,0.42)'}
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                    returnKeyType="go"
-                    onSubmitEditing={handleJoinWithCode}
-                    autoFocus
-                    testID="invite-code-input"
-                  />
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.codeJoinButton,
-                      pressed && { opacity: 0.8 },
-                      !inviteCode.trim() && { opacity: 0.5 },
-                    ]}
-                    onPress={handleJoinWithCode}
-                    disabled={!inviteCode.trim()}
-                    testID="invite-code-join"
-                  >
-                    <Text style={styles.codeJoinButtonText}>{t.auth.joinShort}</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ) : (
-              <Pressable
-                style={styles.inviteLink}
-                onPress={() => setShowCodeEntry(true)}
-                testID="invite-code-link"
-              >
-                <Ionicons name="ticket-outline" size={15} color={'rgba(198,167,94,0.85)'} />
-                <Text style={styles.inviteLinkText}>{t.auth.gotInviteCode}</Text>
-              </Pressable>
-            )}
+                "plan the party" first - offered here, but deliberately quiet. */}
+            <InviteCodeEntry testIDPrefix="invite-code" />
 
             <Text style={styles.terms}>
               {t.auth.termsPrefix}{' '}
@@ -176,6 +133,9 @@ const styles = StyleSheet.create({
     // grow past the viewport and scroll on short ones.
     flexGrow: 1,
     paddingHorizontal: 28,
+  },
+  logoRow: {
+    alignItems: 'center',
   },
   claimBlock: {
     // Deliberately no flex: the claim keeps its natural height. Giving it flex
@@ -228,54 +188,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   loginText: {
-    color: 'rgba(255,255,255,0.62)',
-    fontSize: 14,
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 16,
   },
   loginLinkText: {
     color: '#C6A75E',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  inviteLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-  },
-  inviteLinkText: {
-    color: 'rgba(198,167,94,0.85)',
-    fontSize: 13.5,
-  },
-  codeEntry: {
-    gap: 8,
-  },
-  codeEntryRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  codeInput: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(198,167,94,0.35)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    color: '#FFFFFF',
-    fontSize: 15,
-    letterSpacing: 1.5,
-  },
-  codeJoinButton: {
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    borderRadius: 12,
-    backgroundColor: 'rgba(198,167,94,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(198,167,94,0.5)',
-  },
-  codeJoinButtonText: {
-    color: '#C6A75E',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
   },
   terms: {

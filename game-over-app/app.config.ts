@@ -90,6 +90,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-router',
     'expo-secure-store',
     'expo-apple-authentication',
+    'expo-video',
     ['expo-calendar', {
       calendarPermission: 'Game Over needs access to add events to your calendar.',
     }],

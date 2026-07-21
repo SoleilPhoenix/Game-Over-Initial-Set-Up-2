@@ -25,6 +25,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { preloadPackageImages } from '@/constants/packageImages';
 import { preloadSportLogos, preloadShareImages } from '@/constants/sportLogos';
 import { initBudgetCache } from '@/lib/participantCountCache';
+import { shouldPlayIntro } from '@/lib/introSession';
 import { useEditorialFonts } from '@/hooks/useEditorialFonts';
 import { Logo } from '@/components/brand/Logo';
 import config from '../tamagui.config';
@@ -150,8 +151,10 @@ function RootLayoutNav() {
     const inInviteGroup = segments[0] === 'invite';
 
     if (!session && !inAuthGroup && !inInviteGroup) {
-      // Redirect to welcome screen if not authenticated
-      router.replace('/(auth)/welcome');
+      // On a cold start this fires before `app/index.tsx` gets to redirect, so
+      // the intro decision has to be made here too - otherwise this line would
+      // silently skip it on every launch.
+      router.replace(shouldPlayIntro() ? '/(auth)/intro' : '/(auth)/welcome');
     } else if (session && inAuthGroup) {
       // Redirect to main app if authenticated
       router.replace('/(tabs)/events');

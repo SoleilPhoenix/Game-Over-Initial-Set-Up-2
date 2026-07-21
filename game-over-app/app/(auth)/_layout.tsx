@@ -14,6 +14,9 @@ export default function AuthLayout() {
         animation: 'slide_from_right',
       }}
     >
+      {/* Fades rather than slides: a launch intro should feel like the app
+          coming up, not like a screen the user navigated to. */}
+      <Stack.Screen name="intro" options={{ animation: 'fade', gestureEnabled: false }} />
       <Stack.Screen name="welcome" />
       <Stack.Screen name="continue" />
       <Stack.Screen name="login" />
