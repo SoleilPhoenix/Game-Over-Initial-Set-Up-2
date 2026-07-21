@@ -1,36 +1,116 @@
 # Handoff - Game Over App
 
 Kurzer Übergabestand, damit eine neue Session (z. B. von der iPhone-Claude-Code-App) nahtlos anknüpfen kann.
-Letzte Aktualisierung: 2026-07-20.
+Letzte Aktualisierung: 2026-07-21.
 
-## Aktueller Stand (2026-07-20) - Logo-Animation, App-Verschlankung, Start-Journey
+## Aktueller Stand (2026-07-21) - Start-Journey steht, wartet auf Gerätetest
 
-Alles unten ist auf `main` gepusht (`ac4aaf3b6`), Arbeitsverzeichnis sauber.
+Die Start-Journey ist vollständig gebaut:
 
-## HIER weitermachen: Punkt 8, Schritt 3 (Launch-Intro)
-
-Die Start-Journey soll laut User so aussehen:
-
-1. App startet, es läuft eine 10-15 s Visualisierung (Logo-Aufbau, danach das restliche Video).
+1. App startet, Launch-Intro läuft (Logo-Aufbau, danach das Video).
 2. Danach der Welcome-Screen: Logo, Claim, **ein** Button "Party planen".
 3. Erst danach die Anmeldung.
 
-Punkt 2 und 3 dieser Journey sind gebaut (siehe unten), offen ist das Intro selbst.
+Punkt 8 Schritt 3 ist damit abgeschlossen.
+Der User testet gerade am Gerät.
 
-**Mit dem User entschieden:**
+## HIER weitermachen
 
-- Das Intro-Gerüst wird jetzt gebaut, die mp4 kommt später.
-  Die Logo-Animation ist die erste Phase, danach eine klar markierte Stelle für das Video.
-- `expo-av` bzw. `expo-video` ist **nicht installiert**, muss also noch dazu.
-- Es existiert **kein** Video-Asset im Repo.
+Zwei Dinge stehen an, beide hängen am User:
 
-**Vor dem Bauen noch klären, Frage ist offen:**
+**1. Rückmeldung aus dem Gerätetest abwarten.**
+Siehe Abschnitt "Ungetestet" weiter unten, dort steht was konkret unklar ist.
 
-Die Logo-Animation läuft aktuell auf dem **Welcome-Screen**.
-Wandert sie ins Intro, sollte der Welcome danach sofort fertig dastehen, sonst sieht der Nutzer den Aufbau zweimal.
-Vorschlag an den User: Animation ins Intro verschieben, Welcome auf das statische `Logo` umstellen.
+**2. Die mp4 einhängen, sobald sie da ist.**
+Datei nach `assets/brand/intro.mp4` legen, dann in `src/components/brand/introVideo.ts`
+das `null` durch das `require` ersetzen, das dort als Kommentar steht.
+Das ist eine Zeile, sonst ändert sich nichts.
 
-## Fertig in dieser Sitzung
+## Fertig in dieser Sitzung (2026-07-21)
+
+Commit `d296a2886`.
+
+### Punkt 8 Schritt 3 - Launch-Intro
+
+Neu: `app/(auth)/intro.tsx`, `src/components/brand/introVideo.ts`, `src/lib/introSession.ts`.
+`expo-video` installiert und in `app.config.ts` als Plugin eingetragen.
+
+Zwei Phasen: die 4s-Logo-Animation, danach das Video, dann `router.replace` auf den Welcome.
+
+**Warum die Videoquelle eine eigene Konstante ist:**
+Metro löst `require()` auf Assets **statisch** auf.
+Ein fehlendes Asset ist damit ein Bundler-Fehler, kein Laufzeitfehler, und lässt sich weder
+per try/catch abfangen noch hinter ein `if` stellen.
+Deshalb liegt die Quelle als einzelne exportierte Konstante in `introVideo.ts` und steht auf `null`.
+Ist sie `null`, fällt Phase 2 aus und das Intro ist nur der Logo-Aufbau.
+
+**Die offene Frage aus dem letzten Handoff ist beantwortet:**
+Die Animation gehört ins Intro, der Welcome zeigt danach das statische Logo.
+`AnimatedLogo` erledigt das von selbst, es läuft nur einmal pro Session.
+
+**Fallstrick, der fast durchgerutscht wäre:**
+`app/_layout.tsx` leitet beim Kaltstart um, **bevor** `app/index.tsx` überhaupt rendert.
+Stünde die Intro-Entscheidung nur in `index.tsx`, würde das Intro bei jedem Start still übersprungen.
+Beide Stellen fragen jetzt `shouldPlayIntro()`.
+
+Das Intro läuft einmal pro App-Session, absichtlich nur im Speicher und nicht persistiert.
+Persistiert würde es genau einmal überhaupt laufen; asynchron aus dem Storage gelesen
+läge ein leerer Frame vor genau dem Moment, den das Intro besonders machen soll.
+
+Angemeldete Nutzer sehen das Intro nicht, die gehen direkt auf ihre Events.
+
+**Nicht bestellt, trotzdem eingebaut:** ein dezenter "Überspringen"-Link, der nach 1,8 s auftaucht.
+15 Sekunden ohne Ausweg sind bei jedem zweiten Start eine Zumutung und fallen im App-Store-Review auf.
+User ist informiert, kann raus wenn er will.
+
+### Deutsch als Standardsprache
+
+`src/stores/languageStore.ts`: Default von `'en'` auf `'de'`.
+
+Ein neuer Default allein erreicht **niemanden mit installierter App**.
+Dort liegt `'en'` bereits auf der Platte und gewinnt gegen jeden Default.
+Der Versionssprung auf `version: 1` mit `migrate` schreibt diesen Wert genau einmal um.
+Was der User danach selbst wählt, bleibt unangetastet.
+
+### Social-Logos waren keine Logos
+
+`src/components/ui/SocialButton.tsx`.
+
+Das waren getippte Zeichen: ein Apple-Glyph aus der Systemschrift, ein blaues "G", ein kleines "f".
+Sie rendern in dem Gewicht und auf der Grundlinie, die die Plattformschrift gerade vorgibt,
+deshalb fluchteten die drei Knöpfe nie miteinander.
+
+Jetzt echte Vektormarken über `react-native-svg`.
+Googles Vierfarb-"G" ist von deren Markenrichtlinien vorgeschrieben, ein blauer Buchstabe
+ist ein Review-Risiko und kein Schönheitsfehler.
+
+Die Marke hängt links **absolut positioniert** statt in einer Reihe zu liegen.
+In einer Reihe verschiebt jede der drei unterschiedlich breiten Marken ihr Label anders weit,
+und die Beschriftungen fluchten nicht mehr.
+
+Die Labels kommen jetzt aus i18n, vorher waren sie hart englisch verdrahtet.
+
+### Einladungscode auf beiden Screens
+
+Neu: `src/components/auth/InviteCodeEntry.tsx`, herausgezogen statt dupliziert.
+
+Wer die Zeile auf dem Welcome übersieht, steht sonst auf dem Continue-Screen
+vor drei Anmeldeknöpfen, die er als Gast gar nicht braucht.
+
+testIDs bleiben über `testIDPrefix` getrennt: `invite-code-*` auf dem Welcome,
+`continue-invite-code-*` auf dem Continue.
+
+### Layout und Text nach dem Gerätetest des Users
+
+- Logo auf dem Welcome **zentriert**.
+  `AnimatedLogo` ist eine Box fester Größe; ohne zentrierendes Elternelement klebte sie am linken Rand.
+- Logo-Größe Welcome 150 auf 190, Continue 104 auf 150.
+- "Bereits ein Konto? Anmelden" und die Code-Zeile von 14 auf 16 bzw. 15,5 pt.
+- Continue-Titel heißt nicht mehr "Lass uns deine Party planen".
+  Das versprach dasselbe wie der Knopf, den man gerade gedrückt hat.
+  Jetzt "Noch ein Schritt" / "Dann geht es an die Planung."
+
+## Fertig in der Sitzung davor (2026-07-20)
 
 ### Punkt 8 Schritt 2 - Logo-Reveal-Animation
 
@@ -113,17 +193,32 @@ Struktur danach:
 
 ## Ungetestet
 
-**Die App wurde in dieser Sitzung nie laufend gesehen.**
-Typecheck, Lint und vollständige iOS-Builds sind grün, aber alle Aussagen zur Optik stammen aus HTML-Nachbildungen und Messwerten.
+**Die App wurde auch in dieser Sitzung nie laufend gesehen.**
+Grün sind: `npm run typecheck`, `npm run lint`, 96 Unit-Tests inklusive i18n-Parität,
+und ein vollständiger `npx expo export --platform ios`.
+Alle Aussagen zur Optik sind aus dem Code abgeleitet.
 
-Offen für den nächsten Gerätetest:
+Offen für den Gerätetest, nach Risiko sortiert:
 
-- Ob die Logo-Größe 150 in stimmiger Proportion zum Claim steht.
-  Wunsch des Users: Logo unverändert, Größe passend zum Text darunter.
-- Ob die 3 Sekunden bis zum Erscheinen des Buttons zu lang wirken.
+- **Ob `expo-video` in Expo Go überhaupt läuft.**
+  Das ist ein Native-Modul.
+  Läuft es dort nicht, braucht das Intro einen Dev-Build, oder Phase 2 muss in Expo Go ausfallen.
+  Fällt beim ersten Start sofort auf.
+  Aktuell nicht dringend, solange `INTRO_VIDEO_SOURCE` auf `null` steht: dann wird gar kein Player gebaut.
 - Ob OAuth nach dem Umzug in `useSocialAuth` noch durchläuft.
-  Das ist das größte Risiko, Apple lässt sich nur mit echtem Konto prüfen.
+  Bleibt das größte Risiko, Apple lässt sich nur mit echtem Konto prüfen.
+  Die Social-Buttons wurden gerade neu gebaut, die `onPress`-Verdrahtung blieb aber unverändert.
+- Ob Logo-Größe 190 neben dem Claim stimmig wirkt.
+- Ob das Intro sich in der Länge richtig anfühlt, sobald das Video drin ist.
 - Ob nach der Umstellung von 53 Dateien irgendwo ein Icon fehlt.
+
+## Kleinkram, bewusst liegengelassen
+
+Vier Schlüssel im `auth`-Abschnitt von `src/i18n/en.ts` und `de.ts` sind tot,
+Überbleibsel des alten Welcome-Screens:
+`welcomeHeadline`, `welcomeBody`, `enterInviteCode`, `orContinueWith`.
+`grep -rn "auth\.<key>" app src` liefert für alle vier null Treffer.
+Rauswerfen, aber Parität wahren, `__tests__/i18n/parity.test.ts` prüft das.
 
 ## Offene Punkte aus dem alten Backlog
 
