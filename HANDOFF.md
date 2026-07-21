@@ -212,13 +212,24 @@ Offen für den Gerätetest, nach Risiko sortiert:
 - Ob das Intro sich in der Länge richtig anfühlt, sobald das Video drin ist.
 - Ob nach der Umstellung von 53 Dateien irgendwo ein Icon fehlt.
 
-## Kleinkram, bewusst liegengelassen
+### Tote i18n-Schlüssel entfernt
 
-Vier Schlüssel im `auth`-Abschnitt von `src/i18n/en.ts` und `de.ts` sind tot,
-Überbleibsel des alten Welcome-Screens:
-`welcomeHeadline`, `welcomeBody`, `enterInviteCode`, `orContinueWith`.
-`grep -rn "auth\.<key>" app src` liefert für alle vier null Treffer.
-Rauswerfen, aber Parität wahren, `__tests__/i18n/parity.test.ts` prüft das.
+Commit `5380ad67f`.
+
+`welcomeHeadline`, `welcomeBody`, `enterInviteCode` und `orContinueWith` aus dem
+`auth`-Abschnitt von `en.ts` und `de.ts` geworfen.
+Überbleibsel des alten Welcome-Screens, der Claim, drei Anbieterknöpfe und das
+Einladungsfeld noch gemeinsam trug.
+
+Geprüft wurde mit dem nackten Schlüsselnamen statt mit `auth.<key>`, damit auch ein
+dynamischer Zugriff wie `t.auth['welcomeHeadline']` aufgefallen wäre.
+Null Treffer in `app`, `src`, `__tests__` und `e2e`.
+
+**Fallstrick beim Bearbeiten dieser Dateien:**
+`de.ts` enthielt in einem Wert die **literale** Escape-Sequenz `—`, nicht das Zeichen.
+Suchen-und-Ersetzen über den gerenderten Text findet solche Zeilen nicht.
+Das deckt sich mit der bereits bekannten Regel, dass JSX `\uXXXX` nicht auflöst:
+in diesen Dateien gehören echte UTF-8-Zeichen hin, keine Escapes.
 
 ## Offene Punkte aus dem alten Backlog
 
