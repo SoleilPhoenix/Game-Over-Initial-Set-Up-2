@@ -18,7 +18,6 @@ export default function AuthLayout() {
           coming up, not like a screen the user navigated to. */}
       <Stack.Screen name="intro" options={{ animation: 'fade', gestureEnabled: false }} />
       <Stack.Screen name="welcome" />
-      <Stack.Screen name="continue" />
       <Stack.Screen name="login" />
       <Stack.Screen name="signup" />
       <Stack.Screen name="forgot-password" />

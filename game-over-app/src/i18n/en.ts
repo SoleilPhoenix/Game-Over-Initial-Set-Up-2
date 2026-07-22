@@ -526,17 +526,11 @@ const en = {
     continueWithGoogle: 'Continue with Google',
     continueWithApple: 'Continue with Apple',
     continueWithFacebook: 'Continue with Facebook',
-    // Deliberately not a second "plan your party" - the user just pressed that
-    // button on the welcome screen. This screen is friction, so it names the
-    // progress instead of repeating the promise.
-    continueTitle: 'One more step',
-    continueSubtitle: 'Then we get to the fun part.',
-    continueWithEmail: 'Continue with email',
     // Welcome screen
     claim1: 'One gets married.',
     claim2: 'Everyone celebrates.',
     claim3: 'Nobody stresses.',
-    claimSub: 'From the first idea to the final bill - your whole bachelor party in one app.',
+    claimSub: 'Plan it, party, settle up. All in one app.',
     planParty: 'Plan the party',
     skipIntro: 'Skip',
     gotInviteCode: 'Got an invite? Enter code',

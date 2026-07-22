@@ -1,14 +1,19 @@
 /**
- * Welcome Screen
+ * Welcome Screen - the single entry screen
  *
- * The first screen a user sees after the launch intro. It carries the brand and
- * exactly one call to action - picking *how* to sign in happens on the next
- * screen (`continue.tsx`).
+ * Brand and every way in, on one screen. It used to hand off to a separate
+ * `continue` screen to pick a sign-in method; that extra tap cost sign-ups for
+ * no benefit, so the choice moved here. The screen stays uncrowded by keeping
+ * the three providers as a compact icon row rather than three stacked buttons -
+ * which is what had overflowed the viewport the first time everything shared one
+ * screen.
  *
- * It used to hold the claim, three provider buttons, an invite field and the
- * login link all at once. That needed ~927pt of height on a viewport of ~852pt,
- * so the claim - the only block with flex - was squeezed until its text ran over
- * the logo above and behind the card below.
+ * Order is deliberate: the fastest path (one-tap social) sits highest, the email
+ * route ("Party planen") is a quieter button below it, and the guest code - the
+ * exception, not the rule - stays quietest of all.
+ *
+ * The logo asset carries its own #0D1B2A tile; the backdrop is flat navy in its
+ * top half so the logo never reads as a dark rectangle on a lighter gradient.
  */
 import React from 'react';
 import {
@@ -27,25 +32,27 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { AnimatedLogo, willPlayLogoReveal } from '@/components/brand/AnimatedLogo';
+import { SocialButton } from '@/components/ui/SocialButton';
 import { InviteCodeEntry } from '@/components/auth/InviteCodeEntry';
+import { useSocialAuth } from '@/hooks/useSocialAuth';
 import { useTranslation } from '@/i18n';
 
 export default function WelcomeScreen() {
   // Read once, before AnimatedLogo mounts - mounting it flips the session flag.
-  // On a repeat visit the reveal is skipped, so nothing should be delayed either.
+  // The reveal normally plays on the intro screen, so here it usually resolves
+  // to the static logo; the delayed entrances only apply on the rare path where
+  // the welcome screen is the first to show the reveal.
   const [revealPlays] = React.useState(() => willPlayLogoReveal());
   const claimEntrance = revealPlays ? FadeInDown.delay(2000).duration(600) : undefined;
   const actionsEntrance = revealPlays ? FadeInDown.delay(3000).duration(600) : undefined;
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const { loading, signInWithApple, signInWithGoogle, signInWithFacebook } = useSocialAuth();
 
   return (
     <View style={styles.container} testID="welcome-screen">
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* The top 45% stays exactly #0D1B2A because the logo asset carries its own
-          navy tile of that colour - any lighter shade behind it makes the logo
-          read as a dark rectangle. Depth builds towards the bottom instead. */}
       <LinearGradient
         colors={['#0D1B2A', '#132539']}
         locations={[0.45, 1]}
@@ -56,43 +63,75 @@ export default function WelcomeScreen() {
         style={styles.content}
         behavior={Platform.OS === 'android' ? 'height' : undefined}
       >
-        {/* Everything scrolls together, and the spacer below absorbs the slack:
-            it expands on tall screens and collapses to nothing on short ones, so
-            the page scrolls instead of anything overlapping. */}
         <ScrollView
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 20 },
+            { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
           ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           automaticallyAdjustKeyboardInsets={true}
           showsVerticalScrollIndicator={false}
         >
-          {/* AnimatedLogo is a fixed-size box, so without a centring parent it
-              sat flush against the left padding edge. */}
-          <View style={styles.logoRow}>
-            <AnimatedLogo size={190} testID="welcome-logo" />
-          </View>
+          {/* Brand block, pulled towards the top. AnimatedLogo is a fixed-size
+              box, so the centring parent is what keeps it off the left edge. */}
+          <View style={styles.brand}>
+            <AnimatedLogo size={150} testID="welcome-logo" />
 
-          <Animated.View style={styles.claimBlock} entering={claimEntrance}>
-            <Text style={styles.claimLine}>{t.auth.claim1}</Text>
-            <Text style={styles.claimLine}>{t.auth.claim2}</Text>
-            <Text style={[styles.claimLine, styles.claimAccent]}>{t.auth.claim3}</Text>
-            <Text style={styles.claimSub}>{t.auth.claimSub}</Text>
-          </Animated.View>
+            <Animated.View style={styles.claimBlock} entering={claimEntrance}>
+              <Text style={styles.claimLine}>{t.auth.claim1}</Text>
+              <Text style={styles.claimLine}>{t.auth.claim2}</Text>
+              <Text style={[styles.claimLine, styles.claimAccent]}>{t.auth.claim3}</Text>
+              <Text style={styles.claimSub}>{t.auth.claimSub}</Text>
+            </Animated.View>
+          </View>
 
           <View style={styles.flexSpacer} />
 
-          {/* Comes in after the logo reveal, so the brand builds up first. */}
           <Animated.View style={styles.actions} entering={actionsEntrance}>
+            {/* Fastest path first: one tap, no form. */}
+            <View style={styles.socialRow}>
+              <SocialButton
+                provider="apple"
+                compact
+                onPress={signInWithApple}
+                loading={loading === 'apple'}
+                disabled={loading !== null}
+                testID="social-button-apple"
+              />
+              <SocialButton
+                provider="google"
+                compact
+                onPress={signInWithGoogle}
+                loading={loading === 'google'}
+                disabled={loading !== null}
+                testID="social-button-google"
+              />
+              <SocialButton
+                provider="facebook"
+                compact
+                onPress={signInWithFacebook}
+                loading={loading === 'facebook'}
+                disabled={loading !== null}
+                testID="social-button-facebook"
+              />
+            </View>
+
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>{t.auth.or}</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Email route, deliberately the quieter, outlined button. */}
             <Pressable
-              style={({ pressed }) => [styles.primaryButton, pressed && styles.primaryButtonPressed]}
-              onPress={() => router.push('/(auth)/continue')}
+              style={({ pressed }) => [styles.emailButton, pressed && styles.emailButtonPressed]}
+              onPress={() => router.push('/(auth)/signup')}
+              disabled={loading !== null}
               testID="get-started-button"
             >
-              <Text style={styles.primaryButtonText}>{t.auth.planParty}</Text>
-              <Ionicons name="arrow-forward" size={18} color="#0D1B2A" />
+              <Text style={styles.emailButtonText}>{t.auth.planParty}</Text>
+              <Ionicons name="arrow-forward" size={17} color="#C6A75E" />
             </Pressable>
 
             <Pressable
@@ -104,8 +143,8 @@ export default function WelcomeScreen() {
               <Text style={styles.loginLinkText}>{t.auth.logIn}</Text>
             </Pressable>
 
-            {/* Guests arrive with a code and should not have to go through
-                "plan the party" first - offered here, but deliberately quiet. */}
+            {/* Guests arrive with a code and should not have to sign up first -
+                offered here, but deliberately the quietest thing on the screen. */}
             <InviteCodeEntry testIDPrefix="invite-code" />
 
             <Text style={styles.terms}>
@@ -129,26 +168,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    // Lets the spacer expand on tall screens while still allowing the content to
-    // grow past the viewport and scroll on short ones.
     flexGrow: 1,
     paddingHorizontal: 28,
   },
-  logoRow: {
+  brand: {
     alignItems: 'center',
+    paddingTop: 8,
   },
   claimBlock: {
-    // Deliberately no flex: the claim keeps its natural height. Giving it flex
-    // made it the only shrinkable block, and text does not shrink with it.
-    paddingTop: 32,
+    paddingTop: 22,
     gap: 2,
+    alignItems: 'center',
   },
   claimLine: {
     color: '#FFFFFF',
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '800',
-    lineHeight: 41,
+    lineHeight: 38,
     letterSpacing: -0.8,
+    textAlign: 'center',
   },
   claimAccent: {
     color: '#C6A75E',
@@ -157,30 +195,51 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.62)',
     fontSize: 15,
     lineHeight: 22,
-    marginTop: 18,
+    marginTop: 14,
+    textAlign: 'center',
   },
   flexSpacer: {
     flex: 1,
-    minHeight: 32,
+    minHeight: 24,
   },
   actions: {
-    gap: 18,
+    gap: 16,
   },
-  primaryButton: {
+  socialRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginVertical: -2,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  dividerText: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 13,
+  },
+  emailButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#C6A75E',
     borderRadius: 14,
-    paddingVertical: 18,
+    paddingVertical: 15,
+    borderWidth: 1.5,
+    borderColor: 'rgba(198,167,94,0.55)',
   },
-  primaryButtonPressed: {
-    opacity: 0.85,
+  emailButtonPressed: {
+    opacity: 0.7,
   },
-  primaryButtonText: {
-    color: '#0D1B2A',
-    fontSize: 17,
+  emailButtonText: {
+    color: '#C6A75E',
+    fontSize: 16,
     fontWeight: '700',
   },
   loginLink: {

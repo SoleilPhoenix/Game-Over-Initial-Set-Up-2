@@ -31,6 +31,12 @@ interface SocialButtonProps extends Omit<PressableProps, 'style'> {
   provider: SocialProvider;
   loading?: boolean;
   disabled?: boolean;
+  /**
+   * Icon-only, sized to sit three-across in a row. The labelled full-width form
+   * does not fit three abreast, and the provider marks are recognisable on their
+   * own - so the compact welcome screen shows just the marks.
+   */
+  compact?: boolean;
 }
 
 const providerStyle: Record<SocialProvider, { backgroundColor: string; textColor: string }> = {
@@ -99,6 +105,7 @@ export function SocialButton({
   provider,
   loading = false,
   disabled = false,
+  compact = false,
   ...props
 }: SocialButtonProps) {
   const { t } = useTranslation();
@@ -119,7 +126,7 @@ export function SocialButton({
       accessibilityRole="button"
       accessibilityLabel={label}
       style={({ pressed }) => [
-        styles.button,
+        compact ? styles.compactButton : styles.button,
         {
           backgroundColor: style.backgroundColor,
           borderColor: provider === 'google' ? 'rgba(13,27,42,0.14)' : style.backgroundColor,
@@ -130,6 +137,8 @@ export function SocialButton({
     >
       {loading ? (
         <ActivityIndicator color={style.textColor} size="small" />
+      ) : compact ? (
+        <Mark />
       ) : (
         <>
           {/* Pinned to the left edge rather than laid out in a row, so the label
@@ -157,6 +166,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     paddingHorizontal: spacing.lg,
+  },
+  compactButton: {
+    flex: 1,
+    height: 54,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
   },
   pressed: {
     opacity: 0.9,

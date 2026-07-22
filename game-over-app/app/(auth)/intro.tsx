@@ -15,6 +15,15 @@
  * twice or see it in the wrong place. Owning it here means the welcome screen
  * always renders fully formed - `AnimatedLogo` falls back to the static logo
  * once the reveal has run.
+ *
+ * The phase-1 duration is driven by a fixed timer, not by the logo's own
+ * completion callback. The reveal is guaranteed its full running time that way,
+ * so the 4 seconds are always seen rather than depending on a callback that a
+ * transition or a dropped frame could cut short.
+ *
+ * `expo-video` is loaded lazily, only when a video source actually exists (see
+ * `IntroVideo`). It is a native module; keeping its import out of the common
+ * path means the logo-only intro carries no dependency on it at all.
  */
 
 import React from 'react';
@@ -22,11 +31,13 @@ import { View, Text, StyleSheet, StatusBar, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { useVideoPlayer, VideoView } from 'expo-video';
-import { AnimatedLogo } from '@/components/brand/AnimatedLogo';
+import { AnimatedLogo, LOGO_REVEAL_DURATION } from '@/components/brand/AnimatedLogo';
 import { INTRO_VIDEO_SOURCE, INTRO_VIDEO_MAX_DURATION } from '@/components/brand/introVideo';
 import { markIntroPlayed } from '@/lib/introSession';
 import { useTranslation } from '@/i18n';
+
+/** A short beat after the reveal settles, so its final frame is actually seen. */
+const LOGO_HOLD_AFTER_REVEAL = 400;
 
 /** How long before the skip control fades in. Long enough not to invite a reflex tap. */
 const SKIP_APPEARS_AFTER = 1800;
@@ -39,8 +50,8 @@ export default function IntroScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
 
-  // Guards against the two paths into the welcome screen racing: the video can
-  // report completion at almost the same moment the backstop timer fires.
+  // Guards the two exits from racing: the video can report completion at almost
+  // the same moment its backstop timer fires.
   const finished = React.useRef(false);
 
   const finish = React.useCallback(() => {
@@ -55,13 +66,19 @@ export default function IntroScreen() {
     return () => clearTimeout(timer);
   }, []);
 
-  const handleLogoComplete = React.useCallback(() => {
-    if (INTRO_VIDEO_SOURCE === null) {
-      finish();
-      return;
-    }
-    setPhase('video');
-  }, [finish]);
+  // Phase 1 runs for a fixed, guaranteed duration. When it ends we either move to
+  // the video or, if there is none, leave for the welcome screen.
+  React.useEffect(() => {
+    if (phase !== 'logo') return;
+    const timer = setTimeout(() => {
+      if (INTRO_VIDEO_SOURCE === null) {
+        finish();
+      } else {
+        setPhase('video');
+      }
+    }, LOGO_REVEAL_DURATION + LOGO_HOLD_AFTER_REVEAL);
+    return () => clearTimeout(timer);
+  }, [phase, finish]);
 
   return (
     <View style={styles.container} testID="intro-screen">
@@ -71,7 +88,7 @@ export default function IntroScreen() {
         <Animated.View exiting={FadeOut.duration(400)} style={styles.center}>
           {/* `force` because the reveal must play here even if something else
               mounted a logo first during startup. */}
-          <AnimatedLogo size={220} force onComplete={handleLogoComplete} testID="intro-logo" />
+          <AnimatedLogo size={200} force testID="intro-logo" />
         </Animated.View>
       ) : (
         <Animated.View entering={FadeIn.duration(400)} style={StyleSheet.absoluteFill}>
@@ -94,11 +111,16 @@ export default function IntroScreen() {
 }
 
 /**
- * Only mounted once there is a source to play, so the player hooks never have to
- * cope with a null source.
+ * Mounted only once there is a source to play, so the native module is required
+ * lazily and the player hooks never have to cope with a null source.
  */
 function IntroVideo({ onDone }: { onDone: () => void }) {
-  const player = useVideoPlayer(INTRO_VIDEO_SOURCE, (p) => {
+  // Deferred require: touching expo-video only here keeps the logo-only intro
+  // free of the native dependency entirely.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { useVideoPlayer, VideoView } = require('expo-video');
+
+  const player = useVideoPlayer(INTRO_VIDEO_SOURCE, (p: { loop: boolean; muted: boolean; play: () => void }) => {
     p.loop = false;
     p.muted = true;
     p.play();
