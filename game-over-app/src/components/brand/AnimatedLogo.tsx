@@ -23,6 +23,7 @@ import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
+  ReduceMotion,
   runOnJS,
   useAnimatedProps,
   useAnimatedStyle,
@@ -221,51 +222,88 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
     circuit.value = withTiming(1, {
       duration: T.circuitDuration,
       easing: Easing.inOut(Easing.sin),
+      reduceMotion: ReduceMotion.Never,
     });
 
     settled.value = withDelay(
       T.settleStart,
-      withTiming(1, { duration: T.settleDuration, easing: Easing.inOut(Easing.quad) })
+      withTiming(1, {
+        duration: T.settleDuration,
+        easing: Easing.inOut(Easing.quad),
+        reduceMotion: ReduceMotion.Never,
+      })
     );
 
     // Accelerating, like something falling: the stem drops rather than glides.
     stemCover.value = withDelay(
       T.stemStart,
-      withTiming(0, { duration: T.stemDuration, easing: Easing.in(Easing.quad) })
+      withTiming(0, {
+        duration: T.stemDuration,
+        easing: Easing.in(Easing.quad),
+        reduceMotion: ReduceMotion.Never,
+      })
     );
 
     wordOpacity.value = withDelay(
       T.wordStart,
-      withTiming(1, { duration: T.wordDuration * 0.55, easing: Easing.out(Easing.quad) })
+      withTiming(1, {
+        duration: T.wordDuration * 0.55,
+        easing: Easing.out(Easing.quad),
+        reduceMotion: ReduceMotion.Never,
+      })
     );
     wordShift.value = withDelay(
       T.wordStart,
-      withTiming(0, { duration: T.wordDuration, easing: Easing.out(Easing.cubic) })
+      withTiming(0, {
+        duration: T.wordDuration,
+        easing: Easing.out(Easing.cubic),
+        reduceMotion: ReduceMotion.Never,
+      })
     );
     shine.value = withDelay(
       T.shineStart,
-      withTiming(1, { duration: T.shineDuration, easing: Easing.inOut(Easing.quad) })
+      withTiming(1, {
+        duration: T.shineDuration,
+        easing: Easing.inOut(Easing.quad),
+        reduceMotion: ReduceMotion.Never,
+      })
     );
 
     gemOpacity.value = withDelay(
       T.gemStart,
-      withTiming(1, { duration: T.gemDuration * 0.55, easing: Easing.out(Easing.quad) })
+      withTiming(1, {
+        duration: T.gemDuration * 0.55,
+        easing: Easing.out(Easing.quad),
+        reduceMotion: ReduceMotion.Never,
+      })
     );
     // Decelerating, with no overshoot: the gem comes down and seats flush on the
     // stem rather than bouncing onto it.
     gemDrop.value = withDelay(
       T.gemStart,
-      withTiming(0, { duration: T.gemDuration, easing: Easing.out(Easing.cubic) })
+      withTiming(0, {
+        duration: T.gemDuration,
+        easing: Easing.out(Easing.cubic),
+        reduceMotion: ReduceMotion.Never,
+      })
     );
 
     // Last phase to finish, so it owns the completion callback.
     glow.value = withDelay(
       T.glowStart,
-      withTiming(1, { duration: T.glowDuration, easing: Easing.out(Easing.quad) }, (done) => {
-        if (done && onComplete) {
-          runOnJS(onComplete)();
+      withTiming(
+        1,
+        {
+          duration: T.glowDuration,
+          easing: Easing.out(Easing.quad),
+          reduceMotion: ReduceMotion.Never,
+        },
+        (done) => {
+          if (done && onComplete) {
+            runOnJS(onComplete)();
+          }
         }
-      })
+      )
     );
 
     hasPlayedThisSession = true;

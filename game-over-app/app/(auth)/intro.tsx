@@ -88,7 +88,7 @@ export default function IntroScreen() {
         <Animated.View exiting={FadeOut.duration(400)} style={styles.center}>
           {/* `force` because the reveal must play here even if something else
               mounted a logo first during startup. */}
-          <AnimatedLogo size={200} force testID="intro-logo" />
+          <AnimatedLogo size={260} force testID="intro-logo" />
         </Animated.View>
       ) : (
         <Animated.View entering={FadeIn.duration(400)} style={StyleSheet.absoluteFill}>

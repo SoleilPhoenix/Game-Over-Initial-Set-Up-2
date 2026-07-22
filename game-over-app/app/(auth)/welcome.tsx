@@ -76,7 +76,7 @@ export default function WelcomeScreen() {
           {/* Brand block, pulled towards the top. AnimatedLogo is a fixed-size
               box, so the centring parent is what keeps it off the left edge. */}
           <View style={styles.brand}>
-            <AnimatedLogo size={150} testID="welcome-logo" />
+            <AnimatedLogo size={172} testID="welcome-logo" />
 
             <Animated.View style={styles.claimBlock} entering={claimEntrance}>
               <Text style={styles.claimLine}>{t.auth.claim1}</Text>
