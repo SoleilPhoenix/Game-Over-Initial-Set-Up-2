@@ -1,30 +1,62 @@
 # Handoff - Game Over App
 
 Kurzer Übergabestand, damit eine neue Session (z. B. von der iPhone-Claude-Code-App) nahtlos anknüpfen kann.
-Letzte Aktualisierung: 2026-07-21.
+Letzte Aktualisierung: 2026-07-22.
 
-## Aktueller Stand (2026-07-21) - Start-Journey steht, wartet auf Gerätetest
+## Aktueller Stand (2026-07-22) - Ein Auth-Screen, wartet auf Gerätetest
 
-Die Start-Journey ist vollständig gebaut:
+Nach dem ersten Gerätetest hat der User entschieden, Welcome und Continue zu **einem** Screen zusammenzulegen.
+Die Start-Journey ist jetzt:
 
-1. App startet, Launch-Intro läuft (Logo-Aufbau, danach das Video).
-2. Danach der Welcome-Screen: Logo, Claim, **ein** Button "Party planen".
-3. Erst danach die Anmeldung.
+1. App startet, Launch-Intro läuft (4s Logo-Aufbau, danach das Video sobald es existiert).
+2. Danach **ein** Screen: Logo, Claim, Hook, Social-Reihe, "Party planen", Login, Gastcode.
 
-Punkt 8 Schritt 3 ist damit abgeschlossen.
-Der User testet gerade am Gerät.
+Der Continue-Screen ist weg. Der User testet gerade diesen Stand am Gerät.
 
 ## HIER weitermachen
 
-Zwei Dinge stehen an, beide hängen am User:
-
-**1. Rückmeldung aus dem Gerätetest abwarten.**
-Siehe Abschnitt "Ungetestet" weiter unten, dort steht was konkret unklar ist.
+**1. Rückmeldung aus dem aktuellen Gerätetest abwarten.**
+Der Merge auf einen Screen ist neu und am Gerät noch ungesehen.
+Siehe "Ungetestet" weiter unten.
 
 **2. Die mp4 einhängen, sobald sie da ist.**
 Datei nach `assets/brand/intro.mp4` legen, dann in `src/components/brand/introVideo.ts`
 das `null` durch das `require` ersetzen, das dort als Kommentar steht.
 Das ist eine Zeile, sonst ändert sich nichts.
+
+**Wichtig fürs Testen des Intros:** Das Intro läuft nur einmal pro JS-Session (`shouldPlayIntro()` im Speicher).
+Nach Fast Refresh bleibt es übersprungen.
+Um es erneut zu sehen: in Metro **`r`** drücken (voller Reload) oder die App komplett schließen und neu öffnen.
+
+## Fertig in dieser Sitzung (2026-07-22) - Auth-Screens zusammengelegt
+
+Commit `8fc336bc5`.
+
+**Welcome und Continue zu einem Screen.**
+Der Continue-Screen (`app/(auth)/continue.tsx`) ist gelöscht, aus dem `(auth)/_layout` entfernt.
+Die Auth-Methoden liegen jetzt direkt auf dem Welcome. Ein Tap weniger bis zur Anmeldung.
+
+Genau dieser eine Screen war früher überladen und wurde deshalb getrennt (927pt auf 852pt).
+Diesmal passt es, weil die drei Social-Logins eine **kompakte Icon-Reihe** sind statt drei gestapelter Balken.
+`SocialButton` hat dafür eine `compact`-Variante (nur Marke, drei nebeneinander, flex:1).
+
+Reihenfolge nach Conversion, mit dem User so entschieden:
+Social-Icons oben (schnellster Weg), darunter "Party planen" als schlanker Outline-Button (E-Mail → signup),
+dann Login-Zeile, dann als leiseste Zeile der Gastcode.
+
+**Damit ist der Code-Feld-Bug erledigt:** Er trat auf dem Continue-Screen auf, dem die Tastatur-Behandlung fehlte,
+sodass das Feld hinter dem Terms-Balken verschwand. Der Welcome hat `KeyboardAvoidingView` +
+`automaticallyAdjustKeyboardInsets`, jetzt liegt der Code dort - der Bug ist mit dem Merge weg.
+
+Claim mittig zentriert, Logo + Claim nach oben gerückt, Logo einheitlich 150.
+Hook-Zeile knackiger: "Planen, feiern, abrechnen. Alles in einer App."
+
+**Intro-Fix:** Die 4s-Animation wird jetzt von einem festen Timer (`LOGO_REVEAL_DURATION`) gesteuert
+statt vom Completion-Callback des Logos - so ist die volle Laufzeit garantiert sichtbar.
+`expo-video` wird nur noch **lazy** geladen (`require` in der `IntroVideo`-Komponente, die nur bei vorhandenem
+Video mountet). Das native Modul hängt damit nicht mehr am logo-only-Pfad, was in Expo Go ein Risiko war.
+
+`continueTitle`, `continueSubtitle`, `continueWithEmail` aus i18n entfernt (tot nach dem Merge).
 
 ## Fertig in dieser Sitzung (2026-07-21)
 
@@ -90,25 +122,20 @@ und die Beschriftungen fluchten nicht mehr.
 
 Die Labels kommen jetzt aus i18n, vorher waren sie hart englisch verdrahtet.
 
+> **Hinweis:** Die folgenden zwei Unterpunkte betreffen den Continue-Screen und sind durch den
+> Merge auf einen Screen am 2026-07-22 überholt. `InviteCodeEntry` lebt weiter, liegt jetzt aber
+> nur noch auf dem Welcome (testIDs `invite-code-*`). Der Continue-Screen und seine
+> `continue-invite-code-*` testIDs existieren nicht mehr.
+
 ### Einladungscode auf beiden Screens
 
 Neu: `src/components/auth/InviteCodeEntry.tsx`, herausgezogen statt dupliziert.
-
-Wer die Zeile auf dem Welcome übersieht, steht sonst auf dem Continue-Screen
-vor drei Anmeldeknöpfen, die er als Gast gar nicht braucht.
-
-testIDs bleiben über `testIDPrefix` getrennt: `invite-code-*` auf dem Welcome,
-`continue-invite-code-*` auf dem Continue.
 
 ### Layout und Text nach dem Gerätetest des Users
 
 - Logo auf dem Welcome **zentriert**.
   `AnimatedLogo` ist eine Box fester Größe; ohne zentrierendes Elternelement klebte sie am linken Rand.
-- Logo-Größe Welcome 150 auf 190, Continue 104 auf 150.
-- "Bereits ein Konto? Anmelden" und die Code-Zeile von 14 auf 16 bzw. 15,5 pt.
-- Continue-Titel heißt nicht mehr "Lass uns deine Party planen".
-  Das versprach dasselbe wie der Knopf, den man gerade gedrückt hat.
-  Jetzt "Noch ein Schritt" / "Dann geht es an die Planung."
+- "Bereits ein Konto? Anmelden" und die Code-Zeile von 14 auf 16 pt.
 
 ## Fertig in der Sitzung davor (2026-07-20)
 
@@ -200,17 +227,16 @@ Alle Aussagen zur Optik sind aus dem Code abgeleitet.
 
 Offen für den Gerätetest, nach Risiko sortiert:
 
-- **Ob `expo-video` in Expo Go überhaupt läuft.**
-  Das ist ein Native-Modul.
-  Läuft es dort nicht, braucht das Intro einen Dev-Build, oder Phase 2 muss in Expo Go ausfallen.
-  Fällt beim ersten Start sofort auf.
-  Aktuell nicht dringend, solange `INTRO_VIDEO_SOURCE` auf `null` steht: dann wird gar kein Player gebaut.
-- Ob OAuth nach dem Umzug in `useSocialAuth` noch durchläuft.
-  Bleibt das größte Risiko, Apple lässt sich nur mit echtem Konto prüfen.
-  Die Social-Buttons wurden gerade neu gebaut, die `onPress`-Verdrahtung blieb aber unverändert.
-- Ob Logo-Größe 190 neben dem Claim stimmig wirkt.
-- Ob das Intro sich in der Länge richtig anfühlt, sobald das Video drin ist.
-- Ob nach der Umstellung von 53 Dateien irgendwo ein Icon fehlt.
+- **Ob der zusammengelegte Screen auf kleinen iPhones ohne Überlauf passt.**
+  Das war der Grund der ursprünglichen Trennung.
+  Die kompakte Social-Reihe soll genug Höhe sparen, gemessen ist es noch nicht.
+- Ob die 4s-Logo-Animation jetzt sichtbar ist.
+  Sie wird von einem festen Timer gesteuert; zum erneuten Auslösen voller Reload nötig (siehe oben).
+- Ob OAuth durchläuft. Bleibt das größte Risiko, Apple nur mit echtem Konto prüfbar.
+  Die Social-Buttons wurden neu gebaut, die `onPress`-Verdrahtung (`useSocialAuth`) blieb unverändert.
+- Ob `expo-video` in Expo Go läuft, sobald ein Video drin ist.
+  Solange `INTRO_VIDEO_SOURCE` auf `null` steht, wird das Modul gar nicht geladen (lazy require).
+- Ob Logo-Größe 150 neben dem Claim stimmig wirkt.
 
 ### Tote i18n-Schlüssel entfernt
 
