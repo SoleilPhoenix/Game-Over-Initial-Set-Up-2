@@ -3,30 +3,52 @@
 Kurzer Übergabestand, damit eine neue Session (z. B. von der iPhone-Claude-Code-App) nahtlos anknüpfen kann.
 Letzte Aktualisierung: 2026-07-22.
 
-## Aktueller Stand (2026-07-22) - Ein Auth-Screen, wartet auf Gerätetest
+## Aktueller Stand (2026-07-22 spät) - Intro-Fix, Logo-Größen, Gast-Flow gehärtet
 
-Nach dem ersten Gerätetest hat der User entschieden, Welcome und Continue zu **einem** Screen zusammenzulegen.
-Die Start-Journey ist jetzt:
+Alles auf `main` (`eff1db86c`). Über Codex (gpt-5.6-sol) umgesetzt, von Claude geprüft.
 
-1. App startet, Launch-Intro läuft (4s Logo-Aufbau, danach das Video sobald es existiert).
-2. Danach **ein** Screen: Logo, Claim, Hook, Social-Reihe, "Party planen", Login, Gastcode.
+**Intro-Animation gefixt.** Auf dem Gerät erschien das Logo fertig statt sich aufzubauen.
+Ursache: reanimated 4 richtet sich nach iOS "Bewegung reduzieren"; ist das an, springt jede
+Animation sofort auf den Endwert. Fix: `ReduceMotion.Never` an allen Reveal-Timings. Intro-Logo
+200→260, Welcome-Logo 150→172.
 
-Der Continue-Screen ist weg. Der User testet gerade diesen Stand am Gerät.
+**Gast-Flow gehärtet - mit einer wichtigen Drift-Entdeckung.**
+Codex traced den Gast-Flow, fand drei Schwachstellen. Beim kontrollierten Deploy per Supabase-MCP
+stellte sich heraus: die Live-DB hatte die sichere `accept_invite`-RPC **schon** (out-of-band
+angelegt, nie als Migration committet), die offene INSERT-Policy war schon weg. Der eigentliche Bug
+war, dass der **Client die RPC nie aufrief** - der alte Direkt-Insert scheiterte an der RLS, der
+Gast-Beitritt war live vermutlich kaputt. Jetzt ruft `invitesRepository.accept` die RPC auf
+(Rückgabe `success/event_id/reason`), EXECUTE auf `authenticated` verengt, Migration per MCP
+angewendet und verifiziert. Punkt 2: `getPreview` wirft jetzt Transportfehler (Retry + eigener
+Fehler-Screen), damit ein gültiger Code bei einem Aussetzer nicht als ungültig erscheint.
+Details in der Memory `guest-accept-and-db-drift`.
 
 ## HIER weitermachen
 
-**1. Rückmeldung aus dem aktuellen Gerätetest abwarten.**
-Der Merge auf einen Screen ist neu und am Gerät noch ungesehen.
-Siehe "Ungetestet" weiter unten.
+**1. Gast-Flow jetzt LIVE testen.** Die Migration ist auf der Produktiv-DB angewendet, der Client
+passt dazu. Mit echtem Einladungscode durchspielen: Code eingeben → Vorschau → Registrieren →
+landet auf dem Event als Gast. Das war der Punkt, den der User hauptsächlich prüfen wollte.
 
-**2. Die mp4 einhängen, sobald sie da ist.**
-Datei nach `assets/brand/intro.mp4` legen, dann in `src/components/brand/introVideo.ts`
-das `null` durch das `require` ersetzen, das dort als Kommentar steht.
-Das ist eine Zeile, sonst ändert sich nichts.
+**2. Rückmeldung zum zusammengelegten Auth-Screen + Intro abwarten** (siehe "Ungetestet").
 
-**Wichtig fürs Testen des Intros:** Das Intro läuft nur einmal pro JS-Session (`shouldPlayIntro()` im Speicher).
-Nach Fast Refresh bleibt es übersprungen.
-Um es erneut zu sehen: in Metro **`r`** drücken (voller Reload) oder die App komplett schließen und neu öffnen.
+**3. Die mp4 einhängen, sobald sie da ist.**
+`assets/brand/intro.mp4` ablegen, dann in `src/components/brand/introVideo.ts` das `null` durch das
+`require` im Kommentar ersetzen. Eine Zeile.
+
+**Wichtig fürs Intro-Testen:** Läuft nur einmal pro JS-Session. Zum erneuten Auslösen in Metro `r`
+(voller Reload) oder App schließen/neu öffnen.
+
+## Offene separate Baustelle: DB-Drift + migrate.yml
+
+`migrate.yml` scheitert bei **jedem** Push, seit Monaten - die GitHub-Secrets (`SUPABASE_ACCESS_TOKEN`,
+`SUPABASE_DB_PASSWORD`, `SUPABASE_PROJECT_ID`) sind leer, der Job stirbt bei `supabase link` vor
+`db push`. Migrationen werden also **nur** von Hand (MCP/Dashboard) angewendet, nie von der CI.
+Folge: die Migrationsdateien und die Live-DB driften auseinander. Fünf lokale Dateien sind nicht in
+`schema_migrations` registriert (Stand 2026-07-22): `20260417000000_rename_package_tiers` (NICHT
+idempotent), `20260418000000`, `20260601000000`, `20260613000000`, `2026-07-18_notifications_metadata`.
+Solange die CI ohne Secrets nichts anwendet, ist das ungefährlich, aber es ist eine Falle: **vor jeder
+neuen Migration die echte DB per MCP prüfen**, nicht den Dateien vertrauen. Aufräumen wäre ein eigenes
+Thema (Secrets setzen ODER die Historie mit dem Ist-Zustand versöhnen).
 
 ## Fertig in dieser Sitzung (2026-07-22) - Auth-Screens zusammengelegt
 
