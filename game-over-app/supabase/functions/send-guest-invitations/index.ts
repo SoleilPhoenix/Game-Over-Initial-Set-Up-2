@@ -228,7 +228,7 @@ serve(async (req: Request) => {
     // resolve a profiles:created_by(...) join. Two separate queries required.
     const { data: event, error: eventError } = await supabase
       .from('events')
-      .select('id, title, honoree_name, created_by, party_type, start_date')
+      .select('id, title, honoree_name, created_by, party_type, start_date, city:cities(name)')
       .eq('id', eventId)
       .single();
 
@@ -254,8 +254,12 @@ serve(async (req: Request) => {
 
     const organizerName: string = authFullName || profile?.full_name || 'Your friend';
     const honoreeName: string = event.honoree_name ?? 'the guest of honour';
+    // City enriches the copy ("… in Berlin") but must never block a send: a
+    // missing city just drops the suffix rather than failing the whole invite.
+    const cityName = (event.city as { name?: string } | null)?.name ?? '';
+    const citySuffix = cityName ? ` in ${cityName}` : '';
     const partyTypeLabel: string = language === 'de'
-      ? (event.party_type === 'bachelor' ? 'Junggesellenabschied' : 'Junggesellinnenabschied')
+      ? (event.party_type === 'bachelor' ? 'Bachelor Party (JGA)' : 'Bachelorette Party (JGA)')
       : (event.party_type === 'bachelorette' ? 'Bachelorette Party' : 'Bachelor Party');
 
     // ── Guests were already parsed from the request body above ──
@@ -393,14 +397,14 @@ serve(async (req: Request) => {
       // The invite code is kept only as a manual fallback if the link can't be tapped.
       const guestName = guest.firstName ?? '';
       const messageBody = language === 'de'
-        ? `🎉 ${guestName ? guestName + ', du bist' : 'Du bist'} zum ${partyTypeLabel} von ${honoreeName} eingeladen!\n\n` +
+        ? `🎉 ${guestName ? guestName + ', du bist' : 'Du bist'} zur ${partyTypeLabel} von ${honoreeName}${citySuffix} eingeladen!\n\n` +
           `${organizerName} plant die Feier auf Game Over 🥂\n\n` +
           `👉 Zum Beitreten tippen:\n${inviteUrl}\n\n` +
           `Der Link bringt dich direkt zu deiner Einladung — einfach Konto erstellen und du bist dabei. ` +
           `Alles an einem Ort: Planung, Gruppenchat, Abstimmungen & Zahlungen.\n\n` +
           `Falls du danach gefragt wirst, dein Einladungscode: ${code}\n\n` +
           `Antworte mit STOP zum Abmelden.`
-        : `🎉 ${guestName ? guestName + ", you're" : "You're"} invited to ${honoreeName}'s ${partyTypeLabel}!\n\n` +
+        : `🎉 ${guestName ? guestName + ", you're" : "You're"} invited to ${honoreeName}'s ${partyTypeLabel}${citySuffix}!\n\n` +
           `${organizerName} is planning the celebration on Game Over 🥂\n\n` +
           `👉 Tap to join:\n${inviteUrl}\n\n` +
           `The link takes you straight to your invite — just create your account and you're in. ` +
@@ -423,9 +427,10 @@ serve(async (req: Request) => {
           language,
           partyType: (event.party_type === 'bachelor' || event.party_type === 'bachelorette')
             ? event.party_type : undefined,
+          cityName,
         });
         const subject = language === 'de'
-          ? `Du bist zum ${partyTypeLabel} von ${honoreeName} eingeladen! 🎉`
+          ? `Du bist zur ${partyTypeLabel} von ${honoreeName} eingeladen! 🎉`
           : `You're invited to ${honoreeName}'s ${partyTypeLabel}! 🎉`;
         sendResult = await sendEmail({ to: contact, subject, html });
 

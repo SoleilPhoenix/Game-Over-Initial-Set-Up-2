@@ -18,6 +18,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -79,7 +80,6 @@ export default function InviteWizardScreen() {
 
   const [step, setStep] = useState<WizardStep>('preview');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
-  const [avatarMime, setAvatarMime] = useState<string | null>(null);
   const [avatarSize, setAvatarSize] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [signupCompleted, setSignupCompleted] = useState(false);
@@ -321,7 +321,6 @@ export default function InviteWizardScreen() {
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
       setAvatarUri(asset.uri);
-      setAvatarMime(asset.mimeType ?? null);
       setAvatarSize(asset.fileSize ?? null);
     }
   };
@@ -355,29 +354,26 @@ export default function InviteWizardScreen() {
       // pattern as src/components/profile/AvatarUpload.tsx.
       let avatarUrl: string | null = null;
       if (avatarUri) {
-        const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
         const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
         if (avatarSize != null && avatarSize > MAX_FILE_SIZE_BYTES) {
           Alert.alert(t.invite.fileTooLargeTitle, t.invite.fileTooLargeBody);
           return;
         }
-        const mime = avatarMime?.toLowerCase();
-        if (mime && !ALLOWED_MIME_TYPES.includes(mime)) {
-          Alert.alert(t.invite.invalidFileTitle, t.invite.invalidFileBody);
-          return;
-        }
 
-        const contentType = mime && ALLOWED_MIME_TYPES.includes(mime) ? mime : 'image/jpeg';
-        const ext = contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg';
-
-        const base64 = await FileSystem.readAsStringAsync(avatarUri, {
+        // Normalize every picker format (including iPhone HEIC/HEIF) to a
+        // storage-bucket-compatible JPEG before reading and uploading it.
+        const jpeg = await manipulateAsync(avatarUri, [], {
+          compress: 0.8,
+          format: SaveFormat.JPEG,
+        });
+        const base64 = await FileSystem.readAsStringAsync(jpeg.uri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        const path = `${currentUser.id}-${Date.now()}.${ext}`;
+        const path = `${currentUser.id}-${Date.now()}.jpg`;
         const { error: uploadError } = await supabase.storage
           .from('avatars')
-          .upload(path, decode(base64), { contentType, upsert: true });
+          .upload(path, decode(base64), { contentType: 'image/jpeg', upsert: true });
         if (uploadError) {
           // Bug 1 fix: never silently drop the photo. Let the guest decide.
           const proceed = await new Promise<boolean>((resolve) => {

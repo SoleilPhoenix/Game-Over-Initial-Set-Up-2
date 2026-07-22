@@ -6,6 +6,7 @@
 import { supabase } from '@/lib/supabase/client';
 import * as Crypto from 'expo-crypto';
 import type { Database } from '@/lib/supabase/types';
+import { getTranslation } from '@/i18n';
 
 type InviteCode = Database['public']['Tables']['invite_codes']['Row'];
 
@@ -197,8 +198,9 @@ export const invitesRepository = {
     // carries a machine reason we map to a message; both a fresh join and
     // 'already_participant' are successes that should land on the event.
     const row = Array.isArray(data) ? data[0] : data;
+    const t = getTranslation();
     if (!row) {
-      return { success: false, error: 'Failed to join the event. Please try again.' };
+      return { success: false, error: t.invite.acceptGeneric };
     }
 
     if (row.success) {
@@ -206,15 +208,15 @@ export const invitesRepository = {
     }
 
     const reasonMessages: Record<string, string> = {
-      not_found: 'This invite link is invalid or has been revoked.',
-      inactive: 'This invite link is no longer active.',
-      expired: 'This invite link has expired.',
-      max_uses_reached: 'This invite link has reached its maximum number of uses.',
-      unauthenticated: 'Please sign in to accept this invitation.',
+      not_found: t.invite.acceptNotFound,
+      inactive: t.invite.acceptInactive,
+      expired: t.invite.acceptExpired,
+      max_uses_reached: t.invite.acceptMaxUsesReached,
+      unauthenticated: t.invite.acceptUnauthenticated,
     };
     return {
       success: false,
-      error: reasonMessages[row.reason as string] ?? 'Invalid invite link.',
+      error: reasonMessages[row.reason as string] ?? t.invite.acceptGeneric,
     };
   },
 

@@ -367,6 +367,7 @@ interface GuestInviteEmailParams {
   inviteCode?: string;       // show prominently so guest can type it in the app
   language?: 'de' | 'en';    // organizer's app language drives the copy
   partyType?: 'bachelor' | 'bachelorette';
+  cityName?: string;
 }
 
 /**
@@ -377,7 +378,7 @@ interface GuestInviteEmailParams {
  * palette) — this is the primary outbound email, so it owns its own markup.
  */
 export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string {
-  const { organizerName, honoreeName, inviteUrl, guestFirstName, inviteCode, language, partyType } = params;
+  const { organizerName, honoreeName, inviteUrl, guestFirstName, inviteCode, language, partyType, cityName } = params;
   const isDe = language === 'de';
 
   // Brand palette
@@ -391,14 +392,15 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
 
   // Party wording follows party_type. German avoids the genitive-s pitfall
   // (e.g. "Sally Jones" → wrong "Sally Joness") by always using "von {name}".
-  const partyDe = partyType === 'bachelor' ? 'Junggesellenabschied' : 'Junggesellinnenabschied';
+  const partyDe = partyType === 'bachelor' ? 'Bachelor Party (JGA)' : 'Bachelorette Party (JGA)';
   const partyEn = partyType === 'bachelor' ? 'Bachelor Party' : 'Bachelorette Party';
+  const citySuffix = cityName ? ` in ${cityName}` : '';
 
   const C = isDe ? {
     lang: 'de',
-    title: `Du bist zum ${partyDe} von ${honoreeName} eingeladen`,
+    title: `Du bist zur ${partyDe} von ${honoreeName} eingeladen`,
     invitationFrom: `Einladung von ${organizerName}`,
-    celebrate: 'Du bist eingeladen zu feiern',
+    celebrate: `Du bist zur ${partyDe} von`,
     greeting: guestFirstName ? `Hallo ${guestFirstName},` : 'Hallo,',
     intro: `<strong style="color:#FFFFFF;">${organizerName}</strong> plant etwas Unvergessliches — und du stehst auf der Gästeliste.`,
     hook: 'Keine Lust auf endlose Gruppenchats und die „Wer schuldet was"-Tabelle? Diesmal nicht.',
@@ -411,7 +413,7 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
       ['🤝', 'Einfach hingehen', 'der Koordinationsstress ist weg — für alle'],
     ],
     codeLabel: 'Dein persönlicher Einladungscode',
-    cta: `Zur Party von ${honoreeName} &rarr;`,
+    cta: `Zur ${partyDe} von ${honoreeName}${citySuffix} &rarr;`,
     howToJoin: `Neu hier? Lade <strong style="color:#FFFFFF;">Game Over</strong> &rarr; tippe auf <em>„Einladungscode?"</em> &rarr; gib <strong style="color:${GOLD};">${inviteCode}</strong> ein`,
     footer: 'Diese Einladung ist persönlich für dich und läuft in 30 Tagen ab.<br>Nicht erwartet? Ignoriere sie einfach.',
   } : {
@@ -431,7 +433,7 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
       ['🤝', 'Just show up', 'the coordination stress is gone — for everyone'],
     ],
     codeLabel: 'Your personal invite code',
-    cta: `Join ${honoreeName}'s ${partyEn} &rarr;`,
+    cta: `Join ${honoreeName}'s ${partyEn}${citySuffix} &rarr;`,
     howToJoin: `New here? Download <strong style="color:#FFFFFF;">Game Over</strong> &rarr; tap <em>"Got an invite code?"</em> &rarr; enter <strong style="color:${GOLD};">${inviteCode}</strong>`,
     footer: 'This invite is personal to you and expires in 30 days.<br>Not expecting this? You can safely ignore it.',
   };
