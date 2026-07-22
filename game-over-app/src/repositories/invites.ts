@@ -193,15 +193,28 @@ export const invitesRepository = {
       return { success: false, error: error.message };
     }
 
-    const result = Array.isArray(data) ? data[0] : data;
-    if (!result?.event_id) {
+    // The RPC returns one row: (success, event_id, reason). A false success
+    // carries a machine reason we map to a message; both a fresh join and
+    // 'already_participant' are successes that should land on the event.
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) {
       return { success: false, error: 'Failed to join the event. Please try again.' };
     }
 
+    if (row.success) {
+      return { success: true, eventId: row.event_id ?? undefined };
+    }
+
+    const reasonMessages: Record<string, string> = {
+      not_found: 'This invite link is invalid or has been revoked.',
+      inactive: 'This invite link is no longer active.',
+      expired: 'This invite link has expired.',
+      max_uses_reached: 'This invite link has reached its maximum number of uses.',
+      unauthenticated: 'Please sign in to accept this invitation.',
+    };
     return {
-      success: true,
-      eventId: result.event_id,
-      error: result.joined ? undefined : 'You are already a participant of this event.',
+      success: false,
+      error: reasonMessages[row.reason as string] ?? 'Invalid invite link.',
     };
   },
 

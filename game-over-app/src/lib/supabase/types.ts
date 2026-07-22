@@ -880,7 +880,7 @@ export type Database = {
     Functions: {
       accept_invite: {
         Args: { p_code: string }
-        Returns: { event_id: string; joined: boolean }[]
+        Returns: { success: boolean; event_id: string; reason: string | null }[]
       }
       generate_booking_reference: { Args: never; Returns: string }
       increment_invite_use_count: {
