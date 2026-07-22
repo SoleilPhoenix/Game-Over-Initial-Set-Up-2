@@ -878,6 +878,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_invite: {
+        Args: { p_code: string }
+        Returns: { event_id: string; joined: boolean }[]
+      }
       generate_booking_reference: { Args: never; Returns: string }
       increment_invite_use_count: {
         Args: { invite_id: string }

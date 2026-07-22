@@ -85,7 +85,13 @@ export default function InviteWizardScreen() {
   const [signupCompleted, setSignupCompleted] = useState(false);
   const [isAccepting, setIsAccepting] = useState(false);
 
-  const { data: preview, isLoading: previewLoading } = usePublicInvitePreview(code);
+  const {
+    data: preview,
+    isLoading: previewLoading,
+    isError: previewError,
+    isFetching: previewFetching,
+    refetch: retryPreview,
+  } = usePublicInvitePreview(code);
   const acceptInvite = useAcceptInvite();
 
   // ── Core accept handler (defined first — used by steps 1 and 3) ──
@@ -124,7 +130,7 @@ export default function InviteWizardScreen() {
       }
 
       try {
-        const result = await acceptInvite.mutateAsync({ code: code!, userId: currentUser.id });
+        const result = await acceptInvite.mutateAsync({ code: code! });
         if (!result.eventId) {
           Alert.alert(t.invite.errorTitle, result.error || t.invite.couldNotJoin);
           return;
@@ -429,6 +435,26 @@ export default function InviteWizardScreen() {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
         <Spinner size="large" color="$primary" />
+      </YStack>
+    );
+  }
+
+  // ── Transient preview error ──────────────────────────────────
+  if (previewError) {
+    return (
+      <YStack flex={1} justifyContent="center" alignItems="center"
+        backgroundColor="$background" paddingHorizontal="$6" gap="$4"
+        testID="invite-preview-error-screen">
+        <Ionicons name="cloud-offline-outline" size={48} color={'rgba(255,255,255,0.48)'} />
+        <Text fontSize={18} fontWeight="700" color="$textPrimary" textAlign="center">
+          {t.invite.previewErrorTitle}
+        </Text>
+        <Text fontSize={14} color="$textTertiary" textAlign="center">
+          {t.invite.previewErrorBody}
+        </Text>
+        <Button onPress={() => void retryPreview()} loading={previewFetching}>
+          {t.invite.previewErrorRetry}
+        </Button>
       </YStack>
     );
   }

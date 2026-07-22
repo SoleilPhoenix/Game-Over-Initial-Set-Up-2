@@ -48,7 +48,7 @@ export type { InvitePreview };
 
 /**
  * Fetch public invite preview — works WITHOUT authentication.
- * Uses anonymous SELECT policy on invite_codes.
+ * Uses a SECURITY DEFINER RPC and retries transient RPC failures.
  */
 export function usePublicInvitePreview(code: string | undefined) {
   return useQuery({
@@ -56,7 +56,7 @@ export function usePublicInvitePreview(code: string | undefined) {
     queryFn: () => invitesRepository.getPreview(code!),
     enabled: !!code,
     staleTime: 30 * 1000,
-    retry: false,
+    retry: 2,
   });
 }
 
@@ -117,8 +117,7 @@ export function useAcceptInvite() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ code, userId }: { code: string; userId: string }) =>
-      invitesRepository.accept(code, userId),
+    mutationFn: ({ code }: { code: string }) => invitesRepository.accept(code),
     onSuccess: (result) => {
       if (result.success && result.eventId) {
         // Invalidate relevant queries

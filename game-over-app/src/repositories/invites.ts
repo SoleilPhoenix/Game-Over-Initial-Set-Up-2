@@ -125,7 +125,7 @@ export const invitesRepository = {
 
     if (error) {
       console.error('[getPreview] RPC error:', error.message);
-      return null;
+      throw error;
     }
 
     // rpc returns an array; take the first row
@@ -179,109 +179,30 @@ export const invitesRepository = {
   },
 
   /**
-   * Increment use count when an invite is accepted
-   * Uses RPC for atomic increment to prevent race conditions
-   *
-   * IMPORTANT: Requires the 'increment_invite_use_count' RPC function in Supabase:
-   *
-   * CREATE OR REPLACE FUNCTION increment_invite_use_count(invite_id UUID)
-   * RETURNS VOID AS $$
-   * BEGIN
-   *   UPDATE invite_codes
-   *   SET use_count = use_count + 1
-   *   WHERE id = invite_id;
-   * END;
-   * $$ LANGUAGE plpgsql SECURITY DEFINER;
+   * Accept an invite atomically through the server-authoritative RPC.
    */
-  async incrementUseCount(inviteId: string): Promise<void> {
-    // Note: increment_invite_use_count RPC function may need to be created in Supabase
-    const { error } = await supabase.rpc('increment_invite_use_count', {
-      invite_id: inviteId,
+  async accept(
+    inviteCode: string
+  ): Promise<{ success: boolean; eventId?: string; error?: string }> {
+    const { data, error } = await supabase.rpc('accept_invite', {
+      p_code: inviteCode.toUpperCase(),
     });
 
     if (error) {
-      // If RPC doesn't exist (PGRST202), throw with clear instructions
-      if (error.code === 'PGRST202') {
-        console.error(
-          'Missing RPC function: increment_invite_use_count. ' +
-          'Please create this function in Supabase for atomic invite counting.'
-        );
-        throw new Error('Server configuration error: Missing invite increment function');
-      }
-      throw error;
-    }
-  },
-
-  /**
-   * Accept an invite - adds user as participant and increments use count
-   */
-  async accept(
-    inviteCode: string,
-    userId: string
-  ): Promise<{ success: boolean; eventId?: string; error?: string }> {
-    // Validate the invite
-    const validation = await this.validate(inviteCode);
-
-    if (!validation.valid) {
-      const errorMessages = {
-        not_found: 'This invite link is invalid or has been revoked.',
-        expired: 'This invite link has expired.',
-        max_uses_reached: 'This invite link has reached its maximum number of uses.',
-        inactive: 'This invite link is no longer active.',
-      };
-      return {
-        success: false,
-        error: errorMessages[validation.reason!] || 'Invalid invite link.',
-      };
+      console.error('[accept] RPC error:', error.message);
+      return { success: false, error: error.message };
     }
 
-    const invite = validation.invite!;
-    const eventId = invite.event_id;
-
-    // Check if user is already a participant
-    const { data: existingParticipant } = await supabase
-      .from('event_participants')
-      .select('id')
-      .eq('event_id', eventId)
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (existingParticipant) {
-      return {
-        success: true,
-        eventId,
-        error: 'You are already a participant of this event.',
-      };
-    }
-
-    // Insert participant first (critical path)
-    const { error: participantError } = await supabase
-      .from('event_participants')
-      .insert({
-        event_id: eventId,
-        user_id: userId,
-        role: 'guest',
-        invited_via: 'link',
-        confirmed_at: new Date().toISOString(),
-      });
-
-    if (participantError) {
-      console.error('Failed to add participant:', participantError);
+    const result = Array.isArray(data) ? data[0] : data;
+    if (!result?.event_id) {
       return { success: false, error: 'Failed to join the event. Please try again.' };
     }
 
-    // NOTE: incrementUseCount is not atomic with the insert above.
-    // If this fails, the participant is already added but use_count won't increment.
-    // The user can retry and the existingParticipant check will route them correctly.
-    // This is acceptable for an MVP where max_uses is enforced at the DB level too.
-    try {
-      await this.incrementUseCount(invite.id);
-    } catch (e) {
-      console.warn('incrementUseCount failed after participant insert:', e);
-      // Non-critical: continue — participant is already added
-    }
-
-    return { success: true, eventId };
+    return {
+      success: true,
+      eventId: result.event_id,
+      error: result.joined ? undefined : 'You are already a participant of this event.',
+    };
   },
 
   /**

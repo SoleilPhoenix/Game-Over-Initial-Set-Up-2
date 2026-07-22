@@ -951,6 +951,9 @@ const de: TranslationKeys = {
   invite: {
     invalidTitle: 'Dieser Einladungslink ist nicht mehr gültig',
     invalidBody: 'Der Link ist möglicherweise abgelaufen, bereits verwendet oder widerrufen worden. Bitte den Organisator um einen neuen.',
+    previewErrorTitle: 'Diese Einladung konnte nicht geladen werden',
+    previewErrorBody: 'Es gibt ein Netzwerk- oder Serverproblem. Deine Einladung kann weiterhin gültig sein.',
+    previewErrorRetry: 'Erneut versuchen',
     goToApp: 'Zur App',
     invitedBy: 'Eingeladen von',
     accept: 'Einladung annehmen →',

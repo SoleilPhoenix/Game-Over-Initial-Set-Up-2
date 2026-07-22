@@ -967,6 +967,9 @@ const en = {
   invite: {
     invalidTitle: 'This invite link is no longer valid',
     invalidBody: 'The link may have expired, already been used, or been revoked. Ask the organizer for a new one.',
+    previewErrorTitle: 'Could not load this invitation',
+    previewErrorBody: 'There was a network or server problem. Your invitation may still be valid.',
+    previewErrorRetry: 'Try again',
     goToApp: 'Go to App',
     invitedBy: 'Invited by',
     accept: 'Accept Invitation →',
