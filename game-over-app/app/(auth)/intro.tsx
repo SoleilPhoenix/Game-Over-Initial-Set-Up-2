@@ -27,7 +27,7 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, Pressable } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, Pressable, InteractionManager } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -47,6 +47,12 @@ type Phase = 'logo' | 'video';
 export default function IntroScreen() {
   const [phase, setPhase] = React.useState<Phase>('logo');
   const [showSkip, setShowSkip] = React.useState(false);
+  // The reveal advances by wall-clock from the moment AnimatedLogo mounts. On a
+  // cold start the screen mounts a beat before it is actually painted (JS warm-up
+  // plus the fade transition), so starting on mount ate the first ~2 s and only
+  // the tail was seen. Gate the whole logo phase on this flag, set once the entry
+  // interactions have settled, so the draw-on starts when the screen is visible.
+  const [ready, setReady] = React.useState(false);
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
 
@@ -62,14 +68,27 @@ export default function IntroScreen() {
   }, []);
 
   React.useEffect(() => {
-    const timer = setTimeout(() => setShowSkip(true), SKIP_APPEARS_AFTER);
-    return () => clearTimeout(timer);
+    const handle = InteractionManager.runAfterInteractions(() => setReady(true));
+    // Fallback: never let the intro hang on a device where the interaction
+    // handle does not resolve promptly.
+    const fallback = setTimeout(() => setReady(true), 700);
+    return () => {
+      handle.cancel();
+      clearTimeout(fallback);
+    };
   }, []);
 
-  // Phase 1 runs for a fixed, guaranteed duration. When it ends we either move to
-  // the video or, if there is none, leave for the welcome screen.
   React.useEffect(() => {
-    if (phase !== 'logo') return;
+    if (!ready) return;
+    const timer = setTimeout(() => setShowSkip(true), SKIP_APPEARS_AFTER);
+    return () => clearTimeout(timer);
+  }, [ready]);
+
+  // Phase 1 runs for a fixed, guaranteed duration once the reveal has actually
+  // started (i.e. the screen is visible). When it ends we either move to the
+  // video or, if there is none, leave for the welcome screen.
+  React.useEffect(() => {
+    if (!ready || phase !== 'logo') return;
     const timer = setTimeout(() => {
       if (INTRO_VIDEO_SOURCE === null) {
         finish();
@@ -78,7 +97,7 @@ export default function IntroScreen() {
       }
     }, LOGO_REVEAL_DURATION + LOGO_HOLD_AFTER_REVEAL);
     return () => clearTimeout(timer);
-  }, [phase, finish]);
+  }, [ready, phase, finish]);
 
   return (
     <View style={styles.container} testID="intro-screen">
@@ -86,9 +105,10 @@ export default function IntroScreen() {
 
       {phase === 'logo' ? (
         <Animated.View exiting={FadeOut.duration(400)} style={styles.center}>
-          {/* `force` because the reveal must play here even if something else
+          {/* Mounted only once the screen is visible, so the reveal is seen from
+              its first frame. `force` because it must play even if something else
               mounted a logo first during startup. */}
-          <AnimatedLogo size={260} force testID="intro-logo" />
+          {ready && <AnimatedLogo size={260} force testID="intro-logo" />}
         </Animated.View>
       ) : (
         <Animated.View entering={FadeIn.duration(400)} style={StyleSheet.absoluteFill}>
