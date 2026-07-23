@@ -5,7 +5,6 @@
 
 import React, { memo } from 'react';
 import { YStack, XStack, Text, Avatar } from 'tamagui';
-import { colors } from '@/constants/colors';
 import type { MessageWithAuthor } from '@/repositories/messages';
 
 interface MessageBubbleProps {
@@ -31,7 +30,7 @@ function MessageBubbleComponent({
   };
 
   const getInitials = (name: string | null) => {
-    if (!name) return '?';
+    if (!name) return '';
     return name
       .split(' ')
       .map((n) => n[0])
@@ -89,15 +88,14 @@ function MessageBubbleComponent({
 
           {/* Bubble */}
           <YStack
-            backgroundColor={isOwnMessage ? '$primary' : '$surface'}
+            backgroundColor={isOwnMessage ? '#22385A' : '#1A2F47'}
             paddingHorizontal="$3"
             paddingVertical="$2"
             borderRadius="$lg"
             borderBottomRightRadius={isOwnMessage ? '$sm' : '$lg'}
             borderBottomLeftRadius={isOwnMessage ? '$lg' : '$sm'}
-            borderWidth={isOwnMessage ? 0 : 1}
-            borderColor="$borderColor"
-            elevation={isOwnMessage ? 0 : 1}
+            borderWidth={1}
+            borderColor={isOwnMessage ? 'rgba(198,167,94,0.25)' : 'rgba(230,220,200,0.12)'}
           >
             <Text
               fontSize="$3"

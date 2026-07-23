@@ -11,7 +11,7 @@ type EventParticipantInsert = Database['public']['Tables']['event_participants']
 type Profile = Database['public']['Tables']['profiles']['Row'];
 
 export interface ParticipantWithProfile extends EventParticipant {
-  profile: Pick<Profile, 'id' | 'email' | 'full_name' | 'avatar_url'> | null;
+  profile: Pick<Profile, 'id' | 'email' | 'full_name' | 'avatar_url' | 'phone'> | null;
 }
 
 export const participantsRepository = {
@@ -21,19 +21,38 @@ export const participantsRepository = {
   async getByEventId(eventId: string): Promise<ParticipantWithProfile[]> {
     const { data, error } = await supabase
       .from('event_participants')
-      .select(`
-        *,
-        profile:profiles(id, email, full_name, avatar_url)
-      `)
+      .select('id, event_id, user_id, role, payment_status, payment_claimed_at, contribution_amount_cents, confirmed_at, invited_at, invited_via')
       .eq('event_id', eventId)
       .order('invited_at', { ascending: true });
 
     if (error) throw error;
 
-    // Note: event_participants->profiles relation may need FK in Supabase
-    return (data || []).map(p => ({
+    const rows = data || [];
+
+    // event_participants.user_id references auth.users.id, not profiles.id.
+    // PostgREST cannot traverse that indirect relationship, so we fetch profiles separately.
+    const userIds = rows.map(r => r.user_id).filter((id): id is string => !!id);
+    const profilesMap: Record<string, Pick<Profile, 'id' | 'email' | 'full_name' | 'avatar_url' | 'phone'>> = {};
+
+    if (userIds.length > 0) {
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, avatar_url, phone')
+        .in('id', userIds);
+
+      if (profilesError) {
+        console.warn('[participantsRepository.getByEventId] profiles fetch failed:', profilesError.message);
+      }
+      if (profilesData) {
+        for (const p of profilesData) {
+          profilesMap[p.id] = p;
+        }
+      }
+    }
+
+    return rows.map(p => ({
       ...p,
-      profile: (p as any).profile as ParticipantWithProfile['profile'],
+      profile: p.user_id ? (profilesMap[p.user_id] ?? null) : null,
     }));
   },
 
@@ -140,10 +159,15 @@ export const participantsRepository = {
   /**
    * Get all events where the user participates as a guest
    */
-  async getGuestParticipations(userId: string): Promise<Array<{ event_id: string; role: string; payment_status: string | null }>> {
+  async getGuestParticipations(userId: string): Promise<{
+    event_id: string;
+    role: string;
+    payment_status: string | null;
+    payment_claimed_at: string | null;
+  }[]> {
     const { data, error } = await supabase
       .from('event_participants')
-      .select('event_id, role, payment_status')
+      .select('event_id, role, payment_status, payment_claimed_at')
       .eq('user_id', userId)
       .eq('role', 'guest');
 

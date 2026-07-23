@@ -1,11 +1,38 @@
 /**
- * Manage Invitations Screen — Redesigned
+ * Manage Invitations Screen — Editorial re-skin (content-preserving).
  * Shows ALL participant slots: organizer (pre-filled), guests (editable), honoree (pre-filled).
  * Organizer can fill in guest contact details and send invitations.
+ *
+ * Phase A-3: swaps editorial tokens, unifies primary accents to gold.
+ * Semantic colors (role badges blue/amber, status green/red) intentionally preserved.
  */
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { ScrollView, Share, ActivityIndicator, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Modal, Alert } from 'react-native';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { ScrollView, Share, ActivityIndicator, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Modal, Alert, Image } from 'react-native';
+
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
+import { useQueryClient } from '@tanstack/react-query';
+import { participantKeys } from '@/hooks/queries/useParticipants';
+import { YStack, XStack, Text, Spinner } from 'tamagui';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useEvent } from '@/hooks/queries/useEvents';
+import { useParticipants } from '@/hooks/queries/useParticipants';
+import { useInviteGuests, useCreateInvite } from '@/hooks/queries/useInvites';
+import { useBooking } from '@/hooks/queries/useBookings';
+import { useUser } from '@/stores/authStore';
+import { useTranslation } from '@/i18n';
+import { useTheme } from '@/hooks/useTheme';
+import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { PastEventBanner } from '@/components/ui/PastEventBanner';
+import { ambientShadow, type EditorialTheme } from '@/constants/designSystem';
+import { GoldButton } from '@/components/ui/editorial';
+import type { ParticipantWithProfile } from '@/repositories';
+import { loadDesiredParticipants, loadBudgetInfo, loadGuestDetails, saveGuestDetails, setInvitedCount, type GuestDetail } from '@/lib/participantCountCache';
+import { resolveGuestDisplay } from '@/utils/guestDisplay';
+import { formatGuestChanges, type GuestDataChange } from '@/utils/guestDataChange';
+import { supabase } from '@/lib/supabase/client';
 
 // ─── Phone Formatting ──────────────────────────
 /** Auto-formats German phone numbers with dash after prefix */
@@ -34,6 +61,18 @@ function formatGermanPhone(text: string): string {
   return prefix + digits.slice(0, 15);
 }
 
+/** Normalise a phone number to a comparable E.164-ish key so that "0177…",
+ *  "+49 177…" and "0049177…" all collapse to the same value. Empty when blank. */
+function normalizePhoneKey(phone: string): string {
+  if (!phone) return '';
+  let s = phone.replace(/[^\d+]/g, '');
+  if (!s) return '';
+  if (s.startsWith('00')) s = '+' + s.slice(2);
+  if (s.startsWith('0')) return '+49' + s.slice(1);
+  if (s.startsWith('+')) return s;
+  return '+' + s;
+}
+
 // ─── Email Autocomplete ────────────────────────
 const COMMON_DOMAINS = [
   'gmail.com', 'gmx.de', 'web.de', 't-online.de',
@@ -47,25 +86,28 @@ function getEmailSuggestions(email: string): string[] {
   if (!afterAt) return COMMON_DOMAINS.slice(0, 5);
   return COMMON_DOMAINS.filter(d => d.startsWith(afterAt));
 }
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useEvent } from '@/hooks/queries/useEvents';
-import { useParticipants } from '@/hooks/queries/useParticipants';
-import { useBooking } from '@/hooks/queries/useBookings';
-import { useUser } from '@/stores/authStore';
-import { useTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
-import { Button } from '@/components/ui/Button';
-import type { ParticipantWithProfile } from '@/repositories';
-import { loadDesiredParticipants, loadBudgetInfo, loadGuestDetails, saveGuestDetails, setInvitedCount, type GuestDetail } from '@/lib/participantCountCache';
-import { supabase } from '@/lib/supabase/client';
+/** Renders a profile photo with automatic fallback to `children` on load error.
+ *  Required because React Native's <Image> silently shows blank on broken URLs. */
+function AvatarImage({ uri, style, fallback }: { uri: string; style: any; fallback: React.ReactNode }) {
+  const [errored, setErrored] = React.useState(false);
+  if (errored) return <>{fallback}</>;
+  return <Image source={{ uri }} style={style} onError={() => setErrored(true)} />;
+}
 
 type SlotRole = 'organizer' | 'guest' | 'honoree';
-type SlotStatus = 'confirmed' | 'pending' | 'not_invited';
+type SlotStatus =
+  | 'declined'
+  | 'confirmed'
+  | 'pending'
+  | 'delivery_failed'
+  | 'invited'
+  | 'not_invited';
 
 type GuestDetails = GuestDetail;
+type GuestInvitationAttempt = {
+  recipient: string;
+  status: string;
+};
 
 interface Slot {
   index: number;
@@ -77,38 +119,58 @@ interface Slot {
   isEditable: boolean;
   isExpanded: boolean;
   participant?: ParticipantWithProfile;
+  // Fields a registered guest changed relative to the organizer's invite entry.
+  changed?: { name?: { from: string; to: string }; phone?: { from: string; to: string } };
 }
 
 export default function ManageInvitationsScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, role: roleParam } = useLocalSearchParams<{ id: string; role?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const user = useUser();
 
+  const queryClient = useQueryClient();
   const { data: event, isLoading: eventLoading } = useEvent(id);
-  const { data: participants, isLoading: isLoadingParticipants } = useParticipants(id);
-  const { data: booking, isLoading: bookingLoading } = useBooking(id);
-  const currentParticipant = participants?.find(p => p.user_id === user?.id);
-  const isGuest = isLoadingParticipants ? true : currentParticipant?.role === 'guest';
+  const { data: participants } = useParticipants(id);
+  const { data: booking } = useBooking(id);
 
-  // Redirect guests away from the participants management screen
-  useEffect(() => {
-    if (isGuest && participants !== undefined) {
-      router.replace(`/event/${id}`);
-    }
-  }, [isGuest, participants, id, router]);
+  // Keyboard avoidance: iOS does not auto-scroll a focused TextInput above the
+  // keyboard inside a ScrollView. We record each slot card's Y offset (via
+  // onLayout, which is already in ScrollView-content coordinates) and, on input
+  // focus, scroll that card near the top so its edit form clears the keyboard.
+  const scrollViewRef = useRef<ScrollView>(null);
+  const slotYRef = useRef<Record<number, number>>({});
+  const handleInputFocus = useCallback((slotIndex: number) => {
+    // Delay so the keyboard has begun animating and layout is settled.
+    setTimeout(() => {
+      const y = slotYRef.current[slotIndex];
+      if (y != null) {
+        scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true });
+      }
+    }, 250);
+  }, []);
+
+  const currentParticipant = participants?.find(p => p.user_id === user?.id);
+  // Use role param from navigation (known immediately) — fallback to participants query
+  const isGuest = roleParam === 'guest' || (!roleParam && currentParticipant?.role === 'guest');
+  // Past events: no more invitations — view-only
+  const isReadOnly = event ? isReadOnlyEvent(event) : false;
+
+  // Guests see a read-only view — no redirect needed
 
   // Local state for guest details entered by organizer
   const [guestDetails, setGuestDetails] = useState<Record<number, GuestDetails>>({});
   const [expandedSlot, setExpandedSlot] = useState<number | null>(null);
-  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteLoading] = useState(false);
   const [inviteModalVisible, setInviteModalVisible] = useState(false);
   type InviteSendStatus = 'idle' | 'sending' | 'done';
   type GuestResult = { slotIndex: number; status: 'sent' | 'failed' | 'invalid'; recipient: string; error?: string };
   const [inviteSendStatus, setInviteSendStatus] = useState<InviteSendStatus>('idle');
   const [inviteResults, setInviteResults] = useState<GuestResult[]>([]);
-  const [activeChannel, setActiveChannel] = useState<'email' | 'sms' | 'whatsapp' | null>(null);
+  const [activeChannel, setActiveChannel] = useState<'email' | 'whatsapp' | null>(null);
   const [activeEmailSlot, setActiveEmailSlot] = useState<number | null>(null);
   const [showHonoreeInfo, setShowHonoreeInfo] = useState(false);
   const [emailSuggestions, setEmailSuggestions] = useState<string[]>([]);
@@ -128,6 +190,95 @@ export default function ManageInvitationsScreen() {
     });
   }, [id]);
 
+  // Fetch invite_codes to resolve names for registered guests
+  // (organizer-entered data is the source of truth)
+  const { data: rawInviteGuests = [] } = useInviteGuests(id ?? null);
+  const createInvite = useCreateInvite();
+  const invitesByEmail = useMemo(() => {
+    const map: Record<string, {
+      phone: string;
+      firstName: string;
+      lastName: string;
+      declinedAt: string | null;
+    }> = {};
+    for (const ic of rawInviteGuests) {
+      if (ic.guest_email) {
+        map[ic.guest_email.trim().toLowerCase()] = {
+          phone: ic.guest_phone || '',
+          firstName: ic.guest_first_name || '',
+          lastName: ic.guest_last_name || '',
+          declinedAt: ic.declined_at,
+        };
+      }
+    }
+    return map;
+  }, [rawInviteGuests]);
+
+  // One event-scoped query supplies delivery history for every guest slot.
+  const [guestInvitations, setGuestInvitations] = useState<GuestInvitationAttempt[]>([]);
+  const fetchGuestInvitations = useCallback(async () => {
+    if (!id) {
+      setGuestInvitations([]);
+      return;
+    }
+
+    const { data } = await supabase
+      .from('guest_invitations')
+      .select('recipient, status')
+      .eq('event_id', id);
+    setGuestInvitations(data ?? []);
+  }, [id]);
+  useEffect(() => {
+    void fetchGuestInvitations();
+  }, [fetchGuestInvitations]);
+
+  const deliveryCheckStartedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!id || !user?.id || event?.created_by !== user.id) return;
+    if (deliveryCheckStartedRef.current.has(id)) return;
+    deliveryCheckStartedRef.current.add(id);
+
+    void (async () => {
+      try {
+        await supabase.functions.invoke('check-invite-delivery', {
+          body: { eventId: id },
+        });
+      } catch {
+        // Delivery polling is best effort and must never block this screen.
+      } finally {
+        await fetchGuestInvitations();
+      }
+    })();
+  }, [event?.created_by, fetchGuestInvitations, id, user?.id]);
+
+  // Fetch own profile from DB so organizer name is shown even if user_metadata.full_name is unset.
+  // Also ensures guests see their updated name after editing in profile settings.
+  const [ownProfile, setOwnProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
+  const fetchOwnProfile = useCallback(() => {
+    if (!user?.id) return;
+    void supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).single()
+      .then(({ data }) => { if (data) setOwnProfile(data); });
+  }, [user?.id]);
+  useEffect(fetchOwnProfile, [fetchOwnProfile]);
+
+  // Cleanup emailBlurTimer on unmount to prevent state updates after unmount
+  useEffect(() => {
+    return () => {
+      if (emailBlurTimerRef.current) {
+        clearTimeout(emailBlurTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Refetch participants on focus so guest profile changes (name, phone) appear immediately
+  useFocusEffect(
+    useCallback(() => {
+      if (id) {
+        queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(id) });
+      }
+    }, [id, queryClient])
+  );
+
   // Only show full-screen spinner if we have NO event data at all
   // Participants and booking load in background — slots use cache as fallback
   const isLoading = eventLoading && !event;
@@ -145,23 +296,68 @@ export default function ManageInvitationsScreen() {
     const totalSlots = cachedBudgetTotal || cachedParticipants || bookingTotal || 10;
     const result: Slot[] = [];
 
-    // Organizer info
-    const organizerName = user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You';
-    const organizerEmail = user?.email || '';
-
     // Map DB participants by role
     const dbParticipants = participants || [];
     const organizerParticipant = dbParticipants.find(p => p.role === 'organizer');
     const honoreeParticipant = dbParticipants.find(p => p.role === 'honoree');
     const guestParticipants = dbParticipants.filter(p => p.role === 'guest');
+    const dbGuestEmails = new Set<string>();
+    const dbGuestPhones = new Set<string>();
+
+    for (const dbGuest of guestParticipants) {
+      const email = (dbGuest.profile?.email || (dbGuest as any)?.email || '')
+        .trim()
+        .toLowerCase();
+      if (email) dbGuestEmails.add(email);
+
+      const profilePhone = ((dbGuest.profile as any)?.phone || '').trim();
+      const invitePhone = email ? invitesByEmail[email]?.phone || '' : '';
+      const phone = normalizePhoneKey(profilePhone || invitePhone);
+      if (phone) dbGuestPhones.add(phone);
+    }
+
+    const getGuestStatus = (
+      email: string,
+      phone: string,
+      participant?: ParticipantWithProfile,
+    ): SlotStatus => {
+      const emailKey = email.trim().toLowerCase();
+      if (emailKey && invitesByEmail[emailKey]?.declinedAt) return 'declined';
+      if (participant?.confirmed_at) return 'confirmed';
+      if (participant?.user_id) return 'pending';
+
+      const phoneKey = normalizePhoneKey(phone);
+      const attempts = guestInvitations.filter((attempt) => {
+        const recipientEmailKey = attempt.recipient.trim().toLowerCase();
+        const recipientPhoneKey = normalizePhoneKey(attempt.recipient);
+        return (emailKey !== '' && recipientEmailKey === emailKey)
+          || (phoneKey !== '' && recipientPhoneKey === phoneKey);
+      });
+
+      if (attempts.length > 0 && attempts.every(attempt => attempt.status !== 'sent')) {
+        return 'delivery_failed';
+      }
+      if (attempts.some(attempt => attempt.status === 'sent')) return 'invited';
+      return 'not_invited';
+    };
+
+    // Organizer info — prefer profile data; when isGuest never fall back to current user's data
+    const organizerEmail = organizerParticipant?.profile?.email
+      || (organizerParticipant as any)?.email
+      || (isGuest ? '' : (user?.email || ''));
+    const organizerName = organizerParticipant?.profile?.full_name
+      || organizerParticipant?.profile?.email?.split('@')[0]
+      || (isGuest ? 'Organizer' : (
+        user?.user_metadata?.full_name || ownProfile?.full_name || user?.email?.split('@')[0] || 'You'
+      ));
 
     // Slot 1: Organizer (pre-filled but phone is editable)
-    const orgPhone = guestDetails[-1]?.phone || (organizerParticipant?.profile as any)?.phone || '';
+    const orgPhone = guestDetails[-1]?.phone || organizerParticipant?.profile?.phone || '';
     result.push({
       index: 0,
       role: 'organizer',
-      name: organizerParticipant?.profile?.full_name || organizerName,
-      email: organizerParticipant?.profile?.email || (organizerParticipant as any)?.email || organizerEmail,
+      name: organizerName,
+      email: organizerEmail,
       phone: orgPhone,
       status: 'confirmed', // organizer is always confirmed
       isEditable: true, // allow editing phone
@@ -177,27 +373,52 @@ export default function ManageInvitationsScreen() {
       const localDetails = guestDetails[slotIdx];
 
       if (dbGuest) {
+        // Option B (2026-07-18): once a slot is registered, the guest's OWN
+        // profile data wins over the organizer-entered invite_codes data.
+        const isCurrentUserGuest = dbGuest.user_id === user?.id;
+        const guestEmail = dbGuest.profile?.email || (dbGuest as any)?.email || '';
+        const inviteData = invitesByEmail[guestEmail.trim().toLowerCase()];
+        const selfName = isCurrentUserGuest
+          ? (ownProfile?.full_name || dbGuest.profile?.full_name || user?.user_metadata?.full_name || null)
+          : (dbGuest.profile?.full_name || null);
+        const display = resolveGuestDisplay({
+          isRegistered: !!dbGuest.user_id,
+          profileFullName: selfName,
+          profilePhone: (dbGuest.profile as any)?.phone ?? null,
+          inviteFirstName: inviteData?.firstName || '',
+          inviteLastName: inviteData?.lastName || '',
+          invitePhone: inviteData?.phone || '',
+        });
         result.push({
           index: i + 1,
           role: 'guest',
-          name: dbGuest.profile?.full_name || 'Guest',
-          email: dbGuest.profile?.email || (dbGuest as any)?.email || '',
-          phone: (dbGuest.profile as any)?.phone || '',
-          status: dbGuest.confirmed_at ? 'confirmed' : 'pending',
+          // Empty name falls back to the localized "Gast #n" in renderSlotCard.
+          name: display.name,
+          email: guestEmail,
+          phone: display.phone,
+          status: getGuestStatus(guestEmail, display.phone, dbGuest),
           isEditable: false,
           isExpanded: false,
           participant: dbGuest,
+          changed: display.changedFromInvite,
         });
       } else {
+        const localEmail = localDetails?.email?.trim().toLowerCase() || '';
+        const localPhone = normalizePhoneKey(localDetails?.phone || '');
+        const duplicatesDbGuest = (localEmail !== '' && dbGuestEmails.has(localEmail))
+          || (localPhone !== '' && dbGuestPhones.has(localPhone));
+
         result.push({
           index: i + 1,
           role: 'guest',
-          name: localDetails
+          name: localDetails && !duplicatesDbGuest
             ? [localDetails.firstName, localDetails.lastName].filter(Boolean).join(' ')
             : '',
-          email: localDetails?.email || '',
-          phone: localDetails?.phone || '',
-          status: 'not_invited',
+          email: duplicatesDbGuest ? '' : localDetails?.email || '',
+          phone: duplicatesDbGuest ? '' : localDetails?.phone || '',
+          status: duplicatesDbGuest
+            ? 'not_invited'
+            : getGuestStatus(localDetails?.email || '', localDetails?.phone || ''),
           isEditable: true,
           isExpanded: expandedSlot === i + 1,
         });
@@ -219,13 +440,44 @@ export default function ManageInvitationsScreen() {
     });
 
     return result;
-  }, [event, participants, user, guestDetails, expandedSlot, booking, cachedParticipants, cachedBudgetTotal]);
+  }, [event, participants, user, guestDetails, expandedSlot, booking, cachedParticipants, cachedBudgetTotal, isGuest, invitesByEmail, ownProfile, guestInvitations]);
 
   // Stats — "filled" = has email (contact info provided, not just a name)
   const filledCount = slots.filter(s => !!s.email).length;
   const totalSlots = slots.length;
   const confirmedCount = slots.filter(s => s.status === 'confirmed').length;
   const pendingCount = slots.filter(s => s.status === 'pending').length;
+
+  // A phone number OR email address may appear at most once WITHIN a single
+  // event (organizer, guests and honoree share one namespace). Across different
+  // events the same contact is fine. Compute the slot indexes whose phone/email
+  // collides with another slot so we can flag them inline AND block confirming.
+  const buildDupSet = useCallback((getKey: (s: Slot) => string) => {
+    const byKey = new Map<string, number[]>();
+    for (const s of slots) {
+      const key = getKey(s);
+      if (!key) continue;
+      const arr = byKey.get(key) ?? [];
+      arr.push(s.index);
+      byKey.set(key, arr);
+    }
+    const dup = new Set<number>();
+    for (const idxs of byKey.values()) {
+      if (idxs.length > 1) idxs.forEach(i => dup.add(i));
+    }
+    return dup;
+  }, [slots]);
+  const duplicatePhoneSlots = useMemo(() => buildDupSet(s => normalizePhoneKey(s.phone)), [buildDupSet]);
+  const duplicateEmailSlots = useMemo(() => buildDupSet(s => s.email.trim().toLowerCase()), [buildDupSet]);
+  const hasDuplicates = duplicatePhoneSlots.size > 0 || duplicateEmailSlots.size > 0;
+  const dupPhoneMsg = (t.manageInvitations as any).duplicatePhone
+    ?? (language === 'de'
+      ? 'Diese Telefonnummer ist bereits einem anderen Teilnehmer in diesem Event zugewiesen.'
+      : 'This phone number is already used by another participant in this event.');
+  const dupEmailMsg = (t.manageInvitations as any).duplicateEmail
+    ?? (language === 'de'
+      ? 'Diese E-Mail-Adresse ist bereits einem anderen Teilnehmer in diesem Event zugewiesen.'
+      : 'This email address is already used by another participant in this event.');
 
   const updateGuestDetail = (slotIndex: number, field: keyof GuestDetails, value: string) => {
     const formatted = field === 'phone' ? formatGermanPhone(value) : value;
@@ -271,9 +523,9 @@ export default function ManageInvitationsScreen() {
     setEmailSuggestions([]);
   };
 
-  // Guests (non-organizer) with contact data — used to build the payload
+  // Guests only (excludes organizer AND honoree) — honoree is notified separately 1h before event
   const invitableGuests = useMemo(
-    () => slots.filter(s => s.role !== 'organizer' && (s.email || s.phone)),
+    () => slots.filter(s => s.role === 'guest' && (s.email || s.phone)),
     [slots]
   );
   const hasEmails = invitableGuests.some(s => s.email);
@@ -281,17 +533,33 @@ export default function ManageInvitationsScreen() {
   const emailCount = invitableGuests.filter(s => s.email).length;
   const phoneCount = invitableGuests.filter(s => s.phone).length;
 
-  const handleSendViaChannel = async (channel: 'email' | 'sms' | 'whatsapp') => {
+  const handleSendViaChannel = async (channel: 'email' | 'whatsapp') => {
+    // Block sending while any phone/email is duplicated within this event —
+    // otherwise two slots would resolve to the same recipient.
+    if (hasDuplicates) {
+      Alert.alert(
+        t.manageInvitations.duplicateTitle,
+        duplicatePhoneSlots.size > 0 ? dupPhoneMsg : dupEmailMsg,
+      );
+      return;
+    }
     setActiveChannel(channel);
     setInviteSendStatus('sending');
 
     // Ensure the session token is fresh — an expired JWT causes a 401 at the
-    // Supabase edge function runtime before our code even runs
+    // Supabase edge function runtime before our code even runs.
+    // If refresh fails, getSession() still returns the current (possibly valid) session.
     await supabase.auth.refreshSession().catch(() => {});
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      Alert.alert('Session expired', 'Please log out and log in again.');
+      setInviteSendStatus('idle');
+      return;
+    }
 
-    // Build guest payload from current slot/guestDetails state
+    // Build guest payload — honoree excluded (notified separately 1h before event)
     const guests = slots
-      .filter(s => s.role !== 'organizer')
+      .filter(s => s.role === 'guest')
       .map(s => ({
         slotIndex: s.index,
         firstName: guestDetails[s.index]?.firstName || s.name.split(' ')[0] || undefined,
@@ -301,25 +569,43 @@ export default function ManageInvitationsScreen() {
       }));
 
     const { data, error } = await supabase.functions.invoke('send-guest-invitations', {
-      body: { eventId: id, channel, guests },
+      // `language` drives the invite copy (German primary, English when the
+      // organizer's app is set to EN).
+      body: { eventId: id, channel, guests, language },
+      // Pass the refreshed token explicitly so the edge function's getUser()
+      // always sees the current session (not a stale/anon token).
+      headers: { Authorization: `Bearer ${sessionData.session.access_token}` },
     });
 
     if (error) {
-      // Decode actual error body from the function response (Supabase client wraps
-      // non-2xx responses in a generic FunctionsHttpError — real detail is in context)
+      // Decode actual error body from the function response
       let detail = error.message ?? 'Unknown error';
+      let statusCode = '';
       try {
-        const body = await (error as any).context?.json?.();
-        if (body?.error) detail = body.error;
-        else if (body?.detail) detail = body.detail;
+        const ctx = (error as any).context;
+        if (ctx) {
+          statusCode = ctx.status ? ` [HTTP ${ctx.status}]` : '';
+          const text = await ctx.text?.();
+          if (text) {
+            try {
+              const body = JSON.parse(text);
+              if (body?.error) detail = body.error;
+              else if (body?.detail) detail = body.detail;
+              else detail = text;
+            } catch {
+              detail = text;
+            }
+          }
+        }
       } catch {}
-      Alert.alert('Send failed', detail);
+      Alert.alert('Send failed', detail + statusCode);
       setInviteSendStatus('idle');
       return;
     }
 
     setInviteResults(data.results ?? []);
     setInviteSendStatus('done');
+    void fetchGuestInvitations();
     // Track invited count for planning step 1 auto-check
     const sentCount = (data.results ?? []).filter((r: any) => r.status === 'sent').length;
     if (sentCount > 0 && id) {
@@ -328,9 +614,15 @@ export default function ManageInvitationsScreen() {
   };
 
   const handleShareFallback = async () => {
-    const inviteLink = `https://game-over.app/invite/${id}`;
-    const msg = `🎉 You're invited to celebrate ${event?.honoree_name || 'the party'}!\n\nJoin us on Game Over:\n${inviteLink}`;
-    try { await Share.share({ message: msg, title: 'Game Over Invitation' }); } catch {}
+    // Generate a real invite code — the link must point at /invite/{code}, never the event id.
+    try {
+      const invite = await createInvite.mutateAsync({ eventId: id! });
+      const inviteLink = `https://game-over.app/invite/${invite.code}`;
+      const msg = `🎉 You're invited to celebrate ${event?.honoree_name || 'the party'}!\n\nJoin us on Game Over:\n${inviteLink}`;
+      await Share.share({ message: msg, title: 'Game Over Invitation' });
+    } catch {
+      Alert.alert(t.common.error, t.events.loadError);
+    }
   };
 
   const handleInviteAll = () => {
@@ -343,70 +635,96 @@ export default function ManageInvitationsScreen() {
   const getRoleBadge = (role: SlotRole) => {
     switch (role) {
       case 'organizer':
-        return { label: t.manageInvitations.organizer, bg: 'rgba(59, 130, 246, 0.2)', color: '#3B82F6' };
+        return { label: t.manageInvitations.organizer, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
       case 'honoree':
-        return { label: t.manageInvitations.honoree, bg: 'rgba(245, 158, 11, 0.2)', color: '#F59E0B' };
+        return { label: t.manageInvitations.honoree, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
       default:
-        return { label: t.manageInvitations.guest, bg: 'rgba(107, 114, 128, 0.2)', color: DARK_THEME.textSecondary };
+        return { label: t.manageInvitations.guest, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
     }
   };
 
-  const getStatusConfig = (status: SlotStatus) => {
+  const getStatusConfig = (status: SlotStatus, role: SlotRole) => {
     switch (status) {
+      case 'declined':
+        return { icon: 'close-circle' as const, color: theme.error, label: t.manageInvitations.declined };
       case 'confirmed':
-        return { icon: 'checkmark-circle' as const, color: '#10B981', label: t.manageInvitations.confirmed };
+        return {
+          icon: 'checkmark-circle' as const,
+          color: theme.success,
+          label: role === 'guest' ? t.manageInvitations.accepted : t.manageInvitations.confirmed,
+        };
       case 'pending':
-        return { icon: 'time-outline' as const, color: '#F59E0B', label: t.manageInvitations.pending };
+        return { icon: 'time-outline' as const, color: theme.warning, label: t.manageInvitations.pending };
+      case 'delivery_failed':
+        return { icon: 'warning-outline' as const, color: theme.warning, label: t.manageInvitations.deliveryFailed };
+      case 'invited':
+        return { icon: 'paper-plane-outline' as const, color: theme.textSecondary, label: t.manageInvitations.invited };
       default:
-        return { icon: 'ellipse-outline' as const, color: DARK_THEME.textTertiary, label: t.manageInvitations.notInvited };
+        return { icon: 'ellipse-outline' as const, color: theme.textTertiary, label: t.manageInvitations.notInvited };
     }
   };
 
   const renderSlotCard = (slot: Slot) => {
     const roleBadge = getRoleBadge(slot.role);
-    const statusConfig = getStatusConfig(slot.status);
-    const initial = slot.name ? slot.name.charAt(0).toUpperCase() : String(slot.index + 1);
+    const statusConfig = getStatusConfig(slot.status, slot.role);
+    // Two-letter initials (e.g. "WS" for "Wais Schmidt")
+    const initial = slot.name
+      ? slot.name.split(' ').map(w => w[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2)
+      : String(slot.index + 1);
     const isEmpty = slot.role === 'guest' && slot.isEditable && !slot.name && !slot.email;
     const needsContactInfo = (slot.role === 'organizer' && !slot.phone) || (slot.role === 'honoree' && !slot.email);
     const guestNum = slot.role === 'guest' ? slot.index + 1 : 0;
     const displayName = slot.name ||
       t.manageInvitations.guestSlot.replace('{{number}}', String(guestNum));
 
+    // Profile photo: organizer uses own profile, others use participant profile
+    const avatarUrl = slot.role === 'organizer'
+      ? (ownProfile?.avatar_url || user?.user_metadata?.avatar_url || null)
+      : (slot.participant?.profile?.avatar_url || null);
+
+    // Past events: slots become fully read-only (no expansion, no edit form)
+    const slotCanEdit = slot.isEditable && !isReadOnly;
     return (
       <Pressable
         key={`${slot.role}-${slot.index}`}
-        style={[styles.slotCard, isEmpty && styles.slotCardEmpty]}
-        onPress={slot.isEditable ? () => setExpandedSlot(slot.isExpanded ? null : slot.index) : undefined}
+        style={[styles.slotCard, isEmpty && !isReadOnly && styles.slotCardEmpty]}
+        onLayout={(e) => { slotYRef.current[slot.index] = e.nativeEvent.layout.y; }}
+        onPress={!isGuest && slotCanEdit ? () => setExpandedSlot(slot.isExpanded ? null : slot.index) : undefined}
       >
         <XStack alignItems="center" gap={12}>
-          {/* Avatar / Number */}
+          {/* Avatar with gold ring (organizer + honoree always, others get muted ring) */}
           <View style={[
-            styles.avatar,
-            slot.role === 'organizer' && styles.avatarOrganizer,
-            slot.role === 'honoree' && styles.avatarHonoree,
-            isEmpty && styles.avatarEmpty,
+            styles.avatarRing,
+            (slot.role === 'honoree' || slot.role === 'organizer') && styles.avatarRingHonoree,
           ]}>
-            {slot.role === 'honoree' ? (
-              <Ionicons name="star" size={18} color="#F59E0B" />
-            ) : (
-              <Text style={styles.avatarText}>{initial}</Text>
-            )}
+            <View style={[
+              styles.avatar,
+              slot.role === 'honoree' && styles.avatarHonoree,
+              isEmpty && styles.avatarEmpty,
+            ]}>
+              {avatarUrl ? (
+                <AvatarImage
+                  uri={avatarUrl}
+                  style={{ width: 44, height: 44, borderRadius: 22 }}
+                  fallback={<Text style={styles.avatarText}>{initial}</Text>}
+                />
+              ) : slot.role === 'honoree' ? (
+                <Ionicons name="star" size={18} color="#C6A75E" />
+              ) : (
+                <Text style={styles.avatarText}>{initial}</Text>
+              )}
+            </View>
           </View>
 
           {/* Details */}
           <YStack flex={1} gap={2}>
-            <XStack alignItems="center" gap={8}>
-              <Text style={[styles.slotName, isEmpty && styles.slotNameEmpty]} numberOfLines={1}>
+            <XStack alignItems="center" gap={8} flex={1} flexWrap="nowrap">
+              <Text style={[styles.slotName, isEmpty && styles.slotNameEmpty]} numberOfLines={1} flex={1}>
                 {displayName}
               </Text>
               <View style={[styles.roleBadge, { backgroundColor: roleBadge.bg }]}>
                 <Text style={[styles.roleBadgeText, { color: roleBadge.color }]}>{roleBadge.label}</Text>
               </View>
-              {slot.role === 'honoree' && (
-                <Pressable onPress={() => setShowHonoreeInfo(true)} hitSlop={10}>
-                  <Ionicons name="information-circle-outline" size={17} color="#F59E0B" />
-                </Pressable>
-              )}
             </XStack>
 
             {/* Contact info (for filled slots) */}
@@ -414,52 +732,113 @@ export default function ManageInvitationsScreen() {
               <YStack gap={2} marginTop={2}>
                 {slot.email ? (
                   <XStack alignItems="center" gap={6}>
-                    <Ionicons name="mail-outline" size={12} color={DARK_THEME.textTertiary} />
+                    <Ionicons name="mail-outline" size={12} color={theme.textTertiary} />
                     <Text style={styles.detailText} numberOfLines={1}>{slot.email}</Text>
                   </XStack>
                 ) : null}
                 {slot.phone ? (
                   <XStack alignItems="center" gap={6}>
-                    <Ionicons name="call-outline" size={12} color={DARK_THEME.textTertiary} />
+                    <Ionicons name="call-outline" size={12} color={theme.textTertiary} />
                     <Text style={styles.detailText} numberOfLines={1}>{slot.phone}</Text>
                   </XStack>
                 ) : null}
               </YStack>
             )}
 
+            {/* Guest adjusted their details vs the organizer's invite entry */}
+            {slot.changed && (slot.changed.name || slot.changed.phone) && (
+              <XStack alignItems="flex-start" gap={6} marginTop={4}>
+                <Ionicons name="information-circle-outline" size={13} color={theme.accentGold} style={{ marginTop: 1 }} />
+                <Text style={styles.adjustedHint} numberOfLines={3}>
+                  {t.manageInvitations.guestAdjusted}: {formatGuestChanges(
+                    ([
+                      slot.changed.name && { field: 'name', ...slot.changed.name },
+                      slot.changed.phone && { field: 'phone', ...slot.changed.phone },
+                    ].filter(Boolean) as GuestDataChange[]),
+                    { name: t.notifications.fieldName, email: t.notifications.fieldEmail, phone: t.notifications.fieldPhone },
+                  )}
+                </Text>
+              </XStack>
+            )}
+
             {/* Empty slot hint */}
-            {isEmpty && !slot.isExpanded && (
+            {isEmpty && !slot.isExpanded && !isReadOnly && (
               <Text style={styles.fillHint}>{t.manageInvitations.fillDetails}</Text>
             )}
-            {/* Contact info hint for organizer/honoree */}
-            {needsContactInfo && !slot.isExpanded && (
+            {/* Contact info hint for organizer/honoree — hidden after event ends */}
+            {needsContactInfo && !slot.isExpanded && !isReadOnly && (
               <Text style={styles.fillHint}>
-                {slot.role === 'organizer' ? 'Tap to add phone number' : 'Tap to add contact details'}
+                {slot.role === 'organizer' ? t.manageInvitations.tapAddPhone : t.manageInvitations.tapAddContact}
               </Text>
             )}
           </YStack>
 
-          {/* Status indicator */}
-          <XStack alignItems="center" gap={4}>
-            <Ionicons name={statusConfig.icon} size={16} color={statusConfig.color} />
-          </XStack>
         </XStack>
 
-        {/* Expanded edit form */}
-        {slot.isEditable && slot.isExpanded && (
-          <YStack gap={10} marginTop={14} paddingTop={14} borderTopWidth={1} borderTopColor={DARK_THEME.glassBorder}>
-            {/* Organizer: only phone field */}
-            {slot.role === 'organizer' && (
-              <View style={styles.inputContainer}>
-                <TextInput
-                  style={styles.input}
-                  placeholder={t.manageInvitations.phone}
-                  placeholderTextColor={DARK_THEME.textTertiary}
-                  value={guestDetails[-1]?.phone || ''}
-                  onChangeText={(v) => updateGuestDetail(-1, 'phone', v)}
-                  keyboardType="phone-pad"
+        {/* ── Bottom action strip ── */}
+        {!isEmpty && (
+          <XStack
+            justifyContent="space-between"
+            alignItems="center"
+            marginTop={10}
+            paddingTop={10}
+            borderTopWidth={StyleSheet.hairlineWidth}
+            borderTopColor={theme.ghostBorder}
+          >
+            <XStack gap={10} alignItems="center">
+              {/* Confirmed checkmark chip */}
+              <View style={[
+                styles.actionChip,
+                slot.status !== 'not_invited' && styles.actionChipActive,
+                slot.status !== 'not_invited' && { borderColor: statusConfig.color },
+              ]}>
+                <Ionicons
+                  name={statusConfig.icon}
+                  size={14}
+                  color={statusConfig.color}
                 />
               </View>
+              {/* Honoree info button — same size as checkmark chip */}
+              {slot.role === 'honoree' && (
+                <Pressable
+                  style={styles.actionChip}
+                  onPress={() => setShowHonoreeInfo(true)}
+                  hitSlop={8}
+                >
+                  <Ionicons name="information-circle-outline" size={14} color={theme.accentGold} />
+                </Pressable>
+              )}
+            </XStack>
+            <Text style={[
+              styles.statusLabel,
+              { color: statusConfig.color },
+            ]}>
+              {statusConfig.label}
+            </Text>
+          </XStack>
+        )}
+
+        {/* Expanded edit form — fully suppressed when event is read-only (past) */}
+        {slotCanEdit && slot.isExpanded && (
+          <YStack gap={10} marginTop={14} paddingTop={14} borderTopWidth={1} borderTopColor={theme.ghostBorder}>
+            {/* Organizer: only phone field */}
+            {slot.role === 'organizer' && (
+              <>
+                <View style={styles.inputContainer}>
+                  <TextInput
+                    style={styles.input}
+                    placeholder={t.manageInvitations.phone}
+                    placeholderTextColor={theme.textTertiary}
+                    value={guestDetails[-1]?.phone || ''}
+                    onChangeText={(v) => updateGuestDetail(-1, 'phone', v)}
+                    onFocus={() => handleInputFocus(slot.index)}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+                {duplicatePhoneSlots.has(slot.index) && (
+                  <Text style={styles.dupError}>{dupPhoneMsg}</Text>
+                )}
+              </>
             )}
             {/* Honoree: email + phone (name comes from wizard) */}
             {slot.role === 'honoree' && (
@@ -469,10 +848,10 @@ export default function ManageInvitationsScreen() {
                     <TextInput
                       style={styles.input}
                       placeholder={t.manageInvitations.email}
-                      placeholderTextColor={DARK_THEME.textTertiary}
+                      placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.email || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'email', v)}
-                      onFocus={() => handleEmailFocus(slot.index, guestDetails[slot.index]?.email || '')}
+                      onFocus={() => { handleEmailFocus(slot.index, guestDetails[slot.index]?.email || ''); handleInputFocus(slot.index); }}
                       onBlur={handleEmailBlur}
                       keyboardType="email-address"
                       autoCapitalize="none"
@@ -486,23 +865,30 @@ export default function ManageInvitationsScreen() {
                           style={styles.suggestionItem}
                           onPress={() => selectEmailSuggestion(slot.index, domain)}
                         >
-                          <Ionicons name="mail-outline" size={13} color={DARK_THEME.textTertiary} />
+                          <Ionicons name="mail-outline" size={13} color={theme.textTertiary} />
                           <Text style={styles.suggestionText}>{domain}</Text>
                         </Pressable>
                       ))}
                     </View>
+                  )}
+                  {duplicateEmailSlots.has(slot.index) && (
+                    <Text style={styles.dupError}>{dupEmailMsg}</Text>
                   )}
                 </View>
                 <View style={styles.inputContainer}>
                   <TextInput
                     style={styles.input}
                     placeholder={t.manageInvitations.phone}
-                    placeholderTextColor={DARK_THEME.textTertiary}
+                    placeholderTextColor={theme.textTertiary}
                     value={guestDetails[slot.index]?.phone || ''}
                     onChangeText={(v) => updateGuestDetail(slot.index, 'phone', v)}
+                    onFocus={() => handleInputFocus(slot.index)}
                     keyboardType="phone-pad"
                   />
                 </View>
+                {duplicatePhoneSlots.has(slot.index) && (
+                  <Text style={styles.dupError}>{dupPhoneMsg}</Text>
+                )}
               </>
             )}
             {/* Guest: full form (name + email + phone) */}
@@ -513,9 +899,10 @@ export default function ManageInvitationsScreen() {
                     <TextInput
                       style={styles.input}
                       placeholder={t.manageInvitations.firstName}
-                      placeholderTextColor={DARK_THEME.textTertiary}
+                      placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.firstName || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'firstName', v)}
+                      onFocus={() => handleInputFocus(slot.index)}
                       autoCapitalize="words"
                     />
                   </View>
@@ -523,9 +910,10 @@ export default function ManageInvitationsScreen() {
                     <TextInput
                       style={styles.input}
                       placeholder={t.manageInvitations.lastName}
-                      placeholderTextColor={DARK_THEME.textTertiary}
+                      placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.lastName || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'lastName', v)}
+                      onFocus={() => handleInputFocus(slot.index)}
                       autoCapitalize="words"
                     />
                   </View>
@@ -535,10 +923,10 @@ export default function ManageInvitationsScreen() {
                     <TextInput
                       style={styles.input}
                       placeholder={t.manageInvitations.email}
-                      placeholderTextColor={DARK_THEME.textTertiary}
+                      placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.email || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'email', v)}
-                      onFocus={() => handleEmailFocus(slot.index, guestDetails[slot.index]?.email || '')}
+                      onFocus={() => { handleEmailFocus(slot.index, guestDetails[slot.index]?.email || ''); handleInputFocus(slot.index); }}
                       onBlur={handleEmailBlur}
                       keyboardType="email-address"
                       autoCapitalize="none"
@@ -552,34 +940,48 @@ export default function ManageInvitationsScreen() {
                           style={styles.suggestionItem}
                           onPress={() => selectEmailSuggestion(slot.index, domain)}
                         >
-                          <Ionicons name="mail-outline" size={13} color={DARK_THEME.textTertiary} />
+                          <Ionicons name="mail-outline" size={13} color={theme.textTertiary} />
                           <Text style={styles.suggestionText}>{domain}</Text>
                         </Pressable>
                       ))}
                     </View>
+                  )}
+                  {duplicateEmailSlots.has(slot.index) && (
+                    <Text style={styles.dupError}>{dupEmailMsg}</Text>
                   )}
                 </View>
                 <View style={styles.inputContainer}>
                   <TextInput
                     style={styles.input}
                     placeholder={t.manageInvitations.phone}
-                    placeholderTextColor={DARK_THEME.textTertiary}
+                    placeholderTextColor={theme.textTertiary}
                     value={guestDetails[slot.index]?.phone || ''}
                     onChangeText={(v) => updateGuestDetail(slot.index, 'phone', v)}
+                    onFocus={() => handleInputFocus(slot.index)}
                     keyboardType="phone-pad"
                   />
                 </View>
+                {duplicatePhoneSlots.has(slot.index) && (
+                  <Text style={styles.dupError}>{dupPhoneMsg}</Text>
+                )}
               </>
             )}
 
-            {/* Confirm button */}
-            <Pressable
-              style={styles.confirmButton}
-              onPress={() => setExpandedSlot(null)}
-            >
-              <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
-              <Text style={styles.confirmButtonText}>Confirm</Text>
-            </Pressable>
+            {/* Confirm button — disabled while this slot has a duplicate phone or
+                email, so a colliding contact can never be finalised. */}
+            {(() => {
+              const slotHasDuplicate = duplicatePhoneSlots.has(slot.index) || duplicateEmailSlots.has(slot.index);
+              return (
+                <Pressable
+                  style={[styles.confirmButton, slotHasDuplicate && styles.confirmButtonDisabled]}
+                  disabled={slotHasDuplicate}
+                  onPress={() => setExpandedSlot(null)}
+                >
+                  <Ionicons name="checkmark-circle" size={18} color={theme.textOnPrimary} />
+                  <Text style={styles.confirmButtonText}>{t.manageInvitations.confirmSlot}</Text>
+                </Pressable>
+              );
+            })()}
           </YStack>
         )}
       </Pressable>
@@ -590,7 +992,7 @@ export default function ManageInvitationsScreen() {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
         <YStack flex={1} justifyContent="center" alignItems="center">
-          <Spinner size="large" color={DARK_THEME.primary} />
+          <Spinner size="large" color={theme.accentGold} />
         </YStack>
       </View>
     );
@@ -598,16 +1000,20 @@ export default function ManageInvitationsScreen() {
 
   return (
     <>
+    {/* On iOS the ScrollView's automaticallyAdjustKeyboardInsets handles keyboard
+        avoidance AND auto-scrolls the focused input into view — using 'padding'
+        here as well would double-count and push content too far. Android keeps
+        the 'height' behavior since it has no equivalent inset adjustment. */}
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={Platform.OS === 'android' ? 'height' : undefined}
       keyboardVerticalOffset={0}
     >
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={16}>
           <Pressable onPress={() => router.back()} hitSlop={8} testID="back-button">
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
+            <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>{t.manageInvitations.title}</Text>
           <View style={{ width: 24 }} />
@@ -615,53 +1021,65 @@ export default function ManageInvitationsScreen() {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 320 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"
+        automaticallyAdjustKeyboardInsets={true}
       >
         {/* Stats Row */}
         <XStack gap={12} marginBottom={20}>
           <View style={[styles.statCard, { flex: 1 }]}>
-            <Text style={[styles.statNumber, { color: '#10B981' }]}>{confirmedCount}</Text>
+            <Text style={[styles.statNumber, { color: theme.accentGold }]}>{confirmedCount}</Text>
             <Text style={styles.statLabel}>{t.manageInvitations.confirmed}</Text>
           </View>
           <View style={[styles.statCard, { flex: 1 }]}>
-            <Text style={[styles.statNumber, { color: '#F59E0B' }]}>{pendingCount}</Text>
+            <Text style={[styles.statNumber, { color: theme.accentGold }]}>{pendingCount}</Text>
             <Text style={styles.statLabel}>{t.manageInvitations.pending}</Text>
           </View>
           <View style={[styles.statCard, { flex: 1 }]}>
-            <Text style={[styles.statNumber, { color: DARK_THEME.textPrimary }]}>{totalSlots}</Text>
-            <Text style={styles.statLabel}>Total</Text>
+            <Text style={[styles.statNumber, { color: theme.accentGold }]}>{totalSlots}</Text>
+            <Text style={styles.statLabel}>{t.manageInvitations.total}</Text>
           </View>
         </XStack>
 
-        {/* Slots info */}
-        <XStack alignItems="center" justifyContent="space-between" marginBottom={12}>
-          <Text style={styles.sectionTitle}>
-            {t.manageInvitations.slots
-              .replace('{{filled}}', String(filledCount))
-              .replace('{{total}}', String(totalSlots))}
-          </Text>
-        </XStack>
+        {/* Slots info — STATUS chip */}
+        <View style={styles.statusChipRow}>
+          <Text style={styles.statusChipLabel}>STATUS</Text>
+          <View style={styles.statusChip}>
+            <Text style={styles.statusChipText}>
+              {t.manageInvitations.slots
+                .replace('{{filled}}', String(filledCount))
+                .replace('{{total}}', String(totalSlots))}
+            </Text>
+          </View>
+        </View>
 
         {/* Slot Cards */}
         {slots.map((slot) => renderSlotCard(slot))}
       </ScrollView>
 
-      {/* Invite All Footer — organizers only */}
-      {!isGuest && (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          <Button
-            flex={1}
+      {/* Invite All Footer — organizers only, hidden once event has ended (no more invites possible) */}
+      {!isGuest && !isReadOnly && (
+        <View style={[styles.footer, { paddingBottom: insets.bottom }]}>
+          <GoldButton
+            label={inviteLoading ? 'Sending…' : t.manageInvitations.inviteAll}
+            fullWidth
+            size="lg"
+            leftIcon={<Ionicons name="paper-plane-outline" size={20} color="#1A2F47" />}
             onPress={handleInviteAll}
-            loading={inviteLoading}
-            icon={<Ionicons name="paper-plane-outline" size={20} color="white" />}
             testID="invite-all-button"
-          >
-            {t.manageInvitations.inviteAll}
-          </Button>
+          />
+        </View>
+      )}
+      {!isGuest && isReadOnly && (
+        <View style={[styles.footer, { paddingBottom: insets.bottom, paddingHorizontal: 16 }]}>
+          <PastEventBanner
+            testID="invitations-readonly-banner"
+            message={(t.manageInvitations as any).pastEventReadOnly || 'Invitations are closed — the event has already taken place.'}
+          />
         </View>
       )}
 
@@ -672,7 +1090,7 @@ export default function ManageInvitationsScreen() {
             <View style={styles.infoHandle} />
             <XStack gap={12} alignItems="center" marginBottom={14}>
               <View style={styles.infoIconCircle}>
-                <Ionicons name="notifications" size={20} color="#F59E0B" />
+                <Ionicons name="notifications" size={20} color="#C6A75E" />
               </View>
               <YStack flex={1}>
                 <Text style={styles.infoTitle}>
@@ -680,7 +1098,7 @@ export default function ManageInvitationsScreen() {
                 </Text>
               </YStack>
               <Pressable onPress={() => setShowHonoreeInfo(false)} hitSlop={8}>
-                <Ionicons name="close-circle" size={22} color={DARK_THEME.textTertiary} />
+                <Ionicons name="close-circle" size={22} color={theme.textTertiary} />
               </Pressable>
             </XStack>
             <Text style={styles.infoBody}>
@@ -688,7 +1106,7 @@ export default function ManageInvitationsScreen() {
                 .replace('{{time}}', (t.manageInvitations as any).honoreeNotificationTime)}
             </Text>
             <XStack alignItems="center" gap={6} marginTop={12} style={styles.infoPrivacyRow}>
-              <Ionicons name="eye-off-outline" size={14} color="#10B981" />
+              <Ionicons name="eye-off-outline" size={14} color="#C6A75E" />
               <Text style={styles.infoPrivacyText}>
                 {(t.manageInvitations as any).honoreePrivacyNote}
               </Text>
@@ -702,59 +1120,60 @@ export default function ManageInvitationsScreen() {
       {!isGuest && <Modal
         visible={inviteModalVisible}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setInviteModalVisible(false)}
       >
         <View style={styles.inviteOverlay}>
           <Pressable style={{ flex: 1 }} onPress={() => setInviteModalVisible(false)} />
-          <View style={styles.inviteSheet}>
-            {/* Header */}
+          <View style={styles.inviteSheet} accessibilityViewIsModal={true}>
+            {/* Handle + centered header */}
             <View style={styles.inviteHandle} />
-            <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
-              <Text style={styles.inviteTitle}>
+            <View style={{ alignItems: 'center', marginBottom: 4 }}>
+              <Text style={[
+                styles.inviteTitle,
+                inviteSendStatus === 'done' && { color: theme.accentGold },
+              ]}>
                 {inviteSendStatus === 'done'
-                  ? `${activeChannel === 'email' ? 'Email' : activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} sent`
-                  : 'Invite All Guests'}
+                  ? (activeChannel === 'email' ? t.manageInvitations.emailSent : t.manageInvitations.whatsappSent)
+                  : t.manageInvitations.inviteAllGuests}
               </Text>
-              {inviteSendStatus !== 'sending' && (
-                <Pressable onPress={() => setInviteModalVisible(false)} hitSlop={10}>
-                  <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
-                </Pressable>
-              )}
-            </XStack>
+            </View>
+            {inviteSendStatus !== 'sending' && (
+              <Pressable
+                style={{ position: 'absolute', top: 20, right: 16 }}
+                onPress={() => setInviteModalVisible(false)}
+                hitSlop={10}
+              >
+                <Ionicons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            )}
 
-            {/* ── idle: channel picker ── */}
+            {/* ── idle: channel picker (Email + WhatsApp only) ── */}
             {inviteSendStatus === 'idle' && (
               <>
-                <Text style={styles.inviteSectionLabel}>SEND FROM GAME OVER</Text>
-                <XStack gap={10} marginBottom={20}>
+                <Text style={[styles.inviteSectionLabel, { textAlign: 'center', marginBottom: 16 }]}>
+                  {t.manageInvitations.sendFromGameOver}
+                </Text>
+                <XStack gap={12} marginBottom={20}>
                   <Pressable
                     style={[styles.inviteChannelBtn, !hasEmails && styles.inviteChannelBtnDisabled]}
                     onPress={() => hasEmails && handleSendViaChannel('email')}
                   >
-                    <Ionicons name="mail-outline" size={22} color={hasEmails ? '#3B82F6' : DARK_THEME.textTertiary} />
-                    <Text style={[styles.inviteChannelLabel, { color: hasEmails ? '#3B82F6' : DARK_THEME.textTertiary }]}>Email</Text>
-                    <Text style={styles.inviteChannelCount}>{emailCount} guest{emailCount !== 1 ? 's' : ''}</Text>
-                  </Pressable>
-                  <Pressable
-                    style={[styles.inviteChannelBtn, !hasPhones && styles.inviteChannelBtnDisabled]}
-                    onPress={() => hasPhones && handleSendViaChannel('sms')}
-                  >
-                    <Ionicons name="chatbubble-outline" size={22} color={hasPhones ? '#10B981' : DARK_THEME.textTertiary} />
-                    <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#10B981' : DARK_THEME.textTertiary }]}>SMS</Text>
-                    <Text style={styles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
+                    <Ionicons name="mail-outline" size={24} color={hasEmails ? '#C6A75E' : theme.textTertiary} />
+                    <Text style={[styles.inviteChannelLabel, { color: hasEmails ? '#C6A75E' : theme.textTertiary }]}>{t.manageInvitations.email}</Text>
+                    <Text style={styles.inviteChannelCount}>{emailCount} {emailCount === 1 ? t.manageInvitations.guestUnit : t.manageInvitations.guestUnitPlural}</Text>
                   </Pressable>
                   <Pressable
                     style={[styles.inviteChannelBtn, !hasPhones && styles.inviteChannelBtnDisabled]}
                     onPress={() => hasPhones && handleSendViaChannel('whatsapp')}
                   >
-                    <Ionicons name="logo-whatsapp" size={22} color={hasPhones ? '#25D366' : DARK_THEME.textTertiary} />
-                    <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#25D366' : DARK_THEME.textTertiary }]}>WhatsApp</Text>
-                    <Text style={styles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
+                    <Ionicons name="logo-whatsapp" size={24} color={hasPhones ? '#C6A75E' : theme.textTertiary} />
+                    <Text style={[styles.inviteChannelLabel, { color: hasPhones ? '#C6A75E' : theme.textTertiary }]}>WhatsApp</Text>
+                    <Text style={styles.inviteChannelCount}>{phoneCount} {phoneCount === 1 ? t.manageInvitations.guestUnit : t.manageInvitations.guestUnitPlural}</Text>
                   </Pressable>
                 </XStack>
                 <Pressable style={{ alignItems: 'center', paddingVertical: 8 }} onPress={handleShareFallback}>
-                  <Text style={{ fontSize: 13, color: DARK_THEME.textTertiary }}>Or share invite link via other apps →</Text>
+                  <Text style={{ fontSize: 13, color: theme.textTertiary }}>{t.manageInvitations.shareOther}</Text>
                 </Pressable>
               </>
             )}
@@ -762,12 +1181,14 @@ export default function ManageInvitationsScreen() {
             {/* ── sending: spinner ── */}
             {inviteSendStatus === 'sending' && (
               <View style={{ alignItems: 'center', paddingVertical: 32, gap: 16 }}>
-                <ActivityIndicator size="large" color="#5A7EB0" />
-                <Text style={{ fontSize: 15, fontWeight: '600', color: DARK_THEME.textPrimary }}>
-                  Sending {activeChannel === 'email' ? 'email' : activeChannel === 'sms' ? 'SMS' : 'WhatsApp'} invitations…
+                <ActivityIndicator size="large" color={theme.accentGold} />
+                <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textPrimary }}>
+                  {activeChannel === 'email' ? t.manageInvitations.sendingEmail : t.manageInvitations.sendingWhatsapp}
                 </Text>
-                <Text style={{ fontSize: 13, color: DARK_THEME.textTertiary }}>
-                  Validating and sending to {activeChannel === 'email' ? emailCount : phoneCount} guest{(activeChannel === 'email' ? emailCount : phoneCount) !== 1 ? 's' : ''}
+                <Text style={{ fontSize: 13, color: theme.textTertiary }}>
+                  {t.manageInvitations.sendingSubtitle
+                    .replace('{{count}}', String(activeChannel === 'email' ? emailCount : phoneCount))
+                    .replace('{{unit}}', (activeChannel === 'email' ? emailCount : phoneCount) === 1 ? t.manageInvitations.guestUnit : t.manageInvitations.guestUnitPlural)}
                 </Text>
               </View>
             )}
@@ -775,31 +1196,46 @@ export default function ManageInvitationsScreen() {
             {/* ── done: results list ── */}
             {inviteSendStatus === 'done' && (
               <>
-                <View style={{ backgroundColor: DARK_THEME.deepNavy, borderRadius: 12, padding: 12, marginBottom: 16 }}>
-                  <Text style={{ fontSize: 13, color: DARK_THEME.textSecondary, marginBottom: 8 }}>
-                    {inviteResults.filter(r => r.status === 'sent').length} sent ·{' '}
-                    {inviteResults.filter(r => r.status === 'failed').length} failed ·{' '}
-                    {inviteResults.filter(r => r.status === 'invalid').length} invalid
-                  </Text>
-                  {inviteResults.map((r, i) => (
-                    <View key={i} style={[styles.inviteGuestRow, { paddingVertical: 8 }]}>
-                      <Ionicons
-                        name={r.status === 'sent' ? 'checkmark-circle' : r.status === 'invalid' ? 'warning-outline' : 'close-circle'}
-                        size={18}
-                        color={r.status === 'sent' ? '#10B981' : r.status === 'invalid' ? '#F59E0B' : '#EF4444'}
-                      />
-                      <YStack flex={1} marginLeft={10}>
-                        <Text style={styles.inviteGuestName}>Guest {r.slotIndex}</Text>
-                        <Text style={styles.inviteGuestPhone}>{r.recipient}{r.error ? ` — ${r.error}` : ''}</Text>
-                      </YStack>
-                    </View>
-                  ))}
+                <Text style={{ fontSize: 13, color: theme.textTertiary, textAlign: 'center', marginBottom: 12 }}>
+                  {t.manageInvitations.sentSummary.replace('{{sent}}', String(inviteResults.filter(r => r.status === 'sent').length))}
+                  {inviteResults.filter(r => r.status === 'failed').length > 0
+                    ? ` · ${inviteResults.filter(r => r.status === 'failed').length} ${t.manageInvitations.failedSuffix}` : ''}
+                  {inviteResults.filter(r => r.status === 'invalid').length > 0
+                    ? ` · ${inviteResults.filter(r => r.status === 'invalid').length} ${t.manageInvitations.invalidSuffix}` : ''}
+                </Text>
+                <View style={{ backgroundColor: theme.surfaceHigh, borderRadius: 12, marginBottom: 16, overflow: 'hidden' }}>
+                  {inviteResults.map((r, i) => {
+                    // Resolve actual guest name + full contact from slots (not the potentially-masked server value)
+                    const matchedSlot = slots.find(s => s.index === r.slotIndex);
+                    const guestName = matchedSlot?.name || `Guest ${r.slotIndex}`;
+                    const contactInfo = activeChannel === 'email'
+                      ? (matchedSlot?.email || r.recipient)
+                      : (matchedSlot?.phone || r.recipient);
+                    const isLast = i === inviteResults.length - 1;
+                    return (
+                      <View key={i} style={[
+                        styles.inviteGuestRow,
+                        { paddingVertical: 12, paddingHorizontal: 14 },
+                        !isLast && { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.ghostBorder },
+                      ]}>
+                        <Ionicons
+                          name={r.status === 'sent' ? 'checkmark-circle' : r.status === 'invalid' ? 'warning-outline' : 'close-circle'}
+                          size={20}
+                          color={r.status === 'sent' ? theme.accentGold : r.status === 'invalid' ? '#F59E0B' : '#EF4444'}
+                        />
+                        <YStack flex={1} marginLeft={12}>
+                          <Text style={[styles.inviteGuestName, { color: theme.accentGold }]}>{guestName}</Text>
+                          <Text style={styles.inviteGuestPhone}>{contactInfo}{r.error ? ` — ${r.error}` : ''}</Text>
+                        </YStack>
+                      </View>
+                    );
+                  })}
                 </View>
                 <Pressable
                   style={[styles.inviteChannelBtn, { flex: 0, paddingHorizontal: 20, marginBottom: 10 }]}
                   onPress={() => { setInviteSendStatus('idle'); setInviteResults([]); setActiveChannel(null); }}
                 >
-                  <Text style={[styles.inviteChannelLabel, { color: '#5A7EB0' }]}>Send another channel</Text>
+                  <Text style={[styles.inviteChannelLabel, { color: theme.accentGold }]}>{t.manageInvitations.sendAnotherChannel}</Text>
                 </Pressable>
               </>
             )}
@@ -810,29 +1246,31 @@ export default function ManageInvitationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+/** Style factory — consumes theme tokens, memoized per render in component. */
+const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: theme.background,
   },
   header: {
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
+    borderBottomColor: theme.ghostBorder,
   },
   headerTitle: {
     fontSize: 17,
     fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   statCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: theme.ghostBorder,
     padding: 14,
     alignItems: 'center',
     gap: 4,
+    ...ambientShadow(theme),
   },
   statNumber: {
     fontSize: 24,
@@ -841,31 +1279,31 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   sectionTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   slotCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: theme.ghostBorder,
     padding: 14,
     marginBottom: 10,
   },
   slotCardEmpty: {
     borderStyle: 'dashed',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
-    backgroundColor: 'rgba(35, 39, 47, 0.5)',
+    borderColor: theme.ghostBorder,
+    backgroundColor: theme.surfaceLow,
   },
   avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: theme.surfaceHigh,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -873,27 +1311,27 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(59, 130, 246, 0.2)',
   },
   avatarHonoree: {
-    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    backgroundColor: 'rgba(198, 167, 94, 0.18)',
   },
   avatarEmpty: {
-    backgroundColor: 'rgba(45, 55, 72, 0.4)',
+    backgroundColor: theme.surfaceLow,
     borderWidth: 1,
     borderStyle: 'dashed',
-    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderColor: theme.ghostBorder,
   },
   avatarText: {
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   slotName: {
     fontSize: 15,
     fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
     flex: 1,
   },
   slotNameEmpty: {
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     fontStyle: 'italic',
   },
   roleBadge: {
@@ -908,23 +1346,38 @@ const styles = StyleSheet.create({
   },
   detailText: {
     fontSize: 12,
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
     flex: 1,
   },
   fillHint: {
     fontSize: 12,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     fontStyle: 'italic',
     marginTop: 2,
   },
+  adjustedHint: {
+    flex: 1,
+    fontSize: 11,
+    color: theme.accentGold,
+    lineHeight: 15,
+  },
+  dupError: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginTop: 6,
+    lineHeight: 16,
+  },
+  confirmButtonDisabled: {
+    opacity: 0.4,
+  },
   inputContainer: {
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: theme.surfaceHigh,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: theme.ghostBorder,
   },
   input: {
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
     fontSize: 14,
     paddingHorizontal: 12,
     paddingVertical: 10,
@@ -933,7 +1386,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#5A7EB0',
+    backgroundColor: theme.accentGold,
     borderRadius: 10,
     paddingVertical: 10,
     gap: 6,
@@ -942,7 +1395,7 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: theme.textOnPrimary,
   },
   infoOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -951,19 +1404,19 @@ const styles = StyleSheet.create({
     zIndex: 200,
   },
   infoSheet: {
-    backgroundColor: '#1E2329',
+    backgroundColor: theme.surfaceBright,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     paddingHorizontal: 18,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: theme.ghostBorder,
   },
   infoHandle: {
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: theme.ghostBorder,
     alignSelf: 'center',
     marginBottom: 18,
   },
@@ -978,11 +1431,11 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#F59E0B',
+    color: '#C6A75E',
   },
   infoBody: {
     fontSize: 14,
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 20,
   },
   infoPrivacyRow: {
@@ -993,15 +1446,15 @@ const styles = StyleSheet.create({
   },
   infoPrivacyText: {
     fontSize: 13,
-    color: '#10B981',
+    color: '#C6A75E',
     fontWeight: '500',
     flex: 1,
   },
   suggestionBox: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: theme.surfaceLow,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: theme.ghostBorder,
     marginTop: 4,
     overflow: 'hidden',
   },
@@ -1012,22 +1465,102 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 9,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: theme.ghostBorder,
   },
   suggestionText: {
     fontSize: 13,
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    padding: 16,
-    backgroundColor: DARK_THEME.surface,
-    borderTopWidth: 1,
-    borderTopColor: DARK_THEME.glassBorder,
+    // No background/border — GoldButton is the visual element
+  },
+  readOnlyBanner: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: 'rgba(230,220,200,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
+  },
+  readOnlyBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: theme.textSecondary,
+    textAlign: 'center',
+  },
+  // ─── Status chip (above participant list) ───
+  statusChipRow: {
+    marginBottom: 14,
+    gap: 6,
+  },
+  statusChipLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.4,
+    color: theme.textTertiary,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  statusChip: {
+    alignSelf: 'flex-start',
+    backgroundColor: theme.surfaceCard,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.accentGold,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  statusChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.accentGold,
+  },
+  // ─── Avatar ring ───────────────────────────
+  avatarRing: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: theme.ghostBorder,
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarRingHonoree: {
+    borderColor: theme.accentGold,
+    borderWidth: 2,
+  },
+  // ─── Bottom action strip ───────────────────
+  actionChip: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.ghostBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.surfaceLow,
+  },
+  actionChipActive: {
+    borderColor: theme.textSecondary,
+    backgroundColor: 'rgba(107,114,128,0.12)',
+  },
+  statusLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.textTertiary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
   // ─── Invite Modal ───
   inviteOverlay: {
@@ -1036,55 +1569,55 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   inviteSheet: {
-    backgroundColor: '#1E2329',
+    backgroundColor: theme.surfaceCard,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 18,
     paddingTop: 12,
     paddingBottom: 32,
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: theme.ghostBorder,
   },
   inviteHandle: {
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: theme.ghostBorder,
     alignSelf: 'center',
     marginBottom: 16,
   },
   inviteTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   invitePreview: {
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: theme.surfaceHigh,
     borderRadius: 12,
     padding: 12,
     marginBottom: 18,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: theme.ghostBorder,
   },
   invitePreviewText: {
     fontSize: 13,
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
     lineHeight: 20,
   },
   inviteSectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     letterSpacing: 0.8,
     marginBottom: 10,
   },
   inviteChannelBtn: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderColor: theme.ghostBorder,
     paddingVertical: 14,
     gap: 4,
   },
@@ -1097,37 +1630,37 @@ const styles = StyleSheet.create({
   },
   inviteChannelCount: {
     fontSize: 11,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
   },
   inviteGuestRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.05)',
+    borderBottomColor: theme.ghostBorder,
     gap: 10,
   },
   inviteGuestAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: DARK_THEME.deepNavy,
+    backgroundColor: theme.surfaceHigh,
     alignItems: 'center',
     justifyContent: 'center',
   },
   inviteGuestInitial: {
     fontSize: 14,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   inviteGuestName: {
     fontSize: 14,
     fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   inviteGuestPhone: {
     fontSize: 12,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     marginTop: 1,
   },
   inviteWABtn: {

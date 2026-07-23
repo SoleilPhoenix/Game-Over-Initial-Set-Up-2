@@ -2,7 +2,7 @@ import { createAnimations } from '@tamagui/animations-react-native';
 import { createInterFont } from '@tamagui/font-inter';
 import { createMedia } from '@tamagui/react-native-media-driver';
 import { shorthands } from '@tamagui/shorthands';
-import { themes, tokens as defaultTokens } from '@tamagui/themes';
+import { tokens as defaultTokens } from '@tamagui/themes';
 import { createTamagui, createTokens } from 'tamagui';
 
 // Animations
@@ -83,45 +83,51 @@ const bodyFont = createInterFont({
   },
 });
 
-// Custom tokens matching the app's design system (updated to match UI designs)
+// Custom tokens — kept in sync with src/constants/designSystem.ts
+// (EDITORIAL_DARK + EDITORIAL_LIGHT). Both surfaces of the design system
+// must agree, otherwise a screen mixing Tamagui $tokens and useTheme()
+// reads two different palettes for the same semantic key.
 const customTokens = createTokens({
   ...defaultTokens,
   color: {
     ...defaultTokens.color,
-    // Primary colors - Unified active blue across all screens
-    primary: '#5A7EB0',
-    primaryLight: '#7A9BC4',
-    primaryDark: '#456A9C',
+    // Primary — Champagne Gold (editorial)
+    primary: '#C6A75E',
+    primaryLight: '#E8DCC8',
+    primaryDark: '#8A7338',
 
-    // Semantic colors
-    success: '#22C55E',
-    warning: '#EAB308',
-    error: '#EF4444',
+    // Semantic — soft palette per editorial guideline (warm, never harsh)
+    success: '#4ADE80',
+    warning: '#E8B14C',
+    error: '#E8836B',
     info: '#7B68EE',
 
-    // Light mode
-    lightBackground: '#F6F7F7',
-    lightSurface: '#FFFFFF',
-    lightTextPrimary: '#1A202C',
-    lightTextSecondary: '#64748B',
-    lightTextTertiary: '#94A3B8',
-    lightBorder: '#E2E8F0',
+    // Light mode — "Ethereal Architect" warm off-whites
+    lightBackground: '#FFFFFF',
+    lightSurface: '#FBF9F4',
+    lightSurfaceLow: '#F7F5F0',
+    lightSurfaceHigh: '#F2EDE1',
+    lightTextPrimary: '#1F2A44',
+    lightTextSecondary: 'rgba(31,42,68,0.72)',
+    lightTextTertiary: 'rgba(31,42,68,0.48)',
+    lightBorder: 'rgba(31,42,68,0.15)',
 
-    // Dark mode - Updated to match UI designs exactly
-    darkBackground: '#15181D',
-    darkSurface: '#1E2329',
-    darkSurfaceCard: '#23272F',
-    darkDeepNavy: '#2D3748',
+    // Dark mode — Midnight Navy editorial palette
+    darkBackground: '#0D1B2A',
+    darkSurface: '#12253A',
+    darkSurfaceCard: '#1A2F47',
+    darkSurfaceHigh: '#22385A',
+    darkSurfaceBright: '#2C446B',
     darkTextPrimary: '#FFFFFF',
-    darkTextSecondary: '#D1D5DB',
-    darkTextTertiary: '#9CA3AF',
-    darkBorder: 'rgba(255, 255, 255, 0.08)',
-    darkBorderLight: 'rgba(255, 255, 255, 0.05)',
+    darkTextSecondary: 'rgba(255,255,255,0.72)',
+    darkTextTertiary: 'rgba(255,255,255,0.48)',
+    darkBorder: 'rgba(230,220,200,0.15)',
+    darkBorderLight: 'rgba(230,220,200,0.08)',
 
-    // Glassmorphic colors
-    glassBackground: 'rgba(45, 55, 72, 0.7)',
-    glassBackgroundLight: 'rgba(45, 55, 72, 0.6)',
-    glassBorder: 'rgba(255, 255, 255, 0.08)',
+    // Glassmorphic colors (used by GlassPanel — pre-editorial component)
+    glassBackground: 'rgba(26,47,71,0.7)',
+    glassBackgroundLight: 'rgba(26,47,71,0.6)',
+    glassBorder: 'rgba(230,220,200,0.15)',
 
     // Common
     white: '#FFFFFF',
@@ -262,13 +268,13 @@ const lightTheme = {
   shadowColorStrong: 'rgba(0, 0, 0, 0.2)',
 };
 
-// Dark theme - Updated to match UI designs exactly
+// Dark theme — editorial Midnight Navy palette (sync with EDITORIAL_DARK)
 const darkTheme = {
   background: customTokens.color.darkBackground,
   backgroundHover: customTokens.color.darkSurface,
-  backgroundPress: customTokens.color.darkDeepNavy,
+  backgroundPress: customTokens.color.darkSurfaceHigh,
   backgroundFocus: customTokens.color.darkSurface,
-  backgroundStrong: customTokens.color.darkDeepNavy,
+  backgroundStrong: customTokens.color.darkSurfaceHigh,
   backgroundTransparent: 'transparent',
 
   color: customTokens.color.darkTextPrimary,
@@ -291,7 +297,9 @@ const darkTheme = {
 
   surface: customTokens.color.darkSurface,
   surfaceCard: customTokens.color.darkSurfaceCard,
-  surfaceHover: customTokens.color.darkDeepNavy,
+  surfaceHover: customTokens.color.darkSurfaceHigh,
+  surfaceHigh: customTokens.color.darkSurfaceHigh,
+  surfaceBright: customTokens.color.darkSurfaceBright,
 
   textPrimary: customTokens.color.darkTextPrimary,
   textSecondary: customTokens.color.darkTextSecondary,
@@ -332,7 +340,9 @@ const media = createMedia({
 export const config = createTamagui({
   defaultFont: 'body',
   animations,
-  shouldAddPrefersColorThemes: true,
+  // React Native doesn't use CSS media queries — prefers-color-scheme injection
+  // adds dead classes. Theme is driven by our themeStore + ThemeProvider wrapper.
+  shouldAddPrefersColorThemes: false,
   themeClassNameOnRoot: true,
   shorthands,
   fonts: {
@@ -376,5 +386,6 @@ export default config;
 export type AppConfig = typeof config;
 
 declare module 'tamagui' {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- required Tamagui type augmentation pattern
   interface TamaguiCustomConfig extends AppConfig {}
 }

@@ -8,7 +8,7 @@ import { Animated, PanResponder, FlatList, KeyboardAvoidingView, Modal, Platform
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   useChannel,
@@ -20,8 +20,6 @@ import {
 } from '@/hooks/queries/useChat';
 import { useAuthStore } from '@/stores/authStore';
 import { MessageBubble, MessageInput } from '@/components/chat';
-import { colors } from '@/constants/colors';
-import { DARK_THEME } from '@/constants/theme';
 import { useTranslation, getTranslation } from '@/i18n';
 import type { MessageWithAuthor } from '@/repositories/messages';
 
@@ -90,15 +88,15 @@ export default function ChatChannelScreen() {
     if (!isDbChannel && localMessages.length > 0) {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 150);
     }
-  }, [isDbChannel]); // Only run on mount for local channels
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only auto-scroll once on mount for local channels
+  }, [isDbChannel]);
 
   // Fetch channel info (only for real DB channels)
-  const { data: channel, isLoading: channelLoading } = useChannel(isDbChannel ? channelId : undefined);
+  const { data: channel } = useChannel(isDbChannel ? channelId : undefined);
 
   // Fetch messages with infinite scroll (only for real DB channels)
   const {
     data: messagesData,
-    isLoading: messagesLoading,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -114,13 +112,14 @@ export default function ChatChannelScreen() {
   const deleteChannelMutation = useDeleteChannel();
 
   const handleDeleteChannel = () => {
+    const tr = getTranslation();
     Alert.alert(
-      'Delete Channel',
-      `Are you sure you want to delete "${channelDisplayName}"? This cannot be undone.`,
+      (tr.chat as any).channelDeleteTitle,
+      (tr.chat as any).channelDeleteMsg.replace('{{name}}', channelDisplayName),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: tr.common.cancel, style: 'cancel' },
         {
-          text: 'Delete',
+          text: tr.common.delete,
           style: 'destructive',
           onPress: async () => {
             setInfoModalVisible(false);
@@ -131,7 +130,7 @@ export default function ChatChannelScreen() {
                 await AsyncStorage.removeItem(`local-messages-${channelId}`);
                 const raw = await AsyncStorage.getItem('localChannelsByEvent');
                 if (raw) {
-                  const map = JSON.parse(raw) as Record<string, Array<{ id: string; channels: Array<{ id: string }> }>>;
+                  const map = JSON.parse(raw) as Record<string, { id: string; channels: { id: string }[] }[]>;
                   for (const eventKey of Object.keys(map)) {
                     for (const section of map[eventKey]) {
                       section.channels = section.channels.filter((ch: any) => ch.id !== channelId);
@@ -146,7 +145,7 @@ export default function ChatChannelScreen() {
                 await deleteChannelMutation.mutateAsync(channelId!);
                 router.back();
               } catch {
-                Alert.alert('Error', 'Could not delete channel.');
+                Alert.alert((tr.chat as any).errorTitle, (tr.chat as any).channelDeleteFailed);
               }
             }
           },
@@ -187,6 +186,7 @@ export default function ChatChannelScreen() {
     if (channelId && isDbChannel) {
       markAsReadMutation.mutate(channelId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mark-as-read should fire once per channel change, not on mutation/isDbChannel change
   }, [channelId]);
 
   // Keyboard listeners
@@ -255,6 +255,7 @@ export default function ChatChannelScreen() {
         console.error('Failed to send message:', error);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- isDbChannel and user info captured at send-time; adding them re-creates the callback unnecessarily
     [channelId, sendMessageMutation, localMessages]
   );
 
@@ -291,10 +292,10 @@ export default function ChatChannelScreen() {
   );
 
   const CATEGORY_COLORS: Record<string, string> = {
-    general: '#8B5CF6',
-    accommodation: '#3B82F6',
-    activities: '#F97316',
-    budget: '#10B981',
+    general: '#C6A75E',
+    accommodation: '#C6A75E',
+    activities: '#C6A75E',
+    budget: '#C6A75E',
   };
 
   const getCategoryIcon = (category: string | undefined): keyof typeof Ionicons.glyphMap => {
@@ -309,27 +310,27 @@ export default function ChatChannelScreen() {
 
   // Use the icon passed from the Topics list, fall back to category default
   const headerIcon = (channelIconParam ?? getCategoryIcon(channelDisplayCategory)) as keyof typeof Ionicons.glyphMap;
-  const headerColor = CATEGORY_COLORS[channelDisplayCategory ?? 'general'] ?? '#5A7EB0';
+  const headerColor = CATEGORY_COLORS[channelDisplayCategory ?? 'general'] ?? '#C6A75E';
   const headerBg = `${headerColor}26`; // 15% opacity
 
   // Remove full-screen loading - show UI immediately with loading states
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: DARK_THEME.background }}
+      style={{ flex: 1, backgroundColor: '#0D1B2A' }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
       testID="chat-screen"
     >
-      <YStack flex={1} backgroundColor="$background">
+      <YStack flex={1} backgroundColor="#0D1B2A">
         {/* Header */}
         <XStack
           paddingTop={insets.top + 8}
           paddingHorizontal="$3"
           paddingBottom="$3"
           alignItems="center"
-          backgroundColor="$surface"
+          backgroundColor="#1A2F47"
           borderBottomWidth={1}
-          borderBottomColor="$borderColor"
+          borderBottomColor="rgba(230,220,200,0.15)"
           gap="$2"
         >
           <XStack
@@ -342,7 +343,7 @@ export default function ChatChannelScreen() {
             onPress={() => router.back()}
             testID="back-button"
           >
-            <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
           </XStack>
 
           <YStack
@@ -376,7 +377,7 @@ export default function ChatChannelScreen() {
             testID="info-button"
             onPress={() => setInfoModalVisible(true)}
           >
-            <Ionicons name="information-circle-outline" size={24} color={DARK_THEME.textSecondary} />
+            <Ionicons name="information-circle-outline" size={24} color={'rgba(255,255,255,0.72)'} />
           </XStack>
         </XStack>
 
@@ -408,12 +409,12 @@ export default function ChatChannelScreen() {
                 width={60}
                 height={60}
                 borderRadius="$full"
-                backgroundColor="rgba(90, 126, 176, 0.15)"
+                backgroundColor="rgba(198,167,94,0.15)"
                 alignItems="center"
                 justifyContent="center"
                 marginBottom="$3"
               >
-                <Ionicons name="chatbubble-outline" size={28} color="#5A7EB0" />
+                <Ionicons name="chatbubble-outline" size={28} color="#C6A75E" />
               </YStack>
               <Text fontSize="$3" fontWeight="600" color="$textPrimary" marginBottom="$1">
                 {t.chat.noMessages}
@@ -455,14 +456,15 @@ export default function ChatChannelScreen() {
         >
           <Pressable onPress={() => {}}>
           <Animated.View
+            accessibilityViewIsModal={true}
             style={{
-              backgroundColor: '#1E2329',
+              backgroundColor: '#1A2F47',
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               padding: 24,
               paddingBottom: 32,
               borderTopWidth: 1,
-              borderColor: 'rgba(255,255,255,0.08)',
+              borderColor: 'rgba(230,220,200,0.15)',
               transform: [{ translateY: infoSheetY }],
             }}
           >
@@ -472,16 +474,22 @@ export default function ChatChannelScreen() {
             </View>
             {/* Header row: title + close */}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '700' }}>Channel Info</Text>
+              <Text style={{ color: '#FFFFFF', fontSize: 17, fontWeight: '700' }}>{(t.chat as any).channelInfoTitle}</Text>
               <Pressable onPress={() => setInfoModalVisible(false)} hitSlop={8}>
-                <Ionicons name="close" size={22} color="#9CA3AF" />
+                <Ionicons name="close" size={22} color="rgba(255,255,255,0.48)" />
               </Pressable>
             </View>
 
             {/* 1. Category — text only */}
             <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center', marginBottom: 10 }}>
               <Text style={{ color: headerColor, fontSize: 13, fontWeight: '700', letterSpacing: 0.5 }}>
-                {channelDisplayCategory.toUpperCase()}
+                {channelDisplayCategory === 'accommodation'
+                  ? t.chat.accommodation.toUpperCase()
+                  : channelDisplayCategory === 'activities'
+                    ? t.chat.activities.toUpperCase()
+                    : channelDisplayCategory === 'budget'
+                      ? t.chat.budgetCategory.toUpperCase()
+                      : t.chat.general.toUpperCase()}
               </Text>
             </View>
 
@@ -498,7 +506,7 @@ export default function ChatChannelScreen() {
               <Ionicons name="person-outline" size={18} color={headerColor} />
               <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
                 {!isDbChannel
-                  ? (user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'You')
+                  ? (user?.user_metadata?.full_name || user?.email?.split('@')[0] || (t.chat as any).pollYou)
                   : '—'}
               </Text>
             </View>
@@ -521,7 +529,7 @@ export default function ChatChannelScreen() {
               onPress={handleDeleteChannel}
             >
               <Ionicons name="trash-outline" size={16} color="#EF4444" />
-              <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14 }}>Delete Channel</Text>
+              <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14 }}>{(t.chat as any).channelDeleteTitle}</Text>
             </Pressable>
           </Animated.View>
           </Pressable>

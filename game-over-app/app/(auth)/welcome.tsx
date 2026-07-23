@@ -1,265 +1,139 @@
 /**
- * Welcome Screen
- * Dark glassmorphic design matching UI specifications
- * Full-screen hero image with gradient overlay and glass action card
+ * Welcome Screen - the single entry screen
+ *
+ * Brand and every way in, on one screen. It used to hand off to a separate
+ * `continue` screen to pick a sign-in method; that extra tap cost sign-ups for
+ * no benefit, so the choice moved here. The screen stays uncrowded by keeping
+ * the three providers as a compact icon row rather than three stacked buttons -
+ * which is what had overflowed the viewport the first time everything shared one
+ * screen.
+ *
+ * Order is deliberate: the fastest path (one-tap social) sits highest, the email
+ * route ("Party planen") is a quieter button below it, and the guest code - the
+ * exception, not the rule - stays quietest of all.
+ *
+ * The logo asset carries its own #0D1B2A tile; the backdrop is flat navy in its
+ * top half so the logo never reads as a dark rectangle on a lighter gradient.
  */
-
 import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
   StatusBar,
-  ImageBackground,
   Pressable,
-  Dimensions,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
-import { Link, router } from 'expo-router';
+import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { AnimatedLogo, willPlayLogoReveal } from '@/components/brand/AnimatedLogo';
 import { SocialButton } from '@/components/ui/SocialButton';
-import { DARK_THEME } from '@/constants/theme';
+import { InviteCodeEntry } from '@/components/auth/InviteCodeEntry';
+import { useSocialAuth } from '@/hooks/useSocialAuth';
 import { useTranslation } from '@/i18n';
-import { useAuthStore } from '@/stores/authStore';
-import { supabase } from '@/lib/supabase/client';
-import * as AppleAuthentication from 'expo-apple-authentication';
-import * as WebBrowser from 'expo-web-browser';
-import { makeRedirectUri } from 'expo-auth-session';
-
-WebBrowser.maybeCompleteAuthSession();
-
-const { width, height } = Dimensions.get('window');
-
-/**
- * Validates that a token appears to be a valid JWT format
- * JWT tokens have 3 base64-encoded parts separated by dots
- */
-function isValidJWTFormat(token: string): boolean {
-  if (!token || typeof token !== 'string') return false;
-  const parts = token.split('.');
-  if (parts.length !== 3) return false;
-  // Check each part is non-empty and looks like base64
-  return parts.every(part => part.length > 0 && /^[A-Za-z0-9_-]+$/.test(part));
-}
 
 export default function WelcomeScreen() {
-  const [isLoading, setIsLoading] = React.useState<string | null>(null);
+  // Read once, before AnimatedLogo mounts - mounting it flips the session flag.
+  // The reveal normally plays on the intro screen, so here it usually resolves
+  // to the static logo; the delayed entrances only apply on the rare path where
+  // the welcome screen is the first to show the reveal.
+  const [revealPlays] = React.useState(() => willPlayLogoReveal());
+  const claimEntrance = revealPlays ? FadeInDown.delay(2000).duration(600) : undefined;
+  const actionsEntrance = revealPlays ? FadeInDown.delay(3000).duration(600) : undefined;
   const insets = useSafeAreaInsets();
-  const setError = useAuthStore((state) => state.setError);
   const { t } = useTranslation();
-
-  const handleAppleSignIn = async () => {
-    try {
-      setIsLoading('apple');
-      const credential = await AppleAuthentication.signInAsync({
-        requestedScopes: [
-          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
-          AppleAuthentication.AppleAuthenticationScope.EMAIL,
-        ],
-      });
-
-      if (credential.identityToken) {
-        const { error } = await supabase.auth.signInWithIdToken({
-          provider: 'apple',
-          token: credential.identityToken,
-        });
-
-        if (error) throw error;
-      }
-    } catch (error: any) {
-      if (error.code !== 'ERR_REQUEST_CANCELED') {
-        setError(error.message || 'Apple sign in failed');
-      }
-    } finally {
-      setIsLoading(null);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    try {
-      setIsLoading('google');
-      const redirectUrl = makeRedirectUri({ scheme: 'gameover' });
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-        },
-      });
-
-      if (error) throw error;
-
-      if (data.url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-
-        if (result.type === 'success') {
-          const url = new URL(result.url);
-          const accessToken = url.searchParams.get('access_token');
-          const refreshToken = url.searchParams.get('refresh_token');
-
-          if (accessToken && refreshToken) {
-            // Validate token format before setting session
-            if (!isValidJWTFormat(accessToken)) {
-              throw new Error('Invalid access token format received');
-            }
-            await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-          }
-        }
-      }
-    } catch (error: any) {
-      setError(error.message || 'Google sign in failed');
-    } finally {
-      setIsLoading(null);
-    }
-  };
-
-  const handleFacebookSignIn = async () => {
-    try {
-      setIsLoading('facebook');
-      const redirectUrl = makeRedirectUri({ scheme: 'gameover' });
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'facebook',
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-        },
-      });
-
-      if (error) throw error;
-
-      if (data.url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-
-        if (result.type === 'success') {
-          const url = new URL(result.url);
-          const accessToken = url.searchParams.get('access_token');
-          const refreshToken = url.searchParams.get('refresh_token');
-
-          if (accessToken && refreshToken) {
-            // Validate token format before setting session
-            if (!isValidJWTFormat(accessToken)) {
-              throw new Error('Invalid access token format received');
-            }
-            await supabase.auth.setSession({
-              access_token: accessToken,
-              refresh_token: refreshToken,
-            });
-          }
-        }
-      }
-    } catch (error: any) {
-      setError(error.message || 'Facebook sign in failed');
-    } finally {
-      setIsLoading(null);
-    }
-  };
-
-  const handleGetStarted = () => {
-    router.push('/(auth)/signup');
-  };
+  const { loading, signInWithApple, signInWithGoogle, signInWithFacebook } = useSocialAuth();
 
   return (
     <View style={styles.container} testID="welcome-screen">
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* Background Hero Image with Gradient Overlay */}
-      <ImageBackground
-        source={{
-          uri: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=800&q=80',
-        }}
-        style={styles.heroImage}
-        resizeMode="cover"
-      >
-        {/* Gradient Overlay */}
-        <LinearGradient
-          colors={['rgba(0,0,0,0.4)', 'transparent', DARK_THEME.background]}
-          locations={[0, 0.4, 1]}
-          style={styles.gradientOverlay}
-        />
+      <LinearGradient
+        colors={['#0D1B2A', '#132539']}
+        locations={[0.45, 1]}
+        style={StyleSheet.absoluteFillObject}
+      />
 
-        {/* Content */}
-        <View style={[styles.content, { paddingTop: insets.top }]}>
-          {/* Top App Bar */}
-          <View style={styles.topBar}>
-            <View style={styles.logoBadge}>
-              <Ionicons name="game-controller" size={20} color={DARK_THEME.primary} />
-              <Text style={styles.logoText}>Game-Over.app</Text>
-            </View>
+      <KeyboardAvoidingView
+        style={styles.content}
+        behavior={Platform.OS === 'android' ? 'height' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 16 },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          automaticallyAdjustKeyboardInsets={true}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Brand block, pulled towards the top. AnimatedLogo is a fixed-size
+              box, so the centring parent is what keeps it off the left edge. */}
+          <View style={styles.brand}>
+            <AnimatedLogo size={172} testID="welcome-logo" />
+
+            <Animated.View style={styles.claimBlock} entering={claimEntrance}>
+              <Text style={styles.claimLine}>{t.auth.claim1}</Text>
+              <Text style={styles.claimLine}>{t.auth.claim2}</Text>
+              <Text style={[styles.claimLine, styles.claimAccent]}>{t.auth.claim3}</Text>
+              <Text style={styles.claimSub}>{t.auth.claimSub}</Text>
+            </Animated.View>
           </View>
 
-          {/* Spacer */}
-          <View style={styles.spacer} />
+          <View style={styles.flexSpacer} />
 
-          {/* Bottom Action Area */}
-          <View style={[styles.bottomArea, { paddingBottom: insets.bottom + 16 }]}>
-            {/* Glassmorphic Action Card */}
-            <BlurView intensity={20} tint="dark" style={styles.glassCard}>
-              <View style={styles.glassCardInner}>
-                {/* Headlines */}
-                <View style={styles.headlines}>
-                  <Text style={styles.title}>
-                    {t.auth.welcomeHeadline}
-                  </Text>
-                  <Text style={styles.subtitle}>
-                    {t.auth.welcomeBody}
-                  </Text>
-                </View>
+          <Animated.View style={styles.actions} entering={actionsEntrance}>
+            {/* Fastest path first: one tap, no form. */}
+            <View style={styles.socialRow}>
+              <SocialButton
+                provider="apple"
+                compact
+                onPress={signInWithApple}
+                loading={loading === 'apple'}
+                disabled={loading !== null}
+                testID="social-button-apple"
+              />
+              <SocialButton
+                provider="google"
+                compact
+                onPress={signInWithGoogle}
+                loading={loading === 'google'}
+                disabled={loading !== null}
+                testID="social-button-google"
+              />
+              <SocialButton
+                provider="facebook"
+                compact
+                onPress={signInWithFacebook}
+                loading={loading === 'facebook'}
+                disabled={loading !== null}
+                testID="social-button-facebook"
+              />
+            </View>
 
-                {/* Social Sign-In Buttons */}
-                <View style={styles.socialButtons}>
-                  <SocialButton
-                    provider="apple"
-                    onPress={handleAppleSignIn}
-                    loading={isLoading === 'apple'}
-                    disabled={isLoading !== null}
-                    testID="social-button-apple"
-                  />
-                  <SocialButton
-                    provider="google"
-                    onPress={handleGoogleSignIn}
-                    loading={isLoading === 'google'}
-                    disabled={isLoading !== null}
-                    testID="social-button-google"
-                  />
-                  <SocialButton
-                    provider="facebook"
-                    onPress={handleFacebookSignIn}
-                    loading={isLoading === 'facebook'}
-                    disabled={isLoading !== null}
-                    testID="social-button-facebook"
-                  />
-                </View>
+            <View style={styles.divider}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>{t.auth.or}</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
-                {/* Divider */}
-                <View style={styles.divider}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>{t.auth.or}</Text>
-                  <View style={styles.dividerLine} />
-                </View>
+            {/* Email route, deliberately the quieter, outlined button. */}
+            <Pressable
+              style={({ pressed }) => [styles.emailButton, pressed && styles.emailButtonPressed]}
+              onPress={() => router.push('/(auth)/signup')}
+              disabled={loading !== null}
+              testID="get-started-button"
+            >
+              <Text style={styles.emailButtonText}>{t.auth.planParty}</Text>
+              <Ionicons name="arrow-forward" size={17} color="#C6A75E" />
+            </Pressable>
 
-                {/* Primary CTA */}
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.primaryButton,
-                    pressed && styles.primaryButtonPressed,
-                  ]}
-                  onPress={handleGetStarted}
-                  testID="get-started-button"
-                >
-                  <Text style={styles.primaryButtonText}>{t.auth.getStarted}</Text>
-                  <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-                </Pressable>
-              </View>
-            </BlurView>
-
-            {/* Login Link */}
             <Pressable
               style={styles.loginLink}
               onPress={() => router.push('/(auth)/login')}
@@ -269,15 +143,18 @@ export default function WelcomeScreen() {
               <Text style={styles.loginLinkText}>{t.auth.logIn}</Text>
             </Pressable>
 
-            {/* Terms */}
+            {/* Guests arrive with a code and should not have to sign up first -
+                offered here, but deliberately the quietest thing on the screen. */}
+            <InviteCodeEntry testIDPrefix="invite-code" />
+
             <Text style={styles.terms}>
               {t.auth.termsPrefix}{' '}
               <Text style={styles.termsLink}>{t.auth.termsOfService}</Text> {t.auth.and}{' '}
               <Text style={styles.termsLink}>{t.auth.privacyPolicy}</Text>
             </Text>
-          </View>
-        </View>
-      </ImageBackground>
+          </Animated.View>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
@@ -285,141 +162,106 @@ export default function WelcomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
-  },
-  heroImage: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
-  gradientOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#0D1B2A',
   },
   content: {
     flex: 1,
   },
-  topBar: {
-    flexDirection: 'row',
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 28,
+  },
+  brand: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingTop: 12,
+    paddingTop: 8,
   },
-  logoBadge: {
-    flexDirection: 'row',
+  claimBlock: {
+    paddingTop: 22,
+    gap: 2,
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(0, 0, 0, 0.2)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
   },
-  logoText: {
-    color: DARK_THEME.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+  claimLine: {
+    color: '#FFFFFF',
+    fontSize: 32,
+    fontWeight: '800',
+    lineHeight: 38,
+    letterSpacing: -0.8,
+    textAlign: 'center',
   },
-  spacer: {
+  claimAccent: {
+    color: '#C6A75E',
+  },
+  claimSub: {
+    color: 'rgba(255,255,255,0.62)',
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 14,
+    textAlign: 'center',
+  },
+  flexSpacer: {
     flex: 1,
+    minHeight: 24,
   },
-  bottomArea: {
-    paddingHorizontal: 16,
+  actions: {
     gap: 16,
   },
-  glassCard: {
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
-  },
-  glassCardInner: {
-    backgroundColor: DARK_THEME.glass,
-    padding: 24,
-    gap: 20,
-  },
-  headlines: {
-    gap: 8,
-  },
-  title: {
-    color: DARK_THEME.textPrimary,
-    fontSize: 28,
-    fontWeight: '800',
-    lineHeight: 34,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    color: DARK_THEME.textSecondary,
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: '400',
-  },
-  socialButtons: {
+  socialRow: {
+    flexDirection: 'row',
     gap: 12,
   },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+    marginVertical: -2,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
   },
   dividerText: {
-    color: DARK_THEME.textTertiary,
-    fontSize: 12,
-    fontWeight: '500',
-    marginHorizontal: 16,
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 13,
   },
-  primaryButton: {
+  emailButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: DARK_THEME.primary,
-    paddingVertical: 16,
-    borderRadius: 12,
-    shadowColor: DARK_THEME.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: 14,
+    paddingVertical: 15,
+    borderWidth: 1.5,
+    borderColor: 'rgba(198,167,94,0.55)',
   },
-  primaryButtonPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.9,
+  emailButtonPressed: {
+    opacity: 0.7,
   },
-  primaryButtonText: {
-    color: DARK_THEME.textPrimary,
+  emailButtonText: {
+    color: '#C6A75E',
     fontSize: 16,
     fontWeight: '700',
   },
   loginLink: {
     flexDirection: 'row',
     justifyContent: 'center',
-    paddingVertical: 12,
   },
   loginText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 14,
-    fontWeight: '500',
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 16,
   },
   loginLinkText: {
-    color: DARK_THEME.primary,
-    fontSize: 14,
+    color: '#C6A75E',
+    fontSize: 16,
     fontWeight: '700',
-    textDecorationLine: 'underline',
   },
   terms: {
-    color: DARK_THEME.textTertiary,
-    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 12,
+    lineHeight: 18,
     textAlign: 'center',
-    lineHeight: 16,
   },
   termsLink: {
-    color: DARK_THEME.primary,
+    color: 'rgba(198,167,94,0.9)',
   },
 });

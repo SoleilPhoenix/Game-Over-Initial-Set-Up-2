@@ -1,0 +1,8 @@
+
+# macOS metadata
+.DS_Store
+**/.DS_Store
+
+# Geheimnisse gehoeren in den Passwortmanager, nie ins Repo
+*recovery_code*
+*.secret

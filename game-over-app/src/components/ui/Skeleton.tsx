@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    width: 100,
+    width: '100%',
   },
 });
 

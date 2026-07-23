@@ -7,21 +7,18 @@
  * for tests requiring server-side mocking or complex state manipulation.
  */
 
-import { device, element, by, expect, waitFor } from 'detox';
+import { device, element, by, waitFor } from 'detox';
 import {
   waitForElement,
   assertTextVisible,
   assertVisible,
-  assertNotVisible,
   tap,
   typeInInput,
   dismissKeyboard,
   restartApp,
-  cleanStart,
-  waitForLoadingComplete,
   TEST_USER,
 } from '../utils/testHelpers';
-import { loginAsTestUser, logout, isLoggedIn } from '../utils/auth';
+import { loginAsTestUser, logout } from '../utils/auth';
 import { navigateToTab } from '../utils/navigation';
 
 describe('Session Management', () => {

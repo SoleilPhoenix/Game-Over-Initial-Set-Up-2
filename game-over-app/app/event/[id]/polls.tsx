@@ -7,11 +7,12 @@ import React, { useState, useCallback } from 'react';
 import { FlatList, RefreshControl, Pressable, StyleSheet, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePolls, useCreatePoll, useVote } from '@/hooks/queries/usePolls';
+import { useEvent } from '@/hooks/queries/useEvents';
 import { PollCard, CreatePollModal } from '@/components/polls';
-import { colors } from '@/constants/colors';
+import { isReadOnlyEvent } from '@/utils/eventLifecycle';
 import type { Database } from '@/lib/supabase/types';
 
 type PollCategory = Database['public']['Tables']['polls']['Row']['category'];
@@ -35,6 +36,10 @@ export default function PollsScreen() {
   const createPollMutation = useCreatePoll();
   const voteMutation = useVote();
 
+  // Past events: voting is greyed out, but topics (poll creation/discussion) stay open
+  const { data: event } = useEvent(eventId);
+  const isReadOnly = event ? isReadOnlyEvent(event) : false;
+
   // Filter polls based on status
   const filteredPolls = React.useMemo(() => {
     if (!polls) return [];
@@ -53,7 +58,8 @@ export default function PollsScreen() {
     }
   }, [voteMutation]);
 
-  // Handle create poll
+  // Handle create poll — fire-and-forget so the modal closes instantly.
+  // useCreatePoll adds the poll to the cache optimistically; server confirms in the background.
   const handleCreatePoll = useCallback(async (data: {
     question: string;
     category: PollCategory;
@@ -61,8 +67,7 @@ export default function PollsScreen() {
     deadline?: Date;
   }) => {
     if (!eventId) return;
-
-    await createPollMutation.mutateAsync({
+    createPollMutation.mutate({
       poll: {
         event_id: eventId,
         title: data.question,
@@ -81,10 +86,11 @@ export default function PollsScreen() {
         poll={item}
         onVote={(optionId) => handleVote(item.id, optionId)}
         isVoting={voteMutation.isPending}
+        readOnly={isReadOnly}
         testID={`poll-${item.id}`}
       />
     </YStack>
-  ), [handleVote, voteMutation.isPending]);
+  ), [handleVote, voteMutation.isPending, isReadOnly]);
 
   if (isLoading) {
     return (
@@ -117,7 +123,7 @@ export default function PollsScreen() {
           onPress={() => router.back()}
           testID="back-button"
         >
-          <Ionicons name="arrow-back" size={24} color="#1A202C" />
+          <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
         </XStack>
 
         <YStack flex={1}>
@@ -179,8 +185,8 @@ export default function PollsScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            colors={[colors.light.primary]}
-            tintColor={colors.light.primary}
+            colors={['#C6A75E']}
+            tintColor={'#C6A75E'}
           />
         }
         ListEmptyComponent={
@@ -189,7 +195,7 @@ export default function PollsScreen() {
               width={80}
               height={80}
               borderRadius="$full"
-              backgroundColor={`${colors.light.primary}15`}
+              backgroundColor="rgba(198, 167, 94, 0.08)"
               alignItems="center"
               justifyContent="center"
               marginBottom="$4"
@@ -197,7 +203,7 @@ export default function PollsScreen() {
               <Ionicons
                 name={filter === 'closed' ? 'checkmark-done' : 'bar-chart-outline'}
                 size={40}
-                color={colors.light.primary}
+                color={'#C6A75E'}
               />
             </YStack>
             <Text fontSize="$4" fontWeight="700" color="$textPrimary" marginBottom="$2">
@@ -239,7 +245,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.light.primary,
+    backgroundColor: '#C6A75E',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -247,13 +253,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 16,
-    backgroundColor: colors.light.background,
+    backgroundColor: '#12253A',
     borderWidth: 1,
-    borderColor: colors.light.border,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   filterChipSelected: {
-    backgroundColor: colors.light.primary,
-    borderColor: colors.light.primary,
+    backgroundColor: '#C6A75E',
+    borderColor: '#C6A75E',
   },
   listContent: {
     paddingTop: 16,
@@ -264,7 +270,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.light.primary,
+    backgroundColor: '#C6A75E',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,

@@ -1,0 +1,294 @@
+{
+  "_instructions": {
+    "how_to_use": [
+      "1. Fülle die bestehenden 9 Packages mit echten Anbieterdaten aus.",
+      "2. Füge neue Packages pro Stadt hinzu — kopiere einfach ein bestehendes Objekt und passe 'id', 'city', 'tier', 'name' an.",
+      "3. 'id' MUSS dem Schema '{city}-{tier}' folgen, z.B. 'berlin-cocktailbar' oder 'hamburg-spa'.",
+      "4. 'tier' muss einer dieser Werte sein: 'essential' (S, €99), 'classic' (M, €149), 'grand' (L, €199).",
+      "5. 'features' sind die 3–5 Bulletpoints, die im Package-Detail angezeigt werden.",
+      "6. 'activities' sind die generischen Activity-Namen aus activities_template.json — diese steuern das KI-Matching.",
+      "7. Wenn du fertig bist, gib diese Datei zurück — ich integriere sie in den Code."
+    ],
+    "city_uuids": {
+      "berlin": "550e8400-e29b-41d4-a716-446655440101",
+      "hamburg": "550e8400-e29b-41d4-a716-446655440102",
+      "hannover": "550e8400-e29b-41d4-a716-446655440103"
+    },
+    "price_guide": {
+      "essential": "9900 = €99 pro Person",
+      "classic": "14900 = €149 pro Person",
+      "grand": "19900 = €199 pro Person"
+    }
+  },
+  "packages": [
+    {
+      "id": "berlin-essential",
+      "city": "berlin",
+      "tier": "essential",
+      "name": "Berlin Essential",
+      "tagline": "A solid party plan with all the essentials covered.",
+      "description": "A solid party plan with all the essentials covered.",
+      "price_per_person_cents": 9900,
+      "rating": 4.5,
+      "review_count": 89,
+      "features": [
+        "Bar hopping tour",
+        "Welcome drinks",
+        "Group coordination"
+      ],
+      "activities": [
+        "Bar Crawl",
+        "Pub Quiz Night"
+      ],
+      "provider": {
+        "company_name": "",
+        "contact_name": "",
+        "contact_email": "",
+        "contact_phone": "",
+        "website": "",
+        "notes": ""
+      }
+    },
+    {
+      "id": "berlin-classic",
+      "city": "berlin",
+      "tier": "classic",
+      "name": "Berlin Classic",
+      "tagline": "The ideal balance of nightlife, culture, and unforgettable moments in Berlin.",
+      "description": "The ideal balance of nightlife, culture, and unforgettable moments in Berlin.",
+      "price_per_person_cents": 14900,
+      "rating": 4.8,
+      "review_count": 127,
+      "features": [
+        "VIP nightlife access",
+        "Private party bus",
+        "Professional photographer",
+        "Welcome drinks package"
+      ],
+      "activities": [
+        "Club Entry + Reserved Area",
+        "Bar Crawl",
+        "Street Art / Underground Tour"
+      ],
+      "provider": {
+        "company_name": "",
+        "contact_name": "",
+        "contact_email": "",
+        "contact_phone": "",
+        "website": "",
+        "notes": ""
+      }
+    },
+    {
+      "id": "berlin-grand",
+      "city": "berlin",
+      "tier": "grand",
+      "name": "Berlin Grand",
+      "tagline": "The ultimate premium experience with luxury at every turn.",
+      "description": "The ultimate premium experience with luxury at every turn.",
+      "price_per_person_cents": 19900,
+      "rating": 4.9,
+      "review_count": 42,
+      "features": [
+        "Luxury suite",
+        "Private chef dinner",
+        "Spa & wellness package",
+        "VIP club access",
+        "Private chauffeur"
+      ],
+      "activities": [
+        "Club Entry + Reserved Area",
+        "Spa / Sauna Day Pass",
+        "Private Dining Room + Chef's Menu",
+        "Massage Add-On"
+      ],
+      "provider": {
+        "company_name": "",
+        "contact_name": "",
+        "contact_email": "",
+        "contact_phone": "",
+        "website": "",
+        "notes": ""
+      }
+    },
+    {
+      "id": "hamburg-essential",
+      "city": "hamburg",
+      "tier": "essential",
+      "name": "Hamburg Essential",
+      "tagline": "A fun, well-organized Hamburg party experience.",
+      "description": "A fun, well-organized Hamburg party experience.",
+      "price_per_person_cents": 9900,
+      "rating": 4.4,
+      "review_count": 64,
+      "features": [
+        "Guided bar tour",
+        "Welcome cocktails",
+        "Group planning"
+      ],
+      "activities": [
+        "Bar Crawl",
+        "Pub Quiz Night"
+      ],
+      "provider": {
+        "company_name": "",
+        "contact_name": "",
+        "contact_email": "",
+        "contact_phone": "",
+        "website": "",
+        "notes": ""
+      }
+    },
+    {
+      "id": "hamburg-classic",
+      "city": "hamburg",
+      "tier": "classic",
+      "name": "Hamburg Classic",
+      "tagline": "Experience Hamburg's legendary nightlife and harbor in style.",
+      "description": "Experience Hamburg's legendary nightlife and harbor in style.",
+      "price_per_person_cents": 14900,
+      "rating": 4.7,
+      "review_count": 98,
+      "features": [
+        "Reeperbahn nightlife tour",
+        "Harbor cruise",
+        "Professional photographer",
+        "Reserved bar area"
+      ],
+      "activities": [
+        "Harbor / River Cruise",
+        "Bar Crawl",
+        "Club Entry + Reserved Area"
+      ],
+      "provider": {
+        "company_name": "",
+        "contact_name": "",
+        "contact_email": "",
+        "contact_phone": "",
+        "website": "",
+        "notes": ""
+      }
+    },
+    {
+      "id": "hamburg-grand",
+      "city": "hamburg",
+      "tier": "grand",
+      "name": "Hamburg Grand",
+      "tagline": "Premium Hamburg experience with exclusive venues and luxury service.",
+      "description": "Premium Hamburg experience with exclusive venues and luxury service.",
+      "price_per_person_cents": 19900,
+      "rating": 4.9,
+      "review_count": 31,
+      "features": [
+        "Elbphilharmonie VIP event",
+        "Private yacht dinner",
+        "Luxury hotel suite",
+        "Spa & wellness day",
+        "Premium bottle service"
+      ],
+      "activities": [
+        "Harbor / River Cruise",
+        "Spa / Sauna Day Pass",
+        "Private Dining Room + Chef's Menu",
+        "Musical / Theater Show"
+      ],
+      "provider": {
+        "company_name": "",
+        "contact_name": "",
+        "contact_email": "",
+        "contact_phone": "",
+        "website": "",
+        "notes": ""
+      }
+    },
+    {
+      "id": "hannover-essential",
+      "city": "hannover",
+      "tier": "essential",
+      "name": "Hannover Essential",
+      "tagline": "A great time in Hannover without breaking the bank.",
+      "description": "A great time in Hannover without breaking the bank.",
+      "price_per_person_cents": 9900,
+      "rating": 4.3,
+      "review_count": 51,
+      "features": [
+        "City adventure tour",
+        "Welcome drinks",
+        "Group coordination"
+      ],
+      "activities": [
+        "Bar Crawl",
+        "Outdoor Scavenger Hunt"
+      ],
+      "provider": {
+        "company_name": "",
+        "contact_name": "",
+        "contact_email": "",
+        "contact_phone": "",
+        "website": "",
+        "notes": ""
+      }
+    },
+    {
+      "id": "hannover-classic",
+      "city": "hannover",
+      "tier": "classic",
+      "name": "Hannover Classic",
+      "tagline": "An action-packed celebration in the heart of Hannover.",
+      "description": "An action-packed celebration in the heart of Hannover.",
+      "price_per_person_cents": 14900,
+      "rating": 4.6,
+      "review_count": 73,
+      "features": [
+        "Craft beer experience",
+        "Go-kart racing",
+        "Professional photographer",
+        "Welcome dinner"
+      ],
+      "activities": [
+        "Go-Karting",
+        "Beer Tasting Flight",
+        "Bar Crawl"
+      ],
+      "provider": {
+        "company_name": "",
+        "contact_name": "",
+        "contact_email": "",
+        "contact_phone": "",
+        "website": "",
+        "notes": ""
+      }
+    },
+    {
+      "id": "hannover-grand",
+      "city": "hannover",
+      "tier": "grand",
+      "name": "Hannover Grand",
+      "tagline": "Exclusive Hannover experience with private gala and luxury wellness.",
+      "description": "Exclusive Hannover experience with private gala and luxury wellness.",
+      "price_per_person_cents": 19900,
+      "rating": 4.8,
+      "review_count": 28,
+      "features": [
+        "Herrenhausen Gardens gala",
+        "Private chef dinner",
+        "Spa & wellness day",
+        "VIP nightlife access",
+        "Luxury hotel suite"
+      ],
+      "activities": [
+        "Spa / Sauna Day Pass",
+        "Private Dining Room + Chef's Menu",
+        "Club Entry + Reserved Area"
+      ],
+      "provider": {
+        "company_name": "",
+        "contact_name": "",
+        "contact_email": "",
+        "contact_phone": "",
+        "website": "",
+        "notes": ""
+      }
+    }
+  ]
+}

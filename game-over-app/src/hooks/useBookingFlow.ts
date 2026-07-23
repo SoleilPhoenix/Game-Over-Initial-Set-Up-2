@@ -8,6 +8,25 @@ import { useEvent } from '@/hooks/queries/useEvents';
 import { useParticipants } from '@/hooks/queries/useParticipants';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { usePackage } from '@/hooks/queries/usePackages';
+import { calculateBookingPricing } from '@/utils/pricing';
+import type { EventWithDetails } from '@/repositories/events';
+import type { ParticipantWithProfile } from '@/repositories/participants';
+import type { BookingWithDetails } from '@/repositories/bookings';
+import type { Database } from '@/lib/supabase/types';
+
+import { getCityTierName, TIER_PRICE_PER_PERSON_CENTS } from '@/constants/packageTiers';
+
+type Package = Database['public']['Tables']['packages']['Row'];
+
+export interface FallbackPackage {
+  id: string;
+  name: string;
+  tier: string;
+  price_per_person_cents: number;
+  base_price_cents: 0;
+  slug?: string;
+  [key: string]: unknown;
+}
 
 export interface BookingPricing {
   packagePriceCents: number;
@@ -18,10 +37,10 @@ export interface BookingPricing {
 }
 
 export interface UseBookingFlowResult {
-  event: any;
-  participants: any[];
-  booking: any;
-  package: any;
+  event: EventWithDetails | null | undefined;
+  participants: ParticipantWithProfile[];
+  booking: BookingWithDetails | null | undefined;
+  package: Package | FallbackPackage | null | undefined;
   excludeHonoree: boolean;
   setExcludeHonoree: (value: boolean) => void;
   pricing: BookingPricing | null;
@@ -29,20 +48,17 @@ export interface UseBookingFlowResult {
   error: Error | null;
 }
 
-const MIN_SERVICE_FEE_CENTS = 5000; // €50 minimum
-const SERVICE_FEE_RATE = 0.10; // 10%
-
-// Fallback packages for local IDs that don't exist in DB
-const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; price_per_person_cents: number }> = {
-  'berlin-classic': { id: 'berlin-classic', name: 'Berlin Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'berlin-essential': { id: 'berlin-essential', name: 'Berlin Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'berlin-grand': { id: 'berlin-grand', name: 'Berlin Grand', tier: 'grand', price_per_person_cents: 199_00 },
-  'hamburg-classic': { id: 'hamburg-classic', name: 'Hamburg Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'hamburg-essential': { id: 'hamburg-essential', name: 'Hamburg Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'hamburg-grand': { id: 'hamburg-grand', name: 'Hamburg Grand', tier: 'grand', price_per_person_cents: 199_00 },
-  'hannover-classic': { id: 'hannover-classic', name: 'Hannover Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'hannover-essential': { id: 'hannover-essential', name: 'Hannover Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'hannover-grand': { id: 'hannover-grand', name: 'Hannover Grand', tier: 'grand', price_per_person_cents: 199_00 },
+// Fallback packages for local IDs that don't exist in DB — names + prices from packageTiers
+const FALLBACK_PKG: Record<string, FallbackPackage> = {
+  'berlin-essential':   { id: 'berlin-essential',   name: getCityTierName('berlin',   'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential, base_price_cents: 0 },
+  'berlin-classic':     { id: 'berlin-classic',     name: getCityTierName('berlin',   'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic,   base_price_cents: 0 },
+  'berlin-grand':       { id: 'berlin-grand',       name: getCityTierName('berlin',   'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand,     base_price_cents: 0 },
+  'hamburg-essential':  { id: 'hamburg-essential',  name: getCityTierName('hamburg',  'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential, base_price_cents: 0 },
+  'hamburg-classic':    { id: 'hamburg-classic',    name: getCityTierName('hamburg',  'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic,   base_price_cents: 0 },
+  'hamburg-grand':      { id: 'hamburg-grand',      name: getCityTierName('hamburg',  'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand,     base_price_cents: 0 },
+  'hannover-essential': { id: 'hannover-essential', name: getCityTierName('hannover', 'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential, base_price_cents: 0 },
+  'hannover-classic':   { id: 'hannover-classic',   name: getCityTierName('hannover', 'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic,   base_price_cents: 0 },
+  'hannover-grand':     { id: 'hannover-grand',     name: getCityTierName('hannover', 'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand,     base_price_cents: 0 },
 };
 
 export function useBookingFlow(eventId: string | undefined, packageIdOverride?: string, participantCountOverride?: number): UseBookingFlowResult {
@@ -67,31 +83,23 @@ export function useBookingFlow(eventId: string | undefined, packageIdOverride?: 
 
     // Use override (from URL params) > participant list > event count > fallback to 1
     const totalParticipants = participantCountOverride ||
-      ((participants && participants.length > 0) ? participants.length : (event?.participant_count || 1));
-    const honoreeCount = excludeHonoree ? 1 : 0;
-    const payingCount = Math.max(1, totalParticipants - honoreeCount);
+      ((participants && participants.length > 0) ? participants.length : 1);
 
-    const perPersonPrice = pkg.price_per_person_cents || (pkg as any).base_price_cents || 0;
-    // Package Base is ALWAYS price × total participants (fixed amount)
-    const packagePrice = perPersonPrice * totalParticipants;
-    const serviceFee = Math.max(
-      Math.ceil(packagePrice * SERVICE_FEE_RATE / 100) * 100,
-      MIN_SERVICE_FEE_CENTS
-    );
-    // Round total to whole euros so perPerson × payingCount matches displayed Total Group Cost
-    const totalEurosRounded = Math.round((packagePrice + serviceFee) / 100);
-    const total = totalEurosRounded * 100;
-    // Per-person derived from rounded total so the math adds up on screen
-    const perPerson = Math.ceil(total / payingCount);
+    const result = calculateBookingPricing({
+      pricePerPersonCents: pkg.price_per_person_cents,
+      baseFeeCents: (pkg as FallbackPackage).base_price_cents ?? 0,
+      totalParticipants,
+      excludeHonoree,
+    });
 
     return {
-      packagePriceCents: packagePrice,
-      serviceFeeCents: serviceFee,
-      totalCents: total,
-      perPersonCents: perPerson,
-      payingParticipantCount: payingCount,
+      packagePriceCents: result.packageBaseCents,
+      serviceFeeCents: result.serviceFeeCents,
+      totalCents: result.totalCents,
+      perPersonCents: result.perPersonCents,
+      payingParticipantCount: result.payingCount,
     };
-  }, [pkg, participants, excludeHonoree, event, participantCountOverride]);
+  }, [pkg, participants, excludeHonoree, participantCountOverride]);
 
   const isLoading = eventLoading || participantsLoading || bookingLoading || (packageLoading && !pkg);
 

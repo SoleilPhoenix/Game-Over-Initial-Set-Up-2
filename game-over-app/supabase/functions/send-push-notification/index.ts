@@ -41,6 +41,33 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  const authHeader = req.headers.get('Authorization');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!authHeader) {
+    return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+  if (authHeader !== `Bearer ${serviceRoleKey}`) {
+    const token = authHeader.replace('Bearer ', '');
+    const { createClient: createUserClient } = await import('https://esm.sh/@supabase/supabase-js@2.39.3');
+    // Pass the JWT explicitly to getUser(). With supabase-js v2, getUser() WITHOUT
+    // an argument looks for a stored session (absent in an edge function) and fails
+    // with "Auth session missing!" even for a valid token.
+    const userSupabase = createUserClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_ANON_KEY')!,
+    );
+    const { error: authError } = await userSupabase.auth.getUser(token);
+    if (authError) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
+
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');

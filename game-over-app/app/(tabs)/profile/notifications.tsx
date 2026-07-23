@@ -7,14 +7,16 @@ import React, { useState, useEffect } from 'react';
 import { Pressable, StyleSheet, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, View } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Toggle } from '@/components/ui/Toggle';
 import { useUser } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 import { useTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
+import { useMemo } from 'react';
+import { useTheme } from '@/hooks/useTheme';
+import { type EditorialTheme } from '@/constants/designSystem';
 
 const PREFS_CACHE_KEY = 'notification_prefs';
 
@@ -23,6 +25,8 @@ export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
   const user = useUser();
   const { t } = useTranslation();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
 
   const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(true);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(true);
@@ -31,6 +35,7 @@ export default function NotificationsScreen() {
 
   useEffect(() => {
     loadPreferences();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- loadPreferences is defined below and stable; we only want to reload when user changes
   }, [user?.id]);
 
   const loadPreferences = async () => {
@@ -128,7 +133,7 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <View flex={1} backgroundColor={DARK_THEME.background}>
+    <View flex={1} backgroundColor={theme.background}>
       {/* Header */}
       <XStack
         paddingTop={insets.top}
@@ -136,14 +141,17 @@ export default function NotificationsScreen() {
         paddingBottom="$3"
         alignItems="center"
         justifyContent="space-between"
-        backgroundColor={DARK_THEME.surface}
+        backgroundColor={theme.surfaceLow}
         borderBottomWidth={1}
-        borderBottomColor={DARK_THEME.border}
+        borderBottomColor={theme.ghostBorder}
       >
-        <Pressable onPress={() => router.back()} style={styles.headerButton} testID="notifications-back">
-          <Ionicons name="chevron-back" size={24} color={DARK_THEME.textPrimary} />
+        <Pressable onPress={() => router.back()} style={styles.headerButton} testID="notifications-back"
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text fontSize={17} fontWeight="600" color={DARK_THEME.textPrimary}>
+        <Text fontSize={17} fontWeight="600" color={theme.textPrimary}>
           {t.notificationPrefs.title}
         </Text>
         <View width={40} />
@@ -158,23 +166,27 @@ export default function NotificationsScreen() {
 
           {/* Push Notifications Section */}
           <YStack gap="$3">
-            <Text fontSize={11} fontWeight="600" color={DARK_THEME.textSecondary}
+            <Text fontSize={11} fontWeight="600" color={theme.textSecondary}
               textTransform="uppercase" letterSpacing={1} marginLeft="$1">
               {t.notificationPrefs.pushNotifications}
             </Text>
             <View style={styles.card}>
               {/* General push toggle */}
-              <XStack paddingVertical="$3" paddingHorizontal="$4" alignItems="center" justifyContent="space-between">
+              <XStack paddingVertical="$3" paddingHorizontal="$4" alignItems="center" justifyContent="space-between"
+                accessibilityRole="switch"
+                accessibilityLabel="Enable push notifications"
+                accessibilityState={{ checked: pushNotificationsEnabled, disabled: isSaving }}
+              >
                 <XStack flex={1} alignItems="center" gap="$3" marginRight="$3">
                   <View width={36} height={36} borderRadius={18}
-                    backgroundColor="rgba(96, 165, 250, 0.2)" alignItems="center" justifyContent="center">
-                    <Ionicons name="notifications" size={18} color="#60A5FA" />
+                    backgroundColor="rgba(198, 167, 94, 0.2)" alignItems="center" justifyContent="center">
+                    <Ionicons name="notifications" size={18} color="#C6A75E" />
                   </View>
                   <YStack flex={1}>
-                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
+                    <Text fontSize={14} fontWeight="500" color={theme.textPrimary} numberOfLines={1}>
                       {t.notificationPrefs.enablePush}
                     </Text>
-                    <Text fontSize={12} color={DARK_THEME.textSecondary}>
+                    <Text fontSize={11} color={theme.textSecondary} numberOfLines={2}>
                       {t.notificationPrefs.enablePushDesc}
                     </Text>
                   </YStack>
@@ -188,21 +200,25 @@ export default function NotificationsScreen() {
               </XStack>
 
               {/* Divider */}
-              <View height={1} backgroundColor={DARK_THEME.border} marginHorizontal={16} />
+              <View height={1} backgroundColor={theme.ghostBorder} marginHorizontal={16} />
 
               {/* Payment Due Alerts */}
-              <XStack paddingVertical="$3" paddingHorizontal="$4" alignItems="center" justifyContent="space-between">
+              <XStack paddingVertical="$3" paddingHorizontal="$4" alignItems="center" justifyContent="space-between"
+                accessibilityRole="switch"
+                accessibilityLabel="Payment due alerts"
+                accessibilityState={{ checked: paymentAlertsEnabled, disabled: isSaving }}
+              >
                 <XStack flex={1} alignItems="center" gap="$3" marginRight="$3">
                   <View width={36} height={36} borderRadius={18}
                     backgroundColor="rgba(249, 115, 22, 0.15)" alignItems="center" justifyContent="center">
                     <Ionicons name="warning" size={18} color="#F97316" />
                   </View>
                   <YStack flex={1}>
-                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
-                      Payment Due Alerts
+                    <Text fontSize={14} fontWeight="500" color={theme.textPrimary} numberOfLines={1}>
+                      {t.notificationPrefs.paymentDueAlerts}
                     </Text>
-                    <Text fontSize={12} color={DARK_THEME.textSecondary}>
-                      Remind when a balance is due soon
+                    <Text fontSize={11} color={theme.textSecondary} numberOfLines={2}>
+                      {t.notificationPrefs.paymentDueAlertsDesc}
                     </Text>
                   </YStack>
                 </XStack>
@@ -218,22 +234,26 @@ export default function NotificationsScreen() {
 
           {/* Email Notifications Section */}
           <YStack gap="$3">
-            <Text fontSize={11} fontWeight="600" color={DARK_THEME.textSecondary}
+            <Text fontSize={11} fontWeight="600" color={theme.textSecondary}
               textTransform="uppercase" letterSpacing={1} marginLeft="$1">
               {t.notificationPrefs.emailNotifications}
             </Text>
             <View style={styles.card}>
-              <XStack paddingVertical="$3" paddingHorizontal="$4" alignItems="center" justifyContent="space-between">
+              <XStack paddingVertical="$3" paddingHorizontal="$4" alignItems="center" justifyContent="space-between"
+                accessibilityRole="switch"
+                accessibilityLabel="Email notifications for event updates"
+                accessibilityState={{ checked: emailNotificationsEnabled, disabled: isSaving }}
+              >
                 <XStack flex={1} alignItems="center" gap="$3" marginRight="$3">
                   <View width={36} height={36} borderRadius={18}
-                    backgroundColor="rgba(52, 211, 153, 0.2)" alignItems="center" justifyContent="center">
-                    <Ionicons name="mail" size={18} color="#34D399" />
+                    backgroundColor="rgba(198, 167, 94, 0.2)" alignItems="center" justifyContent="center">
+                    <Ionicons name="mail" size={18} color="#C6A75E" />
                   </View>
                   <YStack flex={1}>
-                    <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
+                    <Text fontSize={14} fontWeight="500" color={theme.textPrimary} numberOfLines={1}>
                       {t.notificationPrefs.eventUpdates}
                     </Text>
-                    <Text fontSize={12} color={DARK_THEME.textSecondary}>
+                    <Text fontSize={11} color={theme.textSecondary} numberOfLines={2}>
                       {t.notificationPrefs.eventUpdatesDesc}
                     </Text>
                   </YStack>
@@ -251,10 +271,10 @@ export default function NotificationsScreen() {
           {/* Info */}
           <View style={styles.infoCard}>
             <XStack alignItems="flex-start" gap="$3">
-              <Ionicons name="information-circle" size={20} color={DARK_THEME.textSecondary} />
+              <Ionicons name="information-circle" size={20} color={theme.textSecondary} />
               <YStack flex={1}>
-                <Text fontSize={13} color={DARK_THEME.textSecondary}>
-                  You can manage notification permissions in your device settings at any time.
+                <Text fontSize={13} color={theme.textSecondary}>
+                  {t.notificationPrefs.manageNotifPermissions}
                 </Text>
               </YStack>
             </XStack>
@@ -265,7 +285,7 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
   headerButton: {
     width: 40,
     height: 40,
@@ -273,17 +293,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   card: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: theme.surfaceLow,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: theme.ghostBorder,
     overflow: 'hidden',
   },
   infoCard: {
     backgroundColor: 'rgba(45, 55, 72, 0.4)',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: theme.ghostBorder,
     padding: 16,
   },
 });

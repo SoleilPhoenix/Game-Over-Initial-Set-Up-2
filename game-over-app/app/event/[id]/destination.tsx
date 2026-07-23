@@ -7,13 +7,13 @@ import React, { useState, useRef } from 'react';
 import { ScrollView, Linking, Platform, Pressable, StyleSheet, View, PanResponder, Animated, Image } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { useTranslation } from '@/i18n';
-import { DARK_THEME } from '@/constants/theme';
+
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 
 // ─── German City Data ─────────────────────────────────────────────────────────
@@ -374,7 +374,7 @@ const TEAM_LOGO_MAP: Record<string, any> = {
   '1. FC Union Berlin':       require('../../../src/constants/Sportclubs_Visuals/Berlin/1._FC_Union_Berlin.png'),
   'Alba Berlin':              require('../../../src/constants/Sportclubs_Visuals/Berlin/ALBA_Berlin.png'),
   'Füchse Berlin':            require('../../../src/constants/Sportclubs_Visuals/Berlin/Füchse_Berlin.png'),
-  'Eisbären Berlin':          require('../../../src/constants/Sportclubs_Visuals/Berlin/Eisbären_Berlin.png'),
+  'Eisbären Berlin':          require('../../../src/constants/Sportclubs_Visuals/Berlin/Eisbären_Berlin.jpeg'),
   'Wasserfreunde Spandau 04': require('../../../src/constants/Sportclubs_Visuals/Berlin/Wasserfreunde_Spandau_04.png'),
   // Hamburg
   'Hamburger SV':             require('../../../src/constants/Sportclubs_Visuals/Hamburg/Hamburger_SV.png'),
@@ -393,11 +393,43 @@ const TEAM_LOGO_MAP: Record<string, any> = {
 };
 
 const CATEGORY_CONFIG: Record<NonNullable<PopupCategory>, { label: string; icon: string; color: string }> = {
-  attractions: { label: 'Local Attractions', icon: 'telescope-outline', color: '#F59E0B' },
+  attractions: { label: 'Local Attractions', icon: 'compass-outline', color: '#F59E0B' },
   dining: { label: 'Dining Options', icon: 'restaurant-outline', color: '#10B981' },
-  entertainment: { label: 'Entertainment', icon: 'musical-notes-outline', color: '#8B5CF6' },
-  sports: { label: 'Sports Teams', icon: 'trophy-outline', color: '#EF4444' },
+  entertainment: { label: 'Entertainment', icon: 'color-palette-outline', color: '#8B5CF6' },
+  sports: { label: 'Sports Teams', icon: 'football-outline', color: '#EF4444' },
 };
+
+// ─── Custom icon assets ───────────────────────────────────────────────────────
+const HOSPITAL_ICON = require('../../../src/constants/emergency-icon.jpeg');
+
+// ─── City map image assets ────────────────────────────────────────────────────
+const CITY_MAP_IMAGES: Record<string, any> = {
+  hamburg:  require('../../../src/constants/City_Maps/Hamburg.jpg'),
+  hannover: require('../../../src/constants/City_Maps/Hannover.jpg'),
+  berlin:   require('../../../src/constants/City_Maps/Berlin.png'),
+};
+
+/**
+ * Renders the city's real map image in black-and-white at 30 % opacity.
+ * React Native doesn't have a CSS grayscale filter, so we display the image
+ * at 0.30 opacity on the dark #0D1B2A card background — the low opacity
+ * naturally desaturates the colours into a near-monochrome silhouette.
+ */
+function CityMapBackground({ citySlug }: { citySlug: string }) {
+  const src = CITY_MAP_IMAGES[citySlug];
+  if (!src) return null;
+  return (
+    // cover mode fills the card so no white margins remain —
+    // the map naturally centers on the city silhouette.
+    <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+      <Image
+        source={src}
+        style={{ width: '100%', height: '100%', opacity: 0.32 }}
+        resizeMode="cover"
+      />
+    </View>
+  );
+}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 export default function DestinationScreen() {
@@ -432,8 +464,8 @@ export default function DestinationScreen() {
 
   if (isLoading || !event) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: DARK_THEME.background }}>
-        <Spinner size="large" color={DARK_THEME.primary} />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0D1B2A' }}>
+        <Spinner size="large" color={'#C6A75E'} />
       </View>
     );
   }
@@ -443,10 +475,10 @@ export default function DestinationScreen() {
   const city = CITY_DATA[citySlug] || FALLBACK_CITY;
   const cityTagline = city.tagline[language as 'en' | 'de'] ?? city.tagline.en;
 
-  // German emergency contacts — same for all cities
+  // Emergency contacts — same for all cities
   const emergencyContacts = [
     {
-      label: 'Notruf (Emergency)',
+      label: 'Emergency',
       icon: 'shield',
       iconColor: '#EF4444',
       iconBg: 'rgba(239, 68, 68, 0.15)',
@@ -454,7 +486,7 @@ export default function DestinationScreen() {
       onPress: () => Linking.openURL('tel:112'),
     },
     {
-      label: 'Polizei (Police)',
+      label: 'Police',
       icon: 'shield-checkmark',
       iconColor: '#3B82F6',
       iconBg: 'rgba(59, 130, 246, 0.15)',
@@ -470,7 +502,7 @@ export default function DestinationScreen() {
       onPress: () => Linking.openURL(`tel:${city.taxi.number.replace(/\s/g, '')}`),
     },
     {
-      label: 'Ärztlicher Bereitschaftsdienst',
+      label: 'Medical Service',
       icon: 'medkit',
       iconColor: '#10B981',
       iconBg: 'rgba(16, 185, 129, 0.15)',
@@ -478,10 +510,11 @@ export default function DestinationScreen() {
       onPress: () => Linking.openURL('tel:116117'),
     },
     {
-      label: 'Nächstes Krankenhaus',
+      label: 'Nearest Hospital',
       icon: 'add-circle',
-      iconColor: '#9CA3AF',
-      iconBg: 'rgba(156, 163, 175, 0.15)',
+      iconImage: HOSPITAL_ICON,
+      iconColor: '#EF4444',
+      iconBg: 'rgba(239,68,68,0.15)',
       number: 'In Maps',
       onPress: () => openHospitalSearch(city.lat, city.lon, cityName),
     },
@@ -497,44 +530,49 @@ export default function DestinationScreen() {
 
   return (
     <View style={styles.container}>
-      {/* ─── Hero Header ─────────────────────────── */}
-      <View style={styles.heroContainer}>
-        <KenBurnsImage source={resolveImageSource(heroImage)} style={StyleSheet.absoluteFillObject} />
-        <View style={styles.heroOverlay} />
-        <Pressable
-          style={[styles.backButton, { top: insets.top + 8 }]}
-          onPress={() => router.back()}
-          hitSlop={8}
-          testID="back-button"
-        >
-          <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
-        </Pressable>
-        <View style={styles.heroContent}>
-          <Text style={styles.heroSupertitle}>DESTINATION GUIDE</Text>
-          <Text style={styles.heroTitle}>{cityName}</Text>
-          <Text style={styles.heroSubtitle}>{cityTagline}</Text>
-        </View>
-      </View>
-
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* ─── Highlights (in-app popup) ────────────── */}
+        {/* ─── Hero — scrolls with content ─────────── */}
+        <View style={styles.heroContainer}>
+          <KenBurnsImage source={resolveImageSource(heroImage)} style={StyleSheet.absoluteFillObject} />
+          <View style={styles.heroOverlay} />
+          {/* Back button — lives inside hero so it scrolls with the image */}
+          <Pressable
+            style={[styles.backButton, { top: insets.top + 8 }]}
+            onPress={() => router.back()}
+            hitSlop={8}
+            testID="back-button"
+          >
+            <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
+          </Pressable>
+          <View style={styles.heroContent}>
+            <Text style={styles.heroSupertitle}>DESTINATION GUIDE</Text>
+            <Text style={styles.heroTitle}>{cityName}</Text>
+            <Text style={styles.heroSubtitle}>{cityTagline}</Text>
+          </View>
+        </View>
+
+        {/* ─── Section content ─────────────────────── */}
+        <View style={{ padding: 16 }}>
+
+        {/* ─── Highlights ──────────────────────────── */}
         <Text style={styles.sectionTitle}>Highlights</Text>
-        <View style={styles.highlightRow}>
+        <View style={styles.highlightGrid}>
           {(Object.keys(CATEGORY_CONFIG) as NonNullable<PopupCategory>[]).map((cat) => {
             const cfg = CATEGORY_CONFIG[cat];
             return (
               <Pressable
                 key={cat}
-                style={({ pressed }) => [styles.highlightChip, pressed && { opacity: 0.75 }]}
+                style={({ pressed }) => [styles.highlightTile, pressed && { opacity: 0.75 }]}
                 onPress={() => setPopupCategory(cat)}
               >
-                <Ionicons name={cfg.icon as any} size={14} color={cfg.color} />
-                <Text style={styles.highlightText}>{cfg.label}</Text>
-                <Ionicons name="chevron-forward" size={12} color={DARK_THEME.textTertiary} />
+                <View style={styles.highlightTileIconWrap}>
+                  <Ionicons name={cfg.icon as any} size={28} color="#C6A75E" />
+                </View>
+                <Text style={styles.highlightTileLabel}>{cfg.label}</Text>
               </Pressable>
             );
           })}
@@ -542,48 +580,43 @@ export default function DestinationScreen() {
 
         {/* ─── Local Tips ──────────────────────────── */}
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Local Tips</Text>
-        <View style={styles.tipsCard}>
-          {/* Check Weather */}
-          <Pressable
-            style={({ pressed }) => [styles.tipRow, pressed && { opacity: 0.7 }]}
-            onPress={() => openWeather(city.lat, city.lon, cityName)}
-          >
-            <XStack alignItems="center" gap={10} flex={1}>
-              <View style={[styles.tipIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                <Ionicons name="partly-sunny" size={16} color="#F59E0B" />
-              </View>
-              <YStack flex={1}>
-                <Text style={styles.tipLabel}>Check local weather</Text>
-                <Text style={styles.tipUrl}>
-                  Google Weather — {cityName}
-                </Text>
-              </YStack>
-              <Ionicons name="open-outline" size={15} color={DARK_THEME.textTertiary} />
-            </XStack>
-          </Pressable>
 
-          <View style={styles.tipDivider} />
+        {/* Public transportation — own card */}
+        <Pressable
+          style={({ pressed }) => [styles.tipCard, pressed && { opacity: 0.7 }]}
+          onPress={() => openTransportation(city.transit.url)}
+        >
+          <XStack alignItems="center" gap={10} flex={1}>
+            <View style={[styles.tipIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+              <Ionicons name="train-outline" size={16} color="#C6A75E" />
+            </View>
+            <YStack flex={1}>
+              <Text style={styles.tipLabel}>Public transportation</Text>
+              <Text style={styles.tipUrl}>{city.transit.name}</Text>
+            </YStack>
+            <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.48)" />
+          </XStack>
+        </Pressable>
 
-          {/* Transportation */}
-          <Pressable
-            style={({ pressed }) => [styles.tipRow, pressed && { opacity: 0.7 }]}
-            onPress={() => openTransportation(city.transit.url)}
-          >
-            <XStack alignItems="center" gap={10} flex={1}>
-              <View style={[styles.tipIcon, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}>
-                <Ionicons name="train" size={16} color="#3B82F6" />
-              </View>
-              <YStack flex={1}>
-                <Text style={styles.tipLabel}>Public transportation</Text>
-                <Text style={styles.tipUrl}>{city.transit.name}</Text>
-              </YStack>
-              <Ionicons name="open-outline" size={15} color={DARK_THEME.textTertiary} />
-            </XStack>
-          </Pressable>
-        </View>
+        {/* Check local weather — own card */}
+        <Pressable
+          style={({ pressed }) => [styles.tipCard, pressed && { opacity: 0.7 }]}
+          onPress={() => openWeather(city.lat, city.lon, cityName)}
+        >
+          <XStack alignItems="center" gap={10} flex={1}>
+            <View style={[styles.tipIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+              <Ionicons name="sunny-outline" size={16} color="#C6A75E" />
+            </View>
+            <YStack flex={1}>
+              <Text style={styles.tipLabel}>Check local weather</Text>
+              <Text style={styles.tipUrl}>7-day forecast for {cityName}</Text>
+            </YStack>
+            <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.48)" />
+          </XStack>
+        </Pressable>
 
-        {/* ─── Emergency Contacts ───────────────────── */}
-        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Emergency Contacts</Text>
+        {/* ─── Important Numbers ───────────────────── */}
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Important Numbers</Text>
         <View style={styles.emergencyCard}>
           {emergencyContacts.map((contact, i) => (
             <React.Fragment key={contact.label}>
@@ -592,25 +625,55 @@ export default function DestinationScreen() {
                 style={({ pressed }) => [styles.emergencyRow, pressed && { opacity: 0.7 }]}
                 onPress={contact.onPress}
               >
-                <View style={[styles.emergencyIcon, { backgroundColor: contact.iconBg }]}>
-                  <Ionicons name={contact.icon as any} size={16} color={contact.iconColor} />
+                <View style={[
+                  styles.emergencyIcon,
+                  { backgroundColor: contact.iconBg },
+                  (contact as any).iconImage && { overflow: 'hidden', padding: 0 },
+                ]}>
+                  {(contact as any).iconImage ? (
+                    <Image
+                      source={(contact as any).iconImage}
+                      style={{ width: 22, height: 22, borderRadius: 11 }}
+                      resizeMode="contain"
+                    />
+                  ) : (
+                    <Ionicons name={contact.icon as any} size={16} color={contact.iconColor} />
+                  )}
                 </View>
                 <Text style={styles.emergencyLabel} flex={1}>{contact.label}</Text>
-                <Text style={[styles.emergencyNumber, { color: contact.iconColor }]}>{contact.number}</Text>
+                <View style={[styles.emergencyBadge, { backgroundColor: contact.iconBg }]}>
+                  <Text style={[styles.emergencyNumber, { color: contact.iconColor }]}>{contact.number}</Text>
+                </View>
               </Pressable>
             </React.Fragment>
           ))}
         </View>
 
-        {/* ─── Open in Maps ────────────────────────── */}
-        <Pressable
-          style={({ pressed }) => [styles.mapsButton, pressed && { opacity: 0.8 }]}
-          onPress={() => openMapsForCity(city.lat, city.lon, cityName)}
-          testID="open-maps-button"
-        >
-          <Ionicons name="map" size={20} color="#5A7EB0" />
-          <Text style={styles.mapsButtonText}>Open in Maps</Text>
-        </Pressable>
+        {/* ─── Map Preview Card ────────────────────── */}
+        <View style={[styles.mapCard, { marginTop: 24 }]}>
+          <Pressable
+            style={({ pressed }) => [styles.mapVisual, pressed && { opacity: 0.88 }]}
+            onPress={() => openMapsForCity(city.lat, city.lon, cityName)}
+            testID="open-maps-button"
+          >
+            {/* ── City-specific schematic map (B&W @ 30 % opacity) ── */}
+            <CityMapBackground citySlug={citySlug} />
+            {/* Center pin + city label */}
+            <View style={styles.mapCenterPin}>
+              <View style={styles.mapPin}>
+                <Ionicons name="location" size={18} color="#0D1B2A" />
+              </View>
+              <Text style={styles.mapCityName}>{cityName.toUpperCase()}</Text>
+            </View>
+            {/* Open in Maps badge */}
+            <View style={styles.mapBadge}>
+              <Ionicons name="map-outline" size={11} color="#C6A75E" />
+              <Text style={styles.mapBadgeText}>Open in Maps</Text>
+            </View>
+          </Pressable>
+        </View>
+
+        </View>{/* end section content wrapper */}
       </ScrollView>
 
       {/* ─── In-App Places Popup ──────────────────── */}
@@ -626,15 +689,15 @@ export default function DestinationScreen() {
               <View style={styles.popupHandle} />
               {/* Header */}
               <XStack alignItems="center" gap={10} marginBottom={16}>
-                <View style={[styles.popupIconCircle, { backgroundColor: `${popupConfig.color}22` }]}>
-                  <Ionicons name={popupConfig.icon as any} size={20} color={popupConfig.color} />
+                <View style={[styles.popupIconCircle, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+                  <Ionicons name={popupConfig.icon as any} size={20} color="#C6A75E" />
                 </View>
                 <YStack flex={1}>
                   <Text style={styles.popupTitle}>{popupConfig.label}</Text>
                   <Text style={styles.popupSubtitle}>{cityName} — Top picks</Text>
                 </YStack>
                 <Pressable onPress={() => setPopupCategory(null)} hitSlop={8}>
-                  <Ionicons name="close-circle" size={24} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="close-circle" size={24} color={'rgba(255,255,255,0.48)'} />
                 </Pressable>
               </XStack>
             </View>
@@ -644,9 +707,6 @@ export default function DestinationScreen() {
                 <View key={i} style={styles.placeRow}>
                   <XStack alignItems="flex-start" gap={12}>
                     <YStack alignItems="center" gap={4}>
-                      <View style={[styles.placeNumber, { backgroundColor: `${popupConfig.color}22` }]}>
-                        <Text style={[styles.placeNumberText, { color: popupConfig.color }]}>{i + 1}</Text>
-                      </View>
                       {popupCategory === 'sports' && (() => {
                         const logo = TEAM_LOGO_MAP[place.name];
                         const badge = TEAM_BADGE_CONFIG[place.name];
@@ -690,10 +750,10 @@ export default function DestinationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
   },
   heroContainer: {
-    height: 240,
+    height: 300,
     position: 'relative',
   },
   heroOverlay: {
@@ -703,6 +763,8 @@ const styles = StyleSheet.create({
   backButton: {
     position: 'absolute',
     left: 16,
+    zIndex: 100,
+    elevation: 10,
     width: 38,
     height: 38,
     borderRadius: 19,
@@ -715,57 +777,168 @@ const styles = StyleSheet.create({
     bottom: 20,
     left: 16,
     right: 16,
+    alignItems: 'center',
   },
   heroSupertitle: {
     fontSize: 11,
     fontWeight: '600',
-    letterSpacing: 1.5,
-    color: 'rgba(255,255,255,0.75)',
-    marginBottom: 4,
+    letterSpacing: 2,
+    color: '#C6A75E',
+    marginBottom: 6,
+    fontFamily: 'Inter_600SemiBold',
+    textAlign: 'center',
   },
   heroTitle: {
-    fontSize: 32,
-    fontWeight: '800',
+    fontSize: 36,
+    fontWeight: '600',
     color: '#FFFFFF',
-    lineHeight: 36,
+    lineHeight: 42,
+    fontFamily: 'Inter_600SemiBold',
+    textAlign: 'center',
   },
   heroSubtitle: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    marginTop: 2,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.75)',
+    marginTop: 4,
+    fontFamily: 'Inter_400Regular',
+    textAlign: 'center',
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#FFFFFF',
     marginBottom: 12,
+    fontFamily: 'Inter_600SemiBold',
   },
-  highlightRow: {
+  highlightGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 10,
+  },
+  highlightTile: {
+    width: '48%',
+    backgroundColor: '#1A2F47',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(198,167,94,0.45)',
+    paddingVertical: 20,
+    paddingHorizontal: 12,
+    alignItems: 'center',
     gap: 8,
   },
-  highlightChip: {
+  highlightTileIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    backgroundColor: 'rgba(198,167,94,0.15)',
+  },
+  highlightTileLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  // ─── Map Preview Card ────────────────────────
+  mapCard: {
+    backgroundColor: '#1A2F47',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(198,167,94,0.45)',
+    overflow: 'hidden',
+    marginTop: 16,
+  },
+  mapVisual: {
+    height: 150,
+    backgroundColor: '#0D1B2A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  mapLine: {
+    position: 'absolute',
+    backgroundColor: 'rgba(198,167,94,0.07)',
+  },
+  mapRoad: {
+    position: 'absolute',
+    backgroundColor: 'rgba(198,167,94,0.18)',
+  },
+  mapRoadMain: {
+    position: 'absolute',
+    backgroundColor: 'rgba(198,167,94,0.28)',
+  },
+  mapBlock: {
+    position: 'absolute',
+    backgroundColor: 'rgba(198,167,94,0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(198,167,94,0.1)',
+    borderRadius: 2,
+  },
+  mapCenterPin: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  mapPin: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#C6A75E',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapCityName: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 2.5,
+  },
+  mapBadge: {
+    position: 'absolute',
+    bottom: 10,
+    right: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: DARK_THEME.surfaceCard,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    gap: 4,
+    backgroundColor: 'rgba(13,27,42,0.85)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(198,167,94,0.3)',
   },
-  highlightText: {
-    fontSize: 13,
+  mapBadgeText: {
+    fontSize: 11,
     fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+    color: '#C6A75E',
+  },
+  mapWeatherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(230,220,200,0.1)',
+  },
+  // ─── Individual Tip Cards ────────────────────
+  tipCard: {
+    backgroundColor: '#1A2F47',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(198,167,94,0.45)',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginBottom: 10,
   },
   tipsCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderWidth: 1.5,
+    borderColor: 'rgba(198,167,94,0.45)',
     overflow: 'hidden',
   },
   tipRow: {
@@ -782,11 +955,11 @@ const styles = StyleSheet.create({
   tipLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   tipUrl: {
     fontSize: 12,
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
     marginTop: 1,
   },
   tipDivider: {
@@ -795,10 +968,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 14,
   },
   emergencyCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 14,
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderWidth: 1.5,
+    borderColor: 'rgba(198,167,94,0.45)',
     overflow: 'hidden',
   },
   emergencyRow: {
@@ -817,11 +990,19 @@ const styles = StyleSheet.create({
   },
   emergencyLabel: {
     fontSize: 13,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
+  },
+  emergencyBadge: {
+    width: 100,
+    paddingVertical: 6,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emergencyNumber: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
+    textAlign: 'center',
   },
   mapsButton: {
     flexDirection: 'row',
@@ -829,16 +1010,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     marginTop: 16,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
     paddingVertical: 16,
   },
   mapsButtonText: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#5A7EB0',
+    color: '#C6A75E',
   },
   // ─── Popup styles ────────────────────────────
   popupOverlay: {
@@ -849,14 +1030,14 @@ const styles = StyleSheet.create({
     // pointerEvents="box-none" applied inline so touches pass through to children
   },
   popupSheet: {
-    backgroundColor: '#1E2329',
+    backgroundColor: '#1A2F47',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 16,
     paddingTop: 12,
     maxHeight: '90%',
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   popupHandle: {
     width: 40,
@@ -876,11 +1057,11 @@ const styles = StyleSheet.create({
   popupTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   popupSubtitle: {
     fontSize: 12,
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
     marginTop: 1,
   },
   placeRow: {
@@ -901,19 +1082,19 @@ const styles = StyleSheet.create({
   placeName: {
     fontSize: 14,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   placeType: {
     fontSize: 11,
     fontWeight: '600',
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginTop: 1,
   },
   placeDescription: {
     fontSize: 13,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
     lineHeight: 18,
     marginTop: 3,
   },

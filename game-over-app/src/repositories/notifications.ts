@@ -20,20 +20,34 @@ export const notificationsRepository = {
     page: number = 0
   ): Promise<{ notifications: Notification[]; hasMore: boolean }> {
     const from = page * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
+    // Over-fetch to compensate for client-side filtering of cancelled events
+    const to = from + PAGE_SIZE * 2 - 1;
 
-    const { data, error, count } = await supabase
+    type Joined = Notification & { event: { status: string } | null };
+    const { data, error } = await supabase
       .from('notifications')
-      .select('*', { count: 'exact' })
+      .select('*, event:events(status)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(from, to);
 
     if (error) throw error;
 
+    // Hide notifications whose related event was cancelled (soft-deleted).
+    // Notifications with no event_id (system-level) always pass through.
+    const filtered = ((data || []) as Joined[]).filter(
+      (n) => !n.event || n.event.status !== 'cancelled',
+    );
+
+    // Strip the joined `event` field so the returned shape matches Notification
+    const notifications: Notification[] = filtered.slice(0, PAGE_SIZE).map((n) => {
+      const { event: _event, ...rest } = n;
+      return rest as Notification;
+    });
+
     return {
-      notifications: data || [],
-      hasMore: (count || 0) > to + 1,
+      notifications,
+      hasMore: filtered.length > PAGE_SIZE,
     };
   },
 
@@ -41,14 +55,18 @@ export const notificationsRepository = {
    * Get unread notifications count
    */
   async getUnreadCount(userId: string): Promise<number> {
-    const { count, error } = await supabase
+    // Fetch with event status to exclude cancelled-event notifications from badge count
+    type Joined = { event: { status: string } | null };
+    const { data, error } = await supabase
       .from('notifications')
-      .select('*', { count: 'exact', head: true })
+      .select('event:events(status)')
       .eq('user_id', userId)
       .eq('is_read', false);
 
     if (error) throw error;
-    return count || 0;
+    return ((data || []) as Joined[]).filter(
+      (n) => !n.event || n.event.status !== 'cancelled',
+    ).length;
   },
 
   /**

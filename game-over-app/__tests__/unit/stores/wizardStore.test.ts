@@ -5,6 +5,9 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+// Import store after mocking
+import { useWizardStore } from '@/stores/wizardStore';
+
 // Mock MMKV before importing store
 vi.mock('react-native-mmkv', () => ({
   MMKV: vi.fn(() => ({
@@ -34,9 +37,6 @@ vi.mock('@/lib/storage', () => {
     isExpoGo: false,
   };
 });
-
-// Import store after mocking
-import { useWizardStore } from '@/stores/wizardStore';
 
 describe('wizardStore', () => {
   beforeEach(() => {

@@ -4,8 +4,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { packagesRepository, PackageWithMatch } from '@/repositories';
-import type { Database } from '@/lib/supabase/types';
+import { packagesRepository } from '@/repositories';
 
 // Local preferences type — Supabase generated types lag behind migrations
 type EventPreferences = Record<string, unknown>;

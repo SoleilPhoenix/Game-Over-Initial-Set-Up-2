@@ -9,7 +9,7 @@ import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 
 import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import { useQueryClient } from '@tanstack/react-query';
@@ -21,17 +21,13 @@ import { useTranslation, getTranslation } from '@/i18n';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
+import { getTierDisplayLabel } from '@/constants/packageTiers';
 
 const CITY_NAMES: Record<string, string> = {
   berlin: 'Berlin', hamburg: 'Hamburg', hannover: 'Hannover',
   '550e8400-e29b-41d4-a716-446655440101': 'Berlin',
   '550e8400-e29b-41d4-a716-446655440102': 'Hamburg',
   '550e8400-e29b-41d4-a716-446655440103': 'Hannover',
-};
-const FALLBACK_PKG_NAMES: Record<string, string> = {
-  'berlin-classic': 'Classic (M)', 'berlin-essential': 'Essential (S)', 'berlin-grand': 'Grand (L)',
-  'hamburg-classic': 'Classic (M)', 'hamburg-essential': 'Essential (S)', 'hamburg-grand': 'Grand (L)',
-  'hannover-classic': 'Classic (M)', 'hannover-essential': 'Essential (S)', 'hannover-grand': 'Grand (L)',
 };
 
 export default function BookingConfirmationScreen() {
@@ -66,7 +62,7 @@ export default function BookingConfirmationScreen() {
   const isDraft = eventId === 'draft';
   // fullTotal exists only when deposit (25%) was paid — total < fullTotal
   const isDepositOnly = !!(fullTotal && parseInt(fullTotal, 10) > parseInt(total || '0', 10));
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const wizardStartDate = useWizardStore((s) => s.startDate);
 
   // Navigate to the Events tab — dismiss all modal/booking screens back to tabs
@@ -133,8 +129,12 @@ export default function BookingConfirmationScreen() {
   };
 
   const handleViewEvent = () => {
-    const { activeDraftId, deleteDraft } = useWizardStore.getState();
+    const { activeDraftId, deleteDraft, setCreatedEventId } = useWizardStore.getState();
     if (activeDraftId) deleteDraft(activeDraftId);
+    // Release the createdEventId lock so the freshly-booked event shows up on
+    // the Events tab (the tab hides any event whose id matches createdEventId
+    // to prevent flashing a half-created event while the wizard is still open).
+    setCreatedEventId(null);
     queryClient.invalidateQueries({ queryKey: eventKeys.all });
     if (isDraft) {
       goToEventsTab();
@@ -145,8 +145,9 @@ export default function BookingConfirmationScreen() {
   };
 
   const handleGoHome = () => {
-    const { activeDraftId, deleteDraft } = useWizardStore.getState();
+    const { activeDraftId, deleteDraft, setCreatedEventId } = useWizardStore.getState();
     if (activeDraftId) deleteDraft(activeDraftId);
+    setCreatedEventId(null);
     queryClient.invalidateQueries({ queryKey: eventKeys.all });
     goToEventsTab();
   };
@@ -182,7 +183,7 @@ export default function BookingConfirmationScreen() {
               width={80}
               height={80}
               borderRadius={40}
-              backgroundColor="rgba(71, 184, 129, 0.2)"
+              backgroundColor="rgba(198,167,94,0.20)"
               alignItems="center"
               justifyContent="center"
               marginBottom="$4"
@@ -191,11 +192,11 @@ export default function BookingConfirmationScreen() {
                 width={56}
                 height={56}
                 borderRadius={28}
-                backgroundColor="$success"
+                backgroundColor="#C6A75E"
                 alignItems="center"
                 justifyContent="center"
               >
-                <Ionicons name="checkmark" size={32} color="white" />
+                <Ionicons name="checkmark" size={32} color="#0D1B2A" />
               </YStack>
             </YStack>
 
@@ -214,14 +215,14 @@ export default function BookingConfirmationScreen() {
             <XStack justifyContent="space-between" alignItems="center">
               <Text color="$textSecondary">{t.booking.packageLabel}</Text>
               <Text fontWeight="600" color="$textPrimary">
-                {isDraft
-                  ? (packageId ? FALLBACK_PKG_NAMES[packageId] || packageId : 'Selected Package')
-                  : (packageId ? FALLBACK_PKG_NAMES[packageId] : null) || (() => {
-                      const bk = booking as any;
-                      const tier = bk?.package?.tier || bk?.tier;
-                      const tierNames: Record<string, string> = { essential: 'Essential (S)', classic: 'Classic (M)', grand: 'Grand (L)' };
-                      return tier ? tierNames[tier] || event?.title : event?.title;
-                    })() || 'Package'}
+                {(() => {
+                  // Prefer tier from packageId (draft) or booking record, render with current language
+                  const tierFromId = packageId?.split('-').pop();
+                  const tierFromBooking = (booking as any)?.package?.tier || (booking as any)?.tier;
+                  const tier = tierFromId || tierFromBooking;
+                  if (tier) return getTierDisplayLabel(tier, language);
+                  return event?.title || (isDraft ? 'Selected Package' : 'Package');
+                })()}
               </Text>
             </XStack>
 
@@ -241,7 +242,7 @@ export default function BookingConfirmationScreen() {
                 <XStack justifyContent="space-between" alignItems="center">
                   <Text color="$textSecondary">{t.booking.date}</Text>
                   <Text fontWeight="600" color="$textPrimary">
-                    {d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    {d.toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
                   </Text>
                 </XStack>
               );
@@ -249,9 +250,9 @@ export default function BookingConfirmationScreen() {
 
             {participants && (
               <XStack justifyContent="space-between" alignItems="center">
-                <Text color="$textSecondary">Participants</Text>
+                <Text color="$textSecondary">{t.booking.participants}</Text>
                 <Text fontWeight="600" color="$textPrimary">
-                  {participants} Guests
+                  {participants} {t.booking.guestsPlain}
                 </Text>
               </XStack>
             )}
@@ -268,7 +269,7 @@ export default function BookingConfirmationScreen() {
                   <Ionicons
                     name={copied ? 'checkmark-circle' : 'copy-outline'}
                     size={18}
-                    color={copied ? '#47B881' : '#258CF4'}
+                    color={copied ? '#4ADE80' : '#C6A75E'}
                   />
                 </XStack>
               </Pressable>
@@ -278,20 +279,20 @@ export default function BookingConfirmationScreen() {
               // Remaining balance paid — show full payment breakdown
               <>
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text color="$textSecondary">Total Paid (75%)</Text>
+                  <Text color="$textSecondary">{t.booking.totalPaidPct}</Text>
                   <Text fontSize="$5" fontWeight="800" color="$primary">
                     {formatPrice(parseInt(paidNow, 10))}
                   </Text>
                 </XStack>
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text color="$textSecondary">Previously Paid (25%)</Text>
+                  <Text color="$textSecondary">{t.booking.previouslyPaid}</Text>
                   <Text fontWeight="600" color="$textSecondary">
                     {total ? formatPrice(parseInt(total, 10) - parseInt(paidNow, 10)) : '---'}
                   </Text>
                 </XStack>
                 <YStack height={1} backgroundColor="$borderColor" />
                 <XStack justifyContent="space-between" alignItems="center">
-                  <Text color="$textSecondary">Total Group Cost</Text>
+                  <Text color="$textSecondary">{t.booking.totalGroupCost}</Text>
                   <Text fontSize="$5" fontWeight="800" color="$primary">
                     {total ? formatPrice(parseInt(total, 10)) : '---'}
                   </Text>
@@ -306,7 +307,7 @@ export default function BookingConfirmationScreen() {
                   </Text>
                   {fullTotal && (
                     <Text fontSize="$5" fontWeight="800" color="$textTertiary">
-                      {' '}of {formatPrice(parseInt(fullTotal, 10))}
+                      {' '}{t.booking.ofAmount.replace('{{amount}}', formatPrice(parseInt(fullTotal, 10)))}
                     </Text>
                   )}
                 </XStack>
@@ -316,25 +317,25 @@ export default function BookingConfirmationScreen() {
         </Card>
 
         {/* Next Steps */}
-        <Card width="100%" marginHorizontal="$4" paddingHorizontal={16} backgroundColor="rgba(37, 140, 244, 0.1)" borderWidth={0}>
+        <Card width="100%" marginHorizontal="$4" paddingHorizontal={16} backgroundColor="rgba(198, 167, 94, 0.1)" borderWidth={0}>
           <YStack gap="$3">
             <Text fontSize="$4" fontWeight="700" color="$primary" textAlign="center">
               {t.booking.whatsNext}
             </Text>
             <XStack gap="$2" alignItems="flex-start">
-              <Ionicons name="mail-outline" size={18} color="#258CF4" style={{ marginTop: 2 }} />
+              <Ionicons name="mail-outline" size={18} color="#C6A75E" style={{ marginTop: 2 }} />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
                 {t.booking.confirmationEmail}
               </Text>
             </XStack>
             <XStack gap="$2" alignItems="flex-start">
-              <Ionicons name="people-outline" size={18} color="#258CF4" style={{ marginTop: 2 }} />
+              <Ionicons name="people-outline" size={18} color="#C6A75E" style={{ marginTop: 2 }} />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
                 {t.booking.inviteGuests}
               </Text>
             </XStack>
             <XStack gap="$2" alignItems="flex-start">
-              <Ionicons name="chatbubbles-outline" size={18} color="#258CF4" style={{ marginTop: 2 }} />
+              <Ionicons name="chatbubbles-outline" size={18} color="#C6A75E" style={{ marginTop: 2 }} />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
                 {t.booking.useGroupChat}
               </Text>
@@ -359,7 +360,7 @@ export default function BookingConfirmationScreen() {
           testID="add-to-calendar-button"
         >
           <XStack gap="$2" alignItems="center">
-            <Ionicons name="calendar-outline" size={20} color="#258CF4" />
+            <Ionicons name="calendar-outline" size={20} color="#C6A75E" />
             <Text color="$primary" fontWeight="600">
               {t.booking.addToCalendar}
             </Text>

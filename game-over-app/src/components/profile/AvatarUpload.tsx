@@ -7,12 +7,51 @@ import React, { useState } from 'react';
 import { Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { View, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '@/lib/supabase/client';
+import { useTranslation } from '@/i18n';
+
+// Security: validate uploaded avatars before sending to Supabase Storage.
+// MIME and size checks are first-line defence — the storage bucket policy is the second.
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_AVATAR_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+];
+
+/**
+ * Validates an asset returned by ImagePicker. Returns an error message
+ * suitable for Alert.alert when invalid, or null when the asset passes.
+ */
+function validateAvatarAsset(asset: ImagePicker.ImagePickerAsset): string | null {
+  if (asset.fileSize != null && asset.fileSize > MAX_AVATAR_BYTES) {
+    const sizeMb = (asset.fileSize / 1024 / 1024).toFixed(1);
+    return `Image is too large (${sizeMb} MB). Please choose one under 5 MB.`;
+  }
+  const mime = asset.mimeType?.toLowerCase();
+  if (mime && !ALLOWED_AVATAR_MIME_TYPES.includes(mime)) {
+    return `Unsupported image type (${mime}). Use JPEG, PNG, WebP, or HEIC.`;
+  }
+  return null;
+}
+
+/**
+ * Maps the asset's MIME type into a content-type string for Supabase Storage.
+ * Falls back to image/jpeg for unknown types so the upload still succeeds.
+ */
+function avatarContentType(asset: ImagePicker.ImagePickerAsset): string {
+  const mime = asset.mimeType?.toLowerCase();
+  if (mime && ALLOWED_AVATAR_MIME_TYPES.includes(mime)) return mime;
+  return 'image/jpeg';
+}
 
 interface AvatarUploadProps {
   userId: string;
@@ -25,7 +64,7 @@ interface AvatarUploadProps {
 
 const THEME = {
   background: '#2D3748',
-  primary: '#4a6fa5',
+  primary: '#C6A75E',
   textPrimary: '#FFFFFF',
   border: 'rgba(255, 255, 255, 0.08)',
 };
@@ -38,6 +77,7 @@ export function AvatarUpload({
   onAvatarChange,
   testID,
 }: AvatarUploadProps) {
+  const { t } = useTranslation();
   const [isUploading, setIsUploading] = useState(false);
   const [localAvatarUrl, setLocalAvatarUrl] = useState(avatarUrl);
 
@@ -60,7 +100,13 @@ export function AvatarUpload({
     });
 
     if (!result.canceled && result.assets[0]) {
-      await uploadAvatar(result.assets[0].uri);
+      const asset = result.assets[0];
+      const validationError = validateAvatarAsset(asset);
+      if (validationError) {
+        Alert.alert('Invalid image', validationError);
+        return;
+      }
+      await uploadAvatar(asset.uri, avatarContentType(asset));
     }
   };
 
@@ -82,11 +128,17 @@ export function AvatarUpload({
     });
 
     if (!result.canceled && result.assets[0]) {
-      await uploadAvatar(result.assets[0].uri);
+      const asset = result.assets[0];
+      const validationError = validateAvatarAsset(asset);
+      if (validationError) {
+        Alert.alert('Invalid image', validationError);
+        return;
+      }
+      await uploadAvatar(asset.uri, avatarContentType(asset));
     }
   };
 
-  const uploadAvatar = async (uri: string) => {
+  const uploadAvatar = async (uri: string, contentType: string) => {
     setIsUploading(true);
     try {
       const fileName = `${userId}-${Date.now()}.jpg`;
@@ -97,15 +149,31 @@ export function AvatarUpload({
         encoding: FileSystem.EncodingType.Base64,
       });
 
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        await supabase.auth.refreshSession();
+        const { data: { session: refreshedSession } } = await supabase.auth.getSession();
+        session = refreshedSession;
+      }
+
+      console.log('[avatar upload] session present:', !!session?.access_token);
+      if (!session?.access_token) {
+        Alert.alert(t.common.signInAgainTitle, t.common.signInAgainBody);
+        return;
+      }
+
       // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, decode(base64), {
-          contentType: 'image/jpeg',
+          contentType,
           upsert: true,
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('[avatar upload] failed', uploadError);
+        throw uploadError;
+      }
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
@@ -152,7 +220,7 @@ export function AvatarUpload({
       accessibilityState={{ disabled: isUploading }}
     >
       <LinearGradient
-        colors={[THEME.primary, '#60A5FA']}
+        colors={[THEME.primary, '#8A7338']}
         style={[styles.gradient, { width: size, height: size, borderRadius: size / 2 }]}
       >
         <View

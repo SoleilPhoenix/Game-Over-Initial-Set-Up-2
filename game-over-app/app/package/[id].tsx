@@ -3,41 +3,49 @@
  * Glass card overlay, premium highlights, reviews, fixed bottom bar
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ScrollView, ImageBackground } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useQueryClient } from '@tanstack/react-query';
 import { usePackage } from '@/hooks/queries/usePackages';
+import { useEventSchedule, scheduleKeys } from '@/hooks/queries/useSchedule';
+import { useEvent } from '@/hooks/queries/useEvents';
+import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { getTierName } from '@/constants/packageTiers';
 import { useWizardStore } from '@/stores/wizardStore';
+import { useAuthStore } from '@/stores/authStore';
 import { useFavoritesStore } from '@/stores/favoritesStore';
 import { Button } from '@/components/ui/Button';
-import { DARK_THEME } from '@/constants/theme';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
-import { useTranslation } from '@/i18n';
+import { useTranslation, getCurrentLanguage } from '@/i18n';
+import { translateFeature, translateFeatureSub, translatePackageDescription } from '@/i18n/packageContent';
 import { assemblePackages } from '@/utils/packageAssembly';
 import { loadBudgetInfo, type BudgetInfo } from '@/lib/participantCountCache';
+import { scheduleRepository } from '@/repositories';
+import { formatScheduleTime, generateDefaultSchedule, tierFromPackageSlug } from '@/utils/scheduleGenerator';
 import type { Json } from '@/lib/supabase/types';
 
 const TIER_PRICE_PER_PERSON: Record<string, number> = {
-  essential: 99_00,
-  classic: 149_00,
-  grand: 199_00,
+  essential: 129_00,
+  classic: 179_00,
+  grand: 229_00,
 };
 
 // Fallback package data for local IDs that don't exist in DB (S=3, M=4, L=5 features)
 const FALLBACK_PACKAGE_MAP: Record<string, any> = {
-  'berlin-classic': { id: 'berlin-classic', name: 'Berlin Classic', tier: 'classic', base_price_cents: 149_00, price_per_person_cents: 149_00, rating: 4.8, review_count: 127, features: ['VIP nightlife access', 'Private party bus', 'Professional photographer', 'Welcome drinks package'], description: 'The ideal balance of nightlife, culture, and unforgettable moments in Berlin.', hero_image_url: getPackageImage('berlin', 'classic') },
-  'berlin-essential': { id: 'berlin-essential', name: 'Berlin Essential', tier: 'essential', base_price_cents: 99_00, price_per_person_cents: 99_00, rating: 4.5, review_count: 89, features: ['Bar hopping tour', 'Welcome drinks', 'Group coordination'], description: 'A solid party plan with all the essentials covered.', hero_image_url: getPackageImage('berlin', 'essential') },
-  'berlin-grand': { id: 'berlin-grand', name: 'Berlin Grand', tier: 'grand', base_price_cents: 199_00, price_per_person_cents: 199_00, rating: 4.9, review_count: 42, features: ['Luxury suite', 'Private chef dinner', 'Spa & wellness package', 'VIP club access', 'Private chauffeur'], description: 'The ultimate premium experience with luxury at every turn.', hero_image_url: getPackageImage('berlin', 'grand') },
-  'hamburg-classic': { id: 'hamburg-classic', name: 'Hamburg Classic', tier: 'classic', base_price_cents: 149_00, price_per_person_cents: 149_00, rating: 4.7, review_count: 98, features: ['Reeperbahn nightlife tour', 'Harbor cruise', 'Professional photographer', 'Reserved bar area'], description: "Experience Hamburg's legendary nightlife and harbor in style.", hero_image_url: getPackageImage('hamburg', 'classic') },
-  'hamburg-essential': { id: 'hamburg-essential', name: 'Hamburg Essential', tier: 'essential', base_price_cents: 99_00, price_per_person_cents: 99_00, rating: 4.4, review_count: 64, features: ['Guided bar tour', 'Welcome cocktails', 'Group planning'], description: 'A fun, well-organized Hamburg party experience.', hero_image_url: getPackageImage('hamburg', 'essential') },
-  'hamburg-grand': { id: 'hamburg-grand', name: 'Hamburg Grand', tier: 'grand', base_price_cents: 199_00, price_per_person_cents: 199_00, rating: 4.9, review_count: 31, features: ['Elbphilharmonie VIP event', 'Private yacht dinner', 'Luxury hotel suite', 'Spa & wellness day', 'Premium bottle service'], description: 'Premium Hamburg experience with exclusive venues and luxury service.', hero_image_url: getPackageImage('hamburg', 'grand') },
-  'hannover-classic': { id: 'hannover-classic', name: 'Hannover Classic', tier: 'classic', base_price_cents: 149_00, price_per_person_cents: 149_00, rating: 4.6, review_count: 73, features: ['Craft beer experience', 'Go-kart racing', 'Professional photographer', 'Welcome dinner'], description: 'An action-packed celebration in the heart of Hannover.', hero_image_url: getPackageImage('hannover', 'classic') },
-  'hannover-essential': { id: 'hannover-essential', name: 'Hannover Essential', tier: 'essential', base_price_cents: 99_00, price_per_person_cents: 99_00, rating: 4.3, review_count: 51, features: ['City adventure tour', 'Welcome drinks', 'Group coordination'], description: 'A great time in Hannover without breaking the bank.', hero_image_url: getPackageImage('hannover', 'essential') },
-  'hannover-grand': { id: 'hannover-grand', name: 'Hannover Grand', tier: 'grand', base_price_cents: 199_00, price_per_person_cents: 199_00, rating: 4.8, review_count: 28, features: ['Herrenhausen Gardens gala', 'Private chef dinner', 'Spa & wellness day', 'VIP nightlife access', 'Luxury hotel suite'], description: 'Exclusive Hannover experience with private gala and luxury wellness.', hero_image_url: getPackageImage('hannover', 'grand') },
+  'berlin-classic': { id: 'berlin-classic', name: 'Berlin Rausch', tier: 'classic', base_price_cents: 179_00, price_per_person_cents: 179_00, rating: 4.8, review_count: 127, features: ['VIP nightlife access', 'Private party bus', 'Professional photographer', 'Welcome drinks package'], description: 'The ideal balance of nightlife, culture, and unforgettable moments in Berlin.', hero_image_url: getPackageImage('berlin', 'classic') },
+  'berlin-essential': { id: 'berlin-essential', name: 'Berlin Feier', tier: 'essential', base_price_cents: 129_00, price_per_person_cents: 129_00, rating: 4.5, review_count: 89, features: ['Bar hopping tour', 'Welcome drinks', 'Group coordination'], description: 'A solid party plan with all the essentials covered.', hero_image_url: getPackageImage('berlin', 'essential') },
+  'berlin-grand': { id: 'berlin-grand', name: 'Berlin Legende', tier: 'grand', base_price_cents: 229_00, price_per_person_cents: 229_00, rating: 4.9, review_count: 42, features: ['Luxury suite', 'Private chef dinner', 'Spa & wellness package', 'VIP club access', 'Private chauffeur'], description: 'The ultimate premium experience with luxury at every turn.', hero_image_url: getPackageImage('berlin', 'grand') },
+  'hamburg-classic': { id: 'hamburg-classic', name: 'Hamburg Rausch', tier: 'classic', base_price_cents: 179_00, price_per_person_cents: 179_00, rating: 4.7, review_count: 98, features: ['Reeperbahn nightlife tour', 'Harbor cruise', 'Professional photographer', 'Reserved bar area'], description: "Experience Hamburg's legendary nightlife and harbor in style.", hero_image_url: getPackageImage('hamburg', 'classic') },
+  'hamburg-essential': { id: 'hamburg-essential', name: 'Hamburg Feier', tier: 'essential', base_price_cents: 129_00, price_per_person_cents: 129_00, rating: 4.4, review_count: 64, features: ['Guided bar tour', 'Welcome cocktails', 'Group planning'], description: 'A fun, well-organized Hamburg party experience.', hero_image_url: getPackageImage('hamburg', 'essential') },
+  'hamburg-grand': { id: 'hamburg-grand', name: 'Hamburg Legende', tier: 'grand', base_price_cents: 229_00, price_per_person_cents: 229_00, rating: 4.9, review_count: 31, features: ['Elbphilharmonie VIP event', 'Private yacht dinner', 'Luxury hotel suite', 'Spa & wellness day', 'Premium bottle service'], description: 'Premium Hamburg experience with exclusive venues and luxury service.', hero_image_url: getPackageImage('hamburg', 'grand') },
+  'hannover-classic': { id: 'hannover-classic', name: 'Hannover Rausch', tier: 'classic', base_price_cents: 179_00, price_per_person_cents: 179_00, rating: 4.6, review_count: 73, features: ['Craft beer experience', 'Go-kart racing', 'Professional photographer', 'Welcome dinner'], description: 'An action-packed celebration in the heart of Hannover.', hero_image_url: getPackageImage('hannover', 'classic') },
+  'hannover-essential': { id: 'hannover-essential', name: 'Hannover Feier', tier: 'essential', base_price_cents: 129_00, price_per_person_cents: 129_00, rating: 4.3, review_count: 51, features: ['City adventure tour', 'Welcome drinks', 'Group coordination'], description: 'A great time in Hannover without breaking the bank.', hero_image_url: getPackageImage('hannover', 'essential') },
+  'hannover-grand': { id: 'hannover-grand', name: 'Hannover Legende', tier: 'grand', base_price_cents: 229_00, price_per_person_cents: 229_00, rating: 4.8, review_count: 28, features: ['Herrenhausen Gardens gala', 'Private chef dinner', 'Spa & wellness day', 'VIP nightlife access', 'Luxury hotel suite'], description: 'Exclusive Hannover experience with private gala and luxury wellness.', hero_image_url: getPackageImage('hannover', 'grand') },
 };
 
 const CITY_SLUGS = ['berlin', 'hamburg', 'hannover'];
@@ -103,36 +111,39 @@ function featureIcon(name: string): string {
 }
 
 function featureSub(name: string): string {
-  if (DINING_FEATURES.has(name)) return 'Group dinner included';
-  if (BAR_FEATURES.has(name)) return 'Evening entertainment included';
-  return 'Group activity included';
+  // Icon/category logic keys off the canonical English name; only the visible
+  // label is translated.
+  if (DINING_FEATURES.has(name)) return translateFeatureSub('Group dinner included');
+  if (BAR_FEATURES.has(name)) return translateFeatureSub('Evening entertainment included');
+  return translateFeatureSub('Group activity included');
 }
 
 function buildHighlights(features: string[]): { icon: string; label: string; sub: string }[] {
   if (features.length === 0) return [];
   const top = features[0];
-  return [{ icon: featureIcon(top), label: top, sub: '' }];
+  return [{ icon: featureIcon(top), label: translateFeature(top), sub: '' }];
 }
 
 function buildIncludes(features: string[]): { icon: string; title: string; sub: string }[] {
-  return features.map(f => ({ icon: featureIcon(f), title: f, sub: featureSub(f) }));
+  return features.map(f => ({ icon: featureIcon(f), title: translateFeature(f), sub: featureSub(f) }));
 }
 
-// 2-3 reviews per tier
-const MOCK_REVIEWS: Record<string, { initials: string; color: string; name: string; rating: number; text: string }[]> = {
+// 2-3 demo reviews per tier. Bilingual: `text` is EN, `textDe` is DE — the
+// render picks based on the active language.
+const MOCK_REVIEWS: Record<string, { initials: string; color: string; name: string; rating: number; text: string; textDe: string }[]> = {
   essential: [
-    { initials: 'SJ', color: '#22C55E', name: 'Sarah J.', rating: 4, text: "This was the best bang for our buck. We didn't need the fancy extras, just a solid plan and a ride. The Essential tier delivered exactly that." },
-    { initials: 'LC', color: '#3B82F6', name: 'Laura C.', rating: 4, text: "Great for a budget-friendly party. The bar hopping tour was well organized and the concierge helped with last-minute changes. Would recommend!" },
+    { initials: 'SJ', color: '#22C55E', name: 'Sarah J.', rating: 4, text: "This was the best bang for our buck. We didn't need the fancy extras, just a solid plan and a ride. The Essential tier delivered exactly that.", textDe: 'Das war das beste Preis-Leistungs-Verhältnis. Wir brauchten keinen Schnickschnack, nur einen soliden Plan und einen Transfer. Genau das hat die Feier-Stufe geliefert.' },
+    { initials: 'LC', color: '#3B82F6', name: 'Laura C.', rating: 4, text: "Great for a budget-friendly party. The bar hopping tour was well organized and the concierge helped with last-minute changes. Would recommend!", textDe: 'Super für eine budgetfreundliche Party. Die Bar-Tour war gut organisiert und der Concierge half bei kurzfristigen Änderungen. Sehr empfehlenswert!' },
   ],
   classic: [
-    { initials: 'MT', color: '#EF4444', name: 'Mike T.', rating: 5, text: "Honestly, the private wine tasting was the highlight. We didn't have to worry about transport or bookings. The Classic tier was the perfect middle ground." },
-    { initials: 'JD', color: '#14B8A6', name: 'James D.', rating: 5, text: "The party bus alone was worth it. Everyone was together, the photographer captured amazing shots, and VIP access meant zero waiting." },
-    { initials: 'KW', color: '#EC4899', name: 'Kate W.', rating: 4, text: "Planned my best friend's bachelorette. The Classic package took all the stress away. Everyone loved the VIP experience!" },
+    { initials: 'MT', color: '#EF4444', name: 'Mike T.', rating: 5, text: "Honestly, the private wine tasting was the highlight. We didn't have to worry about transport or bookings. The Classic tier was the perfect middle ground.", textDe: 'Ehrlich, die private Weinverkostung war das Highlight. Wir mussten uns um nichts kümmern – weder Transport noch Buchungen. Die Rausch-Stufe war der perfekte Mittelweg.' },
+    { initials: 'JD', color: '#14B8A6', name: 'James D.', rating: 5, text: "The party bus alone was worth it. Everyone was together, the photographer captured amazing shots, and VIP access meant zero waiting.", textDe: 'Allein der Party-Bus war es wert. Alle waren zusammen, der Fotograf hat großartige Aufnahmen gemacht und dank VIP-Zugang gab es keine Wartezeiten.' },
+    { initials: 'KW', color: '#EC4899', name: 'Kate W.', rating: 4, text: "Planned my best friend's bachelorette. The Classic package took all the stress away. Everyone loved the VIP experience!", textDe: 'Habe den JGA meiner besten Freundin geplant. Das Rausch-Paket hat den ganzen Stress abgenommen. Alle waren vom VIP-Erlebnis begeistert!' },
   ],
   grand: [
-    { initials: 'RK', color: '#F59E0B', name: 'Ryan K.', rating: 5, text: "The VIP access was legit. No waiting in lines anywhere, and the penthouse was incredible. Best bachelor weekend hands down." },
-    { initials: 'TM', color: '#8B5CF6', name: 'Tyler M.', rating: 5, text: "Everything was handled for us. We just showed up and had a blast. The private chef dinner was a highlight for sure." },
-    { initials: 'AP', color: '#22C55E', name: 'Alex P.', rating: 5, text: "The spa recovery session the next morning was genius. Whoever thought of that deserves an award. Absolutely premium from start to finish." },
+    { initials: 'RK', color: '#F59E0B', name: 'Ryan K.', rating: 5, text: "The VIP access was legit. No waiting in lines anywhere, and the penthouse was incredible. Best bachelor weekend hands down.", textDe: 'Der VIP-Zugang war top. Nirgends Schlangestehen und das Penthouse war unglaublich. Ganz klar das beste JGA-Wochenende.' },
+    { initials: 'TM', color: '#8B5CF6', name: 'Tyler M.', rating: 5, text: "Everything was handled for us. We just showed up and had a blast. The private chef dinner was a highlight for sure.", textDe: 'Alles wurde für uns organisiert. Wir sind einfach aufgetaucht und hatten eine Riesengaudi. Das private Chefkoch-Dinner war definitiv ein Highlight.' },
+    { initials: 'AP', color: '#22C55E', name: 'Alex P.', rating: 5, text: "The spa recovery session the next morning was genius. Whoever thought of that deserves an award. Absolutely premium from start to finish.", textDe: 'Die Spa-Erholung am nächsten Morgen war genial. Wer sich das ausgedacht hat, verdient einen Preis. Von Anfang bis Ende absolut premium.' },
   ],
 };
 
@@ -152,11 +163,11 @@ function HighlightCard({ icon, label, sub }: { icon: string; label: string; sub:
         width={40}
         height={40}
         borderRadius="$full"
-        backgroundColor="rgba(37, 140, 244, 0.15)"
+        backgroundColor="rgba(198, 167, 94, 0.15)"
         alignItems="center"
         justifyContent="center"
       >
-        <Ionicons name={icon as any} size={20} color={DARK_THEME.primary} />
+        <Ionicons name={icon as any} size={20} color={'#C6A75E'} />
       </YStack>
       <Text fontSize={13} fontWeight="600" color="$textPrimary" textAlign="center">
         {label}
@@ -168,30 +179,52 @@ function HighlightCard({ icon, label, sub }: { icon: string; label: string; sub:
   );
 }
 
-function IncludeItem({ icon, title, sub }: { icon: string; title: string; sub: string }) {
+function IncludeItem({ icon, title, sub, time, location }: { icon: string; title: string; sub: string; time?: string; location?: string }) {
   return (
     <XStack gap="$3" alignItems="flex-start" paddingVertical="$2">
       <YStack
         width={36}
         height={36}
         borderRadius="$full"
-        backgroundColor="rgba(37, 140, 244, 0.15)"
+        backgroundColor="rgba(198, 167, 94, 0.15)"
         alignItems="center"
         justifyContent="center"
         marginTop={2}
       >
-        <Ionicons name={icon as any} size={18} color={DARK_THEME.primary} />
+        <Ionicons name={icon as any} size={18} color={'#C6A75E'} />
       </YStack>
       <YStack flex={1}>
         <Text fontSize={15} fontWeight="600" color="$textPrimary">{title}</Text>
         <Text fontSize={13} color="$textTertiary">{sub}</Text>
+        {location ? (
+          <XStack alignItems="center" gap={4} marginTop={2}>
+            <Ionicons name="location-outline" size={11} color="rgba(255,255,255,0.48)" />
+            <Text fontSize={11} color="$textTertiary">{location}</Text>
+          </XStack>
+        ) : null}
       </YStack>
+      {time ? (
+        <YStack
+          backgroundColor="rgba(198, 167, 94, 0.18)"
+          paddingHorizontal={10}
+          paddingVertical={6}
+          borderRadius={8}
+          alignItems="center"
+          justifyContent="center"
+          marginTop={2}
+          minWidth={56}
+        >
+          <Text fontSize={13} fontWeight="700" color="#C6A75E" fontVariant={['tabular-nums']}>
+            {time}
+          </Text>
+        </YStack>
+      ) : null}
     </XStack>
   );
 }
 
-function ReviewCard({ initials, color, name, rating, text }: {
-  initials: string; color: string; name: string; rating: number; text: string;
+function ReviewCard({ initials, name, rating, text }: {
+  initials: string; color?: string; name: string; rating: number; text: string;
 }) {
   return (
     <YStack marginBottom="$5">
@@ -200,11 +233,13 @@ function ReviewCard({ initials, color, name, rating, text }: {
           width={40}
           height={40}
           borderRadius="$full"
-          backgroundColor={color}
+          backgroundColor="rgba(198,167,94,0.18)"
+          borderWidth={1}
+          borderColor="#C6A75E"
           alignItems="center"
           justifyContent="center"
         >
-          <Text fontSize={14} fontWeight="700" color="white">{initials}</Text>
+          <Text fontSize={14} fontWeight="700" color="#C6A75E">{initials}</Text>
         </YStack>
         <YStack flex={1}>
           <Text fontSize={14} fontWeight="600" color="$textPrimary">{name}</Text>
@@ -236,7 +271,7 @@ export default function PackageDetailsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { toggleFavorite, isFavorite } = useFavoritesStore();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const { data: dbPkg, isLoading } = usePackage(id);
 
   // Load event budget cache when opened from Event Summary (viewOnly mode)
@@ -247,6 +282,32 @@ export default function PackageDetailsScreen() {
     }
   }, [eventId]);
 
+  // Schedule data — only relevant in viewOnly mode (event context)
+  const user = useAuthStore((s) => s.user);
+  const queryClient = useQueryClient();
+  const { data: scheduleData } = useEventSchedule(isViewOnly ? eventId : undefined);
+  const { data: eventData } = useEvent(isViewOnly ? eventId : undefined);
+  const isOrganizer = !!eventData && eventData.created_by === user?.id;
+  // Show archived badge when viewing a past event's package
+  const isArchivedView = isViewOnly && eventData ? isReadOnlyEvent(eventData) : false;
+
+  // Auto-generate schedule when missing (mirrors the previous day.tsx logic)
+  const genAttempted = useRef(false);
+  useEffect(() => {
+    if (!isViewOnly || !eventId) return;
+    if (!scheduleData || scheduleData.length > 0) return;
+    if (!isOrganizer) return;
+    if (genAttempted.current) return;
+    const tier = tierFromPackageSlug(id) ?? tierFromPackageSlug(eventBudget?.packageId ?? null);
+    if (!tier) return;
+    genAttempted.current = true;
+    const items = generateDefaultSchedule(eventId, [], tier);
+    if (items.length === 0) return;
+    scheduleRepository.createMany(items)
+      .then(() => queryClient.invalidateQueries({ queryKey: scheduleKeys.byEvent(eventId) }))
+      .catch(() => { genAttempted.current = false; });
+  }, [isViewOnly, eventId, scheduleData, isOrganizer, id, eventBudget?.packageId, queryClient]);
+
   // Read wizard answers to assemble dynamic package when needed (creation flow only)
   const wizardState = useWizardStore();
   const {
@@ -254,6 +315,8 @@ export default function PackageDetailsScreen() {
     energyLevel, spotlightComfort, competitionStyle, enjoymentType, indoorOutdoor, eveningStyle,
     averageAge, groupCohesion, fitnessLevel, drinkingCulture, groupDynamic, groupVibe,
   } = wizardState;
+  const wizardParticipantCount = useWizardStore((s) => s.participantCount);
+  const setSelectedPackageId = useWizardStore((s) => s.setSelectedPackageId);
 
   // If DB returned nothing and the ID matches a city-tier pattern, assemble dynamically
   let assembledPkg: ReturnType<typeof assemblePackages>[number] | undefined;
@@ -269,7 +332,7 @@ export default function PackageDetailsScreen() {
         id,
         name: id,
         tier: tierSlug as 'essential' | 'classic' | 'grand',
-        price_per_person_cents: TIER_PRICE_PER_PERSON[tierSlug] || 149_00,
+        price_per_person_cents: TIER_PRICE_PER_PERSON[tierSlug] || 179_00,
         hero_image_url: getPackageImage(citySlug, tierSlug),
         rating: 4.8,
         review_count: tierSlug === 'classic' ? 127 : tierSlug === 'grand' ? 42 : 89,
@@ -326,7 +389,7 @@ export default function PackageDetailsScreen() {
   if (!pkg) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background" padding="$6">
-        <Ionicons name="alert-circle-outline" size={48} color={DARK_THEME.primary} />
+        <Ionicons name="alert-circle-outline" size={48} color={'#C6A75E'} />
         <Text fontSize="$4" fontWeight="600" color="$textPrimary" marginTop="$3">
           {t.packageDetail.packageNotFound}
         </Text>
@@ -351,21 +414,18 @@ export default function PackageDetailsScreen() {
   const reviews = MOCK_REVIEWS[tier] || [];
 
   // Participant count: viewOnly uses cached event total, creation flow uses wizard store
-  const wizardParticipantCount = useWizardStore((s) => s.participantCount);
-  const setSelectedPackageId = useWizardStore((s) => s.setSelectedPackageId);
   const participantCount = (isViewOnly && eventBudget?.totalParticipants)
     ? eventBudget.totalParticipants
     : wizardParticipantCount;
 
-  const perPersonCents = pkg.price_per_person_cents || pkg.base_price_cents || TIER_PRICE_PER_PERSON[tier] || 149_00;
+  const perPersonCents = pkg.price_per_person_cents || pkg.base_price_cents || TIER_PRICE_PER_PERSON[tier] || 179_00;
   // In viewOnly mode, show the actual total paid (from cache) if available
   const totalGroupCents = (isViewOnly && eventBudget?.totalCents)
     ? eventBudget.totalCents
     : perPersonCents * participantCount;
 
-  // Display name without city prefix
-  const tierNames: Record<string, string> = { essential: 'Essential', classic: 'Classic', grand: 'Grand' };
-  const displayName = `${tierNames[tier] || tier} (${tier === 'essential' ? 'S' : tier === 'classic' ? 'M' : 'L'})`;
+  // Display name without city prefix (language-aware)
+  const displayName = getTierName(tier, language) || tier;
 
   return (
     <YStack flex={1} backgroundColor="$background">
@@ -376,7 +436,7 @@ export default function PackageDetailsScreen() {
           style={{ height: 350 }}
         >
           <LinearGradient
-            colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(21,24,29,0.9)', DARK_THEME.background]}
+            colors={['rgba(0,0,0,0.3)', 'transparent', 'rgba(21,24,29,0.9)', '#0D1B2A']}
             locations={[0, 0.3, 0.7, 1]}
             style={{ flex: 1 }}
           >
@@ -400,7 +460,26 @@ export default function PackageDetailsScreen() {
               >
                 <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
               </XStack>
-              <Text fontSize="$4" fontWeight="600" color="white">{t.packageDetail.title}</Text>
+              <YStack alignItems="center">
+                <Text fontSize="$4" fontWeight="700" color="#FFFFFF">{t.packageDetail.title}</Text>
+                {isArchivedView && (
+                  <XStack
+                    alignItems="center"
+                    gap={4}
+                    marginTop={2}
+                    paddingHorizontal={8}
+                    paddingVertical={2}
+                    borderRadius={10}
+                    backgroundColor="rgba(255,255,255,0.12)"
+                    testID="package-archived-badge"
+                  >
+                    <Ionicons name="lock-closed-outline" size={10} color="rgba(255,255,255,0.8)" />
+                    <Text fontSize={10} fontWeight="700" color="rgba(255,255,255,0.8)" letterSpacing={0.8}>
+                      {(t.packageDetail as any).archived || 'ARCHIVED'}
+                    </Text>
+                  </XStack>
+                )}
+              </YStack>
               <XStack
                 width={40}
                 height={40}
@@ -441,15 +520,15 @@ export default function PackageDetailsScreen() {
                 position="absolute"
                 bottom={100}
                 left={20}
-                backgroundColor="rgba(34, 197, 94, 0.9)"
+                backgroundColor="rgba(232,220,200,0.90)"
                 paddingHorizontal={14}
                 paddingVertical={6}
                 borderRadius={20}
                 gap="$1.5"
                 alignItems="center"
               >
-                <Ionicons name="sparkles" size={14} color="white" />
-                <Text color="white" fontSize={12} fontWeight="600">{t.packageDetail.recommendationBadge}</Text>
+                <Ionicons name="sparkles" size={14} color="#0D1B2A" />
+                <Text color="#0D1B2A" fontSize={12} fontWeight="700">{t.packageDetail.recommendationBadge}</Text>
               </XStack>
             )}
           </LinearGradient>
@@ -478,12 +557,12 @@ export default function PackageDetailsScreen() {
                   {(pkg.rating || 4.5).toFixed(1)}
                 </Text>
                 <Text fontSize={14} color="$textTertiary">
-                  ({pkg.review_count || 0} reviews)
+                  {(t.packageDetail as any).reviewsCount.replace('{{count}}', String(pkg.review_count || 0))}
                 </Text>
               </XStack>
             </YStack>
             <YStack alignItems="flex-end">
-              <Text fontSize={22} fontWeight="800" color={DARK_THEME.primary}>
+              <Text fontSize={22} fontWeight="800" color={'#C6A75E'}>
                 {formatPrice(totalGroupCents)}
               </Text>
               <Text fontSize={12} color="$textTertiary">{t.packageDetail.totalPeople.replace('{{count}}', String(participantCount))}</Text>
@@ -493,7 +572,7 @@ export default function PackageDetailsScreen() {
           {/* Description */}
           {pkg.description && (
             <Text fontSize={14} color="$textSecondary" lineHeight={22} marginBottom="$4">
-              {pkg.description}
+              {translatePackageDescription(pkg.description)}
             </Text>
           )}
 
@@ -501,7 +580,7 @@ export default function PackageDetailsScreen() {
           {highlights.length > 0 && (
             <YStack marginBottom="$4">
               <XStack alignItems="center" gap="$2" marginBottom="$3">
-                <Ionicons name="diamond" size={16} color={DARK_THEME.primary} />
+                <Ionicons name="diamond" size={16} color={'#C6A75E'} />
                 <Text fontSize={13} fontWeight="700" color="$textPrimary" textTransform="uppercase" letterSpacing={1}>
                   {t.packageDetail.premiumHighlights}
                 </Text>
@@ -542,61 +621,14 @@ export default function PackageDetailsScreen() {
                 }}
                 testID="book-now-button"
               >
-                {t.packageDetail.selectThisPackage}
+                <Text color="#0D1B2A" fontWeight="700" fontSize="$4">{t.packageDetail.selectThisPackage}</Text>
               </Button>
             </YStack>
           )}
         </YStack>
 
-        {/* Total Price breakdown — viewOnly mode only, shown below glass card */}
-        {isViewOnly && (
-          <YStack
-            marginHorizontal="$4"
-            marginTop="$4"
-            backgroundColor="rgba(35, 39, 47, 0.95)"
-            borderRadius={16}
-            borderWidth={1}
-            borderColor="rgba(255, 255, 255, 0.1)"
-            padding="$4"
-          >
-            <Text fontSize={12} color="$textTertiary" textTransform="uppercase" letterSpacing={1} marginBottom="$3">
-              Price Breakdown
-            </Text>
-            {/* Price breakdown rows */}
-            <YStack gap="$2">
-              {/* Row: €199/person  ×  6 people  =  €1.194 */}
-              <XStack alignItems="center">
-                <Text fontSize={13} color="$textTertiary" flex={1}>{formatPrice(perPersonCents)}/person</Text>
-                <Text fontSize={13} color="$textTertiary" flex={1} textAlign="center">× {participantCount} people</Text>
-                <Text fontSize={13} color="$textTertiary" flex={1} textAlign="right">{formatPrice(perPersonCents * participantCount)}</Text>
-              </XStack>
-              {totalGroupCents > perPersonCents * participantCount && (
-                <XStack alignItems="center">
-                  <Text fontSize={12} color="rgba(249,115,22,0.9)" flex={1}>
-                    + {Math.round((totalGroupCents / (perPersonCents * participantCount) - 1) * 100)}% service fee
-                  </Text>
-                  <Text fontSize={12} color="rgba(249,115,22,0.9)" flex={1} textAlign="right">
-                    +{formatPrice(totalGroupCents - perPersonCents * participantCount)}
-                  </Text>
-                </XStack>
-              )}
-              {/* Separator + Total row */}
-              <YStack
-                borderTopWidth={1}
-                borderTopColor="rgba(255,255,255,0.12)"
-                paddingTop="$2"
-                marginTop="$1"
-              >
-                <XStack justifyContent="space-between" alignItems="center">
-                  <Text fontSize={14} fontWeight="700" color="$textPrimary">Total</Text>
-                  <Text fontSize={16} fontWeight="800" color={DARK_THEME.primary}>{formatPrice(totalGroupCents)}</Text>
-                </XStack>
-              </YStack>
-            </YStack>
-          </YStack>
-        )}
 
-        {/* Package Includes */}
+        {/* Package Includes (with schedule times when in event context) */}
         {includes.length > 0 && (
           <YStack paddingHorizontal="$5" marginTop="$5">
             <Text
@@ -609,9 +641,19 @@ export default function PackageDetailsScreen() {
             >
               {t.packageDetail.packageIncludes}
             </Text>
-            {includes.map((item, i) => (
-              <IncludeItem key={i} icon={item.icon} title={item.title} sub={item.sub} />
-            ))}
+            {includes.map((item, i) => {
+              const sched = scheduleData?.[i];
+              return (
+                <IncludeItem
+                  key={i}
+                  icon={item.icon}
+                  title={item.title}
+                  sub={item.sub}
+                  time={sched ? formatScheduleTime(sched.start_time) : undefined}
+                  location={sched?.location ?? undefined}
+                />
+              );
+            })}
           </YStack>
         )}
 
@@ -625,7 +667,7 @@ export default function PackageDetailsScreen() {
                 color={review.color}
                 name={review.name}
                 rating={review.rating}
-                text={review.text}
+                text={getCurrentLanguage() === 'de' ? review.textDe : review.text}
               />
             ))}
           </YStack>

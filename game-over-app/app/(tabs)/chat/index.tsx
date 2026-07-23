@@ -3,29 +3,34 @@
  * Chat, Voting, Decisions with organized channel sections
  */
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Animated, PanResponder, ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadDesiredParticipants } from '@/lib/participantCountCache';
-import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import { YStack, XStack, Text, Image } from 'tamagui';
 import { Image as ExpoImage } from 'expo-image';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { ShareModal } from '@/components/ui/ShareModal';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useChannels, useCreateChannel } from '@/hooks/queries/useChat';
 import { usePolls, useCreatePoll, useVote, useDeletePoll, useAddPollOption, useDeletePollOption } from '@/hooks/queries/usePolls';
-import { DARK_THEME } from '@/constants/theme';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
+import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { PastEventBanner } from '@/components/ui/PastEventBanner';
 import { useUser } from '@/stores/authStore';
+import { useWizardStore } from '@/stores/wizardStore';
+import { useTabBarStore } from '@/stores/tabBarStore';
+import { useActiveEventStore } from '@/stores/activeEventStore';
+import { useUIStore } from '@/stores/uiStore';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import type { Database } from '@/lib/supabase/types';
 
 // 100 icon options per category — best match chosen from channel name keywords
-const CATEGORY_ICON_POOLS: Record<string, Array<{ icon: string; keywords: string[] }>> = {
+const CATEGORY_ICON_POOLS: Record<string, { icon: string; keywords: string[] }[]> = {
   general: [
     { icon: 'chatbubbles',           keywords: ['chat', 'general', 'talk', 'discussion', 'lobby', 'main'] },
     { icon: 'megaphone',             keywords: ['announcement', 'news', 'update', 'broadcast', 'info'] },
@@ -422,10 +427,10 @@ function pickIconForChannel(channelName: string, _category?: string): string {
 
 // Category config — shared between voting tab and poll info modal
 const POLL_CATEGORY_CONFIG_CONST: Record<string, { icon: string; color: string; bg: string }> = {
-  general:       { icon: 'chatbubbles',     color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.15)' },
-  accommodation: { icon: 'bed',             color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.15)' },
-  activities:    { icon: 'game-controller', color: '#F97316', bg: 'rgba(249, 115, 22, 0.15)' },
-  budget:        { icon: 'cash',            color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)' },
+  general:       { icon: 'chatbubbles',     color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+  accommodation: { icon: 'bed',             color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+  activities:    { icon: 'game-controller', color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+  budget:        { icon: 'cash',            color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
 };
 
 type CommunicationTab = 'topics' | 'voting';
@@ -447,14 +452,15 @@ type LocalChannelSection = {
 
 export default function CommunicationScreen() {
   const router = useRouter();
-  const { hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
   // eventIdParam is set when navigating from Event Summary — pre-selects that event
   const { eventId: eventIdParam } = useLocalSearchParams<{ eventId?: string }>();
   const insets = useSafeAreaInsets();
   const user = useUser();
   const [selectedTab, setSelectedTab] = useState<CommunicationTab>('topics');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(eventIdParam || null);
+  // Shared with Budget tab — see useActiveEventStore
+  const selectedEventId = useActiveEventStore((s) => s.activeEventId);
+  const setSelectedEventId = useActiveEventStore((s) => s.setActiveEventId);
   const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
   const [pollModalVisible, setPollModalVisible] = useState(false);
   const [pollModalCategory, setPollModalCategory] = useState<ChannelCategory>('general');
@@ -489,7 +495,7 @@ export default function CommunicationScreen() {
   const pollSheetPan = useRef(makeSheetPan(pollSheetY, () => setPollModalVisible(false))).current;
   const channelSheetPan = useRef(makeSheetPan(channelSheetY, () => setChannelInputModal({ visible: false, category: null }))).current;
   const pollInfoSheetPan = useRef(makeSheetPan(pollInfoSheetY, () => setPollInfoModal(null))).current;
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const COMM_TABS = ['topics', 'voting'] as const;
   const { handlers: swipeHandlers, animatedStyle: swipeAnimStyle, switchTab: switchTabAnimated } = useSwipeTabs(COMM_TABS, selectedTab, setSelectedTab);
 
@@ -528,6 +534,16 @@ export default function CommunicationScreen() {
     }, [])
   );
 
+  const setTabBarHidden = useTabBarStore((s) => s.setHidden);
+
+  // Hide tab bar when accessed from Event Summary (eventId present in URL)
+  useFocusEffect(
+    useCallback(() => {
+      if (eventIdParam) setTabBarHidden(true);
+      return () => setTabBarHidden(false);
+    }, [eventIdParam, setTabBarHidden])
+  );
+
   // Fetch user's events
   const { data: events, refetch: refetchEvents } = useEvents();
 
@@ -535,6 +551,18 @@ export default function CommunicationScreen() {
   const bookedEvents = useMemo(() => {
     return (events || []).filter(e => e.status === 'booked' || e.status === 'completed');
   }, [events]);
+
+  // Events shown in the selector dropdown: exclude past events — those live in the Events tab.
+  // Uses start-of-today so today's events are still visible.
+  const selectableEvents = useMemo(() => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const cutoff = startOfToday.getTime();
+    return bookedEvents.filter(e => {
+      if (!e.start_date) return true;
+      return new Date(e.start_date).getTime() >= cutoff;
+    });
+  }, [bookedEvents]);
 
   // Load participant count from cache when event changes
   useEffect(() => {
@@ -544,16 +572,13 @@ export default function CommunicationScreen() {
     });
   }, [selectedEventId]);
 
-  // When returning to Chat via tab bar (eventIdParam gone), reset to auto-select
-  const prevEventIdParam = useRef(eventIdParam);
+  // Deep-link: when the tab is opened with an eventIdParam, that wins and
+  // seeds the shared store so Budget lands on the same event.
   useEffect(() => {
-    const wasSet = !!prevEventIdParam.current;
-    const isNowClear = !eventIdParam;
-    prevEventIdParam.current = eventIdParam;
-    if (wasSet && isNowClear) {
-      setSelectedEventId(null);
-      hasAutoSelected.current = false;
+    if (eventIdParam && eventIdParam !== selectedEventId) {
+      setSelectedEventId(eventIdParam);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on eventIdParam change
   }, [eventIdParam]);
 
   // Left-edge swipe to go back when opened from Event Summary
@@ -567,10 +592,11 @@ export default function CommunicationScreen() {
     })
   ).current;
 
-  // Auto-select nearest upcoming booked event on first load (skip if opened from Event Summary)
+  // Auto-select nearest upcoming booked event on first load (skip if opened
+  // from Event Summary, or if the shared store already holds a selection)
   const hasAutoSelected = useRef(false);
   useEffect(() => {
-    if (hasAutoSelected.current || bookedEvents.length === 0 || eventIdParam) return;
+    if (hasAutoSelected.current || bookedEvents.length === 0 || eventIdParam || selectedEventId) return;
     hasAutoSelected.current = true;
 
     const now = Date.now();
@@ -584,6 +610,7 @@ export default function CommunicationScreen() {
       return aDate - bDate;
     });
     setSelectedEventId(sorted[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally ignores eventIdParam; auto-select runs only when bookedEvents list changes
   }, [bookedEvents]);
 
   // Fetch channels for selected event (only if event exists)
@@ -611,15 +638,15 @@ export default function CommunicationScreen() {
     const latest = polls.find(p => p.id === id);
     if (latest) setPollInfoModal(latest);
   }, [polls]);
-  const optionInputRefs = useRef<Array<import('react-native').TextInput | null>>([]);
+  const optionInputRefs = useRef<(import('react-native').TextInput | null)[]>([]);
   const pollInfoScrollRef = useRef<ScrollView | null>(null);
 
   // Derived local sections for current event (per-event map)
   const DEFAULT_LOCAL_SECTIONS: LocalChannelSection[] = [
-    { id: 'general', title: 'GENERAL', channels: [] },
-    { id: 'accommodation', title: 'ACCOMMODATION', channels: [] },
-    { id: 'activities', title: 'ACTIVITIES', channels: [] },
-    { id: 'budget', title: 'BUDGET', channels: [] },
+    { id: 'general', title: t.chat.general.toUpperCase(), channels: [] },
+    { id: 'accommodation', title: t.chat.accommodation.toUpperCase(), channels: [] },
+    { id: 'activities', title: t.chat.activities.toUpperCase(), channels: [] },
+    { id: 'budget', title: t.chat.budgetCategory.toUpperCase(), channels: [] },
   ];
   const localSections = localChannelsByEvent[selectedEventId ?? 'none'] ?? DEFAULT_LOCAL_SECTIONS;
 
@@ -633,7 +660,7 @@ export default function CommunicationScreen() {
 
   // Group channels by category (use DB channels if event exists, otherwise local)
   const groupedChannels = useMemo(() => {
-    const groups: Record<ChannelCategory, Array<ChatChannel | LocalChannel>> = {
+    const groups: Record<ChannelCategory, (ChatChannel | LocalChannel)[]> = {
       general: [],
       accommodation: [],
       activities: [],
@@ -665,43 +692,33 @@ export default function CommunicationScreen() {
     setIsRefreshing(false);
   };
 
-  const handleNotifications = () => {
-    markUrgencySeen();
-    if (isGuestContribution && guestUrgentEvent) {
-      Alert.alert(
-        'Contribution Due',
-        `Your share for ${guestUrgentEvent.title} is due in ${guestDaysLeft} days.\nPlease transfer your contribution to the organizer.`,
-        [{ text: 'OK' }]
-      );
-    } else {
-      router.push('/notifications');
-    }
-  };
+
+  const [shareModalVisible, setShareModalVisible] = useState(false);
 
   const handleInvite = () => {
-    // Navigate to dedicated Share screen if a real event is selected
     if (selectedEventId) {
-      router.push(`/event/${selectedEventId}/share`);
+      setShareModalVisible(true);
     } else {
       Alert.alert('Kein Event ausgewählt', 'Wähle zuerst ein Event aus, um es zu teilen.');
     }
   };
 
   const handleDeletePoll = (poll: import('@/repositories/polls').PollWithOptions) => {
+    const tr = getTranslation();
     Alert.alert(
-      'Delete Poll',
-      `Delete "${poll.title}"? This cannot be undone.`,
+      (tr.chat as any).deletePollTitle,
+      (tr.chat as any).deletePollMsg.replace('{{title}}', poll.title),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: tr.common.cancel, style: 'cancel' },
         {
-          text: 'Delete',
+          text: tr.common.delete,
           style: 'destructive',
           onPress: async () => {
             setPollInfoModal(null);
             try {
               await deletePollMutation.mutateAsync(poll.id);
             } catch {
-              Alert.alert('Error', 'Could not delete poll.');
+              Alert.alert((tr.chat as any).errorTitle, (tr.chat as any).deletePollFailed);
             }
           },
         },
@@ -726,7 +743,7 @@ export default function CommunicationScreen() {
     if (selectedEventId) {
       try {
         await createChannelMutation.mutateAsync({ event_id: selectedEventId, name, category });
-        Alert.alert(tr.budget.success, tr.chat.channelCreated);
+        useUIStore.getState().showSuccess(tr.budget.success, tr.chat.channelCreated);
       } catch (error: any) {
         const code = error?.code || error?.message || '';
         if (code === '42501' || String(code).includes('42501')) {
@@ -737,7 +754,7 @@ export default function CommunicationScreen() {
                 : section
             )
           );
-          Alert.alert(tr.budget.success, tr.chat.channelCreated);
+          useUIStore.getState().showSuccess(tr.budget.success, tr.chat.channelCreated);
         } else {
           console.error('Failed to create channel:', error);
           Alert.alert(tr.common.error, tr.chat.channelCreateFailed);
@@ -758,6 +775,43 @@ export default function CommunicationScreen() {
     handleAddChannel('general');
   };
 
+  const handleCreateEvent = () => {
+    useWizardStore.getState().startNewDraft(user?.id);
+    router.push('/create-event');
+  };
+
+  const renderChatEmptyState = () => (
+    <View style={styles.marketingEmptyState}>
+      <EmptyState
+        title={t.emptyStates.chat.title}
+        subtitle={t.emptyStates.chat.subtitle}
+        previewLabel={t.emptyStates.chat.previewLabel}
+        preview={
+          <View style={styles.emptyChannelPreview}>
+            {[
+              t.emptyStates.chat.previewAccommodation,
+              t.emptyStates.chat.previewActivities,
+              t.emptyStates.chat.previewTransport,
+            ].map((label) => (
+              <View key={label} style={styles.emptyChannelPreviewRow}>
+                <View style={styles.emptyChannelPreviewIcon}>
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={15}
+                    color="#C6A75E"
+                  />
+                </View>
+                <Text style={styles.emptyChannelPreviewText}>{label}</Text>
+              </View>
+            ))}
+          </View>
+        }
+        primaryLabel={t.emptyStates.partyPlanPrimary}
+        onPrimary={handleCreateEvent}
+      />
+    </View>
+  );
+
   const handleCreatePoll = (category: ChannelCategory) => {
     setPollModalCategory(category);
     setPollQuestion('');
@@ -765,44 +819,36 @@ export default function CommunicationScreen() {
     setPollModalVisible(true);
   };
 
-  const handleSubmitPoll = async () => {
+  const handleSubmitPoll = () => {
     if (!pollQuestion.trim() || !selectedEventId) return;
     const validOptions = pollOptions.filter(o => o.trim());
     if (validOptions.length < 2) return;
-    try {
-      await createPollMutation.mutateAsync({
-        poll: {
-          event_id: selectedEventId,
-          title: pollQuestion.trim(),
-          category: pollModalCategory,
-          status: 'active',
-        },
-        options: validOptions,
-      });
-      setPollModalVisible(false);
-    } catch (err) {
-      console.error('Failed to create poll:', err);
-    }
+    // Fire-and-forget: optimistic update in useCreatePoll adds the poll to the list
+    // instantly, so we can close the modal without waiting for the server round-trip.
+    createPollMutation.mutate({
+      poll: {
+        event_id: selectedEventId,
+        title: pollQuestion.trim(),
+        category: pollModalCategory,
+        status: 'active',
+      },
+      options: validOptions,
+    });
+    setPollModalVisible(false);
   };
 
   const renderVotingTab = () => {
     if (bookedEvents.length === 0) {
-      return (
-        <View style={styles.lockedBanner}>
-          <Ionicons name="lock-closed-outline" size={18} color={DARK_THEME.textSecondary} />
-          <Text style={styles.lockedBannerText}>{t.chat.bookToUnlock}</Text>
-        </View>
-      );
+      return renderChatEmptyState();
     }
-
     // Category config — same as POLL_CATEGORY_CONFIG defined at component scope
     const POLL_CATEGORY_CONFIG = POLL_CATEGORY_CONFIG_CONST;
 
     const VOTING_CATEGORIES = [
-      { id: 'general' as const,       label: 'GENERAL',       icon: 'chatbubbles',     color: '#8B5CF6', bg: 'rgba(139,92,246,0.15)' },
-      { id: 'accommodation' as const, label: 'ACCOMMODATION',  icon: 'bed',             color: '#3B82F6', bg: 'rgba(59,130,246,0.15)' },
-      { id: 'activities' as const,    label: 'ACTIVITIES',     icon: 'game-controller', color: '#F97316', bg: 'rgba(249,115,22,0.15)' },
-      { id: 'budget' as const,        label: 'BUDGET',         icon: 'cash',            color: '#10B981', bg: 'rgba(16,185,129,0.15)' },
+      { id: 'general' as const,       label: t.chat.general.toUpperCase(),         icon: 'chatbubbles',     color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+      { id: 'accommodation' as const, label: t.chat.accommodation.toUpperCase(),   icon: 'bed',             color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+      { id: 'activities' as const,    label: t.chat.activities.toUpperCase(),      icon: 'game-controller', color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+      { id: 'budget' as const,        label: t.chat.budgetCategory.toUpperCase(),  icon: 'cash',            color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
     ];
 
     // Denominator: total participants minus the honoree (bachelor/bachelorette)
@@ -829,19 +875,28 @@ export default function CommunicationScreen() {
             <View key={catDef.id + catDef.label} style={styles.channelSection}>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={12}>
                 <Text style={styles.sectionTitle}>{catDef.label}</Text>
-                <Pressable
-                  onPress={() => handleCreatePoll(catDef.id)}
-                  style={styles.newPollButton}
-                  hitSlop={8}
-                >
-                  <Text style={[styles.newPollButtonText, { color: cfg.color }]}>New Poll</Text>
-                  <Ionicons name="add-circle" size={18} color={cfg.color} />
-                </Pressable>
+                {/* New-poll button hidden after event ends */}
+                {!isPastEvent && (
+                  <Pressable
+                    onPress={() => handleCreatePoll(catDef.id)}
+                    style={styles.newPollButton}
+                    hitSlop={8}
+                  >
+                    <Text style={[styles.newPollButtonText, { color: cfg.color }]}>{(t.chat as any).newPoll}</Text>
+                    <Ionicons name="add-circle" size={18} color={cfg.color} />
+                  </Pressable>
+                )}
               </XStack>
               {catPolls.length === 0 ? (
-                <Pressable onPress={() => handleCreatePoll(catDef.id)} style={styles.emptyChannelBox}>
-                  <Text style={styles.emptyChannelText}>No polls yet — tap to create</Text>
-                </Pressable>
+                isPastEvent ? (
+                  <View style={styles.emptyChannelBox}>
+                    <Text style={styles.emptyChannelText}>{(t.chat as any).noPollsCreated}</Text>
+                  </View>
+                ) : (
+                  <Pressable onPress={() => handleCreatePoll(catDef.id)} style={styles.emptyChannelBox}>
+                    <Text style={styles.emptyChannelText}>{(t.chat as any).noPollsYet}</Text>
+                  </Pressable>
+                )
               ) : (
                 <YStack gap={12}>
                   {catPolls.map(poll => {
@@ -857,7 +912,7 @@ export default function CommunicationScreen() {
                     );
                     return (
                       <View key={poll.id} style={styles.pollCard}>
-                        <XStack alignItems="flex-start" gap={10} marginBottom={12}>
+                        <XStack alignItems="center" gap={10} marginBottom={12}>
                           <View style={[styles.pollCategoryIcon, { backgroundColor: cfg.bg }]}>
                             <Ionicons name={pickIconForChannel(poll.title) as any} size={18} color={cfg.color} />
                           </View>
@@ -866,11 +921,15 @@ export default function CommunicationScreen() {
                           </YStack>
                           <View style={[styles.pollStatusBadge, { backgroundColor: statusBg }]}>
                             <Text style={[styles.pollStatusText, { color: statusColor }]}>
-                              {poll.status === 'closing_soon' ? 'CLOSING SOON' : (poll.status ?? 'ACTIVE').toUpperCase()}
+                              {poll.status === 'closing_soon'
+                                ? (t.chat as any).pollStatusClosingSoon
+                                : poll.status === 'closed'
+                                  ? (t.chat as any).pollStatusClosed
+                                  : (t.chat as any).pollStatusActive}
                             </Text>
                           </View>
                           <Pressable onPress={() => setPollInfoModal(poll)} hitSlop={8}>
-                            <Ionicons name="information-circle-outline" size={20} color={DARK_THEME.textTertiary} />
+                            <Ionicons name="information-circle-outline" size={20} color={'rgba(255,255,255,0.48)'} />
                           </Pressable>
                         </XStack>
                         <YStack gap={8} marginBottom={12}>
@@ -882,7 +941,9 @@ export default function CommunicationScreen() {
                               <Pressable
                                 key={opt.id}
                                 style={[styles.pollOption, isSelected && { ...styles.pollOptionSelected, borderColor: cfg.color }]}
-                                onPress={() => handleVote(poll.id, opt.id)}
+                                // Past events: existing votes stay visible but cannot be changed
+                                onPress={isPastEvent ? undefined : () => handleVote(poll.id, opt.id)}
+                                disabled={isPastEvent}
                               >
                                 <View style={[styles.pollRadio, isSelected && { borderColor: cfg.color }]}>
                                   {isSelected && <View style={[styles.pollRadioDot, { backgroundColor: cfg.color }]} />}
@@ -897,10 +958,11 @@ export default function CommunicationScreen() {
                         </YStack>
                         <XStack justifyContent="space-between" alignItems="center">
                           <Text style={styles.pollFooter}>
-                            {totalVotes} of {denominator} voted{poll.ends_at ? ` \u00b7 Ends ${new Date(poll.ends_at).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })}` : ''}
+                            {(t.chat as any).pollVotedOf.replace('{{count}}', String(totalVotes)).replace('{{total}}', String(denominator))}
+                            {poll.ends_at ? ` \u00b7 ${(t.chat as any).pollEndsSuffix.replace('{{date}}', new Date(poll.ends_at).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { day: 'numeric', month: 'short' }))}` : ''}
                           </Text>
                           {!userVoted && (
-                            <Text style={[styles.pollFooter, { color: '#5A7EB0' }]}>Tap option to vote</Text>
+                            <Text style={[styles.pollFooter, { color: '#C6A75E' }]}>{(t.chat as any).pollTapToVote}</Text>
                           )}
                         </XStack>
                       </View>
@@ -911,13 +973,16 @@ export default function CommunicationScreen() {
             </View>
           );
         })}
-        <Pressable
-          style={styles.newTopicButton}
-          onPress={() => handleCreatePoll('general')}
-        >
-          <Ionicons name="add-circle-outline" size={24} color="#5A7EB0" />
-          <Text style={styles.newTopicText}>Create New Poll</Text>
-        </Pressable>
+        {/* Bottom "Create New Poll" CTA — hidden after event ends */}
+        {!isPastEvent && (
+          <Pressable
+            style={styles.newTopicButton}
+            onPress={() => handleCreatePoll('general')}
+          >
+            <Ionicons name="add-circle-outline" size={24} color="#C6A75E" />
+            <Text style={styles.newTopicText}>{(t.chat as any).createNewPoll}</Text>
+          </Pressable>
+        )}
       </>
     );
   };
@@ -951,6 +1016,8 @@ export default function CommunicationScreen() {
 
   // Selected event display name
   const selectedEvent = bookedEvents.find(e => e.id === selectedEventId);
+  // Past events become read-only: voting locked, no new channels/topics, share-invite hidden
+  const isPastEvent = selectedEvent ? isReadOnlyEvent(selectedEvent) : false;
   const selectedEventName = selectedEvent
     ? (selectedEvent.title || (selectedEvent.honoree_name ? `${selectedEvent.honoree_name}'s Event` : 'Event'))
     : ((t as any).chatSelector?.selectEvent || 'Select Event');
@@ -965,8 +1032,8 @@ export default function CommunicationScreen() {
     return (
       <View style={styles.eventSelectorWrapper}>
         <Pressable
-          style={styles.eventSelectorCard}
-          onPress={() => !eventIdParam && bookedEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
+          style={[styles.eventSelectorCard, !eventIdParam && { borderColor: '#C6A75E', borderWidth: 1.5 }]}
+          onPress={() => !eventIdParam && selectableEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
           testID="event-selector"
         >
           {/* City thumbnail */}
@@ -990,12 +1057,12 @@ export default function CommunicationScreen() {
               </Text>
             )}
           </YStack>
-          {!eventIdParam && bookedEvents.length > 1 && (
+          {!eventIdParam && selectableEvents.length > 1 && (
             <View style={styles.eventSelectorChevron}>
               <Ionicons
                 name={eventSelectorOpen ? 'chevron-up' : 'chevron-down'}
                 size={18}
-                color={DARK_THEME.textPrimary}
+                color={'#FFFFFF'}
               />
             </View>
           )}
@@ -1004,7 +1071,7 @@ export default function CommunicationScreen() {
         {/* Dropdown — hidden when locked to single event from Event Summary */}
         {!eventIdParam && eventSelectorOpen && (
           <View style={styles.eventDropdown}>
-            {[...bookedEvents]
+            {[...selectableEvents]
               .sort((a, b) => {
                 // Selected event always first
                 if (a.id === selectedEventId) return -1;
@@ -1046,7 +1113,7 @@ export default function CommunicationScreen() {
                     </Text>
                   </YStack>
                   {isSelected && (
-                    <Ionicons name="checkmark-circle" size={20} color="#5A7EB0" />
+                    <Ionicons name="checkmark-circle" size={20} color="#C6A75E" />
                   )}
                 </Pressable>
               );
@@ -1059,23 +1126,18 @@ export default function CommunicationScreen() {
 
   const renderShareEventCard = () => (
     <Pressable style={styles.shareEventCard} onPress={handleInvite}>
-      <XStack alignItems="center" gap={10}>
-        <View style={styles.shareEventIcon}>
-          <Ionicons name="share-social-outline" size={18} color="#5A7EB0" />
-        </View>
-        <Text style={styles.shareEventTitle} numberOfLines={1} flex={1}>
-          {t.chat.shareInvite} — {t.chat.inviteFriendsToJoin}
-        </Text>
-        <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
-      </XStack>
+      <Ionicons name="share-social-outline" size={18} color="#1F2A44" />
+      <Text style={styles.shareEventTitle} numberOfLines={1}>
+        {t.chat.shareInvite} — {t.chat.inviteFriendsToJoin}
+      </Text>
     </Pressable>
   );
 
   const CHANNEL_CATEGORY_CONFIG: Record<ChannelCategory, { icon: string; color: string; bg: string }> = {
-    general:       { icon: 'chatbubbles',     color: '#8B5CF6', bg: 'rgba(139, 92, 246, 0.15)' },
-    accommodation: { icon: 'bed',             color: '#3B82F6', bg: 'rgba(59, 130, 246, 0.15)' },
-    activities:    { icon: 'game-controller', color: '#F97316', bg: 'rgba(249, 115, 22, 0.15)' },
-    budget:        { icon: 'cash',            color: '#10B981', bg: 'rgba(16, 185, 129, 0.15)' },
+    general:       { icon: 'chatbubbles',     color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+    accommodation: { icon: 'bed',             color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+    activities:    { icon: 'game-controller', color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
+    budget:        { icon: 'cash',            color: '#C6A75E', bg: 'rgba(198,167,94,0.15)' },
   };
 
   const renderChannelSection = (category: ChannelCategory, title: string) => {
@@ -1086,6 +1148,7 @@ export default function CommunicationScreen() {
       <View key={category} style={styles.channelSection}>
         <XStack justifyContent="space-between" alignItems="center" marginBottom={12}>
           <Text style={styles.sectionTitle}>{title}</Text>
+          {/* Topics tab: new-channel creation remains available even after event ends */}
           <Pressable
             onPress={() => handleAddChannel(category)}
             style={styles.newPollButton}
@@ -1134,26 +1197,29 @@ export default function CommunicationScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Background */}
-      <LinearGradient
-        colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
-        style={StyleSheet.absoluteFill}
-      />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0D1B2A' }]} />
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
-          {/* Back button (when opened from Event Summary) or Avatar */}
-          <XStack alignItems="center" gap={12}>
+        <XStack alignItems="center" paddingHorizontal={20}>
+          {/* Left: back button or avatar */}
+          <View style={{ width: 44 }}>
             {eventIdParam ? (
               <Pressable
                 onPress={() => router.back()}
                 hitSlop={8}
                 style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
               >
-                <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+                <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
               </Pressable>
             ) : (
-              <View style={styles.avatarContainer}>
+              <Pressable
+                onPress={() => router.push('/(tabs)/profile')}
+                style={styles.avatarContainer}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Go to profile"
+              >
                 {userAvatar ? (
                   <ExpoImage
                     source={{ uri: userAvatar }}
@@ -1166,73 +1232,51 @@ export default function CommunicationScreen() {
                     <Text style={styles.avatarInitial}>{userInitial}</Text>
                   </View>
                 )}
-              </View>
+              </Pressable>
             )}
-            <Text style={styles.headerTitle}>{t.chat.headerTitle}</Text>
-          </XStack>
+          </View>
 
-          {/* Notification Bell */}
-          <Pressable
-            onPress={handleNotifications}
-            style={styles.notificationButton}
-            testID="notifications-button"
-          >
-            <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
-            {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
-          </Pressable>
+          {/* Center: title */}
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={styles.headerTitle}>{t.chat.headerTitle}</Text>
+          </View>
+
+          {/* Right: spacer to keep title centred */}
+          <View style={{ width: 44 }} />
         </XStack>
 
         {/* Tabs */}
         {renderTabs()}
       </View>
 
-      {/* Event Selector */}
-      {renderEventSelector()}
-
       {/* Content — swipe left/right to switch tabs */}
       <Animated.View style={[{ flex: 1 }, swipeAnimStyle]} {...swipeHandlers}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 180 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          bookedEvents.length === 0 && styles.marketingEmptyScrollContent,
+          { paddingBottom: insets.bottom + 180 },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
-            tintColor={DARK_THEME.primary}
-            colors={[DARK_THEME.primary]}
+            tintColor={'#C6A75E'}
+            colors={['#C6A75E']}
           />
         }
         showsVerticalScrollIndicator={false}
       >
-        {/* Share Event Card */}
-        {renderShareEventCard()}
+        {/* Event Selector — scrolls with content */}
+        {renderEventSelector()}
+        {/* Share Event Card — organizers only, hidden once event has ended */}
+        {selectedEvent?.created_by === user?.id && !isPastEvent && renderShareEventCard()}
 
         {selectedTab === 'topics' ? (
           /* Topics tab */
           bookedEvents.length === 0 ? (
-            /* No event booked - show grayed out channels with overlay message */
-            <>
-            <View style={styles.lockedBanner}>
-              <Ionicons name="lock-closed-outline" size={18} color={DARK_THEME.textSecondary} />
-              <Text style={styles.lockedBannerText}>
-                {t.chat.bookToUnlock}
-              </Text>
-            </View>
-            <View style={{ opacity: 0.35, pointerEvents: 'none' as const }}>
-              {renderChannelSection('general', t.chat.general.toUpperCase())}
-              {renderChannelSection('accommodation', t.chat.accommodation.toUpperCase())}
-              {renderChannelSection('activities', t.chat.activities.toUpperCase())}
-              {renderChannelSection('budget', t.chat.budgetCategory.toUpperCase())}
-
-              <View style={styles.channelSection}>
-                <Text style={styles.sectionTitle}>{t.chat.newTopics}</Text>
-                <Pressable style={styles.newTopicButton} onPress={handleCreateNewTopic}>
-                  <Ionicons name="add-circle-outline" size={24} color="#5A7EB0" />
-                  <Text style={styles.newTopicText}>{t.chat.createNewTopic}</Text>
-                </Pressable>
-              </View>
-            </View>
-            </>
+            renderChatEmptyState()
           ) : (
             /* Event booked - show active channels */
             <>
@@ -1241,10 +1285,11 @@ export default function CommunicationScreen() {
               {renderChannelSection('activities', t.chat.activities.toUpperCase())}
               {renderChannelSection('budget', t.chat.budgetCategory.toUpperCase())}
 
+              {/* New-topic button remains available in Topics tab even after event ends */}
               <View style={styles.channelSection}>
                 <Text style={styles.sectionTitle}>{t.chat.newTopics}</Text>
                 <Pressable style={styles.newTopicButton} onPress={handleCreateNewTopic}>
-                  <Ionicons name="add-circle-outline" size={24} color="#5A7EB0" />
+                  <Ionicons name="add-circle-outline" size={24} color="#C6A75E" />
                   <Text style={styles.newTopicText}>{t.chat.createNewTopic}</Text>
                 </Pressable>
               </View>
@@ -1257,6 +1302,16 @@ export default function CommunicationScreen() {
       </ScrollView>
       </Animated.View>
 
+      {/* Past-event footer banner — Voting tab only, pinned above the bottom tab bar AND the central FAB */}
+      {isPastEvent && selectedTab === 'voting' && (
+        <PastEventBanner
+          floating
+          bottomInset={120}
+          testID="chat-voting-closed-banner"
+          message={(t.chat as any).votingClosed || 'Voting is closed — the event has already taken place.'}
+        />
+      )}
+
       {/* Poll Creation Popup — inline, no Modal (matches destination.tsx drag pattern) */}
       {pollModalVisible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
@@ -1267,22 +1322,22 @@ export default function CommunicationScreen() {
                 <View style={styles.modalHandle} />
               </View>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
-                <Text style={styles.modalTitle}>New Poll</Text>
+                <Text style={styles.modalTitle}>{(t.chat as any).newPoll}</Text>
                 <Pressable onPress={() => setPollModalVisible(false)} hitSlop={10}>
-                  <Ionicons name="close" size={22} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="close" size={22} color={'rgba(255,255,255,0.48)'} />
                 </Pressable>
               </XStack>
               <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-                <Text style={styles.modalLabel}>Question</Text>
+                <Text style={styles.modalLabel}>{(t.chat as any).pollQuestion}</Text>
                 <TextInput
                   style={styles.modalInput}
                   value={pollQuestion}
                   onChangeText={setPollQuestion}
-                  placeholder="What should we decide?"
-                  placeholderTextColor={DARK_THEME.textTertiary}
+                  placeholder={(t.chat as any).pollQuestionPlaceholder}
+                  placeholderTextColor={'rgba(255,255,255,0.48)'}
                   multiline={false}
                 />
-                <Text style={styles.modalLabel}>Options</Text>
+                <Text style={styles.modalLabel}>{(t.chat as any).pollOptions}</Text>
                 {pollOptions.map((opt, i) => (
                   <TextInput
                     key={i}
@@ -1294,8 +1349,8 @@ export default function CommunicationScreen() {
                       updated[i] = val;
                       setPollOptions(updated);
                     }}
-                    placeholder={`Option ${i + 1}`}
-                    placeholderTextColor={DARK_THEME.textTertiary}
+                    placeholder={(t.chat as any).pollOptionPlaceholder.replace('{{n}}', String(i + 1))}
+                    placeholderTextColor={'rgba(255,255,255,0.48)'}
                   />
                 ))}
               </ScrollView>
@@ -1309,17 +1364,17 @@ export default function CommunicationScreen() {
                   }}
                   style={[styles.addOptionButton, { marginTop: 8, marginBottom: 0 }]}
                 >
-                  <Ionicons name="add-circle-outline" size={18} color="#5A7EB0" />
-                  <Text style={styles.addOptionText}>Add Option</Text>
+                  <Ionicons name="add-circle-outline" size={18} color="#C6A75E" />
+                  <Text style={styles.addOptionText}>{(t.chat as any).pollAddOption}</Text>
                 </Pressable>
               )}
               {/* Cancel / Create Poll — fixed outside ScrollView so always visible above keyboard */}
               <View style={{ flexDirection: 'row', gap: 10, paddingTop: 12, paddingBottom: 4 }}>
                 <Pressable style={[styles.modalButton, styles.modalButtonCancel]} onPress={() => setPollModalVisible(false)}>
-                  <Text style={styles.modalButtonCancelText}>Cancel</Text>
+                  <Text style={styles.modalButtonCancelText}>{t.common.cancel}</Text>
                 </Pressable>
-                <Pressable style={[styles.modalButton, styles.modalButtonCreate]} onPress={handleSubmitPoll}>
-                  <Text style={styles.modalButtonCreateText}>Create Poll</Text>
+                <Pressable style={[styles.modalButton, styles.modalButtonCreate, (!pollQuestion.trim() || pollOptions.filter(o => o.trim()).length < 2) && styles.modalButtonCreateDisabled]} onPress={handleSubmitPoll}>
+                  <Text style={styles.modalButtonCreateText}>{(t.chat as any).pollCreatePoll}</Text>
                 </Pressable>
               </View>
             </Animated.View>
@@ -1337,9 +1392,9 @@ export default function CommunicationScreen() {
                 <View style={styles.modalHandle} />
               </View>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
-                <Text style={styles.modalTitle}>Poll Info</Text>
+                <Text style={styles.modalTitle}>{(t.chat as any).pollInfoTitle}</Text>
                 <Pressable onPress={() => setPollInfoModal(null)} hitSlop={8}>
-                  <Ionicons name="close" size={22} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="close" size={22} color={'rgba(255,255,255,0.48)'} />
                 </Pressable>
               </XStack>
               <ScrollView ref={pollInfoScrollRef} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -1362,8 +1417,8 @@ export default function CommunicationScreen() {
                       <Ionicons name="person-outline" size={18} color={catCfg.color} />
                       <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
                         {pollInfoModal.created_by === user?.id
-                          ? (user?.user_metadata?.full_name ?? 'You')
-                          : 'Another member'}
+                          ? (user?.user_metadata?.full_name ?? (t.chat as any).pollYou)
+                          : (t.chat as any).pollAnotherMember}
                       </Text>
                     </XStack>
                     {/* 4. Date */}
@@ -1379,21 +1434,33 @@ export default function CommunicationScreen() {
                     <XStack gap={10} alignItems="center" marginBottom={20}>
                       <Ionicons name="stats-chart-outline" size={18} color={catCfg.color} />
                       <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
-                        {pollInfoModal.total_votes} vote{pollInfoModal.total_votes !== 1 ? 's' : ''} · {(pollInfoModal.status ?? 'active').toUpperCase()}
+                        {(pollInfoModal.total_votes === 1
+                          ? (t.chat as any).pollVoteCountOne
+                          : (t.chat as any).pollVoteCountMany.replace('{{count}}', String(pollInfoModal.total_votes)))}
+                        {' · '}
+                        {pollInfoModal.status === 'closing_soon'
+                          ? (t.chat as any).pollStatusClosingSoon
+                          : pollInfoModal.status === 'closed'
+                            ? (t.chat as any).pollStatusClosed
+                            : (t.chat as any).pollStatusActive}
                       </Text>
                     </XStack>
                     {/* Existing options with delete (owner only) */}
                     {pollInfoModal.options && pollInfoModal.options.length > 0 && (
                       <View style={{ marginBottom: 16 }}>
-                        <Text style={[styles.modalLabel, { marginTop: 0 }]}>Options</Text>
+                        <Text style={[styles.modalLabel, { marginTop: 0 }]}>{(t.chat as any).pollOptions}</Text>
                         {pollInfoModal.options.map(opt => (
                           <View
                             key={opt.id}
                             style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}
                           >
-                            <View style={{ flex: 1, backgroundColor: DARK_THEME.surfaceCard, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
-                              <Text style={{ color: DARK_THEME.textPrimary, fontSize: 14 }}>{opt.label}</Text>
-                              <Text style={{ color: DARK_THEME.textTertiary, fontSize: 11, marginTop: 2 }}>{opt.vote_count ?? 0} vote{(opt.vote_count ?? 0) !== 1 ? 's' : ''}</Text>
+                            <View style={{ flex: 1, backgroundColor: '#1A2F47', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' }}>
+                              <Text style={{ color: '#FFFFFF', fontSize: 14 }}>{opt.label}</Text>
+                              <Text style={{ color: 'rgba(255,255,255,0.48)', fontSize: 11, marginTop: 2 }}>
+                                {(opt.vote_count ?? 0) === 1
+                                  ? (t.chat as any).pollVoteCountOne
+                                  : (t.chat as any).pollVoteCountMany.replace('{{count}}', String(opt.vote_count ?? 0))}
+                              </Text>
                             </View>
                             {pollInfoModal.created_by === user?.id && (
                               <Pressable
@@ -1417,17 +1484,17 @@ export default function CommunicationScreen() {
               {/* Add Option row — outside ScrollView so it stays visible when keyboard opens */}
               {pollInfoModal?.created_by === user?.id && (
                 <>
-                  <Text style={[styles.modalLabel, { marginTop: 12, marginBottom: 6 }]}>Add Option</Text>
+                  <Text style={[styles.modalLabel, { marginTop: 12, marginBottom: 6 }]}>{(t.chat as any).pollAddOption}</Text>
                   <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8, alignItems: 'center' }}>
                     <TextInput
                       style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                      placeholder="New option…"
-                      placeholderTextColor={DARK_THEME.textTertiary}
+                      placeholder={(t.chat as any).pollNewOptionPlaceholder}
+                      placeholderTextColor={'rgba(255,255,255,0.48)'}
                       value={newOptionText}
                       onChangeText={setNewOptionText}
                     />
                     <Pressable
-                      style={{ backgroundColor: '#5A7EB0', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 }}
+                      style={{ backgroundColor: '#C6A75E', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 11 }}
                       onPress={async () => {
                         const label = newOptionText.trim();
                         if (!label || !pollInfoModal) return;
@@ -1448,7 +1515,7 @@ export default function CommunicationScreen() {
                   onPress={() => handleDeletePoll(pollInfoModal)}
                 >
                   <Ionicons name="trash-outline" size={16} color="#EF4444" />
-                  <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14, marginLeft: 6 }}>Delete Poll</Text>
+                  <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 14, marginLeft: 6 }}>{(t.chat as any).deletePollTitle}</Text>
                 </Pressable>
               )}
             </Animated.View>
@@ -1468,7 +1535,7 @@ export default function CommunicationScreen() {
               <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
                 <Text style={styles.modalTitle}>{(t.chat as any).newChatLabel}</Text>
                 <Pressable onPress={() => setChannelInputModal({ visible: false, category: null })} hitSlop={8}>
-                  <Ionicons name="close" size={22} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="close" size={22} color={'rgba(255,255,255,0.48)'} />
                 </Pressable>
               </XStack>
               <TextInput
@@ -1477,7 +1544,7 @@ export default function CommunicationScreen() {
                 onChangeText={setChannelInputValue}
                 autoCapitalize="sentences"
                 placeholder={(getTranslation().chat as any).newChannelMessage}
-                placeholderTextColor={DARK_THEME.textTertiary}
+                placeholderTextColor={'rgba(255,255,255,0.48)'}
                 returnKeyType="done"
                 onSubmitEditing={handleChannelCreate}
                 style={styles.modalInput}
@@ -1489,7 +1556,7 @@ export default function CommunicationScreen() {
                 >
                   <Text style={styles.modalButtonCancelText}>{getTranslation().common.cancel}</Text>
                 </Pressable>
-                <Pressable style={[styles.modalButton, styles.modalButtonCreate]} onPress={handleChannelCreate}>
+                <Pressable style={[styles.modalButton, styles.modalButtonCreate, !channelInputValue.trim() && styles.modalButtonCreateDisabled]} onPress={handleChannelCreate}>
                   <Text style={styles.modalButtonCreateText}>{getTranslation().chat.create}</Text>
                 </Pressable>
               </View>
@@ -1497,6 +1564,12 @@ export default function CommunicationScreen() {
           </KeyboardAvoidingView>
         </View>
       )}
+
+      <ShareModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        eventId={selectedEventId}
+      />
     </View>
   );
 }
@@ -1504,12 +1577,12 @@ export default function CommunicationScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
   },
   header: {
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
+    borderBottomColor: 'rgba(230,220,200,0.15)',
   },
   avatarContainer: {
     position: 'relative',
@@ -1520,14 +1593,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   avatarPlaceholder: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   onlineIndicator: {
     position: 'absolute',
@@ -1538,18 +1611,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#10B981',
     borderWidth: 2,
-    borderColor: DARK_THEME.background,
+    borderColor: '#0D1B2A',
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    fontFamily: 'Inter_500Medium',
   },
   notificationButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1562,7 +1636,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#F97316',
     borderWidth: 2,
-    borderColor: DARK_THEME.surfaceCard,
+    borderColor: '#1A2F47',
   },
   notificationDot: {
     position: 'absolute',
@@ -1579,53 +1653,91 @@ const styles = StyleSheet.create({
   },
   filterPill: {
     flexDirection: 'row',
-    backgroundColor: DARK_THEME.surfaceCard,
-    borderRadius: 25,
+    backgroundColor: '#1A2F47',
+    borderRadius: 999,
     padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   filterTab: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    alignItems: 'center',
-  },
-  filterTabActive: {
-    backgroundColor: '#5A7EB0',
-  },
-  filterTabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: DARK_THEME.textSecondary,
-  },
-  filterTabTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '600',
-  },
-  scrollContent: {
-    padding: 20,
-  },
-  shareEventCard: {
-    backgroundColor: 'rgba(45, 55, 72, 0.5)',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  shareEventIcon: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    height: 40,
+    borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  shareEventTitle: {
-    fontSize: 14,
+  filterTabActive: {
+    backgroundColor: '#22385A',
+  },
+  filterTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.55)',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  filterTabTextActive: {
+    color: '#C6A75E',
+    fontWeight: '700',
+    fontFamily: 'Inter_600SemiBold',
+  },
+  scrollContent: {
+    padding: 16,
+  },
+  marketingEmptyScrollContent: {
+    flexGrow: 1,
+  },
+  marketingEmptyState: {
+    flex: 1,
+    minHeight: 430,
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  emptyChannelPreview: {
+    overflow: 'hidden',
+    borderRadius: 12,
+    backgroundColor: '#12253A',
+  },
+  emptyChannelPreviewRow: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(230,220,200,0.15)',
+  },
+  emptyChannelPreviewIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(198,167,94,0.14)',
+  },
+  emptyChannelPreviewText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+  },
+  shareEventCard: {
+    backgroundColor: '#C6A75E',
+    borderRadius: 999,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  shareEventIcon: {
+    // unused — icon rendered inline now
+  },
+  shareEventTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F2A44',
   },
   channelSection: {
     marginBottom: 20,
@@ -1633,7 +1745,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
     letterSpacing: 0.8,
     marginBottom: 10,
   },
@@ -1641,97 +1753,73 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    backgroundColor: 'rgba(198,167,94,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyChannelBox: {
-    backgroundColor: 'rgba(45, 55, 72, 0.3)',
+    backgroundColor: 'rgba(26,47,71,0.4)',
     borderRadius: 10,
     paddingVertical: 24,
     paddingHorizontal: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(230,220,200,0.12)',
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
   },
   emptyChannelText: {
     fontSize: 13,
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
   },
   channelItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 10,
     paddingVertical: 12,
     paddingHorizontal: 14,
     gap: 10,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   channelName: {
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     flex: 1,
   },
   newTopicButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 12,
     padding: 16,
     gap: 8,
-    borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderWidth: 1.5,
+    borderColor: '#C6A75E',
   },
   newTopicText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#5A7EB0',
-  },
-  lockedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(45, 55, 72, 0.5)',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  lockedBannerText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: DARK_THEME.textSecondary,
-  },
-  emptyIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(45, 55, 72, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+    color: '#C6A75E',
   },
   // Event Selector — Prominent blue card with city image
   eventSelectorWrapper: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    marginBottom: 20,
     zIndex: 10,
   },
   eventSelectorCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#5A7EB0',
+    backgroundColor: '#22385A',
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
     padding: 14,
   },
   eventSelectorImage: {
@@ -1766,10 +1854,10 @@ const styles = StyleSheet.create({
   },
   eventDropdown: {
     marginTop: 6,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
     overflow: 'hidden',
   },
   eventDropdownItem: {
@@ -1779,10 +1867,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
+    borderBottomColor: 'rgba(230,220,200,0.15)',
   },
   eventDropdownItemActive: {
-    backgroundColor: 'rgba(90, 126, 176, 0.12)',
+    backgroundColor: 'rgba(198,167,94,0.12)',
   },
   eventDropdownImage: {
     width: 36,
@@ -1792,15 +1880,15 @@ const styles = StyleSheet.create({
   eventDropdownText: {
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   eventDropdownTextActive: {
-    color: '#5A7EB0',
+    color: '#C6A75E',
     fontWeight: '700',
   },
   eventDropdownDate: {
     fontSize: 11,
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
   },
   channelIconWrap: {
     width: 32,
@@ -1817,14 +1905,14 @@ const styles = StyleSheet.create({
   newPollButtonText: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#5A7EB0',
+    color: '#C6A75E',
   },
   pollCard: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   pollCategoryIcon: {
     width: 40,
@@ -1836,7 +1924,7 @@ const styles = StyleSheet.create({
   pollTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   pollStatusBadge: {
     borderRadius: 6,
@@ -1860,40 +1948,40 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.06)',
   },
   pollOptionSelected: {
-    backgroundColor: 'rgba(90, 126, 176, 0.15)',
-    borderColor: '#5A7EB0',
+    backgroundColor: 'rgba(198,167,94,0.15)',
+    borderColor: '#C6A75E',
   },
   pollRadio: {
     width: 18,
     height: 18,
     borderRadius: 9,
     borderWidth: 2,
-    borderColor: DARK_THEME.textTertiary,
+    borderColor: 'rgba(255,255,255,0.48)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   pollRadioSelected: {
-    borderColor: '#5A7EB0',
+    borderColor: '#C6A75E',
   },
   pollRadioDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#5A7EB0',
+    backgroundColor: '#C6A75E',
   },
   pollOptionText: {
     fontSize: 13,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   pollPct: {
     fontSize: 13,
     fontWeight: '700',
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
   },
   pollFooter: {
     fontSize: 11,
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
   },
   popupOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1902,14 +1990,14 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   modalSheet: {
-    backgroundColor: '#1E2329',
+    backgroundColor: '#1A2F47',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
     paddingTop: 0,
     paddingBottom: 16,
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(230,220,200,0.15)',
     maxHeight: '82%',
   },
   modalHandleArea: {
@@ -1928,26 +2016,26 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   modalLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
     marginBottom: 8,
     marginTop: 12,
   },
   modalInput: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 14,
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
     marginBottom: 8,
   },
   addOptionButton: {
@@ -1958,7 +2046,7 @@ const styles = StyleSheet.create({
   },
   addOptionText: {
     fontSize: 14,
-    color: '#5A7EB0',
+    color: '#C6A75E',
     fontWeight: '500',
   },
   modalButton: {
@@ -1968,17 +2056,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalButtonCancel: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   modalButtonCreate: {
-    backgroundColor: '#5A7EB0',
+    backgroundColor: '#C6A75E',
+  },
+  modalButtonCreateDisabled: {
+    opacity: 0.45,
   },
   modalButtonCancelText: {
     fontSize: 14,
     fontWeight: '600',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   modalButtonCreateText: {
     fontSize: 14,

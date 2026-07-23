@@ -6,9 +6,8 @@
 import React from 'react';
 import { Pressable, StyleSheet } from 'react-native';
 import { XStack, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { DARK_THEME } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
 
 interface ShareEventBannerProps {
@@ -31,12 +30,12 @@ export function ShareEventBanner({ eventId }: ShareEventBannerProps) {
     >
       <XStack alignItems="center" gap={10}>
         <XStack style={styles.iconCircle} alignItems="center" justifyContent="center">
-          <Ionicons name="share-social-outline" size={18} color="#5A7EB0" />
+          <Ionicons name="share-social-outline" size={18} color="#C6A75E" />
         </XStack>
         <Text style={styles.title} numberOfLines={1} flex={1}>
           {(t.chat as any).shareInvite || 'Share Invite'} — {(t.chat as any).inviteFriendsToJoin || 'Invite Friends to Join'}
         </Text>
-        <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+        <Ionicons name="chevron-forward" size={18} color={'rgba(255,255,255,0.48)'} />
       </XStack>
     </Pressable>
   );
@@ -55,13 +54,13 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    backgroundColor: 'rgba(198, 167, 94, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   title: {
     fontSize: 14,
     fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
 });

@@ -4,11 +4,12 @@
  * Matches the dark theme design from UI specifications
  */
 
-import React, { useCallback, useMemo } from 'react';
-import { RefreshControl, Pressable, StyleSheet, SectionList, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Alert, RefreshControl, Pressable, StyleSheet, SectionList, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   useNotifications,
@@ -20,28 +21,109 @@ import {
 import { NotificationItem } from '@/components/notifications';
 import { useTranslation } from '@/i18n';
 import { useUrgentPayment } from '@/hooks/useUrgentPayment';
+import { useTheme } from '@/hooks/useTheme';
+import { type EditorialTheme } from '@/constants/designSystem';
+import { useParticipants, participantKeys } from '@/hooks/queries/useParticipants';
+import { useUser } from '@/stores/authStore';
+import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/types';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
-// Dark theme colors
-const DARK_THEME = {
-  backgroundDark: '#2D3748',
-  surfaceDark: 'rgba(45, 55, 72, 0.95)',
-  primary: '#4A6FA5',
-  border: 'rgba(255, 255, 255, 0.05)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#D1D5DB',
-  textTertiary: '#9CA3AF',
-};
-
 export default function NotificationsScreen() {
   const router = useRouter();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const user = useUser();
+  const queryClient = useQueryClient();
+  const [guestPayConfirming, setGuestPayConfirming] = useState(false);
 
   // All hooks at the top — no conditional calls
-  const { urgentEvents } = useUrgentPayment();
+  const {
+    urgentEvents,
+    guestUrgentEvent,
+    guestClaimedRecentEvent,
+    guestPaidRecentEvent,
+    isGuestContribution,
+  } = useUrgentPayment();
+
+  // isOrganizer: true only if user created the guest-relevant event.
+  // Check guestUrgentEvent first; fall back to guestPaidRecentEvent (shown after payment).
+  // Never default to true — that would hide the "Contribution Confirmed" card.
+  const relevantGuestEvent = guestUrgentEvent ?? guestClaimedRecentEvent ?? guestPaidRecentEvent;
+  const isOrganizer = relevantGuestEvent ? relevantGuestEvent.created_by === user?.id : false;
+
+  // Load participants for the relevant guest event (to show organizer name)
+  const { data: guestEventParticipants } = useParticipants(relevantGuestEvent?.id);
+  const organizerName = guestEventParticipants?.find(p => p.role === 'organizer')?.profile?.full_name ?? (t.notifications as any).organizerFallback;
+
+  const handleGuestMarkAsPaid = () => {
+    Alert.alert(
+      t.notifications.confirmPayment,
+      t.notifications.confirmPaymentMsg.replace('{{name}}', organizerName),
+      [
+        { text: t.notifications.notYet, style: 'cancel' },
+        {
+          text: t.notifications.yesPaid,
+          onPress: async () => {
+            if (!guestUrgentEvent?.id || !user?.id) return;
+            setGuestPayConfirming(true);
+            try {
+              const eventId = guestUrgentEvent.id;
+              const claimedAt = new Date().toISOString();
+              const { error: claimError } = await supabase.rpc('mark_payment_claimed', {
+                p_event_id: eventId,
+              });
+              if (claimError) throw claimError;
+
+              queryClient.setQueryData(
+                participantKeys.byEvent(eventId),
+                (current: any[] | undefined) => current?.map(participant =>
+                  participant.user_id === user.id
+                    ? { ...participant, payment_claimed_at: claimedAt }
+                    : participant
+                )
+              );
+              queryClient.setQueryData(
+                ['guestParticipations', user.id],
+                (current: any[] | undefined) => current?.map(participation =>
+                  participation.event_id === eventId
+                    ? { ...participation, payment_claimed_at: claimedAt }
+                    : participation
+                )
+              );
+              await queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(eventId) });
+              await queryClient.invalidateQueries({ queryKey: ['guestParticipations', user.id] });
+
+              const eventName = guestUrgentEvent.title
+                || (guestUrgentEvent.honoree_name
+                  ? t.notifications.honoreeEventFallback.replace('{{name}}', guestUrgentEvent.honoree_name)
+                  : t.notifications.yourEventFallback);
+              const guestName = user.user_metadata?.full_name || user.email || 'Guest';
+              const { error: notificationError } = await supabase.from('notifications').insert({
+                event_id: guestUrgentEvent.id,
+                title: t.notifications.paymentClaimedTitle,
+                body: t.notifications.paymentClaimedBody
+                  .replace('{{guest}}', guestName)
+                  .replace('{{event}}', eventName),
+                type: 'payment_claimed',
+                user_id: guestUrgentEvent.created_by,
+              });
+              if (notificationError) {
+                console.warn('[notifications] payment claim notification failed:', notificationError.message);
+              }
+            } catch (e: any) {
+              Alert.alert(t.common.error, e.message || t.notifications.errorConfirmPayment);
+            } finally {
+              setGuestPayConfirming(false);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   // Fetch notifications
   const {
@@ -88,6 +170,7 @@ export default function NotificationsScreen() {
     if (earlierNotifs.length > 0) sections.push({ title: t.notifications.earlier, data: earlierNotifs });
 
     return sections;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
   }, [data]);
 
   const handleNotificationPress = useCallback((notification: Notification) => {
@@ -111,7 +194,7 @@ export default function NotificationsScreen() {
       <Text
         fontSize={12}
         fontWeight="700"
-        color={DARK_THEME.textTertiary}
+        color={theme.textTertiary}
         textTransform="uppercase"
         letterSpacing={1}
       >
@@ -130,38 +213,43 @@ export default function NotificationsScreen() {
 
   if (isLoading) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={DARK_THEME.backgroundDark}>
-        <Spinner size="large" color={DARK_THEME.primary} />
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={theme.background}>
+        <Spinner size="large" color={theme.accentGold} />
       </YStack>
     );
   }
 
   const hasNotifications = groupedNotifications.length > 0;
-  const hasAnyContent = hasNotifications || urgentEvents.length > 0;
+  const organizerUrgentEvents = urgentEvents.filter(info => info.event.created_by === user?.id);
+  const hasAnyContent = hasNotifications
+    || organizerUrgentEvents.length > 0
+    || isGuestContribution
+    || !!guestClaimedRecentEvent
+    || !!guestPaidRecentEvent;
 
   return (
-    <YStack flex={1} backgroundColor={DARK_THEME.backgroundDark} testID="notifications-screen">
+    <YStack flex={1} backgroundColor={theme.background} testID="notifications-screen">
       {/* Header */}
       <XStack
         paddingTop={insets.top + 16}
         paddingHorizontal="$4"
         paddingBottom="$2"
         alignItems="center"
-        backgroundColor={DARK_THEME.surfaceDark}
+        backgroundColor={theme.surfaceLow}
       >
         <Pressable
           style={styles.backButton}
           onPress={() => router.back()}
           testID="back-button"
         >
-          <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text
           flex={1}
           textAlign="center"
           fontSize={18}
           fontWeight="700"
-          color={DARK_THEME.textPrimary}
+          color={theme.textPrimary}
           letterSpacing={-0.3}
         >
           {t.notifications.title}
@@ -174,7 +262,7 @@ export default function NotificationsScreen() {
           <Ionicons
             name="checkmark-done"
             size={24}
-            color={unreadCount && unreadCount > 0 ? DARK_THEME.textPrimary : DARK_THEME.textTertiary}
+            color={unreadCount && unreadCount > 0 ? theme.textPrimary : theme.textTertiary}
           />
         </Pressable>
       </XStack>
@@ -188,22 +276,112 @@ export default function NotificationsScreen() {
           stickySectionHeadersEnabled={false}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
-            urgentEvents.length > 0 ? (
+            (organizerUrgentEvents.length > 0
+              || (isGuestContribution && !isOrganizer)
+              || ((!!guestClaimedRecentEvent || !!guestPaidRecentEvent) && !isOrganizer)) ? (
               <>
                 {/* TODAY label above all urgency rows */}
                 <YStack paddingHorizontal="$4" paddingTop="$3" paddingBottom="$1" marginLeft="$1">
                   <Text
                     fontSize={12}
                     fontWeight="700"
-                    color={DARK_THEME.textTertiary}
+                    color={theme.textTertiary}
                     style={{ textTransform: 'uppercase', letterSpacing: 1 }}
                   >
                     {t.notifications.today}
                   </Text>
                 </YStack>
 
-                {/* One row per urgent event, sorted soonest first */}
-                {urgentEvents.map((info) => (
+                {/* Guest: organizer-confirmed payment */}
+                {!isGuestContribution && !guestClaimedRecentEvent && !isOrganizer && guestPaidRecentEvent && (
+                  <View style={[styles.guestPayCard, { borderColor: 'rgba(52, 211, 153, 0.25)', backgroundColor: 'rgba(52, 211, 153, 0.07)' }]}>
+                    <XStack alignItems="center" gap={12}>
+                      <View style={[styles.urgencyIconCircle, { backgroundColor: 'rgba(52, 211, 153, 0.18)' }]}>
+                        <Ionicons name="checkmark-circle" size={18} color="#34D399" />
+                      </View>
+                      <YStack flex={1}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#34D399' }}>
+                          {(t.notifications as any).contributionConfirmed}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: theme.textSecondary }} numberOfLines={1}>
+                          {guestPaidRecentEvent?.title || (guestPaidRecentEvent?.honoree_name ? (t.notifications as any).honoreeEventFallback.replace('{{name}}', guestPaidRecentEvent.honoree_name) : (t.notifications as any).yourEventFallback)}
+                        </Text>
+                      </YStack>
+                      <Ionicons name="checkmark-circle" size={20} color="#34D399" />
+                    </XStack>
+                    <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 20, marginTop: 10 }}>
+                      {(t.notifications as any).contributionConfirmedMsg}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Guest: payment claimed, awaiting organizer confirmation */}
+                {guestClaimedRecentEvent && !isOrganizer && (
+                  <View style={[styles.guestPayCard, { borderColor: 'rgba(217, 119, 6, 0.35)', backgroundColor: 'rgba(217, 119, 6, 0.09)' }]}>
+                    <XStack alignItems="center" gap={12}>
+                      <View style={[styles.urgencyIconCircle, { backgroundColor: 'rgba(217, 119, 6, 0.18)' }]}>
+                        <Ionicons name="time-outline" size={18} color="#D97706" />
+                      </View>
+                      <YStack flex={1}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#D97706' }}>
+                          {t.notifications.contributionClaimed}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: theme.textSecondary }} numberOfLines={1}>
+                          {guestClaimedRecentEvent.title
+                            || (guestClaimedRecentEvent.honoree_name
+                              ? t.notifications.honoreeEventFallback.replace('{{name}}', guestClaimedRecentEvent.honoree_name)
+                              : t.notifications.yourEventFallback)}
+                        </Text>
+                      </YStack>
+                      <Ionicons name="time" size={20} color="#D97706" />
+                    </XStack>
+                    <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 20, marginTop: 10 }}>
+                      {t.notifications.contributionClaimedMsg}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Guest: contribution due + "I've Paid" button */}
+                {isGuestContribution && !isOrganizer && guestUrgentEvent && (
+                  <View style={styles.guestPayCard}>
+                    <XStack alignItems="center" gap={12} marginBottom={10}>
+                      <View style={[styles.urgencyIconCircle, { backgroundColor: 'rgba(249, 115, 22, 0.18)' }]}>
+                        <Ionicons name="wallet-outline" size={18} color="#F97316" />
+                      </View>
+                      <YStack flex={1}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#F97316' }}>
+                          {(t.notifications as any).contributionDue}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: theme.textSecondary }} numberOfLines={1}>
+                          {guestUrgentEvent.title || (t.notifications as any).honoreeEventFallback.replace('{{name}}', guestUrgentEvent.honoree_name || '')}
+                        </Text>
+                      </YStack>
+                      <View style={styles.urgencyBadge}>
+                        <Text style={styles.urgencyBadgeText}>{(t.notifications as any).urgentBadge}</Text>
+                      </View>
+                    </XStack>
+                    <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 20, marginBottom: 12 }}>
+                      {((t.notifications as any).guestPleaseTransfer as string)
+                        .split('{{name}}')
+                        .flatMap((part, i, arr) => i < arr.length - 1
+                          ? [part, <Text key={i} style={{ color: theme.textPrimary, fontWeight: '600' }}>{organizerName}</Text>]
+                          : [part])}
+                    </Text>
+                    <Pressable
+                      style={[styles.guestPayButton, guestPayConfirming && { opacity: 0.6 }]}
+                      onPress={handleGuestMarkAsPaid}
+                      disabled={guestPayConfirming}
+                    >
+                      <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>
+                        {guestPayConfirming ? t.notifications.confirming : t.notifications.ivePaidConfirm}
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+
+                {/* One row per urgent event (organizer-owned only), sorted soonest first */}
+                {organizerUrgentEvents.map((info) => (
                   <React.Fragment key={info.event.id}>
                     <Pressable
                       style={[styles.urgencyRow, info.isPaid && styles.urgencyRowPaid]}
@@ -220,41 +398,35 @@ export default function NotificationsScreen() {
 
                       {/* Text — unpaid: status on top; paid: event name on top */}
                       <YStack flex={1} gap={2}>
-                        {info.isPaid ? (
-                          // Paid: event name prominent on top, status label below
-                          <>
-                            <Text fontSize={14} fontWeight="700" color={DARK_THEME.textPrimary} numberOfLines={1}>
-                              {info.event.title || `${info.event.honoree_name}'s Party`}
-                              {` · ${
-                                info.daysLeft === 0
-                                  ? 'today'
-                                  : info.daysLeft === 1
-                                  ? '1 day left'
-                                  : `${info.daysLeft} days left`
-                              }`}
-                            </Text>
-                            <Text fontSize={12} color={DARK_THEME.textSecondary}>
-                              Payment Complete
-                            </Text>
-                          </>
-                        ) : (
-                          // Unpaid: status label prominent on top, event name below
-                          <>
-                            <Text fontSize={14} fontWeight="700" color="#F97316">
-                              Payment Outstanding
-                            </Text>
-                            <Text fontSize={12} color={DARK_THEME.textSecondary} numberOfLines={1}>
-                              {info.event.title || `${info.event.honoree_name}'s Party`}
-                              {` · ${
-                                info.daysLeft === 0
-                                  ? 'today'
-                                  : info.daysLeft === 1
-                                  ? '1 day left'
-                                  : `${info.daysLeft} days left`
-                              }`}
-                            </Text>
-                          </>
-                        )}
+                        {(() => {
+                          const eventName = info.event.title || (t.notifications as any).honoreePartyFallback.replace('{{name}}', info.event.honoree_name || '');
+                          const daysStr = info.daysLeft === 0
+                            ? (t.notifications as any).todayShort
+                            : info.daysLeft === 1
+                              ? (t.notifications as any).dayLeftShort
+                              : (t.notifications as any).daysLeftShort.replace('{{count}}', String(info.daysLeft));
+                          return info.isPaid ? (
+                            // Paid: event name prominent on top, status label below
+                            <>
+                              <Text fontSize={14} fontWeight="700" color={theme.textPrimary} numberOfLines={1}>
+                                {eventName}{` · ${daysStr}`}
+                              </Text>
+                              <Text fontSize={12} color={theme.textSecondary}>
+                                {(t.notifications as any).paymentComplete}
+                              </Text>
+                            </>
+                          ) : (
+                            // Unpaid: status label prominent on top, event name below
+                            <>
+                              <Text fontSize={14} fontWeight="700" color="#F97316">
+                                {(t.notifications as any).paymentOutstanding}
+                              </Text>
+                              <Text fontSize={12} color={theme.textSecondary} numberOfLines={1}>
+                                {eventName}{` · ${daysStr}`}
+                              </Text>
+                            </>
+                          );
+                        })()}
                       </YStack>
 
                       {/* Right indicator: green checkmark if paid, orange dot if unpaid */}
@@ -274,7 +446,7 @@ export default function NotificationsScreen() {
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={refetch}
-              tintColor={DARK_THEME.primary}
+              tintColor={theme.accentGold}
             />
           }
           onEndReached={handleLoadMore}
@@ -282,7 +454,7 @@ export default function NotificationsScreen() {
           ListFooterComponent={
             isFetchingNextPage ? (
               <YStack padding="$4" alignItems="center">
-                <Spinner size="small" color={DARK_THEME.primary} />
+                <Spinner size="small" color={theme.accentGold} />
               </YStack>
             ) : (
               <YStack height={100} />
@@ -304,10 +476,10 @@ export default function NotificationsScreen() {
           >
             <Ionicons name="checkmark-done" size={40} color="#34D399" />
           </YStack>
-          <Text fontSize={16} fontWeight="600" color={DARK_THEME.textPrimary} marginBottom="$2">
+          <Text fontSize={16} fontWeight="600" color={theme.textPrimary} marginBottom="$2">
             {t.notifications.allCaughtUp}
           </Text>
-          <Text fontSize={13} color={DARK_THEME.textTertiary} textAlign="center">
+          <Text fontSize={13} color={theme.textTertiary} textAlign="center">
             {t.notifications.noNewNotifications}
           </Text>
         </YStack>
@@ -316,7 +488,7 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
   backButton: {
     width: 48,
     height: 48,
@@ -368,5 +540,36 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
     marginLeft: 68,
+  },
+  guestPayCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    backgroundColor: 'rgba(249, 115, 22, 0.07)',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.25)',
+    padding: 16,
+  },
+  guestPayButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.accentGold,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  urgencyBadge: {
+    backgroundColor: 'rgba(249, 115, 22, 0.15)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  urgencyBadgeText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: '#F97316',
+    letterSpacing: 0.5,
   },
 });

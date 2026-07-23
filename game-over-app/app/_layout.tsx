@@ -3,23 +3,59 @@
  * Main app layout with auth state management and navigation
  */
 
+import * as Sentry from '@sentry/react-native';
+import * as SplashScreen from 'expo-splash-screen';
+
 import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Image, StyleSheet } from 'react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { LogBox, StyleSheet } from 'react-native';
+import { QueryClient } from '@tanstack/react-query';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TamaguiProvider, Theme, Spinner, YStack } from 'tamagui';
 import { ToastProvider, ToastViewport } from '@tamagui/toast';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StripeProviderWrapper } from '@/components/StripeProviderWrapper';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { supabase } from '@/lib/supabase/client';
 import { useAuthStore } from '@/stores/authStore';
-import { DARK_THEME } from '@/constants/theme';
 import { preloadPackageImages } from '@/constants/packageImages';
 import { preloadSportLogos, preloadShareImages } from '@/constants/sportLogos';
+import { initBudgetCache } from '@/lib/participantCountCache';
+import { shouldPlayIntro } from '@/lib/introSession';
+import { useEditorialFonts } from '@/hooks/useEditorialFonts';
+import { Logo } from '@/components/brand/Logo';
+import { ToastHost } from '@/components/ui/ToastHost';
 import config from '../tamagui.config';
+
+// Keep the native splash over the app until startup routing has settled. The
+// intro releases it itself only after its screen has laid out and finished its
+// native-stack transition.
+void SplashScreen.preventAutoHideAsync().catch(() => {});
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  enableNativeCrashHandling: true,
+  enableAutoSessionTracking: true,
+  tracesSampleRate: 0.2,
+  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN,
+});
+
+// Suppress noisy dev-only LogBox red-boxes for Supabase Auth network retries.
+// AuthRetryableFetchError is *by design* — Supabase will retry transparently
+// when the network or backend is briefly unavailable (e.g. project paused on
+// free tier and waking up). Surfacing it as a red box scares users without
+// being actionable. Production builds aren't affected (LogBox is dev-only).
+if (__DEV__) {
+  LogBox.ignoreLogs([
+    'AuthRetryableFetchError',
+    'TypeError: Network request failed',
+  ]);
+}
 
 // Crisp Chat — native module, not available in Expo Go
 const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
@@ -29,6 +65,7 @@ let setUserNickname: ((name: string) => void) | undefined;
 
 if (!isExpoGo) {
   try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- conditional native module
     const crisp = require('react-native-crisp-chat-sdk');
     configureCrisp = crisp.configure;
     setUserEmail = crisp.setUserEmail;
@@ -46,25 +83,54 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 1000 * 60 * 5, // 5 minutes
-      gcTime: 1000 * 60 * 30, // 30 minutes
+      // gcTime must outlive the persister's maxAge so cache entries survive
+      // the in-memory garbage collector long enough to be persisted/restored.
+      gcTime: 1000 * 60 * 60 * 24, // 24 hours
       retry: 2,
       refetchOnWindowFocus: false,
     },
   },
 });
 
+/**
+ * AsyncStorage-backed query cache persister.
+ * On launch, queries are rehydrated from storage so the app shows last-seen
+ * data immediately — no spinner on reconnect or cold start with no network.
+ * Stale queries still refetch in background once a connection is available.
+ */
+const queryPersister = createAsyncStoragePersister({
+  storage: AsyncStorage,
+  key: 'game-over-rq-cache',
+  // Throttle writes — every state change writing to AsyncStorage would
+  // thrash storage and battery. 1 second is the React Query default.
+  throttleTime: 1000,
+});
+
 function RootLayoutNav() {
   const { isInitialized, isLoading, session, initialize } = useAuthStore();
+  const { fontsLoaded } = useEditorialFonts();
   const segments = useSegments();
   const router = useRouter();
 
   useEffect(() => {
-    initialize();
+    let cleanup: (() => void) | undefined;
+    initialize()
+      .then((fn: unknown) => {
+        if (typeof fn === 'function') cleanup = fn as () => void;
+      })
+      .catch(() => {}); // initialize handles its own errors internally
     // Preload package images during splash screen to eliminate loading delays
     preloadPackageImages().catch(() => {});
     preloadSportLogos().catch(() => {});
     preloadShareImages().catch(() => {});
-  }, [initialize]);
+    return () => { cleanup?.(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialize is a stable Zustand action; effect must run only once on mount
+  }, []);
+
+  // Eagerly hydrate budget cache so urgency bell works on cold start
+  useEffect(() => {
+    void initBudgetCache();
+  }, []);
 
   // Sync user info with Crisp when session changes (with identity verification)
   useEffect(() => {
@@ -89,31 +155,52 @@ function RootLayoutNav() {
     if (!isInitialized) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const inInviteGroup = segments[0] === 'invite';
 
-    if (!session && !inAuthGroup) {
-      // Redirect to welcome screen if not authenticated
-      router.replace('/(auth)/welcome');
+    if (!session && !inAuthGroup && !inInviteGroup) {
+      // On a cold start this fires before `app/index.tsx` gets to redirect, so
+      // the intro decision has to be made here too - otherwise this line would
+      // silently skip it on every launch.
+      router.replace(shouldPlayIntro() ? '/(auth)/intro' : '/(auth)/welcome');
     } else if (session && inAuthGroup) {
       // Redirect to main app if authenticated
       router.replace('/(tabs)/events');
     }
   }, [session, isInitialized, segments, router]);
 
-  if (!isInitialized || isLoading) {
+  useEffect(() => {
+    if (!isInitialized || isLoading || !fontsLoaded) return;
+
+    const routeSegments = segments as readonly string[];
+    const inAuthGroup = routeSegments[0] === '(auth)';
+    const inIntro = inAuthGroup && routeSegments[1] === 'intro';
+    const inInviteGroup = routeSegments[0] === 'invite';
+    const atIndex = routeSegments.length === 0 || routeSegments[0] === 'index';
+
+    // Wait for redirects to land before exposing a screen. The intro owns
+    // splash removal because its reveal must start relative to that exact
+    // visible moment; every other settled destination can show immediately.
+    const isSettledNonIntroRoute = session
+      ? !inAuthGroup && !atIndex
+      : inInviteGroup || (inAuthGroup && !inIntro);
+
+    if (isSettledNonIntroRoute) {
+      void SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [session, isInitialized, isLoading, fontsLoaded, segments]);
+
+  if (!isInitialized || isLoading || !fontsLoaded) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={DARK_THEME.background}>
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={'#0D1B2A'}>
         <LinearGradient
-          colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
+          colors={['#1A2F47', '#0D1B2A']}
           style={StyleSheet.absoluteFill}
         />
-        {/* Game Over Logo */}
-        <Image
-          source={require('../assets/icon.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
+        {/* Game Over Logo - Vektor statt des App-Icons. Es wird hier nur 150pt
+            gross gezeigt, das 1024er PNG kostete dafuer 752 KB im Bundle. */}
+        <Logo size={150} />
         {/* Loading Spinner below logo */}
-        <Spinner size="large" color={DARK_THEME.primary} style={{ marginTop: 24 }} />
+        <Spinner size="large" color={'#C6A75E'} style={{ marginTop: 24 }} />
       </YStack>
     );
   }
@@ -136,23 +223,16 @@ function RootLayoutNav() {
         <Stack.Screen name="booking" />
         <Stack.Screen name="invite" />
       </Stack>
+      <ToastHost />
       <ToastViewport flexDirection="column-reverse" top="$4" left={0} right={0} />
     </>
   );
 }
 
-const styles = StyleSheet.create({
-  logo: {
-    width: 150,
-    height: 150,
-  },
-});
-
-export default function RootLayout() {
-  // Force dark theme - Game Over is a dark-mode-only app
-  const colorScheme = 'dark';
-
+function RootLayout() {
+  // Game Over is a dark-mode-only app
   return (
+    <ErrorBoundary>
     <GestureHandlerRootView style={{ flex: 1 }}>
       <StripeProviderWrapper
         publishableKey={STRIPE_PUBLISHABLE_KEY}
@@ -162,13 +242,27 @@ export default function RootLayout() {
         <TamaguiProvider config={config} defaultTheme="dark">
           <Theme name="dark">
             <ToastProvider>
-              <QueryClientProvider client={queryClient}>
+              <PersistQueryClientProvider
+                client={queryClient}
+                persistOptions={{
+                  persister: queryPersister,
+                  // Cached queries older than 24h are dropped on hydrate —
+                  // forces a refresh of long-stale data on next launch.
+                  maxAge: 1000 * 60 * 60 * 24,
+                  // Buster invalidates every cached query when bumped; do this
+                  // whenever query shape changes in a breaking way.
+                  buster: 'v1',
+                }}
+              >
                 <RootLayoutNav />
-              </QueryClientProvider>
+              </PersistQueryClientProvider>
             </ToastProvider>
           </Theme>
         </TamaguiProvider>
       </StripeProviderWrapper>
     </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
+
+export default Sentry.wrap(RootLayout) as typeof RootLayout;

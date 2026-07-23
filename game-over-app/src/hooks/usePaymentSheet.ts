@@ -10,8 +10,10 @@ import { supabase } from '@/lib/supabase/client';
 
 interface PaymentSheetParams {
   bookingId: string;
-  amountCents: number;
+  paymentType?: 'deposit' | 'remaining' | 'full';
   currency?: string;
+  // NOTE: amount is intentionally NOT passed from the client.
+  // The server computes the correct amount from the DB booking record.
 }
 
 interface PaymentIntentResponse {
@@ -31,7 +33,7 @@ export function usePaymentSheet() {
    * Initialize and present payment sheet
    */
   const processPayment = useCallback(
-    async ({ bookingId, amountCents, currency = 'eur' }: PaymentSheetParams): Promise<{
+    async ({ bookingId, paymentType = 'full', currency = 'eur' }: PaymentSheetParams): Promise<{
       success: boolean;
       error?: string;
     }> => {
@@ -50,7 +52,7 @@ export function usePaymentSheet() {
           {
             body: {
               booking_id: bookingId,
-              amount_cents: amountCents,
+              payment_type: paymentType,
               currency,
             },
           }

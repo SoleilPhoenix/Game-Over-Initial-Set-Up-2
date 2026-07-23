@@ -5,23 +5,12 @@
  */
 
 import React, { useMemo } from 'react';
-import { Pressable, StyleSheet, View, Image } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import type { PollWithOptions } from '@/repositories/polls';
 
 // Dark theme colors
-const DARK_THEME = {
-  backgroundDark: '#15181D',
-  surfaceDark: '#1E2329',
-  surfaceCard: '#23272F',
-  primary: '#4A6FA5',
-  border: 'rgba(255, 255, 255, 0.05)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#9CA3AF',
-  textTertiary: '#6B7280',
-};
-
 // Category configuration
 const CATEGORY_CONFIG: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; bgColor: string }> = {
   accommodation: { icon: 'home', color: '#3B82F6', bgColor: 'rgba(59, 130, 246, 0.1)' },
@@ -54,8 +43,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bgColor: str
   draft: {
     label: 'Draft',
     color: '#9CA3AF',
-    bgColor: DARK_THEME.surfaceDark,
-    borderColor: DARK_THEME.border,
+    bgColor: '#1A2F47',
+    borderColor: 'rgba(230,220,200,0.15)',
   },
 };
 
@@ -63,15 +52,16 @@ interface PollCardProps {
   poll: PollWithOptions;
   onVote: (optionId: string) => void;
   isVoting?: boolean;
+  /** When true (e.g. past event), voting is disabled regardless of poll status. */
+  readOnly?: boolean;
   testID?: string;
 }
 
-export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardProps) {
+export function PollCard({ poll, onVote, isVoting = false, readOnly = false, testID }: PollCardProps) {
   const hasVoted = !!poll.user_vote;
   const isClosed = poll.status === 'closed';
-  const isClosingSoon = poll.status === 'closing_soon';
   const isDraft = poll.status === 'draft';
-  const canVote = poll.status === 'active' && !hasVoted;
+  const canVote = !readOnly && poll.status === 'active' && !hasVoted;
 
   const categoryConfig = CATEGORY_CONFIG[poll.category || 'general'] || CATEGORY_CONFIG.general;
   const statusConfig = STATUS_CONFIG[poll.status || 'draft'] || STATUS_CONFIG.draft;
@@ -100,7 +90,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
 
   return (
     <YStack
-      backgroundColor={DARK_THEME.surfaceCard}
+      backgroundColor={'#1A2F47'}
       borderRadius={16}
       padding="$5"
       gap="$3"
@@ -122,11 +112,11 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
             <Ionicons name={categoryConfig.icon} size={20} color={categoryConfig.color} />
           </YStack>
           <YStack flex={1}>
-            <Text fontSize={16} fontWeight="600" color={DARK_THEME.textPrimary} testID="poll-title">
+            <Text fontSize={16} fontWeight="600" color={'#FFFFFF'} testID="poll-title">
               {poll.title}
             </Text>
             {poll.description && (
-              <Text fontSize={11} color={DARK_THEME.textTertiary}>
+              <Text fontSize={11} color={'rgba(255,255,255,0.48)'}>
                 {poll.description}
               </Text>
             )}
@@ -153,10 +143,10 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
           alignItems="center"
           justifyContent="center"
         >
-          <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" maxWidth={200}>
+          <Text fontSize={12} color={'rgba(255,255,255,0.48)'} textAlign="center" maxWidth={200}>
             This poll is currently in draft mode. Options are being finalized.
           </Text>
-          <Text fontSize={12} color={DARK_THEME.primary} fontWeight="700" marginTop="$2">
+          <Text fontSize={12} color={'#C6A75E'} fontWeight="700" marginTop="$2">
             Add Suggestion
           </Text>
         </YStack>
@@ -218,7 +208,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
                       <Text
                         fontSize={14}
                         fontWeight={isUserVote || isWinner ? '500' : '400'}
-                        color={isUserVote ? DARK_THEME.textPrimary : showResults ? 'rgba(209, 213, 219, 1)' : DARK_THEME.textPrimary}
+                        color={isUserVote ? '#FFFFFF' : showResults ? 'rgba(209, 213, 219, 1)' : '#FFFFFF'}
                       >
                         {option.label}
                       </Text>
@@ -249,7 +239,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
                         <Text
                           fontSize={12}
                           fontWeight="700"
-                          color={isUserVote ? DARK_THEME.primary : DARK_THEME.textTertiary}
+                          color={isUserVote ? '#C6A75E' : 'rgba(255,255,255,0.48)'}
                           testID={isUserVote ? `poll-vote-count-${option.id}` : `poll-percentage-${option.id}`}
                         >
                           {isUserVote ? `${option.vote_count} votes` : `${percentage}%`}
@@ -269,9 +259,9 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
             marginTop="$1"
             paddingTop="$2"
             borderTopWidth={1}
-            borderTopColor={DARK_THEME.border}
+            borderTopColor={'rgba(230,220,200,0.15)'}
           >
-            <Text fontSize={10} color={DARK_THEME.textTertiary} fontWeight="500" testID="poll-vote-count">
+            <Text fontSize={10} color={'rgba(255,255,255,0.48)'} fontWeight="500" testID="poll-vote-count">
               {poll.total_votes} vote{poll.total_votes !== 1 ? 's' : ''} cast
               {poll.ends_at && ` • Ends in ${formatDeadline()}`}
             </Text>
@@ -284,7 +274,7 @@ export function PollCard({ poll, onVote, isVoting = false, testID }: PollCardPro
                 </Text>
               </XStack>
             ) : canVote ? (
-              <Text fontSize={10} color={DARK_THEME.primary} fontWeight="500">
+              <Text fontSize={10} color={'#C6A75E'} fontWeight="500">
                 Tap option to vote
               </Text>
             ) : null}
@@ -315,14 +305,14 @@ const styles = StyleSheet.create({
     position: 'relative',
     overflow: 'hidden',
     borderRadius: 12,
-    backgroundColor: '#1E2329',
+    backgroundColor: '#12253A',
     borderWidth: 1,
     borderColor: 'rgba(255, 255, 255, 0.05)',
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
   optionSelected: {
-    borderColor: DARK_THEME.primary,
+    borderColor: '#C6A75E',
     borderWidth: 1,
   },
   optionPressed: {
@@ -344,8 +334,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   radioSelected: {
-    backgroundColor: DARK_THEME.primary,
-    borderColor: DARK_THEME.primary,
+    backgroundColor: '#C6A75E',
+    borderColor: '#C6A75E',
   },
   avatarStack: {
     flexDirection: 'row',
@@ -356,7 +346,7 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: '#23272F',
+    borderColor: '#1A2F47',
     alignItems: 'center',
     justifyContent: 'center',
   },

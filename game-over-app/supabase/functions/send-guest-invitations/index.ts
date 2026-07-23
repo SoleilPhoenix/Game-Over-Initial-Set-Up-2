@@ -22,6 +22,7 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { sendEmail } from '../_shared/email.ts';
 import { getGuestInviteEmailHtml } from '../_shared/email-templates.ts';
+import { sendWhatsApp } from '../_shared/twilio.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,7 +31,7 @@ const corsHeaders = {
 
 // ─── Types ───────────────────────────────────────────────────
 
-type Channel = 'email' | 'sms' | 'whatsapp';
+type Channel = 'email' | 'whatsapp';
 type SendStatus = 'sent' | 'failed' | 'invalid';
 
 interface GuestSlot {
@@ -60,11 +61,17 @@ function maskPhone(phone: string): string {
   return `${phone.slice(0, 5)}***`;
 }
 
-/** Normalise to E.164: keep leading + and digits only, strip spaces/dashes/parens */
+/** Normalise to E.164: keep leading + and digits only, strip spaces/dashes/parens.
+ *  Numbers starting with 0 are treated as German (+49) local format: 0177... → +49177...
+ *  Numbers already starting with + are kept as-is.
+ */
 function normalisePhone(phone: string): string {
   const stripped = phone.replace(/[^\d+]/g, '');
-  // Ensure only one leading + (in case input had none, assume international)
-  return stripped.startsWith('+') ? stripped : `+${stripped}`;
+  if (stripped.startsWith('+')) return stripped;
+  // German local format: leading 0 → replace with +49
+  if (stripped.startsWith('0')) return `+49${stripped.slice(1)}`;
+  // Assume already international without + prefix
+  return `+${stripped}`;
 }
 
 function generateCode(): string {
@@ -128,71 +135,36 @@ async function validatePhone(phone: string): Promise<{ valid: boolean; reason?: 
   }
 }
 
-// ─── Sending ──────────────────────────────────────────────────
-
-async function sendSMS(to: string, body: string): Promise<{ success: boolean; error?: string }> {
-  const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
-  const token = Deno.env.get('TWILIO_AUTH_TOKEN');
-  const from = Deno.env.get('TWILIO_SMS_FROM') ?? 'GameOver';
-
-  if (!sid || !token) return { success: false, error: 'Twilio not configured' };
-
-  const params = new URLSearchParams({ To: to, From: from, Body: body });
-
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    }
-  );
-
-  if (res.ok) return { success: true };
-  const err = await res.json();
-  return { success: false, error: err.message ?? `Twilio error ${res.status}` };
-}
-
-async function sendWhatsApp(to: string, body: string): Promise<{ success: boolean; error?: string; twilioCode?: number }> {
-  const sid = Deno.env.get('TWILIO_ACCOUNT_SID');
-  const token = Deno.env.get('TWILIO_AUTH_TOKEN');
-  const from = Deno.env.get('TWILIO_WHATSAPP_FROM');
-
-  if (!sid || !token || !from) {
-    return { success: false, error: 'WhatsApp not configured — TWILIO_WHATSAPP_FROM missing' };
-  }
-
-  // Normalise recipient to whatsapp: prefix
-  const toFormatted = to.startsWith('whatsapp:') ? to : `whatsapp:${to}`;
-
-  const params = new URLSearchParams({ To: toFormatted, From: from, Body: body });
-
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${btoa(`${sid}:${token}`)}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    }
-  );
-
-  if (res.ok) return { success: true };
-  const err = await res.json();
-  // Return Twilio error code so callers can handle specific cases (e.g. 63016 = outside 24h window)
-  return { success: false, error: err.message ?? `Twilio WhatsApp error ${res.status}`, twilioCode: err.code };
-}
-
 // ─── Main handler ─────────────────────────────────────────────
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // Auth verification
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'Missing authorization header' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+  const userToken = authHeader.replace('Bearer ', '');
+  // Pass the JWT explicitly to getUser(). With supabase-js v2, getUser() WITHOUT
+  // an argument looks for a stored session (absent in an edge function) and fails
+  // with "Auth session missing!" even for a valid token — the global-header
+  // pattern does NOT feed getUser(). This was the cause of every 401 here.
+  const userSupabase = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_ANON_KEY')!,
+  );
+  const { data: { user }, error: authError } = await userSupabase.auth.getUser(userToken);
+  if (authError || !user) {
+    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 
   try {
@@ -201,11 +173,14 @@ serve(async (req: Request) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     // ── Parse & validate request (parse body once — req.json() consumes the stream) ──
-    const { eventId, channel, guests: guestsRaw } = await req.json() as {
+    const { eventId, channel, guests: guestsRaw, language: langRaw } = await req.json() as {
       eventId: string;
       channel: Channel;
       guests: GuestSlot[];
+      language?: string;
     };
+    // German-primary app: default to 'de' when the client didn't pass a language.
+    const language: 'de' | 'en' = langRaw === 'en' ? 'en' : 'de';
 
     if (!eventId || !channel) {
       return new Response(
@@ -213,11 +188,39 @@ serve(async (req: Request) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
-    if (!['email', 'sms', 'whatsapp'].includes(channel)) {
+    if (!['email', 'whatsapp'].includes(channel)) {
       return new Response(
-        JSON.stringify({ error: 'channel must be email, sms, or whatsapp' }),
+        JSON.stringify({ error: 'channel must be email or whatsapp' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
+    }
+
+    // ── Ownership check ──
+    const { data: eventCheck, error: eventCheckError } = await supabase
+      .from('events')
+      .select('id, created_by')
+      .eq('id', eventId)
+      .single();
+    if (eventCheckError || !eventCheck) {
+      return new Response(JSON.stringify({ error: 'Event not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (eventCheck.created_by !== user.id) {
+      return new Response(JSON.stringify({ error: 'Forbidden' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // ── Batch size guard ──
+    const MAX_GUESTS_PER_CALL = 50;
+    if ((guestsRaw ?? []).length > MAX_GUESTS_PER_CALL) {
+      return new Response(JSON.stringify({ error: `Too many guests. Maximum ${MAX_GUESTS_PER_CALL} per call.` }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     // ── Fetch event details ──
@@ -225,7 +228,7 @@ serve(async (req: Request) => {
     // resolve a profiles:created_by(...) join. Two separate queries required.
     const { data: event, error: eventError } = await supabase
       .from('events')
-      .select('id, title, honoree_name, created_by, party_type')
+      .select('id, title, honoree_name, created_by, party_type, start_date, city:cities(name)')
       .eq('id', eventId)
       .single();
 
@@ -251,7 +254,13 @@ serve(async (req: Request) => {
 
     const organizerName: string = authFullName || profile?.full_name || 'Your friend';
     const honoreeName: string = event.honoree_name ?? 'the guest of honour';
-    const partyTypeLabel: string = event.party_type === 'bachelorette' ? 'Bachelorette Party' : 'Bachelor Party';
+    // City enriches the copy ("… in Berlin") but must never block a send: a
+    // missing city just drops the suffix rather than failing the whole invite.
+    const cityName = (event.city as { name?: string } | null)?.name ?? '';
+    const citySuffix = cityName ? ` in ${cityName}` : '';
+    const partyTypeLabel: string = language === 'de'
+      ? (event.party_type === 'bachelor' ? 'Bachelor Party (JGA)' : 'Bachelorette Party (JGA)')
+      : (event.party_type === 'bachelorette' ? 'Bachelorette Party' : 'Bachelor Party');
 
     // ── Guests were already parsed from the request body above ──
     const guests: GuestSlot[] = guestsRaw ?? [];
@@ -320,37 +329,93 @@ serve(async (req: Request) => {
         continue;
       }
 
-      // 2. Generate unique invite code and store it (non-blocking)
-      const code = generateCode();
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-      supabase.from('invite_codes').insert({
-        event_id: eventId,
-        code,
-        max_uses: 1,
-        expires_at: expiresAt,
-      }).then(({ error }) => {
-        if (error) console.warn('[invite_codes] insert failed:', error.message);
-      });
-      const inviteUrl = `https://game-over.app/invite/${code}`;
+      // 2. Reuse the guest's existing active invite code for this event if one
+      //    exists — a person keeps ONE personal code until the event. Re-invites
+      //    and reminders must NOT mint a new code each time. Match on the guest's
+      //    email OR phone so either channel resolves to the same person.
+      const emailKey = (channel === 'email' ? contact : (guest.email ?? '')).toLowerCase();
+      const phoneKey = channel !== 'email' ? contact : (guest.phone ? normalisePhone(guest.phone) : '');
+
+      // Keep the code valid until the day after the event (fallback: 30 days out).
+      const eventStart = event.start_date ? new Date(event.start_date) : null;
+      const expiresAt = (eventStart && eventStart.getTime() > Date.now()
+        ? new Date(eventStart.getTime() + 24 * 60 * 60 * 1000)
+        : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      ).toISOString();
+
+      const { data: eventCodes } = await supabase
+        .from('invite_codes')
+        .select('id, code, guest_email, guest_phone')
+        .eq('event_id', eventId)
+        .eq('is_active', true);
+
+      const existing = (eventCodes ?? []).find((c) =>
+        (emailKey && (c.guest_email ?? '').toLowerCase() === emailKey) ||
+        (phoneKey && (c.guest_phone ?? '') === phoneKey)
+      );
+
+      let code: string;
+      if (existing?.code) {
+        // Same code — just refresh contact details and keep it alive until the event.
+        code = existing.code;
+        const { error: codeUpdateError } = await supabase.from('invite_codes').update({
+          expires_at: expiresAt,
+          guest_first_name: guest.firstName ?? null,
+          guest_last_name: guest.lastName ?? null,
+          guest_email: channel === 'email' ? contact : (guest.email ?? null),
+          guest_phone: channel !== 'email' ? contact : (guest.phone ?? null),
+        }).eq('id', existing.id);
+        if (codeUpdateError) {
+          console.error('[invite_codes] reuse update failed:', codeUpdateError.message, 'code=', code);
+        }
+      } else {
+        code = generateCode();
+        const { error: codeInsertError } = await supabase.from('invite_codes').insert({
+          event_id: eventId,
+          code,
+          created_by: event.created_by,  // organizer's user id — required NOT NULL field
+          max_uses: 1,
+          expires_at: expiresAt,
+          guest_first_name: guest.firstName ?? null,
+          guest_last_name: guest.lastName ?? null,
+          guest_email: channel === 'email' ? contact : (guest.email ?? null),
+          guest_phone: channel !== 'email' ? contact : (guest.phone ?? null),
+        });
+        if (codeInsertError) {
+          console.error('[invite_codes] insert failed:', codeInsertError.message, 'code=', code);
+          // Non-critical for sending the message, but log clearly
+        }
+      }
+      const appBaseUrl = Deno.env.get('APP_BASE_URL') ?? 'https://game-over.app';
+      const inviteUrl = `${appBaseUrl}/invite/${code}`;
 
       // 3. Build message body
+      // Link-first: the tappable invite URL is the primary CTA on every channel
+      // (same link the email uses). On a phone it opens the app directly via the
+      // universal/app link and lands the guest on the invite wizard; in a browser
+      // it shows the invite preview with an "Open in app" / store fallback.
+      // The invite code is kept only as a manual fallback if the link can't be tapped.
       const guestName = guest.firstName ?? '';
-      const greeting = guestName ? `${guestName}, you're` : `You're`;
-      const smsBody =
-        `🎉 ${greeting} invited to ${honoreeName}'s ${partyTypeLabel}!\n\n` +
-        `${organizerName} is organizing the ultimate celebration on "Game-Over.app" 🥂\n\n` +
-        `Why join instead of endless back-and-forth coordination?\n` +
-        `✅ Eliminates planning stress — simple, guided & stress-free\n` +
-        `💰 Full budget transparency — zero hidden costs or awkward money talk\n` +
-        `🤖 AI-curated experiences matched to what YOUR group actually wants\n` +
-        `⚡ Everything in one place — plans, chat & payments, ready in minutes\n` +
-        `🤝 Preserves your friendships — no coordination chaos after the event\n\n` +
-        `Join & RSVP here:\n${inviteUrl}\n\n` +
-        `Reply STOP to opt out.`;
+      const messageBody = language === 'de'
+        ? `🎉 ${guestName ? guestName + ', du bist' : 'Du bist'} zur ${partyTypeLabel} von ${honoreeName}${citySuffix} eingeladen!\n\n` +
+          `${organizerName} plant die Feier auf Game Over 🥂\n\n` +
+          `👉 Zum Beitreten tippen:\n${inviteUrl}\n\n` +
+          `Der Link bringt dich direkt zu deiner Einladung — einfach Konto erstellen und du bist dabei. ` +
+          `Alles an einem Ort: Planung, Gruppenchat, Abstimmungen & Zahlungen.\n\n` +
+          `Falls du danach gefragt wirst, dein Einladungscode: ${code}\n\n` +
+          `Antworte mit STOP zum Abmelden.`
+        : `🎉 ${guestName ? guestName + ", you're" : "You're"} invited to ${honoreeName}'s ${partyTypeLabel}${citySuffix}!\n\n` +
+          `${organizerName} is planning the celebration on Game Over 🥂\n\n` +
+          `👉 Tap to join:\n${inviteUrl}\n\n` +
+          `The link takes you straight to your invite — just create your account and you're in. ` +
+          `Everything in one place: plans, group chat, polls & payments.\n\n` +
+          `If you're asked for it, your invite code is: ${code}\n\n` +
+          `Reply STOP to opt out.`;
 
-      // 4. Send
-      let sendResult: { success: boolean; error?: string; twilioCode?: number };
-      let actualChannel: Channel = channel;
+      // 4. Send — only Email (SendGrid) and WhatsApp (Twilio) are supported channels.
+      // Regular SMS has been intentionally removed as a channel; a failed WhatsApp send
+      // is reported back so the organizer can retry or invite via email instead.
+      let sendResult: { success: boolean; error?: string; twilioCode?: number; messageId?: string };
 
       if (channel === 'email') {
         const html = getGuestInviteEmailHtml({
@@ -358,25 +423,20 @@ serve(async (req: Request) => {
           honoreeName,
           inviteUrl,
           guestFirstName: guest.firstName,
+          inviteCode: code,
+          language,
+          partyType: (event.party_type === 'bachelor' || event.party_type === 'bachelorette')
+            ? event.party_type : undefined,
+          cityName,
         });
-        const subject = `You're invited to ${honoreeName}'s ${partyTypeLabel}! 🎉`;
+        const subject = language === 'de'
+          ? `Du bist zur ${partyTypeLabel} von ${honoreeName} eingeladen! 🎉`
+          : `You're invited to ${honoreeName}'s ${partyTypeLabel}! 🎉`;
         sendResult = await sendEmail({ to: contact, subject, html });
-
-      } else if (channel === 'sms') {
-        sendResult = await sendSMS(contact, smsBody);
 
       } else {
         // WhatsApp
-        sendResult = await sendWhatsApp(contact, smsBody);
-
-        // Error 63016 = outside 24-hour session window (recipient hasn't messaged us recently).
-        // Error 63007 = WhatsApp number not registered (common in sandbox testing).
-        // Both are permanent WhatsApp failures — fall back to SMS automatically.
-        if (!sendResult.success && (sendResult.twilioCode === 63016 || sendResult.twilioCode === 63007)) {
-          console.log(`[whatsapp] code=${sendResult.twilioCode} — falling back to SMS for slot=${guest.slotIndex}`);
-          sendResult = await sendSMS(contact, smsBody);
-          actualChannel = 'sms';
-        }
+        sendResult = await sendWhatsApp(contact, messageBody);
       }
 
       // 5. Record result
@@ -394,16 +454,17 @@ serve(async (req: Request) => {
       supabase.from('guest_invitations').insert({
         event_id: eventId,
         slot_index: guest.slotIndex,
-        channel: actualChannel,
+        channel,
         recipient: contact,
         status,
         error: sendResult.error ?? null,
         invite_code: code,
+        provider_message_id: channel === 'email' ? (sendResult.messageId ?? null) : null,
       }).then(({ error }) => {
         if (error) console.warn('[guest_invitations] insert failed (sent):', error.message);
       });
 
-      console.log(`[${actualChannel}] slot=${guest.slotIndex} status=${status}`);
+      console.log(`[${channel}] slot=${guest.slotIndex} status=${status}`);
     }
 
     return new Response(

@@ -1,0 +1,15 @@
+diff --git a/node_modules/react-native-gesture-handler/android/build.gradle b/node_modules/react-native-gesture-handler/android/build.gradle
+index ac149a0..6148586 100644
+--- a/node_modules/react-native-gesture-handler/android/build.gradle
++++ b/node_modules/react-native-gesture-handler/android/build.gradle
+@@ -187,6 +187,10 @@ android {
+         exclude "**/libreactnative.so"
+         exclude "**/libjsi.so"
+         exclude "**/libc++_shared.so"
++        // Added by patch-package: Detox androidTest builds crash on duplicate libfbjni.so
++        // (one bundled by RN gesture handler, one from React Android AAR). Excluding the
++        // bundled copy makes the merge step pick whichever Gradle resolves first.
++        exclude "**/libfbjni.so"
+     }
+ 
+     sourceSets.main {

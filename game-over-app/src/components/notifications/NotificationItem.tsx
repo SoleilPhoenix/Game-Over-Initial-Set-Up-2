@@ -7,24 +7,28 @@
 import React from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { YStack, XStack, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import type { Database } from '@/lib/supabase/types';
+import { useTranslation, getCurrentLanguage } from '@/i18n';
+import { isGuestDataChangedMeta, formatGuestChanges } from '@/utils/guestDataChange';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
-// Dark theme colors
-const DARK_THEME = {
-  backgroundDark: '#15181D',
-  secondary: '#2D3748',
-  glassCard: 'rgba(45, 55, 72, 0.7)',
-  glassOverlay: 'rgba(255, 255, 255, 0.05)',
-  border: 'rgba(255, 255, 255, 0.08)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#D1D5DB',
-  textTertiary: '#9CA3AF',
+// Maps a notification type to the i18n key used for its action-button label.
+// Kept as a plain lookup so NOTIFICATION_CONFIG below can stay a static const.
+const ACTION_LABEL_KEYS: Record<string, string> = {
+  relationship_health: 'actionViewInsights',
+  conflict_detected: 'actionResolveVoting',
+  payment_reminder: 'actionPayNow',
+  poll_created: 'actionVoteNow',
+  poll_closing: 'actionVoteNow',
+  poll_closed: 'actionViewResults',
+  event_update: 'actionViewEvent',
+  guest_data_changed: 'actionViewParticipants',
 };
 
+// Dark theme colors
 // Notification type configuration with colors
 const NOTIFICATION_CONFIG: Record<
   string,
@@ -171,6 +175,13 @@ const NOTIFICATION_CONFIG: Record<
     color: '#8B5CF6',
     bgColor: 'rgba(139, 92, 246, 0.2)',
   },
+  guest_data_changed: {
+    icon: 'create',
+    color: '#C6A75E',
+    bgColor: 'rgba(198, 167, 94, 0.2)',
+    hasAction: true,
+    actionLabel: 'View Guests',
+  },
 
   // Default
   default: {
@@ -192,7 +203,28 @@ export function NotificationItem({
   testID,
 }: NotificationItemProps) {
   const router = useRouter();
+  const { t } = useTranslation();
   const config = NOTIFICATION_CONFIG[notification.type] || NOTIFICATION_CONFIG.default;
+  const actionLabelKey = ACTION_LABEL_KEYS[notification.type];
+  const actionLabel = actionLabelKey ? (t.notifications as any)[actionLabelKey] : undefined;
+
+  // guest_data_changed carries a structured diff in `metadata` so the text can be
+  // localized to the organizer's language at render time (it was created in the
+  // guest's language). Falls back to the stored title/body for any other type.
+  let displayTitle = notification.title;
+  let displayBody = notification.body;
+  if (notification.type === 'guest_data_changed' && isGuestDataChangedMeta(notification.metadata)) {
+    const meta = notification.metadata;
+    displayTitle = (t.notifications as any).guestDataChangedTitle;
+    const changesText = formatGuestChanges(meta.changes, {
+      name: (t.notifications as any).fieldName,
+      email: (t.notifications as any).fieldEmail,
+      phone: (t.notifications as any).fieldPhone,
+    });
+    displayBody = ((t.notifications as any).guestDataChangedBody as string)
+      .replace('{{guest}}', meta.guestName)
+      .replace('{{changes}}', changesText);
+  }
 
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
@@ -202,11 +234,12 @@ export function NotificationItem({
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (diffMins < 1) return (t.notifications as any).timeJustNow;
+    if (diffMins < 60) return (t.notifications as any).timeMinutesAgo.replace('{{n}}', String(diffMins));
+    if (diffHours < 24) return (t.notifications as any).timeHoursAgo.replace('{{n}}', String(diffHours));
+    if (diffDays < 7) return (t.notifications as any).timeDaysAgo.replace('{{n}}', String(diffDays));
+    const locale = getCurrentLanguage() === 'de' ? 'de-DE' : 'en-US';
+    return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
   };
 
   const handlePress = () => {
@@ -258,26 +291,26 @@ export function NotificationItem({
             <Text
               fontSize={14}
               fontWeight="600"
-              color={DARK_THEME.textPrimary}
+              color={'#FFFFFF'}
               numberOfLines={1}
               flex={1}
               marginRight="$2"
             >
-              {notification.title}
+              {displayTitle}
             </Text>
-            <Text fontSize={10} color={DARK_THEME.textTertiary} fontWeight="500">
+            <Text fontSize={10} color={'rgba(255,255,255,0.48)'} fontWeight="500">
               {notification.created_at && formatTime(notification.created_at)}
             </Text>
           </XStack>
 
-          {notification.body && (
+          {displayBody && (
             <Text
               fontSize={12}
-              color={DARK_THEME.textSecondary}
+              color={'rgba(255,255,255,0.72)'}
               numberOfLines={2}
               lineHeight={18}
             >
-              {notification.body}
+              {displayBody}
             </Text>
           )}
 
@@ -294,14 +327,14 @@ export function NotificationItem({
                 <XStack alignItems="center" gap="$2" flex={1}>
                   <Ionicons name="hand-left" size={16} color={config.color} />
                   <Text fontSize={11} fontWeight="600" color={`${config.color}EE`} flex={1}>
-                    {config.actionLabel}
+                    {actionLabel ?? config.actionLabel}
                   </Text>
                   <Ionicons name="chevron-forward" size={14} color={config.color} />
                 </XStack>
               ) : (
                 <XStack alignItems="center" gap="$1">
                   <Text fontSize={10} fontWeight="700" color={config.color} textTransform="uppercase" letterSpacing={0.5}>
-                    {config.actionLabel}
+                    {actionLabel ?? config.actionLabel}
                   </Text>
                   <Ionicons name="arrow-forward" size={12} color={config.color} />
                 </XStack>
@@ -318,13 +351,13 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: DARK_THEME.glassCard,
+    backgroundColor: 'rgba(26,47,71,0.8)',
     borderRadius: 12,
     padding: 16,
     marginHorizontal: 16,
     marginVertical: 8,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   glassOverlay: {
     position: 'absolute',
@@ -332,7 +365,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: '50%',
-    backgroundColor: DARK_THEME.glassOverlay,
+    backgroundColor: 'rgba(13,27,42,0.7)',
   },
   warningBorder: {
     borderLeftWidth: 3,

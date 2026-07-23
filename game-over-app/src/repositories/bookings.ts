@@ -5,6 +5,7 @@
 
 import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/types';
+import { calculateBookingPricing } from '@/utils/pricing';
 
 type Booking = Database['public']['Tables']['bookings']['Row'];
 type BookingInsert = Database['public']['Tables']['bookings']['Insert'];
@@ -19,9 +20,6 @@ export interface BookingWithDetails extends Booking {
     honoree_name: string;
   } | null;
 }
-
-const SERVICE_FEE_PERCENTAGE = 0.10; // 10%
-const MIN_SERVICE_FEE_CENTS = 5000; // €50
 
 export const bookingsRepository = {
   /**
@@ -89,16 +87,22 @@ export const bookingsRepository = {
     if (error) throw error;
 
     // Update event status to 'booked'
-    await supabase
+    const { error: statusError } = await supabase
       .from('events')
       .update({ status: 'booked' })
       .eq('id', booking.event_id);
+
+    if (statusError) {
+      throw new Error(
+        `Booking created but event status update failed: ${statusError?.message ?? JSON.stringify(statusError)}`
+      );
+    }
 
     return data;
   },
 
   /**
-   * Calculate booking costs
+   * Calculate booking costs — delegates to canonical pricing utility.
    */
   calculateCosts(
     pkg: Package,
@@ -111,25 +115,18 @@ export const bookingsRepository = {
     payingParticipants: number;
     perPersonCents: number;
   } {
-    const payingParticipants = excludeHonoree
-      ? Math.max(1, participantCount - 1)
-      : participantCount;
-
-    const packageBaseCents =
-      pkg.base_price_cents + pkg.price_per_person_cents * participantCount;
-
-    const calculatedFee = Math.round(packageBaseCents * SERVICE_FEE_PERCENTAGE);
-    const servicFeeCents = Math.max(calculatedFee, MIN_SERVICE_FEE_CENTS);
-
-    const totalAmountCents = packageBaseCents + servicFeeCents;
-    const perPersonCents = Math.ceil(totalAmountCents / payingParticipants);
-
+    const result = calculateBookingPricing({
+      pricePerPersonCents: pkg.price_per_person_cents,
+      baseFeeCents: pkg.base_price_cents,
+      totalParticipants: participantCount,
+      excludeHonoree,
+    });
     return {
-      packageBaseCents,
-      servicFeeCents,
-      totalAmountCents,
-      payingParticipants,
-      perPersonCents,
+      packageBaseCents: result.packageBaseCents,
+      servicFeeCents: result.serviceFeeCents,
+      totalAmountCents: result.totalCents,
+      payingParticipants: result.payingCount,
+      perPersonCents: result.perPersonCents,
     };
   },
 
@@ -149,22 +146,6 @@ export const bookingsRepository = {
       updates.stripe_payment_intent_id = stripePaymentIntentId;
     }
 
-    // Add to audit log
-    const { data: existing } = await supabase
-      .from('bookings')
-      .select('audit_log')
-      .eq('id', bookingId)
-      .single();
-
-    const auditLog = Array.isArray(existing?.audit_log) ? existing.audit_log : [];
-    auditLog.push({
-      action: 'payment_status_updated',
-      status,
-      timestamp: new Date().toISOString(),
-    });
-
-    updates.audit_log = auditLog;
-
     const { data, error } = await supabase
       .from('bookings')
       .update(updates)
@@ -173,6 +154,16 @@ export const bookingsRepository = {
       .single();
 
     if (error) throw error;
+
+    // Atomically append to audit log (prevents race conditions on concurrent webhook retries)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (supabase as any).rpc('append_booking_audit_log', {
+      booking_id: bookingId,
+      entry: { action: 'payment_status_updated', status, timestamp: new Date().toISOString() },
+    }).catch((err: unknown) => {
+      console.error('[bookings] audit log append failed in updatePaymentStatus', err);
+    });
+
     return data;
   },
 
@@ -180,30 +171,26 @@ export const bookingsRepository = {
    * Request a refund
    */
   async requestRefund(bookingId: string, reason: string): Promise<Booking> {
-    const { data: existing } = await supabase
-      .from('bookings')
-      .select('audit_log')
-      .eq('id', bookingId)
-      .single();
-
-    const auditLog = Array.isArray(existing?.audit_log) ? existing.audit_log : [];
-    auditLog.push({
-      action: 'refund_requested',
-      reason,
-      timestamp: new Date().toISOString(),
-    });
-
     const { data, error } = await supabase
       .from('bookings')
       .update({
         payment_status: 'refunded',
-        audit_log: auditLog,
       })
       .eq('id', bookingId)
       .select()
       .single();
 
     if (error) throw error;
+
+    // Atomically append to audit log (prevents race conditions on concurrent webhook retries)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (supabase as any).rpc('append_booking_audit_log', {
+      booking_id: bookingId,
+      entry: { action: 'refund_requested', reason, timestamp: new Date().toISOString() },
+    }).catch((err: unknown) => {
+      console.error('[bookings] audit log append failed in requestRefund', err);
+    });
+
     return data;
   },
 

@@ -6,8 +6,8 @@
 import React, { useState } from 'react';
 import { ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import { YStack, XStack, Text } from 'tamagui';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useCreateEvent } from '@/hooks/queries/useEvents';
@@ -16,32 +16,28 @@ import { usePackage } from '@/hooks/queries/usePackages';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { DARK_THEME } from '@/constants/theme';
 
-// Standard per-person pricing for fallback packages
-const TIER_PRICE_PER_PERSON: Record<string, number> = {
-  essential: 99_00,
-  classic: 149_00,
-  grand: 199_00,
-};
+import { TIER_DISPLAY_NAME, TIER_PRICE_PER_PERSON_CENTS, getTierName } from '@/constants/packageTiers';
+import { useTranslation } from '@/i18n';
 
-// Fallback package lookup for local IDs that don't exist in DB
+// Fallback package lookup for local IDs that don't exist in DB — names + prices from packageTiers
 const FALLBACK_PKG_MAP: Record<string, { name: string; tier: string; price_per_person_cents: number }> = {
-  'berlin-classic': { name: 'Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'berlin-essential': { name: 'Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'berlin-grand': { name: 'Grand', tier: 'grand', price_per_person_cents: 199_00 },
-  'hamburg-classic': { name: 'Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'hamburg-essential': { name: 'Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'hamburg-grand': { name: 'Grand', tier: 'grand', price_per_person_cents: 199_00 },
-  'hannover-classic': { name: 'Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'hannover-essential': { name: 'Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'hannover-grand': { name: 'Grand', tier: 'grand', price_per_person_cents: 199_00 },
+  'berlin-essential':   { name: TIER_DISPLAY_NAME.essential, tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential },
+  'berlin-classic':     { name: TIER_DISPLAY_NAME.classic,   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic },
+  'berlin-grand':       { name: TIER_DISPLAY_NAME.grand,     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand },
+  'hamburg-essential':  { name: TIER_DISPLAY_NAME.essential, tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential },
+  'hamburg-classic':    { name: TIER_DISPLAY_NAME.classic,   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic },
+  'hamburg-grand':      { name: TIER_DISPLAY_NAME.grand,     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand },
+  'hannover-essential': { name: TIER_DISPLAY_NAME.essential, tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential },
+  'hannover-classic':   { name: TIER_DISPLAY_NAME.classic,   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic },
+  'hannover-grand':     { name: TIER_DISPLAY_NAME.grand,     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand },
 };
 
 export default function WizardStep5() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [isCreating, setIsCreating] = useState(false);
+  const { language } = useTranslation();
 
   const wizardState = useWizardStore();
   const { mutateAsync: createEvent } = useCreateEvent();
@@ -60,9 +56,8 @@ export default function WizardStep5() {
     : 0;
   const participantCount = wizardState.participantCount;
   const packageTotalCents = perPersonCents * participantCount;
-  const serviceFeeCents = Math.round(packageTotalCents * 0.10);
-  const grandTotalCents = packageTotalCents + serviceFeeCents;
-  const perPersonFinalCents = participantCount > 0 ? Math.round(grandTotalCents / participantCount) : 0;
+  // No service fee — package prices are final all-in
+  const grandTotalCents = packageTotalCents;
 
   const formatPrice = (cents: number) =>
     '\u20AC' + (cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -194,7 +189,7 @@ export default function WizardStep5() {
 
               <YStack gap="$1">
                 <Text fontSize="$5" fontWeight="700" color="$textPrimary">
-                  {selectedPackage.name}
+                  {getTierName(selectedPackage.tier, language) || selectedPackage.name}
                 </Text>
                 <Text fontSize="$4" fontWeight="700" color="$primary">
                   {formatPrice(perPersonCents)} per person
@@ -210,17 +205,19 @@ export default function WizardStep5() {
         {/* Info Banner */}
         <XStack
           padding="$4"
-          backgroundColor="rgba(37, 140, 244, 0.1)"
-          borderRadius="$lg"
+          backgroundColor="rgba(198,167,94,0.08)"
+          borderRadius={16}
+          borderWidth={1}
+          borderColor="rgba(198,167,94,0.2)"
           gap="$3"
           alignItems="flex-start"
         >
-          <Ionicons name="information-circle" size={24} color="#5A7EB0" />
+          <Ionicons name="information-circle" size={24} color="#C6A75E" />
           <YStack flex={1}>
-            <Text fontSize="$3" color="$primary" fontWeight="600">
+            <Text fontSize="$3" color="#C6A75E" fontWeight="600">
               What happens next?
             </Text>
-            <Text fontSize="$2" color="$textSecondary" marginTop="$1">
+            <Text fontSize="$2" color="rgba(255,255,255,0.55)" marginTop="$1">
               After creating your event, you can invite guests, finalize your package booking, and start planning the details!
             </Text>
           </YStack>
