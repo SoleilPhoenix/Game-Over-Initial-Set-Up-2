@@ -33,6 +33,11 @@ import { bookingsRepository } from '@/repositories';
 import { useUser } from '@/stores/authStore';
 import { useWizardStore, type DraftSnapshot } from '@/stores/wizardStore';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
+import { EmptyState } from '@/components/ui/EmptyState';
+import {
+  InviteCodeEntry,
+  type InviteCodeEntryHandle,
+} from '@/components/auth/InviteCodeEntry';
 import { useTranslation, getTranslation, getCurrentLanguage } from '@/i18n';
 import { getCurrentPhaseLabel } from '@/utils/planningProgress';
 import type { BudgetInfo } from '@/lib/participantCountCache';
@@ -178,6 +183,7 @@ const formatDateRange = (startDate?: string, endDate?: string): string => {
 
 export default function EventsScreen() {
   const router = useRouter();
+  const inviteCodeRef = useRef<InviteCodeEntryHandle>(null);
   const insets = useSafeAreaInsets();
   const user = useUser();
   const { hasUnseenUrgency, markUrgencySeen } = useUrgentPayment();
@@ -711,9 +717,31 @@ export default function EventsScreen() {
 
   const renderEmptyState = () => {
     const isAttending = activeFilter === 'attending';
-    const emptyTitle = isAttending ? (t.events as any).noAttendingTitle || 'No Invitations Yet' : t.events.noEventsTitle;
-    const emptySubtitle = isAttending ? (t.events as any).noAttendingSubtitle || 'When someone invites you to an event, it will appear here.' : t.events.noEventsSubtitle;
-    const emptyEmoji = isAttending ? '📬' : '🎊';
+    const copy = isAttending ? t.emptyStates.guest : t.emptyStates.organizer;
+    const preview = isAttending ? (
+      <View style={styles.emptyEventPreview}>
+        <LinearGradient
+          colors={['#24405F', '#0D1B2A']}
+          style={styles.emptyEventPreviewImage}
+        >
+          <Text style={styles.emptyEventPreviewTitle}>{t.emptyStates.guest.previewTitle}</Text>
+        </LinearGradient>
+        <Text style={styles.emptyEventPreviewMeta}>{t.emptyStates.guest.previewMeta}</Text>
+      </View>
+    ) : (
+      <View style={styles.emptyEventPreview}>
+        <LinearGradient
+          colors={['#24405F', '#0D1B2A']}
+          style={styles.emptyEventPreviewImage}
+        >
+          <Text style={styles.emptyEventPreviewTitle}>{t.emptyStates.organizer.previewTitle}</Text>
+        </LinearGradient>
+        <View style={styles.emptyEventPreviewFooter}>
+          <Text style={styles.emptyEventPreviewMeta}>{t.emptyStates.organizer.previewMeta}</Text>
+          <Text style={styles.emptyEventPreviewGuests}>{t.emptyStates.organizer.previewGuests}</Text>
+        </View>
+      </View>
+    );
 
     return (
       <FlatList
@@ -736,34 +764,36 @@ export default function EventsScreen() {
         }
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
-          <YStack justifyContent="center" alignItems="center" width="100%" paddingHorizontal={0}>
-            <View style={styles.emptyIconContainer}>
-              <LinearGradient
-                colors={['rgba(198,167,94,0.19)', 'rgba(198,167,94,0.06)']}
-                style={styles.emptyIconGradient}
-              >
-                <Text fontSize={56}>{emptyEmoji}</Text>
-              </LinearGradient>
-            </View>
-            <Text fontSize={24} fontWeight="800" color={'#FFFFFF'} marginBottom={8}>
-              {emptyTitle}
-            </Text>
-            <Text
-              fontSize={16}
-              color={'rgba(255,255,255,0.72)'}
-              textAlign="center"
-              marginBottom={24}
-              maxWidth={280}
-              lineHeight={24}
-            >
-              {emptySubtitle}
-            </Text>
-            {!isAttending && (
-              <View style={{ width: '100%', paddingHorizontal: 0 }}>
-                {renderStartNewPlanButton()}
-              </View>
-            )}
-          </YStack>
+          <EmptyState
+            title={copy.title}
+            subtitle={copy.subtitle}
+            preview={preview}
+            previewLabel={copy.previewLabel}
+            primaryLabel={
+              isAttending
+                ? t.emptyStates.guest.primary
+                : t.emptyStates.partyPlanPrimary
+            }
+            onPrimary={
+              isAttending
+                ? () => inviteCodeRef.current?.submit()
+                : handleCreateEvent
+            }
+            extra={
+              isAttending ? (
+                <InviteCodeEntry
+                  ref={inviteCodeRef}
+                  testIDPrefix="events-empty-invite-code"
+                  initiallyExpanded
+                  showJoinButton={false}
+                />
+              ) : undefined
+            }
+            secondaryLabel={
+              isAttending ? t.emptyStates.guest.secondary : undefined
+            }
+            onSecondary={isAttending ? handleCreateEvent : undefined}
+          />
         }
       />
     );
@@ -1378,15 +1408,44 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: 'rgba(255,255,255,0.48)',
   },
-  emptyIconContainer: {
-    marginBottom: 24,
+  emptyEventPreview: {
+    overflow: 'hidden',
+    borderRadius: 12,
+    backgroundColor: '#1A2F47',
   },
-  emptyIconGradient: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
+  emptyEventPreviewImage: {
+    height: 82,
+    justifyContent: 'flex-end',
+    padding: 12,
+  },
+  emptyEventPreviewTitle: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: '800',
+  },
+  emptyEventPreviewFooter: {
+    minHeight: 42,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  emptyEventPreviewMeta: {
+    flexShrink: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  emptyEventPreviewGuests: {
+    color: '#C6A75E',
+    fontSize: 12,
+    lineHeight: 17,
+    fontWeight: '700',
+    paddingRight: 12,
   },
   draftCard: {
     borderColor: '#F59E0B40',

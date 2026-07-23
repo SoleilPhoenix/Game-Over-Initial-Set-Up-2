@@ -11,6 +11,44 @@ const en = {
     profile: 'Profile',
   },
 
+  // ─── Marketing Empty States ───────────────────
+  emptyStates: {
+    partyPlanPrimary: 'Plan a party',
+    organizer: {
+      title: 'Plan the party everyone will talk about.',
+      subtitle: 'From choosing the city to settling the bill — everything in one app.',
+      previewLabel: 'THIS IS WHAT YOUR PARTY LOOKS LIKE',
+      previewTitle: "Max's Bachelor",
+      previewMeta: '📍 Berlin · Sat, Sept 12',
+      previewGuests: '8 guests',
+    },
+    guest: {
+      title: 'Your invitation might already be waiting.',
+      subtitle: 'Got a code? Enter it and you’re in.',
+      previewLabel: 'THIS IS WHAT YOUR INVITATION LOOKS LIKE',
+      previewTitle: "Sally's Bachelorette",
+      previewMeta: '📍 Berlin · invited by …',
+      primary: 'Enter invite code',
+      secondary: 'Or plan a party yourself →',
+    },
+    chat: {
+      title: 'The group chat without the chaos.',
+      subtitle: 'Channels for accommodation, activities, and more — as soon as your event is ready.',
+      previewLabel: 'THIS IS HOW YOU PLAN TOGETHER',
+      previewAccommodation: 'Accommodation',
+      previewActivities: 'Activities',
+      previewTransport: 'Who’s driving?',
+    },
+    budget: {
+      title: 'Never ask “Who owes what?” again',
+      subtitle: 'Fair splits, a clear overview — automatically.',
+      previewLabel: 'THIS IS HOW THE BUDGET SPLITS',
+      previewMax: 'Max  €149  ✓',
+      previewTom: 'Tom  €149  ✓',
+      previewBen: 'Ben  €149  pending',
+    },
+  },
+
   // ─── Events Screen ─────────────────────────────
   events: {
     title: 'Events',

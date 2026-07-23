@@ -9,7 +9,6 @@ import { ActivityIndicator, Animated, ScrollView, RefreshControl, Pressable, Sty
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEvents } from '@/hooks/queries/useEvents';
@@ -17,9 +16,11 @@ import { useBooking } from '@/hooks/queries/useBookings';
 import { useParticipants, participantKeys } from '@/hooks/queries/useParticipants';
 import { useInviteGuests } from '@/hooks/queries/useInvites';
 import { useUser } from '@/stores/authStore';
+import { useWizardStore } from '@/stores/wizardStore';
 import { useTheme } from '@/hooks/useTheme';
 import { type EditorialTheme } from '@/constants/designSystem';
 import { ShareModal } from '@/components/ui/ShareModal';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useActiveEventStore } from '@/stores/activeEventStore';
 import { useTranslation, getTranslation } from '@/i18n';
@@ -387,6 +388,11 @@ export default function BudgetDashboardScreen() {
       setManualRefreshing(false);
     }
   }, [refetchEvents]);
+
+  const handleCreateEvent = useCallback(() => {
+    useWizardStore.getState().startNewDraft(user?.id);
+    router.push('/create-event');
+  }, [router, user?.id]);
 
   // Deep-link: if the screen was opened with an eventIdParam, that wins and
   // seeds the shared store so the Chat tab lands on the same event too.
@@ -1036,28 +1042,43 @@ export default function BudgetDashboardScreen() {
           }
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <YStack justifyContent="center" alignItems="center">
-              <View style={styles.emptyIconContainer}>
-                <LinearGradient
-                  colors={[`${theme.accentGold}30`, `${theme.accentGold}10`]}
-                  style={styles.emptyIconGradient}
-                >
-                  <Text fontSize={56}>💰</Text>
-                </LinearGradient>
-              </View>
-              <Text fontSize={24} fontWeight="800" color={theme.textPrimary} marginBottom={8} textAlign="center">
-                {t.budget.noBudgetTitle}
-              </Text>
-              <Text
-                fontSize={16}
-                color={theme.textTertiary}
-                textAlign="center"
-                maxWidth={240}
-                lineHeight={24}
-              >
-                {t.budget.noBudgetSubtitle}
-              </Text>
-            </YStack>
+            <EmptyState
+              title={t.emptyStates.budget.title}
+              subtitle={t.emptyStates.budget.subtitle}
+              previewLabel={t.emptyStates.budget.previewLabel}
+              preview={
+                <View style={styles.emptyBudgetPreview}>
+                  {[
+                    {
+                      label: t.emptyStates.budget.previewMax,
+                      color: theme.success,
+                    },
+                    {
+                      label: t.emptyStates.budget.previewTom,
+                      color: theme.success,
+                    },
+                    {
+                      label: t.emptyStates.budget.previewBen,
+                      color: theme.warning,
+                    },
+                  ].map((item) => (
+                    <View key={item.label} style={styles.emptyBudgetPreviewRow}>
+                      <View
+                        style={[
+                          styles.emptyBudgetPreviewStatus,
+                          { backgroundColor: item.color },
+                        ]}
+                      />
+                      <Text style={[styles.emptyBudgetPreviewText, { color: item.color }]}>
+                        {item.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              }
+              primaryLabel={t.emptyStates.partyPlanPrimary}
+              onPrimary={handleCreateEvent}
+            />
           }
         />
       </View>
@@ -2671,15 +2692,29 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     color: theme.textTertiary,
     marginTop: 2,
   },
-  emptyIconContainer: {
-    marginBottom: 24,
+  emptyBudgetPreview: {
+    overflow: 'hidden',
+    borderRadius: 12,
+    backgroundColor: theme.surfaceLow,
   },
-  emptyIconGradient: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
+  emptyBudgetPreviewRow: {
+    minHeight: 42,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.ghostBorder,
+  },
+  emptyBudgetPreviewStatus: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  emptyBudgetPreviewText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
   },
   budgetCategoryBar: {
     backgroundColor: theme.surfaceLow,

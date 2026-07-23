@@ -13,6 +13,44 @@ const de: TranslationKeys = {
     profile: 'Profil',
   },
 
+  // ─── Marketing Empty States ───────────────────
+  emptyStates: {
+    partyPlanPrimary: 'Party planen',
+    organizer: {
+      title: 'Plane die Party, über die alle reden.',
+      subtitle: 'Von der Stadt bis zur Abrechnung - alles in einer App.',
+      previewLabel: 'SO SIEHT DEINE PARTY AUS',
+      previewTitle: "Max' Bachelor",
+      previewMeta: '📍 Berlin · Sa, 12. Sept',
+      previewGuests: '8 Gäste',
+    },
+    guest: {
+      title: 'Deine Einladung wartet vielleicht schon.',
+      subtitle: 'Code bekommen? Eintippen und du bist dabei.',
+      previewLabel: 'SO SIEHT DEINE EINLADUNG AUS',
+      previewTitle: "Sally's Bachelorette",
+      previewMeta: '📍 Berlin · eingeladen von …',
+      primary: 'Einladungscode eingeben',
+      secondary: 'Oder plane selbst eine Party →',
+    },
+    chat: {
+      title: 'Der Gruppenchat ohne Chaos.',
+      subtitle: 'Kanäle für Unterkunft, Aktivitäten & Co. - sobald dein Event steht.',
+      previewLabel: 'SO PLANT IHR GEMEINSAM',
+      previewAccommodation: 'Unterkunft',
+      previewActivities: 'Aktivitäten',
+      previewTransport: 'Wer fährt?',
+    },
+    budget: {
+      title: 'Nie wieder „Wer schuldet was?“',
+      subtitle: 'Faire Aufteilung, klare Übersicht - automatisch.',
+      previewLabel: 'SO TEILT SICH DAS BUDGET',
+      previewMax: 'Max  €149  ✓',
+      previewTom: 'Tom  €149  ✓',
+      previewBen: 'Ben  €149  offen',
+    },
+  },
+
   // ─── Events Screen ─────────────────────────────
   events: {
     title: 'Events',

@@ -12,6 +12,7 @@ import { YStack, XStack, Text, Image } from 'tamagui';
 import { Image as ExpoImage } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { ShareModal } from '@/components/ui/ShareModal';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useChannels, useCreateChannel } from '@/hooks/queries/useChat';
@@ -21,6 +22,7 @@ import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
 import { PastEventBanner } from '@/components/ui/PastEventBanner';
 import { useUser } from '@/stores/authStore';
+import { useWizardStore } from '@/stores/wizardStore';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useActiveEventStore } from '@/stores/activeEventStore';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
@@ -772,6 +774,43 @@ export default function CommunicationScreen() {
     handleAddChannel('general');
   };
 
+  const handleCreateEvent = () => {
+    useWizardStore.getState().startNewDraft(user?.id);
+    router.push('/create-event');
+  };
+
+  const renderChatEmptyState = () => (
+    <View style={styles.marketingEmptyState}>
+      <EmptyState
+        title={t.emptyStates.chat.title}
+        subtitle={t.emptyStates.chat.subtitle}
+        previewLabel={t.emptyStates.chat.previewLabel}
+        preview={
+          <View style={styles.emptyChannelPreview}>
+            {[
+              t.emptyStates.chat.previewAccommodation,
+              t.emptyStates.chat.previewActivities,
+              t.emptyStates.chat.previewTransport,
+            ].map((label) => (
+              <View key={label} style={styles.emptyChannelPreviewRow}>
+                <View style={styles.emptyChannelPreviewIcon}>
+                  <Ionicons
+                    name="chatbubble-ellipses-outline"
+                    size={15}
+                    color="#C6A75E"
+                  />
+                </View>
+                <Text style={styles.emptyChannelPreviewText}>{label}</Text>
+              </View>
+            ))}
+          </View>
+        }
+        primaryLabel={t.emptyStates.partyPlanPrimary}
+        onPrimary={handleCreateEvent}
+      />
+    </View>
+  );
+
   const handleCreatePoll = (category: ChannelCategory) => {
     setPollModalCategory(category);
     setPollQuestion('');
@@ -799,12 +838,7 @@ export default function CommunicationScreen() {
 
   const renderVotingTab = () => {
     if (bookedEvents.length === 0) {
-      return (
-        <View style={styles.lockedBanner}>
-          <Ionicons name="lock-closed-outline" size={18} color={'rgba(255,255,255,0.72)'} />
-          <Text style={styles.lockedBannerText}>{t.chat.bookToUnlock}</Text>
-        </View>
-      );
+      return renderChatEmptyState();
     }
     // Category config — same as POLL_CATEGORY_CONFIG defined at component scope
     const POLL_CATEGORY_CONFIG = POLL_CATEGORY_CONFIG_CONST;
@@ -1218,7 +1252,11 @@ export default function CommunicationScreen() {
       <Animated.View style={[{ flex: 1 }, swipeAnimStyle]} {...swipeHandlers}>
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 180 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          bookedEvents.length === 0 && styles.marketingEmptyScrollContent,
+          { paddingBottom: insets.bottom + 180 },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={isRefreshing}
@@ -1237,30 +1275,7 @@ export default function CommunicationScreen() {
         {selectedTab === 'topics' ? (
           /* Topics tab */
           bookedEvents.length === 0 ? (
-            /* No event booked - show grayed out channels with overlay message */
-            <>
-            <View style={styles.lockedBanner}>
-              <Ionicons name="lock-closed-outline" size={18} color={'rgba(255,255,255,0.72)'} />
-              <Text style={styles.lockedBannerText}>
-                {t.chat.bookToUnlock}
-              </Text>
-            </View>
-            <View style={{ opacity: 0.35, pointerEvents: 'none' as const }}>
-              {renderChannelSection('general', t.chat.general.toUpperCase())}
-              {renderChannelSection('accommodation', t.chat.accommodation.toUpperCase())}
-              {renderChannelSection('activities', t.chat.activities.toUpperCase())}
-              {renderChannelSection('budget', t.chat.budgetCategory.toUpperCase())}
-
-              {/* New-topic button remains available in Topics tab even after event ends */}
-              <View style={styles.channelSection}>
-                <Text style={styles.sectionTitle}>{t.chat.newTopics}</Text>
-                <Pressable style={styles.newTopicButton} onPress={handleCreateNewTopic}>
-                  <Ionicons name="add-circle-outline" size={24} color="#C6A75E" />
-                  <Text style={styles.newTopicText}>{t.chat.createNewTopic}</Text>
-                </Pressable>
-              </View>
-            </View>
-            </>
+            renderChatEmptyState()
           ) : (
             /* Event booked - show active channels */
             <>
@@ -1667,6 +1682,43 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 16,
   },
+  marketingEmptyScrollContent: {
+    flexGrow: 1,
+  },
+  marketingEmptyState: {
+    flex: 1,
+    minHeight: 430,
+    justifyContent: 'center',
+    paddingVertical: 20,
+  },
+  emptyChannelPreview: {
+    overflow: 'hidden',
+    borderRadius: 12,
+    backgroundColor: '#12253A',
+  },
+  emptyChannelPreviewRow: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(230,220,200,0.15)',
+  },
+  emptyChannelPreviewIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(198,167,94,0.14)',
+  },
+  emptyChannelPreviewText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
   shareEventCard: {
     backgroundColor: '#C6A75E',
     borderRadius: 999,
@@ -1751,33 +1803,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#C6A75E',
-  },
-  lockedBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(26,47,71,0.5)',
-    borderRadius: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginBottom: 16,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(230,220,200,0.15)',
-  },
-  lockedBannerText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: 'rgba(255,255,255,0.72)',
-  },
-  emptyIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(26,47,71,0.4)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
   },
   // Event Selector — Prominent blue card with city image
   eventSelectorWrapper: {

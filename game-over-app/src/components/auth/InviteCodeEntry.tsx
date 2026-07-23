@@ -20,18 +20,36 @@ import { useTranslation } from '@/i18n';
 interface InviteCodeEntryProps {
   /** Prefix for the testIDs, so both screens stay separately addressable in E2E. */
   testIDPrefix?: string;
+  /** Lets an empty state reveal the field immediately while keeping the default link treatment elsewhere. */
+  initiallyExpanded?: boolean;
+  /** The marketing empty state supplies its own primary submit button. */
+  showJoinButton?: boolean;
 }
 
-export function InviteCodeEntry({ testIDPrefix = 'invite-code' }: InviteCodeEntryProps) {
-  const [expanded, setExpanded] = React.useState(false);
+export interface InviteCodeEntryHandle {
+  submit: () => void;
+}
+
+export const InviteCodeEntry = React.forwardRef<InviteCodeEntryHandle, InviteCodeEntryProps>(
+function InviteCodeEntry(
+  {
+    testIDPrefix = 'invite-code',
+    initiallyExpanded = false,
+    showJoinButton = true,
+  },
+  ref,
+) {
+  const [expanded, setExpanded] = React.useState(initiallyExpanded);
   const [code, setCode] = React.useState('');
   const { t } = useTranslation();
 
-  const handleJoin = () => {
+  const handleJoin = React.useCallback(() => {
     const trimmed = code.trim().toUpperCase();
     if (!trimmed) return;
     router.push(`/invite/${trimmed}`);
-  };
+  }, [code]);
+
+  React.useImperativeHandle(ref, () => ({ submit: handleJoin }), [handleJoin]);
 
   if (!expanded) {
     return (
@@ -62,21 +80,23 @@ export function InviteCodeEntry({ testIDPrefix = 'invite-code' }: InviteCodeEntr
         autoFocus
         testID={`${testIDPrefix}-input`}
       />
-      <Pressable
-        style={({ pressed }) => [
-          styles.joinButton,
-          pressed && { opacity: 0.8 },
-          !code.trim() && { opacity: 0.5 },
-        ]}
-        onPress={handleJoin}
-        disabled={!code.trim()}
-        testID={`${testIDPrefix}-join`}
-      >
-        <Text style={styles.joinButtonText}>{t.auth.joinShort}</Text>
-      </Pressable>
+      {showJoinButton ? (
+        <Pressable
+          style={({ pressed }) => [
+            styles.joinButton,
+            pressed && { opacity: 0.8 },
+            !code.trim() && { opacity: 0.5 },
+          ]}
+          onPress={handleJoin}
+          disabled={!code.trim()}
+          testID={`${testIDPrefix}-join`}
+        >
+          <Text style={styles.joinButtonText}>{t.auth.joinShort}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   link: {
