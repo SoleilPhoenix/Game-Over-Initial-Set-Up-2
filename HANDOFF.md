@@ -1,7 +1,79 @@
 # Handoff - Game Over App
 
 Kurzer Übergabestand, damit eine neue Session (z. B. von der iPhone-Claude-Code-App) nahtlos anknüpfen kann.
-Letzte Aktualisierung: 2026-07-22.
+Letzte Aktualisierung: 2026-07-23.
+
+## Aktueller Stand (2026-07-23) - Guest-Flow rund, Empty-States neu, Test-DB geleert
+
+Alles auf `main` gemergt und gepusht, Kopf bei `c9b0b6ff8`. Arbeitsweise: Bau überwiegend via Codex
+(`gpt-5.6-sol`), Review/Architektur/DB von Claude. Jede Gruppe mit `npm run typecheck`, `npm run lint`,
+`npx vitest run` (96 Tests) grün. Am Gerät getestet wird vom User laufend; die neuesten Sachen sind
+teils noch ungesehen (siehe "Zum Gerätetest offen").
+
+### Was in dieser Sitzung fertig + live wurde
+
+1. **Auth-Journey neu.** Welcome + Continue zu **einem** Screen zusammengelegt (Social-Icons oben,
+   „Party planen" als schlanker E-Mail-Weg, Login, Gastcode). Deutsch ist Standardsprache
+   (`languageStore` default `de` + Migration). Social-Buttons sind echte Vektor-Logos. Launch-Intro
+   mit 4s-Logo-Aufbau (Video-Slot via `INTRO_VIDEO_SOURCE` = null, mp4 später einhängen).
+2. **Intro-Aufbau sichtbar gemacht.** Reveal startet erst wenn der Screen sichtbar ist
+   (`InteractionManager` + Fallback in `app/(auth)/intro.tsx`) - vorher verstrich der Anfang beim
+   Kaltstart unsichtbar. Davor schon: `ReduceMotion.Never` gegen iOS „Bewegung reduzieren".
+3. **Gast-Beitritt zusammengelegt (C).** `app/invite/[code].tsx`: Vorschau + Registrierung + Profil
+   auf **einem** Screen, Party-Typ-Badge oben (`get_invite_preview` liefert jetzt `party_type`),
+   Auth-Verzweigung (eingeloggt = nur Annehmen), Foto-Upload konvertiert nach JPEG.
+4. **Batch-1-Fixes.** HEIC-Foto-Upload (Konvertierung), deutsche Gast-Fehlermeldungen (i18n),
+   E-Mail/WhatsApp-Texte „Bachelor/Bachelorette Party (JGA)" + Stadt. `send-guest-invitations` neu
+   deployt.
+5. **Gästeliste-Status (D) + Zustell-Prüfung (B).** Mehrstufiges Badge aus `guest_invitations`
+   (Abgelehnt/Angenommen/Zustellung fehlgeschlagen/Eingeladen/Nicht eingeladen), „Ablehnen" schreibt
+   `decline_invite`. Async-E-Mail-Bounce via neuer Edge-Function `check-invite-delivery` (Resend-Poll).
+   Beide Edge-Functions **deployt**. Details: Memory `guest-flow-backlog` + `guest-accept-and-db-drift`.
+6. **Empty-States neu (6 Screens).** `src/components/ui/EmptyState.tsx` (wiederverwendbar): Hook +
+   Nutzen + gedimmte **Ergebnis-Vorschau** (statt Icon) + Gold-CTA, jeder Screen trichtert zu
+   „Party planen"/Code. Angewandt auf Events (Org/Gast), Chat (Themen/Abstimmung), Budget (Paket/Kosten).
+   Copy liegt als `emptyStates`-Baum in i18n - **bewusst v1**.
+7. **Test-DB komplett geleert.** Auf User-Wunsch: die 9 Test-Konten (+ ihre 4 Events) und danach
+   **alle** 165 Events von `leonardino@web.de` gelöscht. Jetzt: 1 Konto (`leonardino@web.de`),
+   0 Events/Teilnehmer/Codes/Buchungen. Sauberer Ausgangspunkt zum Neu-Testen.
+
+### HIER weitermachen (offen, priorisiert)
+
+- **Empty-States-Copy feilen.** Der User will die Hooks/Texte der 6 Empty-States final schärfen
+  ("treffen den Nerv noch nicht zu 100 %"). Alles in `src/i18n/{en,de}.ts` unter `emptyStates` -
+  reine Einzeiler-Edits, Parität wahren. Am lebenden Screen abstimmen.
+- **Async-Bounce-Vorbehalt prüfen.** `check-invite-delivery` funktioniert nur, wenn `RESEND_API_KEY`
+  Lesezugriff auf `GET /emails/{id}` hat. Testadresse: `bounce@resend.dev`. Wenn der Gast danach nicht
+  auf „Zustellung fehlgeschlagen" springt, liegt's am Key-Scope.
+- **mp4 fürs Intro einhängen.** Datei nach `assets/brand/intro.mp4`, dann in
+  `src/components/brand/introVideo.ts` das `null` durch das `require` im Kommentar ersetzen (1 Zeile).
+- **DB-Drift/CI abschließen.** Drift ist versöhnt und gemergt (`ad47dd9ad`); offen: die 3 GitHub-Secrets
+  (`SUPABASE_ACCESS_TOKEN/DB_PASSWORD/PROJECT_ID`) setzen, damit `migrate.yml` wieder migriert - ERST
+  danach, sonst wird der grüne Skip-Job rot. Siehe Memory `guest-accept-and-db-drift`.
+
+### Zum Gerätetest offen (am Gerät noch ungesehen)
+
+Empty-States (alle 6), der zusammengelegte Gast-Screen mit echtem Code, das Status-Badge im
+Live-Verlauf (Eingeladen→Angenommen/Abgelehnt), der Intro-Kaltstart nach dem Sichtbarkeits-Fix,
+und OAuth (Apple nur mit echtem Konto prüfbar).
+
+### DB / Deploy / Umgebung (wichtig)
+
+- **Supabase-MCP schreibt in dieser Session noch** (die read-only-`.mcp.json` der Drift-Session greift
+  erst nach Neustart). DB-Änderungen dieser Sitzung wurden per MCP `apply_migration` angewendet und die
+  lokale Migrationsdatei mit der **real aufgezeichneten** Version benannt (nicht geraten):
+  `20260722140438` accept_invite, `20260723041729` party_type-in-preview, `20260723045107`
+  decline_invite, `20260723050510` provider_message_id.
+- **Vor jeder neuen Migration die echte DB per MCP prüfen** (`execute_sql` gegen `pg_proc`/`pg_policies`/
+  `schema_migrations`), den Dateien nicht blind trauen. Live-DB driftet historisch.
+- **Edge-Functions deployen** per CLI aus dem Worktree: `npx supabase functions deploy <name>
+  --project-ref stdbvehmjpmqbjyiodqg` (CLI ist eingeloggt/verlinkt). Diese Sitzung deployt:
+  `send-guest-invitations`, `check-invite-delivery`.
+- **Neues npm-Paket = im Hauptordner `npm install`**, sonst startet der User die App nicht
+  (`expo-video`, `expo-image-manipulator` bissen hier schon). Immer nach `npm install` im
+  Haupt-Worktree den `package-lock.json`-Rausch prüfen.
+
+---
 
 ## Aktueller Stand (2026-07-22 spät) - Intro-Fix, Logo-Größen, Gast-Flow gehärtet
 
