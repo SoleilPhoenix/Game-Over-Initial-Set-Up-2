@@ -415,7 +415,7 @@ serve(async (req: Request) => {
       // 4. Send — only Email (SendGrid) and WhatsApp (Twilio) are supported channels.
       // Regular SMS has been intentionally removed as a channel; a failed WhatsApp send
       // is reported back so the organizer can retry or invite via email instead.
-      let sendResult: { success: boolean; error?: string; twilioCode?: number };
+      let sendResult: { success: boolean; error?: string; twilioCode?: number; messageId?: string };
 
       if (channel === 'email') {
         const html = getGuestInviteEmailHtml({
@@ -459,6 +459,7 @@ serve(async (req: Request) => {
         status,
         error: sendResult.error ?? null,
         invite_code: code,
+        provider_message_id: channel === 'email' ? (sendResult.messageId ?? null) : null,
       }).then(({ error }) => {
         if (error) console.warn('[guest_invitations] insert failed (sent):', error.message);
       });

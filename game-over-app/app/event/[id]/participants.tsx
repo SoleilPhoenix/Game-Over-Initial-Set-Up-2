@@ -232,6 +232,25 @@ export default function ManageInvitationsScreen() {
     void fetchGuestInvitations();
   }, [fetchGuestInvitations]);
 
+  const deliveryCheckStartedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!id || !user?.id || event?.created_by !== user.id) return;
+    if (deliveryCheckStartedRef.current.has(id)) return;
+    deliveryCheckStartedRef.current.add(id);
+
+    void (async () => {
+      try {
+        await supabase.functions.invoke('check-invite-delivery', {
+          body: { eventId: id },
+        });
+      } catch {
+        // Delivery polling is best effort and must never block this screen.
+      } finally {
+        await fetchGuestInvitations();
+      }
+    })();
+  }, [event?.created_by, fetchGuestInvitations, id, user?.id]);
+
   // Fetch own profile from DB so organizer name is shown even if user_metadata.full_name is unset.
   // Also ensures guests see their updated name after editing in profile settings.
   const [ownProfile, setOwnProfile] = useState<{ full_name: string | null; avatar_url: string | null } | null>(null);
