@@ -21,7 +21,7 @@ export const participantsRepository = {
   async getByEventId(eventId: string): Promise<ParticipantWithProfile[]> {
     const { data, error } = await supabase
       .from('event_participants')
-      .select('*')
+      .select('id, event_id, user_id, role, payment_status, payment_claimed_at, contribution_amount_cents, confirmed_at, invited_at, invited_via')
       .eq('event_id', eventId)
       .order('invited_at', { ascending: true });
 
@@ -159,10 +159,15 @@ export const participantsRepository = {
   /**
    * Get all events where the user participates as a guest
    */
-  async getGuestParticipations(userId: string): Promise<{ event_id: string; role: string; payment_status: string | null }[]> {
+  async getGuestParticipations(userId: string): Promise<{
+    event_id: string;
+    role: string;
+    payment_status: string | null;
+    payment_claimed_at: string | null;
+  }[]> {
     const { data, error } = await supabase
       .from('event_participants')
-      .select('event_id, role, payment_status')
+      .select('event_id, role, payment_status, payment_claimed_at')
       .eq('user_id', userId)
       .eq('role', 'guest');
 

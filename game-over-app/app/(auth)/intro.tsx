@@ -27,8 +27,10 @@
  */
 
 import React from 'react';
-import { View, Text, StyleSheet, StatusBar, Pressable, InteractionManager } from 'react-native';
-import { router } from 'expo-router';
+import { View, Text, StyleSheet, StatusBar, Pressable } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
+import { router, useNavigation } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { AnimatedLogo, LOGO_REVEAL_DURATION } from '@/components/brand/AnimatedLogo';
@@ -44,17 +46,27 @@ const SKIP_APPEARS_AFTER = 1800;
 
 type Phase = 'logo' | 'video';
 
+type TransitionNavigation = {
+  addListener: (
+    event: 'transitionEnd',
+    listener: (event: { data: { closing: boolean } }) => void
+  ) => () => void;
+};
+
 export default function IntroScreen() {
   const [phase, setPhase] = React.useState<Phase>('logo');
   const [showSkip, setShowSkip] = React.useState(false);
-  // The reveal advances by wall-clock from the moment AnimatedLogo mounts. On a
-  // cold start the screen mounts a beat before it is actually painted (JS warm-up
-  // plus the fade transition), so starting on mount ate the first ~2 s and only
-  // the tail was seen. Gate the whole logo phase on this flag, set once the entry
-  // interactions have settled, so the draw-on starts when the screen is visible.
+  const [hasLaidOut, setHasLaidOut] = React.useState(false);
+  const [transitionEnded, setTransitionEnded] = React.useState(false);
   const [ready, setReady] = React.useState(false);
+  const isFocused = useIsFocused();
+  // Expo Router types this as the core navigation event map, while the native
+  // stack also emits transitionEnd at runtime.
+  const navigation = useNavigation() as unknown as TransitionNavigation;
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  const revealStartClaimed = React.useRef(false);
+  const revealFrame = React.useRef<number | null>(null);
 
   // Guards the two exits from racing: the video can report completion at almost
   // the same moment its backstop timer fires.
@@ -67,16 +79,51 @@ export default function IntroScreen() {
     router.replace('/(auth)/welcome');
   }, []);
 
+  React.useEffect(
+    () =>
+      navigation.addListener('transitionEnd', (event) => {
+        if (!event.data.closing) setTransitionEnded(true);
+      }),
+    [navigation]
+  );
+
+  // Safety net: if the native-stack transitionEnd never arrives (some devices /
+  // no-animation presentations), the reveal would otherwise never start and the
+  // splash would never hide. This timer only arms once the screen is laid out AND
+  // focused, so it cannot reintroduce the invisible-start bug the transitionEnd
+  // gate was added to fix — by then the screen is on (or about to be on) screen.
   React.useEffect(() => {
-    const handle = InteractionManager.runAfterInteractions(() => setReady(true));
-    // Fallback: never let the intro hang on a device where the interaction
-    // handle does not resolve promptly.
-    const fallback = setTimeout(() => setReady(true), 700);
+    if (transitionEnded || !hasLaidOut || !isFocused) return;
+    const settle = setTimeout(() => setTransitionEnded(true), 600);
+    return () => clearTimeout(settle);
+  }, [transitionEnded, hasLaidOut, isFocused]);
+
+  React.useEffect(() => {
+    if (ready || !hasLaidOut || !isFocused || !transitionEnded || revealStartClaimed.current) return;
+
+    revealStartClaimed.current = true;
+    let cancelled = false;
+
+    void SplashScreen.hideAsync()
+      .catch(() => {})
+      .then(() => {
+        if (cancelled) return;
+
+        // Give the native splash removal and the already-laid-out intro two
+        // commits before mounting AnimatedLogo and starting its Reanimated clock.
+        revealFrame.current = requestAnimationFrame(() => {
+          revealFrame.current = requestAnimationFrame(() => {
+            if (!cancelled) setReady(true);
+          });
+        });
+      });
+
     return () => {
-      handle.cancel();
-      clearTimeout(fallback);
+      cancelled = true;
+      revealStartClaimed.current = false;
+      if (revealFrame.current !== null) cancelAnimationFrame(revealFrame.current);
     };
-  }, []);
+  }, [ready, hasLaidOut, isFocused, transitionEnded]);
 
   React.useEffect(() => {
     if (!ready) return;
@@ -100,7 +147,11 @@ export default function IntroScreen() {
   }, [ready, phase, finish]);
 
   return (
-    <View style={styles.container} testID="intro-screen">
+    <View
+      style={styles.container}
+      onLayout={() => setHasLaidOut(true)}
+      testID="intro-screen"
+    >
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {phase === 'logo' ? (

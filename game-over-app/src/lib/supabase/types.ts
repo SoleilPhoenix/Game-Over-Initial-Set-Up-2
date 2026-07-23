@@ -175,6 +175,7 @@ export type Database = {
           id: string
           invited_at: string | null
           invited_via: string | null
+          payment_claimed_at: string | null
           payment_status: Database["public"]["Enums"]["payment_status"] | null
           role: Database["public"]["Enums"]["participant_role"]
           user_id: string
@@ -186,6 +187,7 @@ export type Database = {
           id?: string
           invited_at?: string | null
           invited_via?: string | null
+          payment_claimed_at?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
           role: Database["public"]["Enums"]["participant_role"]
           user_id: string
@@ -197,6 +199,7 @@ export type Database = {
           id?: string
           invited_at?: string | null
           invited_via?: string | null
+          payment_claimed_at?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
           role?: Database["public"]["Enums"]["participant_role"]
           user_id?: string
@@ -896,6 +899,10 @@ export type Database = {
       }
       is_event_creator: { Args: { p_event_id: string }; Returns: boolean }
       is_event_participant: { Args: { p_event_id: string }; Returns: boolean }
+      mark_payment_claimed: {
+        Args: { p_event_id: string }
+        Returns: boolean
+      }
       get_invite_preview: {
         Args: { p_code: string }
         Returns: {

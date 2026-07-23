@@ -4,9 +4,8 @@
  * Matches the dark theme design from UI specifications
  */
 
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Alert, RefreshControl, Pressable, StyleSheet, SectionList, View } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
@@ -40,28 +39,24 @@ export default function NotificationsScreen() {
   const user = useUser();
   const queryClient = useQueryClient();
   const [guestPayConfirming, setGuestPayConfirming] = useState(false);
-  const [guestPayConfirmed, setGuestPayConfirmed] = useState(false);
 
   // All hooks at the top — no conditional calls
-  const { urgentEvents, guestUrgentEvent, guestPaidRecentEvent, isGuestContribution } = useUrgentPayment();
+  const {
+    urgentEvents,
+    guestUrgentEvent,
+    guestClaimedRecentEvent,
+    guestPaidRecentEvent,
+    isGuestContribution,
+  } = useUrgentPayment();
 
   // isOrganizer: true only if user created the guest-relevant event.
   // Check guestUrgentEvent first; fall back to guestPaidRecentEvent (shown after payment).
   // Never default to true — that would hide the "Contribution Confirmed" card.
-  const relevantGuestEvent = guestUrgentEvent ?? guestPaidRecentEvent;
+  const relevantGuestEvent = guestUrgentEvent ?? guestClaimedRecentEvent ?? guestPaidRecentEvent;
   const isOrganizer = relevantGuestEvent ? relevantGuestEvent.created_by === user?.id : false;
 
-  // Persist "payment confirmed" in AsyncStorage so the card survives navigation.
-  const GUEST_PAID_KEY = user?.id ? `gameover:guest_paid_confirmed:${user.id}` : null;
-  useEffect(() => {
-    if (!GUEST_PAID_KEY) return;
-    AsyncStorage.getItem(GUEST_PAID_KEY).then(val => {
-      if (val === '1') setGuestPayConfirmed(true);
-    }).catch(() => {});
-  }, [GUEST_PAID_KEY]);
-
-  // Load participants for the guest's urgent event (to show organizer name)
-  const { data: guestEventParticipants } = useParticipants(guestUrgentEvent?.id);
+  // Load participants for the relevant guest event (to show organizer name)
+  const { data: guestEventParticipants } = useParticipants(relevantGuestEvent?.id);
   const organizerName = guestEventParticipants?.find(p => p.role === 'organizer')?.profile?.full_name ?? (t.notifications as any).organizerFallback;
 
   const handleGuestMarkAsPaid = () => {
@@ -76,23 +71,49 @@ export default function NotificationsScreen() {
             if (!guestUrgentEvent?.id || !user?.id) return;
             setGuestPayConfirming(true);
             try {
-              const { error: updateError } = await supabase
-                .from('event_participants')
-                .update({ payment_status: 'paid' })
-                .eq('event_id', guestUrgentEvent.id)
-                .eq('user_id', user.id);
-              if (updateError) throw updateError;
-              void supabase.from('notifications').insert({
-                event_id: guestUrgentEvent.id,
-                title: 'Payment Confirmed',
-                body: `A guest has confirmed their payment for ${guestUrgentEvent.title || `${guestUrgentEvent.honoree_name}'s event`}.`,
-                type: 'payment_confirmed',
-                user_id: user.id,
+              const eventId = guestUrgentEvent.id;
+              const claimedAt = new Date().toISOString();
+              const { error: claimError } = await supabase.rpc('mark_payment_claimed', {
+                p_event_id: eventId,
               });
-              queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(guestUrgentEvent.id) });
-              queryClient.invalidateQueries({ queryKey: ['guestParticipations', user?.id] });
-              setGuestPayConfirmed(true);
-              if (GUEST_PAID_KEY) AsyncStorage.setItem(GUEST_PAID_KEY, '1').catch(() => {});
+              if (claimError) throw claimError;
+
+              queryClient.setQueryData(
+                participantKeys.byEvent(eventId),
+                (current: any[] | undefined) => current?.map(participant =>
+                  participant.user_id === user.id
+                    ? { ...participant, payment_claimed_at: claimedAt }
+                    : participant
+                )
+              );
+              queryClient.setQueryData(
+                ['guestParticipations', user.id],
+                (current: any[] | undefined) => current?.map(participation =>
+                  participation.event_id === eventId
+                    ? { ...participation, payment_claimed_at: claimedAt }
+                    : participation
+                )
+              );
+              await queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(eventId) });
+              await queryClient.invalidateQueries({ queryKey: ['guestParticipations', user.id] });
+
+              const eventName = guestUrgentEvent.title
+                || (guestUrgentEvent.honoree_name
+                  ? t.notifications.honoreeEventFallback.replace('{{name}}', guestUrgentEvent.honoree_name)
+                  : t.notifications.yourEventFallback);
+              const guestName = user.user_metadata?.full_name || user.email || 'Guest';
+              const { error: notificationError } = await supabase.from('notifications').insert({
+                event_id: guestUrgentEvent.id,
+                title: t.notifications.paymentClaimedTitle,
+                body: t.notifications.paymentClaimedBody
+                  .replace('{{guest}}', guestName)
+                  .replace('{{event}}', eventName),
+                type: 'payment_claimed',
+                user_id: guestUrgentEvent.created_by,
+              });
+              if (notificationError) {
+                console.warn('[notifications] payment claim notification failed:', notificationError.message);
+              }
             } catch (e: any) {
               Alert.alert(t.common.error, e.message || t.notifications.errorConfirmPayment);
             } finally {
@@ -200,7 +221,11 @@ export default function NotificationsScreen() {
 
   const hasNotifications = groupedNotifications.length > 0;
   const organizerUrgentEvents = urgentEvents.filter(info => info.event.created_by === user?.id);
-  const hasAnyContent = hasNotifications || organizerUrgentEvents.length > 0 || isGuestContribution || !!guestPaidRecentEvent || guestPayConfirmed;
+  const hasAnyContent = hasNotifications
+    || organizerUrgentEvents.length > 0
+    || isGuestContribution
+    || !!guestClaimedRecentEvent
+    || !!guestPaidRecentEvent;
 
   return (
     <YStack flex={1} backgroundColor={theme.background} testID="notifications-screen">
@@ -251,7 +276,9 @@ export default function NotificationsScreen() {
           stickySectionHeadersEnabled={false}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
-            (organizerUrgentEvents.length > 0 || (isGuestContribution && !isOrganizer) || ((!!guestPaidRecentEvent || guestPayConfirmed) && !isOrganizer)) ? (
+            (organizerUrgentEvents.length > 0
+              || (isGuestContribution && !isOrganizer)
+              || ((!!guestClaimedRecentEvent || !!guestPaidRecentEvent) && !isOrganizer)) ? (
               <>
                 {/* TODAY label above all urgency rows */}
                 <YStack paddingHorizontal="$4" paddingTop="$3" paddingBottom="$1" marginLeft="$1">
@@ -265,8 +292,8 @@ export default function NotificationsScreen() {
                   </Text>
                 </YStack>
 
-                {/* Guest: payment confirmed card (shown after marking as paid — persists via AsyncStorage) */}
-                {!isGuestContribution && !isOrganizer && (guestPaidRecentEvent || guestPayConfirmed) && (
+                {/* Guest: organizer-confirmed payment */}
+                {!isGuestContribution && !guestClaimedRecentEvent && !isOrganizer && guestPaidRecentEvent && (
                   <View style={[styles.guestPayCard, { borderColor: 'rgba(52, 211, 153, 0.25)', backgroundColor: 'rgba(52, 211, 153, 0.07)' }]}>
                     <XStack alignItems="center" gap={12}>
                       <View style={[styles.urgencyIconCircle, { backgroundColor: 'rgba(52, 211, 153, 0.18)' }]}>
@@ -284,6 +311,32 @@ export default function NotificationsScreen() {
                     </XStack>
                     <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 20, marginTop: 10 }}>
                       {(t.notifications as any).contributionConfirmedMsg}
+                    </Text>
+                  </View>
+                )}
+
+                {/* Guest: payment claimed, awaiting organizer confirmation */}
+                {guestClaimedRecentEvent && !isOrganizer && (
+                  <View style={[styles.guestPayCard, { borderColor: 'rgba(217, 119, 6, 0.35)', backgroundColor: 'rgba(217, 119, 6, 0.09)' }]}>
+                    <XStack alignItems="center" gap={12}>
+                      <View style={[styles.urgencyIconCircle, { backgroundColor: 'rgba(217, 119, 6, 0.18)' }]}>
+                        <Ionicons name="time-outline" size={18} color="#D97706" />
+                      </View>
+                      <YStack flex={1}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#D97706' }}>
+                          {t.notifications.contributionClaimed}
+                        </Text>
+                        <Text style={{ fontSize: 12, color: theme.textSecondary }} numberOfLines={1}>
+                          {guestClaimedRecentEvent.title
+                            || (guestClaimedRecentEvent.honoree_name
+                              ? t.notifications.honoreeEventFallback.replace('{{name}}', guestClaimedRecentEvent.honoree_name)
+                              : t.notifications.yourEventFallback)}
+                        </Text>
+                      </YStack>
+                      <Ionicons name="time" size={20} color="#D97706" />
+                    </XStack>
+                    <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 20, marginTop: 10 }}>
+                      {t.notifications.contributionClaimedMsg}
                     </Text>
                   </View>
                 )}
@@ -314,25 +367,16 @@ export default function NotificationsScreen() {
                           ? [part, <Text key={i} style={{ color: theme.textPrimary, fontWeight: '600' }}>{organizerName}</Text>]
                           : [part])}
                     </Text>
-                    {guestPayConfirmed ? (
-                      <XStack alignItems="center" gap={8} justifyContent="center">
-                        <Ionicons name="checkmark-circle" size={18} color="#10B981" />
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#10B981' }}>
-                          {(t.notifications as any).paymentConfirmedNotified}
-                        </Text>
-                      </XStack>
-                    ) : (
-                      <Pressable
-                        style={[styles.guestPayButton, guestPayConfirming && { opacity: 0.6 }]}
-                        onPress={handleGuestMarkAsPaid}
-                        disabled={guestPayConfirming}
-                      >
-                        <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>
-                          {guestPayConfirming ? (t.notifications as any).confirming : (t.notifications as any).ivePaidConfirm}
-                        </Text>
-                      </Pressable>
-                    )}
+                    <Pressable
+                      style={[styles.guestPayButton, guestPayConfirming && { opacity: 0.6 }]}
+                      onPress={handleGuestMarkAsPaid}
+                      disabled={guestPayConfirming}
+                    >
+                      <Ionicons name="checkmark-circle-outline" size={18} color="#FFFFFF" />
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>
+                        {guestPayConfirming ? t.notifications.confirming : t.notifications.ivePaidConfirm}
+                      </Text>
+                    </Pressable>
                   </View>
                 )}
 

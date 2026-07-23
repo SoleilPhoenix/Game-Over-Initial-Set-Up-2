@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
-import { useParticipants, participantKeys } from '@/hooks/queries/useParticipants';
+import { useParticipants, participantKeys, useUpdateParticipantPayment } from '@/hooks/queries/useParticipants';
 import { useInviteGuests } from '@/hooks/queries/useInvites';
 import { useUser } from '@/stores/authStore';
 import { useWizardStore } from '@/stores/wizardStore';
@@ -152,6 +152,7 @@ export default function BudgetDashboardScreen() {
   const selectedEventId = useActiveEventStore((s) => s.activeEventId);
   const setSelectedEventId = useActiveEventStore((s) => s.setActiveEventId);
   const [markingPaidUserId, setMarkingPaidUserId] = useState<string | null>(null);
+  const updateParticipantPayment = useUpdateParticipantPayment();
   const [manualRefreshing, setManualRefreshing] = useState(false);
   // Derived: is the current user the organizer of the selected event?
   // Used to hide organizer-only actions (Pay Remaining Balance, Invite Guests, Remind All).
@@ -1342,7 +1343,12 @@ export default function BudgetDashboardScreen() {
                   const isPaid = isDemo
                     ? (participantRaw as DemoP).status === 'paid'
                     : (participantRaw as any).payment_status === 'paid' || isOrganizerRow;
+                  const isClaimed = !isDemo
+                    && !isPaid
+                    && !!(participantRaw as any).payment_claimed_at;
                   const isPending = !isPaid;
+                  const participantRole = isDemo ? null : (participantRaw as any).role;
+                  const participantUserId = isDemo ? null : (participantRaw as any).user_id as string;
                   const perPersonAmount = booking?.per_person_cents || budgetStats.perPerson || 0;
                   const amountForRow = isDemo
                     ? (participantRaw as DemoP).amount
@@ -1358,56 +1364,72 @@ export default function BudgetDashboardScreen() {
                   const initials = (name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2)) || '?';
                   const key = (participantRaw as any).id as string;
                   const pendingColor = 'rgba(249,115,22,0.75)';
+                  const claimedColor = '#D97706';
 
                   return (
                     <View key={key} style={styles.contributionCard}>
-                      {/* Avatar */}
-                      {!isDemo && ((participantRaw as any).profile?.avatar_url || (isCurrentUser && userAvatar)) ? (
-                        <View style={[styles.participantAvatarInitials, { overflow: 'hidden' }]}>
-                          <AvatarImage
-                            uri={(participantRaw as any).profile?.avatar_url || userAvatar}
-                            style={{ width: 40, height: 40, borderRadius: 20 }}
-                            fallback={
-                              <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
-                                <Text style={styles.participantInitialsText}>{initials}</Text>
-                              </View>
-                            }
-                          />
-                        </View>
-                      ) : (
-                        <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
-                          <Text style={styles.participantInitialsText}>{initials}</Text>
-                        </View>
-                      )}
+                      <View style={styles.contributionMainRow}>
+                        {/* Avatar */}
+                        {!isDemo && ((participantRaw as any).profile?.avatar_url || (isCurrentUser && userAvatar)) ? (
+                          <View style={[styles.participantAvatarInitials, { overflow: 'hidden' }]}>
+                            <AvatarImage
+                              uri={(participantRaw as any).profile?.avatar_url || userAvatar}
+                              style={{ width: 40, height: 40, borderRadius: 20 }}
+                              fallback={
+                                <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
+                                  <Text style={styles.participantInitialsText}>{initials}</Text>
+                                </View>
+                              }
+                            />
+                          </View>
+                        ) : (
+                          <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
+                            <Text style={styles.participantInitialsText}>{initials}</Text>
+                          </View>
+                        )}
 
-                      {/* Name + (You) */}
-                      <View style={{ flex: 1, marginLeft: 12 }}>
-                        <XStack alignItems="center" gap={6}>
-                          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>
-                            {name}
+                        {/* Name + (You) */}
+                        <View style={styles.contributionName}>
+                          <XStack alignItems="center" gap={6}>
+                            <Text
+                              style={{ flexShrink: 1, fontSize: 14, fontWeight: '600', color: theme.textPrimary }}
+                              numberOfLines={1}
+                            >
+                              {name}
+                            </Text>
+                            {isCurrentUser && (
+                              <View style={{ flexShrink: 0, backgroundColor: theme.surfaceHigh, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textTertiary, letterSpacing: 0.4 }}>{(t.budget as any).youBadge}</Text>
+                              </View>
+                            )}
+                          </XStack>
+                        </View>
+
+                        {/* Amount + status stacked on the right */}
+                        <YStack style={styles.contributionAmount} alignItems="flex-end" gap={2}>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
+                            {formatCurrency(amountForRow)}
                           </Text>
-                          {isCurrentUser && (
-                            <View style={{ backgroundColor: theme.surfaceHigh, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                              <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textTertiary, letterSpacing: 0.4 }}>{(t.budget as any).youBadge}</Text>
-                            </View>
-                          )}
-                        </XStack>
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontWeight: '700',
+                              color: isPaid ? theme.success : isClaimed ? claimedColor : pendingColor,
+                              letterSpacing: 0.5,
+                              textAlign: 'right',
+                              textTransform: 'uppercase',
+                            }}
+                            numberOfLines={2}
+                          >
+                            {isPaid ? t.budget.paid : isClaimed ? t.budget.claimed : t.budget.pending}
+                          </Text>
+                        </YStack>
                       </View>
 
-                      {/* Amount + status stacked on the right */}
-                      <YStack alignItems="flex-end" gap={2}>
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
-                          {formatCurrency(amountForRow)}
-                        </Text>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: isPaid ? theme.textTertiary : pendingColor, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                          {isPaid ? t.budget.paid : t.budget.pending}
-                        </Text>
-                      </YStack>
-
-                      {/* "I've Paid" inline button — current user's pending row only */}
-                      {isCurrentUser && isPending && !isOrganizer && !isDemo && (
+                      {/* Payment actions wrap beneath the row to avoid collisions on narrow screens. */}
+                      {isCurrentUser && isPending && !isClaimed && !isOrganizer && !isDemo && (
                         <Pressable
-                          style={[styles.markPaidButton, { marginLeft: 8 }, markingPaidUserId === user?.id && { opacity: 0.6 }]}
+                          style={[styles.markPaidButton, markingPaidUserId === user?.id && { opacity: 0.6 }]}
                           disabled={markingPaidUserId === user?.id}
                           onPress={() => {
                             Alert.alert(
@@ -1421,16 +1443,50 @@ export default function BudgetDashboardScreen() {
                                     if (!selectedEventId || !user?.id) return;
                                     setMarkingPaidUserId(user.id);
                                     try {
-                                      await supabase
-                                        .from('event_participants')
-                                        .update({ payment_status: 'paid' })
-                                        .eq('event_id', selectedEventId)
-                                        .eq('user_id', user.id);
-                                      queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(selectedEventId) });
-                                      queryClient.invalidateQueries({ queryKey: ['guestParticipations', user.id] });
+                                      const claimedAt = new Date().toISOString();
+                                      const { error: claimError } = await supabase.rpc('mark_payment_claimed', {
+                                        p_event_id: selectedEventId,
+                                      });
+                                      if (claimError) throw claimError;
+
+                                      queryClient.setQueryData(
+                                        participantKeys.byEvent(selectedEventId),
+                                        (current: any[] | undefined) => current?.map(participant =>
+                                          participant.user_id === user.id
+                                            ? { ...participant, payment_claimed_at: claimedAt }
+                                            : participant
+                                        )
+                                      );
+                                      queryClient.setQueryData(
+                                        ['guestParticipations', user.id],
+                                        (current: any[] | undefined) => current?.map(participation =>
+                                          participation.event_id === selectedEventId
+                                            ? { ...participation, payment_claimed_at: claimedAt }
+                                            : participation
+                                        )
+                                      );
+                                      await queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(selectedEventId) });
+                                      await queryClient.invalidateQueries({ queryKey: ['guestParticipations', user.id] });
+
+                                      if (selectedEvent?.created_by) {
+                                        const eventName = selectedEvent.title || selectedEvent.honoree_name || t.notifications.yourEventFallback;
+                                        const guestName = user.user_metadata?.full_name || user.email || name;
+                                        const { error: notificationError } = await supabase.from('notifications').insert({
+                                          event_id: selectedEventId,
+                                          title: t.notifications.paymentClaimedTitle,
+                                          body: t.notifications.paymentClaimedBody
+                                            .replace('{{guest}}', guestName)
+                                            .replace('{{event}}', eventName),
+                                          type: 'payment_claimed',
+                                          user_id: selectedEvent.created_by,
+                                        });
+                                        if (notificationError) {
+                                          console.warn('[budget] payment claim notification failed:', notificationError.message);
+                                        }
+                                      }
                                       Alert.alert(t.budget.thankYou, t.budget.paymentConfirmedMsg);
-                                    } catch {
-                                      Alert.alert(t.common.error, t.budget.errorUpdatingStatus);
+                                    } catch (error: any) {
+                                      Alert.alert(t.common.error, error.message || t.budget.errorUpdatingStatus);
                                     } finally {
                                       setMarkingPaidUserId(null);
                                     }
@@ -1441,7 +1497,34 @@ export default function BudgetDashboardScreen() {
                           }}
                         >
                           <Ionicons name="checkmark-circle-outline" size={14} color={theme.accentGold} />
-                          <Text style={styles.markPaidButtonText}>I've Paid</Text>
+                          <Text style={styles.markPaidButtonText}>{t.budget.ivePaid}</Text>
+                        </Pressable>
+                      )}
+                      {isOrganizer && participantRole === 'guest' && isClaimed && participantUserId && (
+                        <Pressable
+                          style={[styles.confirmClaimButton, markingPaidUserId === participantUserId && { opacity: 0.6 }]}
+                          disabled={markingPaidUserId === participantUserId}
+                          onPress={async () => {
+                            if (!selectedEventId) return;
+                            setMarkingPaidUserId(participantUserId);
+                            try {
+                              await updateParticipantPayment.mutateAsync({
+                                eventId: selectedEventId,
+                                userId: participantUserId,
+                                status: 'paid',
+                              });
+                              await queryClient.invalidateQueries({ queryKey: ['guestParticipations', participantUserId] });
+                            } catch (error: any) {
+                              Alert.alert(t.common.error, error.message || t.budget.errorUpdatingStatus);
+                            } finally {
+                              setMarkingPaidUserId(null);
+                            }
+                          }}
+                        >
+                          {markingPaidUserId === participantUserId
+                            ? <ActivityIndicator size="small" color={theme.background} />
+                            : <Ionicons name="checkmark-circle-outline" size={14} color={theme.background} />}
+                          <Text style={styles.confirmClaimButtonText}>{t.budget.confirmClaim}</Text>
                         </Pressable>
                       )}
                     </View>
@@ -2476,13 +2559,26 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     borderBottomColor: theme.ghostBorder,
   },
   contributionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: theme.surfaceCard,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
     borderColor: theme.ghostBorder,
+  },
+  contributionMainRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  contributionName: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 12,
+    marginRight: 8,
+  },
+  contributionAmount: {
+    flexShrink: 0,
+    maxWidth: '42%',
   },
   participantAvatarGradient: {
     width: 40,
@@ -2607,8 +2703,8 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     gap: 6,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    marginHorizontal: 8,
-    marginBottom: 8,
+    alignSelf: 'flex-end',
+    marginTop: 10,
     borderRadius: 10,
     backgroundColor: 'rgba(198, 167, 94, 0.1)',
     borderWidth: 1,
@@ -2618,6 +2714,23 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: theme.accentGold,
+  },
+  confirmClaimButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'flex-end',
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    marginTop: 10,
+    borderRadius: 10,
+    backgroundColor: theme.accentGold,
+  },
+  confirmClaimButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.background,
   },
   inviteButton: {
     flexDirection: 'row',

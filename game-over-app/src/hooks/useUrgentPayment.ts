@@ -146,6 +146,19 @@ export function useUrgentPayment() {
       const participation = userParticipations.find(p => p.event_id === event.id);
       if (!participation || participation.role !== 'guest') return false;
       if (participation.payment_status === 'paid') return false;
+      if (participation.payment_claimed_at) return false;
+      const days = daysUntil(event.start_date);
+      return days !== null && days <= 14;
+    }) ?? null;
+  }, [events, currentUserId, userParticipations]);
+
+  // A claim stops the payment nag while the organizer verifies the transfer.
+  const guestClaimedRecentEvent = useMemo(() => {
+    if (!currentUserId || userParticipations.length === 0) return null;
+    return (events ?? []).find(event => {
+      const participation = userParticipations.find(p => p.event_id === event.id);
+      if (!participation || participation.role !== 'guest') return false;
+      if (participation.payment_status === 'paid' || !participation.payment_claimed_at) return false;
       const days = daysUntil(event.start_date);
       return days !== null && days <= 14;
     }) ?? null;
@@ -166,10 +179,8 @@ export function useUrgentPayment() {
   const isGuestContribution = guestUrgentEvent !== null;
   const guestDaysLeft = guestUrgentEvent ? (daysUntil(guestUrgentEvent.start_date) ?? 0) : 0;
 
-  // NOTE: For guests, isGuestContribution stays true until payment_status = 'paid' in the DB.
-  // Unlike the organizer path (which uses seenEventIds for temporary dismissal),
-  // the guest bell dot is a persistent reminder until the organizer marks them as paid.
-  // This is intentional — guests have no in-app payment flow.
+  // A claimed contribution is intentionally excluded: it is awaiting organizer review,
+  // not an outstanding "please pay" action for the guest.
   const hasUnseenUrgency = useMemo(
     () => urgentEvents.some(info => !info.isPaid) || isGuestContribution,
     [urgentEvents, isGuestContribution]
@@ -181,6 +192,7 @@ export function useUrgentPayment() {
     hasUnseenUrgency,
     markUrgencySeen,
     guestUrgentEvent,
+    guestClaimedRecentEvent,
     guestPaidRecentEvent,
     isGuestContribution,
     guestDaysLeft,

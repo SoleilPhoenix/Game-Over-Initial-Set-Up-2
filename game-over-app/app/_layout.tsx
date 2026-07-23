@@ -4,6 +4,7 @@
  */
 
 import * as Sentry from '@sentry/react-native';
+import * as SplashScreen from 'expo-splash-screen';
 
 import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
@@ -30,6 +31,11 @@ import { useEditorialFonts } from '@/hooks/useEditorialFonts';
 import { Logo } from '@/components/brand/Logo';
 import { ToastHost } from '@/components/ui/ToastHost';
 import config from '../tamagui.config';
+
+// Keep the native splash over the app until startup routing has settled. The
+// intro releases it itself only after its screen has laid out and finished its
+// native-stack transition.
+void SplashScreen.preventAutoHideAsync().catch(() => {});
 
 Sentry.init({
   dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
@@ -161,6 +167,27 @@ function RootLayoutNav() {
       router.replace('/(tabs)/events');
     }
   }, [session, isInitialized, segments, router]);
+
+  useEffect(() => {
+    if (!isInitialized || isLoading || !fontsLoaded) return;
+
+    const routeSegments = segments as readonly string[];
+    const inAuthGroup = routeSegments[0] === '(auth)';
+    const inIntro = inAuthGroup && routeSegments[1] === 'intro';
+    const inInviteGroup = routeSegments[0] === 'invite';
+    const atIndex = routeSegments.length === 0 || routeSegments[0] === 'index';
+
+    // Wait for redirects to land before exposing a screen. The intro owns
+    // splash removal because its reveal must start relative to that exact
+    // visible moment; every other settled destination can show immediately.
+    const isSettledNonIntroRoute = session
+      ? !inAuthGroup && !atIndex
+      : inInviteGroup || (inAuthGroup && !inIntro);
+
+    if (isSettledNonIntroRoute) {
+      void SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [session, isInitialized, isLoading, fontsLoaded, segments]);
 
   if (!isInitialized || isLoading || !fontsLoaded) {
     return (
