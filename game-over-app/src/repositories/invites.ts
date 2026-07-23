@@ -35,6 +35,7 @@ export interface InvitePreview {
   guestFirstName: string | undefined;
   guestLastName: string | undefined;
   guestPhone: string | undefined;
+  partyType?: 'bachelor' | 'bachelorette';
 }
 
 /**
@@ -130,7 +131,11 @@ export const invitesRepository = {
     }
 
     // rpc returns an array; take the first row
-    const row = Array.isArray(data) ? data[0] : data;
+    const row = (Array.isArray(data) ? data[0] : data) as
+      | (NonNullable<typeof data>[number] & {
+          party_type?: 'bachelor' | 'bachelorette' | null;
+        })
+      | undefined;
     if (!row) return null;
 
     return {
@@ -146,6 +151,7 @@ export const invitesRepository = {
       guestFirstName: row.guest_first_name ?? undefined,
       guestLastName: row.guest_last_name ?? undefined,
       guestPhone: row.guest_phone ?? undefined,
+      partyType: row.party_type ?? undefined,
     };
   },
 
@@ -184,7 +190,12 @@ export const invitesRepository = {
    */
   async accept(
     inviteCode: string
-  ): Promise<{ success: boolean; eventId?: string; error?: string }> {
+  ): Promise<{
+    success: boolean;
+    eventId?: string;
+    error?: string;
+    alreadyParticipant?: boolean;
+  }> {
     const { data, error } = await supabase.rpc('accept_invite', {
       p_code: inviteCode.toUpperCase(),
     });
@@ -204,7 +215,11 @@ export const invitesRepository = {
     }
 
     if (row.success) {
-      return { success: true, eventId: row.event_id ?? undefined };
+      return {
+        success: true,
+        eventId: row.event_id ?? undefined,
+        alreadyParticipant: row.reason === 'already_participant',
+      };
     }
 
     const reasonMessages: Record<string, string> = {
