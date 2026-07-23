@@ -28,6 +28,7 @@ import { initBudgetCache } from '@/lib/participantCountCache';
 import { shouldPlayIntro } from '@/lib/introSession';
 import { useEditorialFonts } from '@/hooks/useEditorialFonts';
 import { Logo } from '@/components/brand/Logo';
+import { ToastHost } from '@/components/ui/ToastHost';
 import config from '../tamagui.config';
 
 Sentry.init({
@@ -195,6 +196,7 @@ function RootLayoutNav() {
         <Stack.Screen name="booking" />
         <Stack.Screen name="invite" />
       </Stack>
+      <ToastHost />
       <ToastViewport flexDirection="column-reverse" top="$4" left={0} right={0} />
     </>
   );

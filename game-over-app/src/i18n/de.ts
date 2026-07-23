@@ -935,6 +935,8 @@ const de: TranslationKeys = {
     comingSoon: 'Demnächst verfügbar',
     selected: 'Ausgewählt',
     euro: '\u20AC',
+    signInAgainTitle: 'Bitte erneut anmelden',
+    signInAgainBody: 'Deine Sitzung ist abgelaufen. Melde dich erneut an, bevor du ein Foto hochlädst.',
   },
 
   // ─── Manage Invitations ─────────────────────────
@@ -998,8 +1000,8 @@ const de: TranslationKeys = {
     previewErrorRetry: 'Erneut versuchen',
     goToApp: 'Zur App',
     invitedBy: 'Eingeladen von',
-    bachelorPartyBadge: 'Bachelor Party (JGA)',
-    bachelorettePartyBadge: 'Bachelorette Party (JGA)',
+    bachelorPartySuffix: ' Bachelor Party (JGA)',
+    bachelorettePartySuffix: ' Bachelorette Party (JGA)',
     accept: 'Einladung annehmen →',
     decline: 'Ablehnen',
     webBannerHave: 'Hast du die App schon? ',
@@ -1047,6 +1049,8 @@ const de: TranslationKeys = {
     uploadFailedBody: 'Dein Foto konnte nicht hochgeladen werden. Du kannst ohne fortfahren oder es erneut versuchen.',
     uploadFailedContinue: 'Ohne Foto fortfahren',
     uploadFailedRetry: 'Erneut versuchen',
+    sessionExpiredTitle: 'Bitte erneut anmelden',
+    sessionExpiredBody: 'Deine Sitzung ist abgelaufen, deshalb können wir dein Foto nicht hochladen. Du kannst ohne Foto fortfahren oder dich erneut anmelden und es noch einmal versuchen.',
   },
 
   // ─── Chat ──────────────────────────────────────

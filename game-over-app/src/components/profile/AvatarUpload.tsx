@@ -13,6 +13,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '@/lib/supabase/client';
+import { useTranslation } from '@/i18n';
 
 // Security: validate uploaded avatars before sending to Supabase Storage.
 // MIME and size checks are first-line defence — the storage bucket policy is the second.
@@ -76,6 +77,7 @@ export function AvatarUpload({
   onAvatarChange,
   testID,
 }: AvatarUploadProps) {
+  const { t } = useTranslation();
   const [isUploading, setIsUploading] = useState(false);
   const [localAvatarUrl, setLocalAvatarUrl] = useState(avatarUrl);
 
@@ -147,6 +149,19 @@ export function AvatarUpload({
         encoding: FileSystem.EncodingType.Base64,
       });
 
+      let { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        await supabase.auth.refreshSession();
+        const { data: { session: refreshedSession } } = await supabase.auth.getSession();
+        session = refreshedSession;
+      }
+
+      console.log('[avatar upload] session present:', !!session?.access_token);
+      if (!session?.access_token) {
+        Alert.alert(t.common.signInAgainTitle, t.common.signInAgainBody);
+        return;
+      }
+
       // Upload to Supabase Storage
       const { error: uploadError } = await supabase.storage
         .from('avatars')
@@ -155,7 +170,10 @@ export function AvatarUpload({
           upsert: true,
         });
 
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        console.error('[avatar upload] failed', uploadError);
+        throw uploadError;
+      }
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage

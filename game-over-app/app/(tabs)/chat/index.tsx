@@ -25,6 +25,7 @@ import { useUser } from '@/stores/authStore';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useActiveEventStore } from '@/stores/activeEventStore';
+import { useUIStore } from '@/stores/uiStore';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import type { Database } from '@/lib/supabase/types';
 
@@ -742,7 +743,7 @@ export default function CommunicationScreen() {
     if (selectedEventId) {
       try {
         await createChannelMutation.mutateAsync({ event_id: selectedEventId, name, category });
-        Alert.alert(tr.budget.success, tr.chat.channelCreated);
+        useUIStore.getState().showSuccess(tr.budget.success, tr.chat.channelCreated);
       } catch (error: any) {
         const code = error?.code || error?.message || '';
         if (code === '42501' || String(code).includes('42501')) {
@@ -753,7 +754,7 @@ export default function CommunicationScreen() {
                 : section
             )
           );
-          Alert.alert(tr.budget.success, tr.chat.channelCreated);
+          useUIStore.getState().showSuccess(tr.budget.success, tr.chat.channelCreated);
         } else {
           console.error('Failed to create channel:', error);
           Alert.alert(tr.common.error, tr.chat.channelCreateFailed);

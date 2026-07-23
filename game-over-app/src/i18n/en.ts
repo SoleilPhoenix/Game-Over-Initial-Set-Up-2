@@ -951,6 +951,8 @@ const en = {
     comingSoon: 'Coming Soon',
     selected: 'Selected',
     euro: '\u20AC',
+    signInAgainTitle: 'Please sign in again',
+    signInAgainBody: 'Your session has expired. Sign in again before uploading a photo.',
   },
 
   // ─── Manage Invitations ─────────────────────────
@@ -1014,8 +1016,8 @@ const en = {
     previewErrorRetry: 'Try again',
     goToApp: 'Go to App',
     invitedBy: 'Invited by',
-    bachelorPartyBadge: 'Bachelor Party',
-    bachelorettePartyBadge: 'Bachelorette Party',
+    bachelorPartySuffix: ' Bachelor Party',
+    bachelorettePartySuffix: ' Bachelorette Party',
     accept: 'Accept Invitation →',
     decline: 'Decline',
     webBannerHave: 'Already have the app? ',
@@ -1063,6 +1065,8 @@ const en = {
     uploadFailedBody: 'We could not upload your photo. You can continue without it or try again.',
     uploadFailedContinue: 'Continue without photo',
     uploadFailedRetry: 'Try again',
+    sessionExpiredTitle: 'Please sign in again',
+    sessionExpiredBody: 'Your session has expired, so we cannot upload your photo. You can continue without it or sign in again and retry.',
   },
 
   // ─── Chat ──────────────────────────────────────

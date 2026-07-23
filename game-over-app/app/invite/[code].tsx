@@ -328,28 +328,54 @@ export default function InviteScreen() {
           encoding: FileSystem.EncodingType.Base64,
         });
         const path = `${currentUser.id}-${Date.now()}.jpg`;
-        const { error: uploadError } = await supabase.storage
-          .from('avatars')
-          .upload(path, decode(base64), { contentType: 'image/jpeg', upsert: true });
-        if (uploadError) {
-          // Bug 1 fix: never silently drop the photo. Let the guest decide.
-          const proceed = await new Promise<boolean>((resolve) => {
+
+        const chooseWhetherToContinue = (title: string, body: string) =>
+          new Promise<boolean>((resolve) => {
             Alert.alert(
-              t.invite.uploadFailedTitle,
-              t.invite.uploadFailedBody,
+              title,
+              body,
               [
                 { text: t.invite.uploadFailedRetry, style: 'cancel', onPress: () => resolve(false) },
                 { text: t.invite.uploadFailedContinue, onPress: () => resolve(true) },
               ],
             );
           });
+
+        let { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          await supabase.auth.refreshSession();
+          const { data: { session: refreshedSession } } = await supabase.auth.getSession();
+          session = refreshedSession;
+        }
+
+        console.log('[avatar upload] session present:', !!session?.access_token);
+        if (!session?.access_token) {
+          const proceed = await chooseWhetherToContinue(
+            t.invite.sessionExpiredTitle,
+            t.invite.sessionExpiredBody,
+          );
           if (!proceed) {
-            return; // Guest wants to retry — do not continue the flow
+            return;
           }
-          // Guest chose to continue without a photo: avatarUrl stays null
         } else {
-          const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
-          avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+          const { error: uploadError } = await supabase.storage
+            .from('avatars')
+            .upload(path, decode(base64), { contentType: 'image/jpeg', upsert: true });
+          if (uploadError) {
+            console.error('[avatar upload] failed', uploadError);
+            // Bug 1 fix: never silently drop the photo. Let the guest decide.
+            const proceed = await chooseWhetherToContinue(
+              t.invite.uploadFailedTitle,
+              t.invite.uploadFailedBody,
+            );
+            if (!proceed) {
+              return; // Guest wants to retry — do not continue the flow
+            }
+            // Guest chose to continue without a photo: avatarUrl stays null
+          } else {
+            const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path);
+            avatarUrl = `${urlData.publicUrl}?t=${Date.now()}`;
+          }
         }
       }
 
@@ -430,11 +456,22 @@ export default function InviteScreen() {
   }
 
   const citySlug = CITY_UUID_TO_SLUG[preview.cityId] ?? preview.cityName.toLowerCase();
-  const partyBadge = preview.partyType === 'bachelor'
-    ? t.invite.bachelorPartyBadge
+  const partySuffix = preview.partyType === 'bachelor'
+    ? t.invite.bachelorPartySuffix
     : preview.partyType === 'bachelorette'
-      ? t.invite.bachelorettePartyBadge
-      : null;
+      ? t.invite.bachelorettePartySuffix
+      : '';
+  const eventName = preview.eventName.trimEnd();
+  const deduplicatedPartySuffix = /\bparty\s*$/i.test(eventName)
+    ? partySuffix.replace(/^ (?:Bachelor |Bachelorette )?Party/i, '')
+    : preview.partyType === 'bachelor' && /\bbachelor\s*$/i.test(eventName)
+      ? partySuffix.replace(/^ Bachelor/i, '')
+      : preview.partyType === 'bachelorette' && /\bbachelorette\s*$/i.test(eventName)
+        ? partySuffix.replace(/^ Bachelorette/i, '')
+        : partySuffix;
+  const heroTitle = partySuffix
+    ? `${eventName}${deduplicatedPartySuffix}`
+    : preview.eventName;
 
   return (
     <KeyboardAvoidingView
@@ -460,12 +497,16 @@ export default function InviteScreen() {
               style={[StyleSheet.absoluteFillObject, { top: '40%' }]}
             />
             <View style={styles.heroContent}>
-              {partyBadge && (
-                <View style={styles.partyBadge}>
-                  <Text style={styles.partyBadgeText}>{partyBadge}</Text>
-                </View>
-              )}
-              <Text fontSize={26} fontWeight="900" color="white">{preview.eventName}</Text>
+              <Text
+                fontSize={26}
+                fontWeight="900"
+                color="white"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.65}
+              >
+                {heroTitle}
+              </Text>
               <Text fontSize={15} color="rgba(255,255,255,0.8)" marginTop={4}>
                 {new Date(preview.startDate).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', {
                   month: 'long', day: 'numeric', year: 'numeric',
@@ -648,23 +689,6 @@ const styles = StyleSheet.create({
     bottom: 24,
     left: 24,
     right: 24,
-  },
-  partyBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(13,27,42,0.72)',
-    borderColor: 'rgba(198,167,94,0.72)',
-    borderRadius: 999,
-    borderWidth: 1,
-    marginBottom: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  partyBadgeText: {
-    color: '#E8DCC8',
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
   },
   avatar: {
     width: 88,

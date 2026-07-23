@@ -301,6 +301,20 @@ export default function ManageInvitationsScreen() {
     const organizerParticipant = dbParticipants.find(p => p.role === 'organizer');
     const honoreeParticipant = dbParticipants.find(p => p.role === 'honoree');
     const guestParticipants = dbParticipants.filter(p => p.role === 'guest');
+    const dbGuestEmails = new Set<string>();
+    const dbGuestPhones = new Set<string>();
+
+    for (const dbGuest of guestParticipants) {
+      const email = (dbGuest.profile?.email || (dbGuest as any)?.email || '')
+        .trim()
+        .toLowerCase();
+      if (email) dbGuestEmails.add(email);
+
+      const profilePhone = ((dbGuest.profile as any)?.phone || '').trim();
+      const invitePhone = email ? invitesByEmail[email]?.phone || '' : '';
+      const phone = normalizePhoneKey(profilePhone || invitePhone);
+      if (phone) dbGuestPhones.add(phone);
+    }
 
     const getGuestStatus = (
       email: string,
@@ -363,7 +377,7 @@ export default function ManageInvitationsScreen() {
         // profile data wins over the organizer-entered invite_codes data.
         const isCurrentUserGuest = dbGuest.user_id === user?.id;
         const guestEmail = dbGuest.profile?.email || (dbGuest as any)?.email || '';
-        const inviteData = invitesByEmail[guestEmail.toLowerCase()];
+        const inviteData = invitesByEmail[guestEmail.trim().toLowerCase()];
         const selfName = isCurrentUserGuest
           ? (ownProfile?.full_name || dbGuest.profile?.full_name || user?.user_metadata?.full_name || null)
           : (dbGuest.profile?.full_name || null);
@@ -389,15 +403,22 @@ export default function ManageInvitationsScreen() {
           changed: display.changedFromInvite,
         });
       } else {
+        const localEmail = localDetails?.email?.trim().toLowerCase() || '';
+        const localPhone = normalizePhoneKey(localDetails?.phone || '');
+        const duplicatesDbGuest = (localEmail !== '' && dbGuestEmails.has(localEmail))
+          || (localPhone !== '' && dbGuestPhones.has(localPhone));
+
         result.push({
           index: i + 1,
           role: 'guest',
-          name: localDetails
+          name: localDetails && !duplicatesDbGuest
             ? [localDetails.firstName, localDetails.lastName].filter(Boolean).join(' ')
             : '',
-          email: localDetails?.email || '',
-          phone: localDetails?.phone || '',
-          status: getGuestStatus(localDetails?.email || '', localDetails?.phone || ''),
+          email: duplicatesDbGuest ? '' : localDetails?.email || '',
+          phone: duplicatesDbGuest ? '' : localDetails?.phone || '',
+          status: duplicatesDbGuest
+            ? 'not_invited'
+            : getGuestStatus(localDetails?.email || '', localDetails?.phone || ''),
           isEditable: true,
           isExpanded: expandedSlot === i + 1,
         });
