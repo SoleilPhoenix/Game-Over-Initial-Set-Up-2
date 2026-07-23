@@ -414,6 +414,7 @@ export type Database = {
           code: string
           created_at: string | null
           created_by: string
+          declined_at: string | null
           event_id: string
           expires_at: string
           guest_email: string | null
@@ -430,6 +431,7 @@ export type Database = {
           code: string
           created_at?: string | null
           created_by: string
+          declined_at?: string | null
           event_id: string
           expires_at?: string
           guest_email?: string | null
@@ -446,6 +448,7 @@ export type Database = {
           code?: string
           created_at?: string | null
           created_by?: string
+          declined_at?: string | null
           event_id?: string
           expires_at?: string
           guest_email?: string | null
@@ -881,6 +884,10 @@ export type Database = {
       accept_invite: {
         Args: { p_code: string }
         Returns: { success: boolean; event_id: string; reason: string | null }[]
+      }
+      decline_invite: {
+        Args: { p_code: string }
+        Returns: boolean
       }
       generate_booking_reference: { Args: never; Returns: string }
       increment_invite_use_count: {

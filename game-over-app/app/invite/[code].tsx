@@ -29,6 +29,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { useLanguageStore } from '@/stores/languageStore';
 import { useTranslation } from '@/i18n';
 import { usePublicInvitePreview, useAcceptInvite } from '@/hooks/queries/useInvites';
+import { invitesRepository } from '@/repositories/invites';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
@@ -233,6 +234,18 @@ export default function InviteScreen() {
 
   const handleLoginInstead = () => {
     router.push(`/(auth)/login?redirect=/invite/${code}`);
+  };
+
+  const handleDecline = async () => {
+    if (code) {
+      await invitesRepository.decline(code).catch(() => {});
+    }
+
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/(tabs)/events');
+    }
   };
 
   const handlePickPhoto = async () => {
@@ -616,13 +629,7 @@ export default function InviteScreen() {
             </Button>
 
             <Pressable
-              onPress={() => {
-                if (router.canGoBack()) {
-                  router.back();
-                } else {
-                  router.replace('/(tabs)/events');
-                }
-              }}
+              onPress={() => void handleDecline()}
               style={{ alignItems: 'center', paddingVertical: 8 }}
               testID="decline-invite-button"
             >

@@ -236,6 +236,16 @@ export const invitesRepository = {
   },
 
   /**
+   * Record that a guest declined an invite. This is intentionally best-effort:
+   * callers should still leave the invite screen if the RPC cannot be reached.
+   */
+  async decline(inviteCode: string): Promise<void> {
+    await supabase.rpc('decline_invite', {
+      p_code: inviteCode.toUpperCase(),
+    });
+  },
+
+  /**
    * Get all invite codes for an event
    */
   async getByEventId(eventId: string): Promise<InviteCode[]> {
@@ -269,10 +279,12 @@ export const invitesRepository = {
     guest_first_name: string | null;
     guest_last_name: string | null;
     guest_email: string | null;
+    guest_phone: string | null;
+    declined_at: string | null;
   }[]> {
     const { data, error } = await supabase
       .from('invite_codes')
-      .select('id, guest_first_name, guest_last_name, guest_email')
+      .select('id, guest_first_name, guest_last_name, guest_email, guest_phone, declined_at')
       .eq('event_id', eventId);
 
     if (error) {

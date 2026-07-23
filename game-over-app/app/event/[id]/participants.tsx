@@ -95,9 +95,19 @@ function AvatarImage({ uri, style, fallback }: { uri: string; style: any; fallba
 }
 
 type SlotRole = 'organizer' | 'guest' | 'honoree';
-type SlotStatus = 'confirmed' | 'pending' | 'not_invited';
+type SlotStatus =
+  | 'declined'
+  | 'confirmed'
+  | 'pending'
+  | 'delivery_failed'
+  | 'invited'
+  | 'not_invited';
 
 type GuestDetails = GuestDetail;
+type GuestInvitationAttempt = {
+  recipient: string;
+  status: string;
+};
 
 interface Slot {
   index: number;
@@ -185,18 +195,42 @@ export default function ManageInvitationsScreen() {
   const { data: rawInviteGuests = [] } = useInviteGuests(id ?? null);
   const createInvite = useCreateInvite();
   const invitesByEmail = useMemo(() => {
-    const map: Record<string, { phone: string; firstName: string; lastName: string }> = {};
+    const map: Record<string, {
+      phone: string;
+      firstName: string;
+      lastName: string;
+      declinedAt: string | null;
+    }> = {};
     for (const ic of rawInviteGuests) {
       if (ic.guest_email) {
-        map[ic.guest_email.toLowerCase()] = {
-          phone: '',
+        map[ic.guest_email.trim().toLowerCase()] = {
+          phone: ic.guest_phone || '',
           firstName: ic.guest_first_name || '',
           lastName: ic.guest_last_name || '',
+          declinedAt: ic.declined_at,
         };
       }
     }
     return map;
   }, [rawInviteGuests]);
+
+  // One event-scoped query supplies delivery history for every guest slot.
+  const [guestInvitations, setGuestInvitations] = useState<GuestInvitationAttempt[]>([]);
+  const fetchGuestInvitations = useCallback(async () => {
+    if (!id) {
+      setGuestInvitations([]);
+      return;
+    }
+
+    const { data } = await supabase
+      .from('guest_invitations')
+      .select('recipient, status')
+      .eq('event_id', id);
+    setGuestInvitations(data ?? []);
+  }, [id]);
+  useEffect(() => {
+    void fetchGuestInvitations();
+  }, [fetchGuestInvitations]);
 
   // Fetch own profile from DB so organizer name is shown even if user_metadata.full_name is unset.
   // Also ensures guests see their updated name after editing in profile settings.
@@ -248,6 +282,31 @@ export default function ManageInvitationsScreen() {
     const organizerParticipant = dbParticipants.find(p => p.role === 'organizer');
     const honoreeParticipant = dbParticipants.find(p => p.role === 'honoree');
     const guestParticipants = dbParticipants.filter(p => p.role === 'guest');
+
+    const getGuestStatus = (
+      email: string,
+      phone: string,
+      participant?: ParticipantWithProfile,
+    ): SlotStatus => {
+      const emailKey = email.trim().toLowerCase();
+      if (emailKey && invitesByEmail[emailKey]?.declinedAt) return 'declined';
+      if (participant?.confirmed_at) return 'confirmed';
+      if (participant?.user_id) return 'pending';
+
+      const phoneKey = normalizePhoneKey(phone);
+      const attempts = guestInvitations.filter((attempt) => {
+        const recipientEmailKey = attempt.recipient.trim().toLowerCase();
+        const recipientPhoneKey = normalizePhoneKey(attempt.recipient);
+        return (emailKey !== '' && recipientEmailKey === emailKey)
+          || (phoneKey !== '' && recipientPhoneKey === phoneKey);
+      });
+
+      if (attempts.length > 0 && attempts.every(attempt => attempt.status !== 'sent')) {
+        return 'delivery_failed';
+      }
+      if (attempts.some(attempt => attempt.status === 'sent')) return 'invited';
+      return 'not_invited';
+    };
 
     // Organizer info — prefer profile data; when isGuest never fall back to current user's data
     const organizerEmail = organizerParticipant?.profile?.email
@@ -304,7 +363,7 @@ export default function ManageInvitationsScreen() {
           name: display.name,
           email: guestEmail,
           phone: display.phone,
-          status: dbGuest.confirmed_at ? 'confirmed' : (dbGuest.user_id ? 'pending' : 'not_invited'),
+          status: getGuestStatus(guestEmail, display.phone, dbGuest),
           isEditable: false,
           isExpanded: false,
           participant: dbGuest,
@@ -319,7 +378,7 @@ export default function ManageInvitationsScreen() {
             : '',
           email: localDetails?.email || '',
           phone: localDetails?.phone || '',
-          status: 'not_invited',
+          status: getGuestStatus(localDetails?.email || '', localDetails?.phone || ''),
           isEditable: true,
           isExpanded: expandedSlot === i + 1,
         });
@@ -341,7 +400,7 @@ export default function ManageInvitationsScreen() {
     });
 
     return result;
-  }, [event, participants, user, guestDetails, expandedSlot, booking, cachedParticipants, cachedBudgetTotal, isGuest, invitesByEmail, ownProfile]);
+  }, [event, participants, user, guestDetails, expandedSlot, booking, cachedParticipants, cachedBudgetTotal, isGuest, invitesByEmail, ownProfile, guestInvitations]);
 
   // Stats — "filled" = has email (contact info provided, not just a name)
   const filledCount = slots.filter(s => !!s.email).length;
@@ -506,6 +565,7 @@ export default function ManageInvitationsScreen() {
 
     setInviteResults(data.results ?? []);
     setInviteSendStatus('done');
+    void fetchGuestInvitations();
     // Track invited count for planning step 1 auto-check
     const sentCount = (data.results ?? []).filter((r: any) => r.status === 'sent').length;
     if (sentCount > 0 && id) {
@@ -543,13 +603,22 @@ export default function ManageInvitationsScreen() {
     }
   };
 
-  const getStatusConfig = (status: SlotStatus) => {
+  const getStatusConfig = (status: SlotStatus, role: SlotRole) => {
     switch (status) {
+      case 'declined':
+        return { icon: 'close-circle' as const, color: theme.error, label: t.manageInvitations.declined };
       case 'confirmed':
-        return { icon: 'checkmark-circle' as const, color: theme.textSecondary, label: t.manageInvitations.confirmed };
+        return {
+          icon: 'checkmark-circle' as const,
+          color: theme.success,
+          label: role === 'guest' ? t.manageInvitations.accepted : t.manageInvitations.confirmed,
+        };
       case 'pending':
-        // Softer muted orange for pending
-        return { icon: 'time-outline' as const, color: 'rgba(249,115,22,0.75)', label: t.manageInvitations.pending };
+        return { icon: 'time-outline' as const, color: theme.warning, label: t.manageInvitations.pending };
+      case 'delivery_failed':
+        return { icon: 'warning-outline' as const, color: theme.warning, label: t.manageInvitations.deliveryFailed };
+      case 'invited':
+        return { icon: 'paper-plane-outline' as const, color: theme.textSecondary, label: t.manageInvitations.invited };
       default:
         return { icon: 'ellipse-outline' as const, color: theme.textTertiary, label: t.manageInvitations.notInvited };
     }
@@ -557,7 +626,7 @@ export default function ManageInvitationsScreen() {
 
   const renderSlotCard = (slot: Slot) => {
     const roleBadge = getRoleBadge(slot.role);
-    const statusConfig = getStatusConfig(slot.status);
+    const statusConfig = getStatusConfig(slot.status, slot.role);
     // Two-letter initials (e.g. "WS" for "Wais Schmidt")
     const initial = slot.name
       ? slot.name.split(' ').map(w => w[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2)
@@ -680,12 +749,13 @@ export default function ManageInvitationsScreen() {
               {/* Confirmed checkmark chip */}
               <View style={[
                 styles.actionChip,
-                slot.status === 'confirmed' && styles.actionChipActive,
+                slot.status !== 'not_invited' && styles.actionChipActive,
+                slot.status !== 'not_invited' && { borderColor: statusConfig.color },
               ]}>
                 <Ionicons
-                  name="checkmark"
+                  name={statusConfig.icon}
                   size={14}
-                  color={slot.status === 'confirmed' ? theme.textSecondary : theme.textTertiary}
+                  color={statusConfig.color}
                 />
               </View>
               {/* Honoree info button — same size as checkmark chip */}
@@ -701,7 +771,7 @@ export default function ManageInvitationsScreen() {
             </XStack>
             <Text style={[
               styles.statusLabel,
-              slot.status === 'pending' && { color: 'rgba(249,115,22,0.75)' },
+              { color: statusConfig.color },
             ]}>
               {statusConfig.label}
             </Text>
