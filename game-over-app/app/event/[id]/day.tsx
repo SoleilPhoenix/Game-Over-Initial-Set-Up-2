@@ -15,6 +15,7 @@ import { useEvent } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { useEventSchedule, scheduleKeys } from '@/hooks/queries/useSchedule';
 import { useAuthStore } from '@/stores/authStore';
+import { useUIStore } from '@/stores/uiStore';
 import { DARK_THEME } from '@/constants/theme';
 import { formatScheduleTime, generateDefaultSchedule, tierFromPackageSlug } from '@/utils/scheduleGenerator';
 import { scheduleRepository } from '@/repositories';
@@ -118,7 +119,13 @@ export default function EventDayScreen() {
     // For now, surface the message so it can be copied/shared.
     Alert.alert('Tagesplan an alle senden?', msg, [
       { text: 'Abbrechen', style: 'cancel' },
-      { text: 'Senden', onPress: () => Alert.alert('Gesendet', 'Alle Teilnehmer wurden benachrichtigt.') },
+      {
+        text: 'Senden',
+        onPress: () => useUIStore.getState().showSuccess(
+          'Gesendet',
+          'Alle Teilnehmer wurden benachrichtigt.'
+        ),
+      },
     ]);
   }, [schedule, event]);
 

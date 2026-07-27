@@ -23,6 +23,7 @@ import { ShareModal } from '@/components/ui/ShareModal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useActiveEventStore } from '@/stores/activeEventStore';
+import { useUIStore } from '@/stores/uiStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
@@ -1501,7 +1502,10 @@ export default function BudgetDashboardScreen() {
                                           console.warn('[budget] payment claim notification failed:', notificationError.message);
                                         }
                                       }
-                                      Alert.alert(t.budget.thankYou, t.budget.paymentConfirmedMsg);
+                                      useUIStore.getState().showSuccess(
+                                        t.budget.thankYou,
+                                        t.budget.paymentConfirmedMsg
+                                      );
                                     } catch (error: any) {
                                       Alert.alert(t.common.error, error.message || t.budget.errorUpdatingStatus);
                                     } finally {

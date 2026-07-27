@@ -6,6 +6,7 @@
 
 import { Alert, Platform } from 'react-native';
 import * as Calendar from 'expo-calendar';
+import { useUIStore } from '@/stores/uiStore';
 
 export interface CalendarEventData {
   title: string;
@@ -141,10 +142,9 @@ export async function addEventToCalendarWithFeedback(eventData: CalendarEventDat
   const result = await addEventToCalendar(eventData);
 
   if (result.success) {
-    Alert.alert(
+    useUIStore.getState().showSuccess(
       'Added to Calendar',
-      `"${eventData.title}" has been added to your calendar.`,
-      [{ text: 'OK' }]
+      `"${eventData.title}" has been added to your calendar.`
     );
   } else {
     Alert.alert(

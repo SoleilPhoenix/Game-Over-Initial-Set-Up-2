@@ -14,6 +14,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { supabase } from '@/lib/supabase/client';
 import { useTranslation } from '@/i18n';
+import { useUIStore } from '@/stores/uiStore';
 
 type PasswordFormData = {
   currentPassword: string;
@@ -67,14 +68,11 @@ export default function SecurityScreen() {
 
       if (error) throw error;
 
-      Alert.alert(
-        t.security.passwordUpdatedTitle,
-        t.security.passwordUpdatedMsg,
-        [{ text: t.security.ok, onPress: () => {
-          reset();
-          router.back();
-        }}]
-      );
+      // Same as the profile screen: confirm quietly and leave, instead of
+      // making the user acknowledge a dialog that only says "done".
+      reset();
+      router.back();
+      useUIStore.getState().showSuccess(t.security.passwordUpdatedTitle, t.security.passwordUpdatedMsg);
     } catch (error: any) {
       console.error('Password change error:', error);
       Alert.alert(

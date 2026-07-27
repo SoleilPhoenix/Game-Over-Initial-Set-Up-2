@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useUser, useAuthStore } from '@/stores/authStore';
 import { useFavoritesStore } from '@/stores/favoritesStore';
+import { useUIStore } from '@/stores/uiStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { getPackageImage } from '@/constants/packageImages';
 import { supabase } from '@/lib/supabase/client';
@@ -139,7 +140,10 @@ export default function ProfileScreen() {
     try {
       const { error } = await supabase.auth.resend({ type: 'signup', email: userEmail });
       if (error) throw error;
-      Alert.alert('Email sent', `Verification email sent to ${userEmail}`);
+      useUIStore.getState().showSuccess(
+        'Email sent',
+        `Verification email sent to ${userEmail}`
+      );
     } catch {
       Alert.alert('Error', 'Could not send verification email. Please try again.');
     } finally {

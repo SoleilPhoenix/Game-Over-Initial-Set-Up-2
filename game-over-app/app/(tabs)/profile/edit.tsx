@@ -13,6 +13,7 @@ import { useUser } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
 import { useTranslation } from '@/i18n';
+import { useUIStore } from '@/stores/uiStore';
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -161,9 +162,10 @@ export default function EditProfileScreen() {
 
       setSavedValues(nextValues);
 
-      Alert.alert(t.editProfile.successTitle, t.editProfile.profileUpdated, [
-        { text: t.editProfile.ok, onPress: () => router.back() },
-      ]);
+      // Leaving immediately and confirming with a toast: the dialog only ever
+      // said "saved", so making the user tap OK to get back was pure friction.
+      router.back();
+      useUIStore.getState().showSuccess(t.editProfile.successTitle, t.editProfile.profileUpdated);
     } catch (error) {
       console.error('Profile update error:', error);
       Alert.alert(t.editProfile.errorTitle, t.editProfile.updateFailed);
