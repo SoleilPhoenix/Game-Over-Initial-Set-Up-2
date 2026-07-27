@@ -1364,6 +1364,10 @@ export default function BudgetDashboardScreen() {
                   const initials = (name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2)) || '?';
                   const key = (participantRaw as any).id as string;
                   const unpaidColor = '#F97316';
+                  const isOtherGuestRow = isDemo
+                    ? !isOrganizerRow && (participantRaw as DemoP).id !== 'honoree'
+                    : participantRole === 'guest' && !isCurrentUser;
+                  const showPaymentStatus = isOrganizer || !isOtherGuestRow;
 
                   return (
                     <View key={key} style={styles.contributionCard}>
@@ -1413,25 +1417,29 @@ export default function BudgetDashboardScreen() {
                               green for paid, one orange for everything still open - so
                               "awaiting confirmation" is set apart by a clock rather than
                               by a third shade. */}
-                          <XStack alignItems="center" justifyContent="flex-end" gap={4} flexShrink={1}>
-                            {isClaimed && (
-                              <Ionicons name="time-outline" size={12} color={unpaidColor} />
-                            )}
-                            <Text
-                              style={{
-                                flexShrink: 1,
-                                fontSize: 11,
-                                fontWeight: '700',
-                                color: isPaid ? theme.success : unpaidColor,
-                                letterSpacing: 0.5,
-                                textAlign: 'right',
-                                textTransform: 'uppercase',
-                              }}
-                              numberOfLines={2}
-                            >
-                              {isPaid ? t.budget.paid : isClaimed ? t.budget.claimed : t.budget.pending}
-                            </Text>
-                          </XStack>
+                          {showPaymentStatus ? (
+                            <XStack alignItems="center" justifyContent="flex-end" gap={4} flexShrink={1}>
+                              {isClaimed && (
+                                <Ionicons name="time-outline" size={12} color={unpaidColor} />
+                              )}
+                              <Text
+                                style={{
+                                  flexShrink: 1,
+                                  fontSize: 11,
+                                  fontWeight: '700',
+                                  color: isPaid ? theme.success : unpaidColor,
+                                  letterSpacing: 0.5,
+                                  textAlign: 'right',
+                                  textTransform: 'uppercase',
+                                }}
+                                numberOfLines={2}
+                              >
+                                {isPaid ? t.budget.paid : isClaimed ? t.budget.claimed : t.budget.pending}
+                              </Text>
+                            </XStack>
+                          ) : (
+                            <View style={styles.contributionStatusPlaceholder} />
+                          )}
                         </YStack>
                       </View>
 
@@ -1560,9 +1568,13 @@ export default function BudgetDashboardScreen() {
                           <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
                             {formatCurrency(perPerson)}
                           </Text>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#F97316', letterSpacing: 0.5, textAlign: 'right', textTransform: 'uppercase' }}>
-                            {t.budget.pending}
-                          </Text>
+                          {isOrganizer ? (
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#F97316', letterSpacing: 0.5, textAlign: 'right', textTransform: 'uppercase' }}>
+                              {t.budget.pending}
+                            </Text>
+                          ) : (
+                            <View style={styles.contributionStatusPlaceholder} />
+                          )}
                         </YStack>
                       </View>
                     </View>
@@ -2595,6 +2607,11 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
   contributionAmount: {
     flexShrink: 0,
     maxWidth: '42%',
+  },
+  // One fixed height for every hidden status. Varying it with the underlying
+  // state would leak that state through the row geometry.
+  contributionStatusPlaceholder: {
+    height: 14,
   },
   participantAvatarGradient: {
     width: 40,

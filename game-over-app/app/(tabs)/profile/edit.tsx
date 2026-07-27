@@ -20,7 +20,7 @@ export default function EditProfileScreen() {
   const user = useUser();
   const { t } = useTranslation();
 
-  // Check if this user is a guest in any event — guests cannot change name/phone/email
+  // Guest email addresses are fixed, so show an explanatory banner for guest users.
   const [isGuestUser, setIsGuestUser] = useState(false);
   React.useEffect(() => {
     if (!user?.id) return;
@@ -32,23 +32,41 @@ export default function EditProfileScreen() {
       .then(({ data }) => { if (data && data.length > 0) setIsGuestUser(true); });
   }, [user?.id]);
 
+  const metadataFullName = (user?.user_metadata?.full_name || '').trim();
+  const metadataNameParts = metadataFullName.split(' ');
+  const metadataFirstName = metadataNameParts[0] || '';
+  const metadataLastName = metadataNameParts.slice(1).join(' ');
+  const metadataPhone = (user?.user_metadata?.phone || '').trim();
+
   const [firstName, setFirstName] = useState(() => {
-    const full = (user?.user_metadata?.full_name || '').trim();
-    return full.split(' ')[0] || '';
+    return metadataFirstName;
   });
   const [lastName, setLastName] = useState(() => {
-    const full = (user?.user_metadata?.full_name || '').trim();
-    const parts = full.split(' ');
-    return parts.slice(1).join(' ');
+    return metadataLastName;
   });
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(() => metadataPhone);
+  const [savedValues, setSavedValues] = useState(() => {
+    return {
+      firstName: metadataFirstName,
+      lastName: metadataLastName,
+      phone: metadataPhone,
+    };
+  });
   const [isSaving, setIsSaving] = useState(false);
 
-  // Load phone from profiles table (not in user_metadata)
+  // Profiles are authoritative for participant-facing contact details.
   React.useEffect(() => {
     if (!user?.id) return;
     void supabase.from('profiles').select('phone').eq('id', user.id).single()
-      .then(({ data }) => { if (data?.phone) setPhone(data.phone); });
+      .then(({ data, error }) => {
+        if (error) {
+          console.warn('[profile] phone load failed:', error.message);
+          return;
+        }
+        const profilePhone = data?.phone?.trim() || '';
+        setPhone(profilePhone);
+        setSavedValues((current) => ({ ...current, phone: profilePhone }));
+      });
   }, [user?.id]);
 
   const userEmail = user?.email || '';
@@ -66,19 +84,82 @@ export default function EditProfileScreen() {
       return;
     }
 
+    if (!user?.id) return;
+
+    const nextValues = {
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      phone: phone.trim(),
+    };
+    const changedFields = [
+      ...(nextValues.firstName !== savedValues.firstName ? [t.notifications.guestProfileFirstName] : []),
+      ...(nextValues.lastName !== savedValues.lastName ? [t.notifications.guestProfileLastName] : []),
+      ...(nextValues.phone !== savedValues.phone ? [t.notifications.guestProfilePhone] : []),
+    ];
+
     setIsSaving(true);
     try {
       const { error } = await supabase.auth.updateUser({
-        data: { full_name: fullNameCombined },
+        data: {
+          full_name: fullNameCombined,
+          phone: nextValues.phone || null,
+        },
       });
 
       if (error) throw error;
 
-      // Also sync to profiles table (used by Edge Functions and server-side features)
-      await supabase
+      // Also sync to profiles table (used by invitation lists, budgets, and server-side features).
+      const { error: profileError } = await supabase
         .from('profiles')
-        .update({ full_name: fullNameCombined, ...(phone.trim() ? { phone: phone.trim() } : {}) })
-        .eq('id', user!.id);
+        .update({ full_name: fullNameCombined, phone: nextValues.phone || null })
+        .eq('id', user.id);
+
+      if (profileError) throw profileError;
+
+      if (changedFields.length > 0) {
+        try {
+          const { data: guestParticipations, error: participationError } = await supabase
+            .from('event_participants')
+            .select('event_id')
+            .eq('user_id', user.id)
+            .eq('role', 'guest');
+
+          if (participationError) throw participationError;
+
+          const eventIds = [...new Set((guestParticipations || []).map(({ event_id }) => event_id))];
+          if (eventIds.length > 0) {
+            const { data: events, error: eventsError } = await supabase
+              .from('events')
+              .select('id, created_by')
+              .in('id', eventIds);
+
+            if (eventsError) throw eventsError;
+
+            const lastField = changedFields[changedFields.length - 1];
+            const formattedFields = changedFields.length === 1
+              ? lastField
+              : `${changedFields.slice(0, -1).join(', ')}${t.notifications.guestProfileFieldConjunction}${lastField}`;
+
+            const { error: notificationError } = await supabase
+              .from('notifications')
+              .insert((events || []).map((event) => ({
+                event_id: event.id,
+                title: t.notifications.guestProfileUpdatedTitle,
+                body: t.notifications.guestProfileUpdatedBody
+                  .replace('{{guest}}', fullNameCombined)
+                  .replace('{{fields}}', formattedFields),
+                type: 'guest_profile_updated',
+                user_id: event.created_by,
+              })));
+
+            if (notificationError) throw notificationError;
+          }
+        } catch (notificationError) {
+          console.warn('[profile] guest profile update notification failed:', notificationError);
+        }
+      }
+
+      setSavedValues(nextValues);
 
       Alert.alert(t.editProfile.successTitle, t.editProfile.profileUpdated, [
         { text: t.editProfile.ok, onPress: () => router.back() },
@@ -176,19 +257,17 @@ export default function EditProfileScreen() {
               >
                 {t.editProfile.firstNameLabel}
               </Text>
-              <View style={[styles.inputContainer, isGuestUser && styles.readOnlyContainer]}>
+              <View style={styles.inputContainer}>
                 <TextInput
                   style={styles.input}
                   value={firstName}
-                  onChangeText={isGuestUser ? undefined : setFirstName}
+                  onChangeText={setFirstName}
                   placeholder={t.editProfile.firstNamePlaceholder}
                   placeholderTextColor="#6B7280"
                   autoCapitalize="words"
                   autoCorrect={false}
-                  editable={!isGuestUser}
                   testID="edit-profile-firstname-input"
                 />
-                {isGuestUser && <Ionicons name="lock-closed" size={16} color="#6B7280" />}
               </View>
             </YStack>
 
@@ -204,16 +283,15 @@ export default function EditProfileScreen() {
               >
                 {t.editProfile.lastNameLabel}
               </Text>
-              <View style={[styles.inputContainer, isGuestUser && styles.readOnlyContainer]}>
+              <View style={styles.inputContainer}>
                 <TextInput
                   style={styles.input}
                   value={lastName}
-                  onChangeText={isGuestUser ? undefined : setLastName}
+                  onChangeText={setLastName}
                   placeholder={t.editProfile.lastNamePlaceholder}
                   placeholderTextColor="#6B7280"
                   autoCapitalize="words"
                   autoCorrect={false}
-                  editable={!isGuestUser}
                   testID="edit-profile-lastname-input"
                 />
               </View>
@@ -231,19 +309,17 @@ export default function EditProfileScreen() {
               >
                 {t.editProfile.phoneLabel}
               </Text>
-              <View style={[styles.inputContainer, isGuestUser && styles.readOnlyContainer]}>
+              <View style={styles.inputContainer}>
                 <TextInput
                   style={styles.input}
                   value={phone}
-                  onChangeText={isGuestUser ? undefined : setPhone}
+                  onChangeText={setPhone}
                   placeholder={t.editProfile.phonePlaceholder}
                   placeholderTextColor="#6B7280"
                   keyboardType="phone-pad"
                   autoCorrect={false}
-                  editable={!isGuestUser}
                   testID="edit-profile-phone-input"
                 />
-                {isGuestUser && <Ionicons name="lock-closed" size={16} color="#6B7280" />}
               </View>
             </YStack>
 
@@ -274,8 +350,7 @@ export default function EditProfileScreen() {
               </Text>
             </YStack>
 
-            {/* Save Button — hidden for guests (data managed by organizer) */}
-            {!isGuestUser && <YStack marginTop="$4">
+            <YStack marginTop="$4">
               <Pressable
                 style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
                 onPress={handleSave}
@@ -295,7 +370,7 @@ export default function EditProfileScreen() {
                   </Text>
                 )}
               </Pressable>
-            </YStack>}
+            </YStack>
           </YStack>
         </ScrollView>
       </KeyboardAvoidingView>
