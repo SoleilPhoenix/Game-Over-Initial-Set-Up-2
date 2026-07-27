@@ -1409,19 +1409,29 @@ export default function BudgetDashboardScreen() {
                           <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
                             {formatCurrency(amountForRow)}
                           </Text>
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              fontWeight: '700',
-                              color: isPaid ? theme.success : unpaidColor,
-                              letterSpacing: 0.5,
-                              textAlign: 'right',
-                              textTransform: 'uppercase',
-                            }}
-                            numberOfLines={2}
-                          >
-                            {isPaid ? t.budget.paid : isClaimed ? t.budget.claimed : t.budget.pending}
-                          </Text>
+                          {/* The screen deliberately carries only two status colours -
+                              green for paid, one orange for everything still open - so
+                              "awaiting confirmation" is set apart by a clock rather than
+                              by a third shade. */}
+                          <XStack alignItems="center" justifyContent="flex-end" gap={4} flexShrink={1}>
+                            {isClaimed && (
+                              <Ionicons name="time-outline" size={12} color={unpaidColor} />
+                            )}
+                            <Text
+                              style={{
+                                flexShrink: 1,
+                                fontSize: 11,
+                                fontWeight: '700',
+                                color: isPaid ? theme.success : unpaidColor,
+                                letterSpacing: 0.5,
+                                textAlign: 'right',
+                                textTransform: 'uppercase',
+                              }}
+                              numberOfLines={2}
+                            >
+                              {isPaid ? t.budget.paid : isClaimed ? t.budget.claimed : t.budget.pending}
+                            </Text>
+                          </XStack>
                         </YStack>
                       </View>
 
