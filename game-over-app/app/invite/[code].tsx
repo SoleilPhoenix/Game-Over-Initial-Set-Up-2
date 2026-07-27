@@ -327,7 +327,9 @@ export default function InviteScreen() {
         const base64 = await FileSystem.readAsStringAsync(jpeg.uri, {
           encoding: FileSystem.EncodingType.Base64,
         });
-        const path = `${currentUser.id}-${Date.now()}.jpg`;
+        // One folder per user: the storage policies scope writes to
+        // <user id>/…, so a guest can only ever touch their own avatars.
+        const path = `${currentUser.id}/${Date.now()}.jpg`;
 
         const chooseWhetherToContinue = (title: string, body: string) =>
           new Promise<boolean>((resolve) => {

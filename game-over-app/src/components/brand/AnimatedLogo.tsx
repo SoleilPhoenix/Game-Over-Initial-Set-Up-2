@@ -87,6 +87,24 @@ const WORD_RISE = 0.055;
 /** Total runtime of the reveal in ms - the glow is the last phase to finish. */
 export const LOGO_REVEAL_DURATION = T.glowStart + T.glowDuration;
 
+/**
+ * Starts a phase after `delayMs`, and keeps that delay even when the device has
+ * "Reduce Motion" on.
+ *
+ * This is not a detail. `withDelay` carries its own reduceMotion setting, and
+ * its default is `ReduceMotion.System`; with the accessibility setting on,
+ * Reanimated drops the delay outright (`now - startTime >= delayMs ||
+ * animation.reduceMotion` in its delay.ts). Marking only the inner `withTiming`
+ * as `Never` is therefore not enough: the timings still run, but every phase
+ * starts at zero, the whole choreography collapses into its longest single
+ * phase, and the reveal reads as a logo that was simply there all along.
+ *
+ * Every delayed phase must go through here rather than calling `withDelay`
+ * directly, so a phase added later cannot silently reintroduce that bug.
+ */
+const revealDelay = (delayMs: number, animation: number): number =>
+  withDelay(delayMs, animation, ReduceMotion.Never);
+
 /** Reveal runs once per app session; later mounts show the static logo instantly. */
 let hasPlayedThisSession = false;
 
@@ -225,7 +243,7 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
       reduceMotion: ReduceMotion.Never,
     });
 
-    settled.value = withDelay(
+    settled.value = revealDelay(
       T.settleStart,
       withTiming(1, {
         duration: T.settleDuration,
@@ -235,7 +253,7 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
     );
 
     // Accelerating, like something falling: the stem drops rather than glides.
-    stemCover.value = withDelay(
+    stemCover.value = revealDelay(
       T.stemStart,
       withTiming(0, {
         duration: T.stemDuration,
@@ -244,7 +262,7 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
       })
     );
 
-    wordOpacity.value = withDelay(
+    wordOpacity.value = revealDelay(
       T.wordStart,
       withTiming(1, {
         duration: T.wordDuration * 0.55,
@@ -252,7 +270,7 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
         reduceMotion: ReduceMotion.Never,
       })
     );
-    wordShift.value = withDelay(
+    wordShift.value = revealDelay(
       T.wordStart,
       withTiming(0, {
         duration: T.wordDuration,
@@ -260,7 +278,7 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
         reduceMotion: ReduceMotion.Never,
       })
     );
-    shine.value = withDelay(
+    shine.value = revealDelay(
       T.shineStart,
       withTiming(1, {
         duration: T.shineDuration,
@@ -269,7 +287,7 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
       })
     );
 
-    gemOpacity.value = withDelay(
+    gemOpacity.value = revealDelay(
       T.gemStart,
       withTiming(1, {
         duration: T.gemDuration * 0.55,
@@ -279,7 +297,7 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
     );
     // Decelerating, with no overshoot: the gem comes down and seats flush on the
     // stem rather than bouncing onto it.
-    gemDrop.value = withDelay(
+    gemDrop.value = revealDelay(
       T.gemStart,
       withTiming(0, {
         duration: T.gemDuration,
@@ -289,7 +307,7 @@ export function AnimatedLogo({ size = 150, onComplete, force = false, testID }: 
     );
 
     // Last phase to finish, so it owns the completion callback.
-    glow.value = withDelay(
+    glow.value = revealDelay(
       T.glowStart,
       withTiming(
         1,

@@ -466,14 +466,6 @@ export default function EventsScreen() {
     router.push('/notifications');
   };
 
-  // Note: this heuristic uses created_by to determine role.
-  // It may incorrectly show "Guest" for co-organizers (participants with role='organizer'
-  // who did not create the event). The accurate role is in event_participants.role,
-  // but that data is not loaded at the event list level to avoid N+1 queries.
-  const getUserRole = (event: EventWithDetails): 'organizer' | 'guest' => {
-    return event.created_by === user?.id ? 'organizer' : 'guest';
-  };
-
   const getPaymentStatus = (event: EventWithDetails): { label: string; fullyPaid: boolean } | null => {
     const formatPct = (pct: number) => (t.events as any).paidPct.replace('{{pct}}', String(pct));
     if (event.status === 'completed') {
@@ -538,7 +530,6 @@ export default function EventsScreen() {
   const keyExtractor = useCallback((item: EventWithDetails) => item.id, []);
 
   const renderEventCard = useCallback(({ item }: { item: EventWithDetails }) => {
-    const role = getUserRole(item);
     const progress = getProgressConfig(
       item, t,
       invitedCounts[item.id] || 0,
@@ -563,16 +554,6 @@ export default function EventsScreen() {
         ]}
         testID={`event-card-${item.id}`}
       >
-        {role === 'guest' && (
-          <View style={{
-            position: 'absolute', top: 8, right: 8,
-            backgroundColor: 'rgba(198,167,94,0.85)',
-            borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3,
-            zIndex: 1,
-          }}>
-            <Text style={{ fontSize: 11, color: 'white', fontWeight: '600' }}>{(t.events as any).guestBadge}</Text>
-          </View>
-        )}
         <XStack flex={1}>
           {/* Thumbnail */}
           <View style={styles.thumbnailContainer}>

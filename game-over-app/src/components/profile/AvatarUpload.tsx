@@ -11,6 +11,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '@/lib/supabase/client';
 import { useTranslation } from '@/i18n';
@@ -41,16 +42,6 @@ function validateAvatarAsset(asset: ImagePicker.ImagePickerAsset): string | null
     return `Unsupported image type (${mime}). Use JPEG, PNG, WebP, or HEIC.`;
   }
   return null;
-}
-
-/**
- * Maps the asset's MIME type into a content-type string for Supabase Storage.
- * Falls back to image/jpeg for unknown types so the upload still succeeds.
- */
-function avatarContentType(asset: ImagePicker.ImagePickerAsset): string {
-  const mime = asset.mimeType?.toLowerCase();
-  if (mime && ALLOWED_AVATAR_MIME_TYPES.includes(mime)) return mime;
-  return 'image/jpeg';
 }
 
 interface AvatarUploadProps {
@@ -106,7 +97,7 @@ export function AvatarUpload({
         Alert.alert('Invalid image', validationError);
         return;
       }
-      await uploadAvatar(asset.uri, avatarContentType(asset));
+      await uploadAvatar(asset.uri);
     }
   };
 
@@ -134,18 +125,27 @@ export function AvatarUpload({
         Alert.alert('Invalid image', validationError);
         return;
       }
-      await uploadAvatar(asset.uri, avatarContentType(asset));
+      await uploadAvatar(asset.uri);
     }
   };
 
-  const uploadAvatar = async (uri: string, contentType: string) => {
+  const uploadAvatar = async (uri: string) => {
     setIsUploading(true);
     try {
-      const fileName = `${userId}-${Date.now()}.jpg`;
-      const filePath = fileName;
+      // One folder per user: the storage policies scope writes to
+      // <user id>/…, so a user can only ever touch their own avatars.
+      const filePath = `${userId}/${Date.now()}.jpg`;
+
+      // Normalize every picker format (including iPhone HEIC/HEIF) to JPEG.
+      // The bucket only accepts jpeg/png/webp, so an unconverted HEIC is
+      // rejected outright — and the file name has always claimed .jpg anyway.
+      const jpeg = await manipulateAsync(uri, [], {
+        compress: 0.8,
+        format: SaveFormat.JPEG,
+      });
 
       // Read file as base64 (fetch/blob doesn't work for local URIs in React Native)
-      const base64 = await FileSystem.readAsStringAsync(uri, {
+      const base64 = await FileSystem.readAsStringAsync(jpeg.uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
@@ -166,7 +166,7 @@ export function AvatarUpload({
       const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, decode(base64), {
-          contentType,
+          contentType: 'image/jpeg',
           upsert: true,
         });
 

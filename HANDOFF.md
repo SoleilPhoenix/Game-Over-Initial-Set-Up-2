@@ -1,7 +1,59 @@
 # Handoff - Game Over App
 
 Kurzer Übergabestand, damit eine neue Session (z. B. von der iPhone-Claude-Code-App) nahtlos anknüpfen kann.
-Letzte Aktualisierung: 2026-07-23.
+Letzte Aktualisierung: 2026-07-27.
+
+## Aktueller Stand (2026-07-27) - Zwei hartnäckige Bugs endlich an der Wurzel
+
+Branch `claude/device-test-errors-c90ee5`, Worktree `.claude/worktrees/macbook-pro-ai-startup-5b439e`.
+`npm run typecheck`, `npm run lint`, `npx vitest run` (97 Tests) grün.
+UI-Batch über Codex (`gpt-5.6-sol`), Diagnose und DB von Claude.
+
+### 1. Foto-Upload: die RLS-Meldung log seit Monaten falsch
+
+`StorageApiError: new row violates row-level security policy` kam **nicht** von der INSERT-Policy.
+Supabase Storage schreibt die Objektzeile mit `INSERT ... RETURNING`, und RETURNING braucht Lesezugriff auf die neue Zeile.
+Auf `storage.objects` gab es überhaupt keine SELECT-Policy, also scheiterte jeder Upload, obwohl der INSERT-Check sauber durchlief.
+Öffentliche Reads funktionierten weiter, weil ein Public Bucket über den CDN-Pfad ausgeliefert wird, der RLS nie auswertet.
+Genau deshalb sah es wie ein Schreibrechte-Problem aus, und deshalb half auch eine testweise immer-wahre INSERT-Policy nicht.
+
+Nachgewiesen live gegen das Projekt: als Rolle `authenticated` lief ein blankes INSERT durch, dasselbe `INSERT ... RETURNING` scheiterte mit exakt der App-Fehlermeldung.
+Danach ein echter End-to-End-Upload mit frischem User-JWT: vorher `FAIL`, nach der Migration `OK`.
+
+Migration `20260727101940_fix_avatar_storage_rls.sql` (per MCP angewendet **und** als Datei abgelegt):
+SELECT-Policy `avatars_public_read` ergänzt, Schreibrechte auf Ordner pro Nutzer verengt (`<user id>/<timestamp>.jpg`).
+Die zwei Client-Stellen bauen den Pfad jetzt so: `src/components/profile/AvatarUpload.tsx` und `app/invite/[code].tsx`.
+`AvatarUpload` konvertiert zusätzlich nach JPEG (wie der Gast-Screen schon), sonst kippt der Bucket jedes iPhone-HEIC wegen `allowed_mime_types`.
+
+Merke: `storage.objects` hat einen `protect_objects_delete`-Trigger, direktes `DELETE` per SQL ist gesperrt, Objekte über die Storage-API entfernen.
+
+### 2. Intro: `withDelay` braucht sein eigenes `ReduceMotion.Never`
+
+Der Logo-Aufbau lief nie sichtbar, weil `withDelay` eine **eigene** reduceMotion-Einstellung trägt (Default `ReduceMotion.System`).
+Bei aktivem iOS "Bewegung reduzieren" wirft Reanimated die Verzögerung komplett weg
+(`now - startTime >= delayMs || animation.reduceMotion` in `animation/delay.js`).
+`ReduceMotion.Never` nur am inneren `withTiming` reicht deshalb nicht:
+die Timings laufen zwar, aber alle sieben Phasen starten gleichzeitig bei t=0, die Choreografie schrumpft auf ihre längste Einzelphase, und das Logo wirkt, als wäre es immer schon fertig gewesen.
+
+Das erklärt beide gescheiterten Vorgänger-Fixes (erst `ReduceMotion.Never` an den Timings, dann das Sichtbarkeits-Gating) - keiner hat `withDelay` angefasst.
+Alle verzögerten Phasen laufen jetzt über den Helfer `revealDelay()` in `AnimatedLogo.tsx`, damit eine später ergänzte Phase den Bug nicht still wieder einbaut.
+
+**Testen nur per Kaltstart** (App ganz beenden oder `r` in Metro), das Intro läuft einmal pro JS-Session.
+
+### 3. UI-Korrekturen aus dem Gerätetest (Codex)
+
+- Events-Karte: das doppelte "Gast"-Badge entfernt, der Organisator/Gast-Umschalter darüber sagt es schon.
+- Einladungs-Screen: der Ehrengast-Slot heißt jetzt BACHELOR bzw. BACHELORETTE je nach `party_type`, EN und DE, `honoree` bleibt Fallback.
+- Budget-Gruppenbeiträge: "Ich habe bezahlt" und "Bestätigen" sind jetzt vollbreite, goldgefüllte Fußzeilen in der Karte statt kleiner rechtsbündiger Pillen, die mit dem Status kollidierten.
+- Budget-Farben auf zwei Zustände reduziert: grün = bezahlt, ein einziges Orange `#F97316` = noch offen (vorher drei Orangetöne).
+- Die schief laufende Karte war kein Zufall: eingeladene, noch nicht beigetretene Gäste rendert eine **zweite** Schleife, der die `contributionMainRow` fehlte, also stapelten sich Avatar, Name und Betrag untereinander. Struktur angeglichen.
+
+### Offen / als Nächstes
+
+- **Gerätetest der beiden Wurzelfixes** steht noch aus (Intro nur per Kaltstart, Foto-Upload in Profil **und** Gast-Beitritt).
+- `assets/splash.png` ist veraltet und markenfremd: altes Kreis-mit-Pfeil-Logo plus Tagline, dazu `backgroundColor: '#15181D'`, das laut `CLAUDE.md` deprecated ist. Erste Sekunde jedes Kaltstarts zeigt damit ein Logo, das sonst nirgends vorkommt.
+- Empty-States-Copy feilen (siehe unten, unverändert offen).
+- DB-Drift/CI: die 3 GitHub-Secrets fehlen weiter, `migrate.yml` migriert nichts.
 
 ## Aktueller Stand (2026-07-23) - Guest-Flow rund, Empty-States neu, Test-DB geleert
 

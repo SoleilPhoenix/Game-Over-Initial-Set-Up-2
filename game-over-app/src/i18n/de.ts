@@ -85,7 +85,6 @@ const de: TranslationKeys = {
     noAttendingTitle: 'Noch keine Einladungen',
     noAttendingSubtitle: 'Wenn dich jemand zu einem Event einlädt, erscheint es hier.',
     nextStepOf: 'Schritt {{n}}/{{total}}',
-    guestBadge: 'Gast',
     paidPct: '{{pct}}% bezahlt',
   },
 
@@ -952,6 +951,8 @@ const de: TranslationKeys = {
     guestSlot: 'Gast #{{number}}',
     organizer: 'ORGANISATOR',
     honoree: 'EHRENGAST',
+    honoreeBachelor: 'BACHELOR',
+    honoreeBachelorette: 'BACHELORETTE',
     guest: 'GAST',
     confirmed: 'Bestätigt',
     accepted: 'Angenommen',

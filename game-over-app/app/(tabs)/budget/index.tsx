@@ -1363,8 +1363,7 @@ export default function BudgetDashboardScreen() {
                   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
                   const initials = (name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2)) || '?';
                   const key = (participantRaw as any).id as string;
-                  const pendingColor = 'rgba(249,115,22,0.75)';
-                  const claimedColor = '#D97706';
+                  const unpaidColor = '#F97316';
 
                   return (
                     <View key={key} style={styles.contributionCard}>
@@ -1414,7 +1413,7 @@ export default function BudgetDashboardScreen() {
                             style={{
                               fontSize: 11,
                               fontWeight: '700',
-                              color: isPaid ? theme.success : isClaimed ? claimedColor : pendingColor,
+                              color: isPaid ? theme.success : unpaidColor,
                               letterSpacing: 0.5,
                               textAlign: 'right',
                               textTransform: 'uppercase',
@@ -1496,7 +1495,7 @@ export default function BudgetDashboardScreen() {
                             );
                           }}
                         >
-                          <Ionicons name="checkmark-circle-outline" size={14} color={theme.accentGold} />
+                          <Ionicons name="checkmark-circle-outline" size={14} color={theme.background} />
                           <Text style={styles.markPaidButtonText}>{t.budget.ivePaid}</Text>
                         </Pressable>
                       )}
@@ -1538,18 +1537,24 @@ export default function BudgetDashboardScreen() {
                   const initials = ic.name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2) || '?';
                   return (
                     <View key={`invite-${ic.id}`} style={styles.contributionCard}>
-                      <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
-                        <Text style={styles.participantInitialsText}>{initials}</Text>
+                      <View style={styles.contributionMainRow}>
+                        <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
+                          <Text style={styles.participantInitialsText}>{initials}</Text>
+                        </View>
+                        <View style={styles.contributionName}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>
+                            {ic.name}
+                          </Text>
+                        </View>
+                        <YStack style={styles.contributionAmount} alignItems="flex-end" gap={2}>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
+                            {formatCurrency(perPerson)}
+                          </Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#F97316', letterSpacing: 0.5, textAlign: 'right', textTransform: 'uppercase' }}>
+                            {t.budget.pending}
+                          </Text>
+                        </YStack>
                       </View>
-                      <View style={{ flex: 1, marginLeft: 12 }}>
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>{ic.name}</Text>
-                      </View>
-                      <YStack alignItems="flex-end" gap={2}>
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>{formatCurrency(perPerson)}</Text>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(249,115,22,0.75)', letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                          {t.budget.pending}
-                        </Text>
-                      </YStack>
                     </View>
                   );
                 })}
@@ -2564,6 +2569,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: theme.ghostBorder,
+    overflow: 'hidden',
   },
   contributionMainRow: {
     width: '100%',
@@ -2701,30 +2707,36 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
+    paddingVertical: 12,
     paddingHorizontal: 16,
-    alignSelf: 'flex-end',
-    marginTop: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(198, 167, 94, 0.1)',
-    borderWidth: 1,
-    borderColor: 'rgba(198, 167, 94, 0.25)',
+    alignSelf: 'stretch',
+    marginTop: 14,
+    marginHorizontal: -14,
+    marginBottom: -14,
+    borderRadius: 0,
+    borderTopWidth: 1,
+    borderTopColor: theme.ghostBorder,
+    backgroundColor: theme.accentGold,
   },
   markPaidButtonText: {
     fontSize: 13,
-    fontWeight: '600',
-    color: theme.accentGold,
+    fontWeight: '700',
+    color: theme.background,
   },
   confirmClaimButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'flex-end',
     gap: 6,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    marginTop: 10,
-    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignSelf: 'stretch',
+    marginTop: 14,
+    marginHorizontal: -14,
+    marginBottom: -14,
+    borderRadius: 0,
+    borderTopWidth: 1,
+    borderTopColor: theme.ghostBorder,
     backgroundColor: theme.accentGold,
   },
   confirmClaimButtonText: {

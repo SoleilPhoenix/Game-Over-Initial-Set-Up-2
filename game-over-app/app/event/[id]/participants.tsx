@@ -637,7 +637,15 @@ export default function ManageInvitationsScreen() {
       case 'organizer':
         return { label: t.manageInvitations.organizer, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
       case 'honoree':
-        return { label: t.manageInvitations.honoree, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
+        return {
+          label: event?.party_type === 'bachelorette'
+            ? t.manageInvitations.honoreeBachelorette
+            : event?.party_type === 'bachelor'
+              ? t.manageInvitations.honoreeBachelor
+              : t.manageInvitations.honoree,
+          bg: 'rgba(107,114,128,0.18)',
+          color: theme.textSecondary,
+        };
       default:
         return { label: t.manageInvitations.guest, bg: 'rgba(107,114,128,0.18)', color: theme.textSecondary };
     }

@@ -87,7 +87,6 @@ const en = {
     noAttendingTitle: "No Invitations Yet",
     noAttendingSubtitle: "When someone invites you to an event, it will appear here.",
     nextStepOf: 'Step {{n}}/{{total}}',
-    guestBadge: 'Guest',
     paidPct: '{{pct}}% Paid',
   },
 
@@ -968,6 +967,8 @@ const en = {
     guestSlot: 'Guest #{{number}}',
     organizer: 'ORGANIZER',
     honoree: 'HONOREE',
+    honoreeBachelor: 'BACHELOR',
+    honoreeBachelorette: 'BACHELORETTE',
     guest: 'GUEST',
     confirmed: 'Confirmed',
     accepted: 'Accepted',
