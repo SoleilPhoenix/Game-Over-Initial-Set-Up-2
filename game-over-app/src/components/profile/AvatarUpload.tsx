@@ -180,7 +180,19 @@ export function AvatarUpload({
         .from('avatars')
         .getPublicUrl(filePath);
 
-      // Update user metadata
+      // `profiles.avatar_url` is the canonical source: the invitation list, the
+      // budget screen and every other participant view read it. Writing only the
+      // auth metadata (as this used to) left those screens on the previous photo
+      // forever, because nothing ever copied the new URL across.
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('id', userId);
+
+      if (profileError) throw profileError;
+
+      // Kept in sync because screens that render the signed-in user before their
+      // profile row has loaded fall back to the metadata copy.
       const { error: updateError } = await supabase.auth.updateUser({
         data: { avatar_url: publicUrl },
       });

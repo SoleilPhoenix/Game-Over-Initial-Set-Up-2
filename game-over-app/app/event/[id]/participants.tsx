@@ -685,10 +685,15 @@ export default function ManageInvitationsScreen() {
     const displayName = slot.name ||
       t.manageInvitations.guestSlot.replace('{{number}}', String(guestNum));
 
-    // Profile photo: organizer uses own profile, others use participant profile
-    const avatarUrl = slot.role === 'organizer'
-      ? (ownProfile?.avatar_url || user?.user_metadata?.avatar_url || null)
-      : (slot.participant?.profile?.avatar_url || null);
+    // Profile photo: always prefer the slot's own participant profile. The
+    // signed-in user's picture is only a fallback for the organizer row, and
+    // only when the viewer *is* the organizer - otherwise a guest opening this
+    // list sees their own photo sitting on the organizer's row. The name above
+    // already guards this the same way.
+    const avatarUrl = slot.participant?.profile?.avatar_url
+      || (slot.role === 'organizer' && !isGuest
+        ? (ownProfile?.avatar_url || user?.user_metadata?.avatar_url || null)
+        : null);
 
     // Past events: slots become fully read-only (no expansion, no edit form)
     const slotCanEdit = slot.isEditable && !isReadOnly;
