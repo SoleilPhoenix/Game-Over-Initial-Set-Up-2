@@ -318,6 +318,7 @@ const en = {
     participantsLabel: 'Participants',
     excludeHonoree: 'Exclude honoree from paying',
     costBreakdown: 'Cost Breakdown',
+    costOverview: 'Cost Overview',
     packageBase: 'Package Base',
     perPersonCost: 'Per Person',
     payingParticipants: 'paying participants',

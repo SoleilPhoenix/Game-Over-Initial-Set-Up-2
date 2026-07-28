@@ -380,17 +380,10 @@ serve(async (req: Request) => {
         sendResult = await sendSMS(contact, smsBody);
 
       } else {
-        // WhatsApp
+        // WhatsApp — no silent SMS fallback. If WhatsApp fails (e.g. 63016 outside
+        // 24h session window, 63007 number not on WhatsApp), report the failure so
+        // the organizer can re-send via email instead.
         sendResult = await sendWhatsApp(contact, smsBody);
-
-        // Error 63016 = outside 24-hour session window (recipient hasn't messaged us recently).
-        // Error 63007 = WhatsApp number not registered (common in sandbox testing).
-        // Both are permanent WhatsApp failures — fall back to SMS automatically.
-        if (!sendResult.success && (sendResult.twilioCode === 63016 || sendResult.twilioCode === 63007)) {
-          console.log(`[whatsapp] code=${sendResult.twilioCode} — falling back to SMS for slot=${guest.slotIndex}`);
-          sendResult = await sendSMS(contact, smsBody);
-          actualChannel = 'sms';
-        }
       }
 
       // 5. Record result

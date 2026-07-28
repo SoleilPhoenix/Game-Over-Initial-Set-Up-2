@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useParticipants } from '@/hooks/queries/useParticipants';
-import { useInviteGuests } from '@/hooks/queries/useInvites';
+import { useInviteGuests, useCreateInvite } from '@/hooks/queries/useInvites';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { useUser } from '@/stores/authStore';
 import { useTranslation } from '@/i18n';
@@ -109,6 +109,33 @@ export default function ManageInvitationsScreen() {
   const { data: event, isLoading: eventLoading } = useEvent(id);
   const { data: participants } = useParticipants(id);
   const { data: booking } = useBooking(id);
+  const createInvite = useCreateInvite();
+  const shareInviteCodeRef = useRef<string | null>(null);
+
+  // ScrollView ref + focus handler — iOS doesn't auto-scroll TextInputs above the
+  // keyboard for us. When any input in an expanded slot gains focus we measure
+  // its position and scroll it to ~180pt above the ScrollView bottom (leaves
+  // room for keyboard + QuickType suggestion bar).
+  const scrollViewRef = useRef<ScrollView>(null);
+  const handleInputFocus = useCallback((event: { target: any }) => {
+    const target = event.target;
+    if (!target || !scrollViewRef.current) return;
+    // Wait a beat so keyboard animation has started; then measure + scroll.
+    setTimeout(() => {
+      const scrollNode = (scrollViewRef.current as any)?.getScrollableNode?.()
+        ?? (scrollViewRef.current as any)?._nativeTag
+        ?? scrollViewRef.current;
+      if (target.measureLayout && scrollNode) {
+        target.measureLayout(
+          scrollNode,
+          (_x: number, y: number) => {
+            scrollViewRef.current?.scrollTo({ y: Math.max(0, y - 120), animated: true });
+          },
+          () => { /* measure failed, ignore */ },
+        );
+      }
+    }, 250);
+  }, []);
   const currentParticipant = participants?.find(p => p.user_id === user?.id);
   // Use role param from navigation (known immediately) — fallback to participants query
   const isGuest = roleParam === 'guest' || (!roleParam && currentParticipant?.role === 'guest');
@@ -431,7 +458,20 @@ export default function ManageInvitationsScreen() {
   };
 
   const handleShareFallback = async () => {
-    const inviteLink = `https://game-over.app/invite/${id}`;
+    if (!id) return;
+    // Lazy-generate a shareable invite code on first use — never share the raw event UUID.
+    let code = shareInviteCodeRef.current;
+    if (!code) {
+      try {
+        const invite = await createInvite.mutateAsync({ eventId: id });
+        code = invite.code;
+        shareInviteCodeRef.current = code;
+      } catch {
+        Alert.alert('Error', 'Could not generate invite link. Please try again.');
+        return;
+      }
+    }
+    const inviteLink = `https://game-over.app/invite/${code}`;
     const msg = `🎉 You're invited to celebrate ${event?.honoree_name || 'the party'}!\n\nJoin us on Game Over:\n${inviteLink}`;
     try { await Share.share({ message: msg, title: 'Game Over Invitation' }); } catch {}
   };
@@ -612,6 +652,7 @@ export default function ManageInvitationsScreen() {
                   placeholderTextColor={theme.textTertiary}
                   value={guestDetails[-1]?.phone || ''}
                   onChangeText={(v) => updateGuestDetail(-1, 'phone', v)}
+                  onFocus={handleInputFocus}
                   keyboardType="phone-pad"
                 />
               </View>
@@ -627,7 +668,7 @@ export default function ManageInvitationsScreen() {
                       placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.email || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'email', v)}
-                      onFocus={() => handleEmailFocus(slot.index, guestDetails[slot.index]?.email || '')}
+                      onFocus={(e) => { handleEmailFocus(slot.index, guestDetails[slot.index]?.email || ''); handleInputFocus(e); }}
                       onBlur={handleEmailBlur}
                       keyboardType="email-address"
                       autoCapitalize="none"
@@ -655,6 +696,7 @@ export default function ManageInvitationsScreen() {
                     placeholderTextColor={theme.textTertiary}
                     value={guestDetails[slot.index]?.phone || ''}
                     onChangeText={(v) => updateGuestDetail(slot.index, 'phone', v)}
+                    onFocus={handleInputFocus}
                     keyboardType="phone-pad"
                   />
                 </View>
@@ -671,6 +713,7 @@ export default function ManageInvitationsScreen() {
                       placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.firstName || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'firstName', v)}
+                      onFocus={handleInputFocus}
                       autoCapitalize="words"
                     />
                   </View>
@@ -681,6 +724,7 @@ export default function ManageInvitationsScreen() {
                       placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.lastName || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'lastName', v)}
+                      onFocus={handleInputFocus}
                       autoCapitalize="words"
                     />
                   </View>
@@ -693,7 +737,7 @@ export default function ManageInvitationsScreen() {
                       placeholderTextColor={theme.textTertiary}
                       value={guestDetails[slot.index]?.email || ''}
                       onChangeText={(v) => updateGuestDetail(slot.index, 'email', v)}
-                      onFocus={() => handleEmailFocus(slot.index, guestDetails[slot.index]?.email || '')}
+                      onFocus={(e) => { handleEmailFocus(slot.index, guestDetails[slot.index]?.email || ''); handleInputFocus(e); }}
                       onBlur={handleEmailBlur}
                       keyboardType="email-address"
                       autoCapitalize="none"
@@ -721,6 +765,7 @@ export default function ManageInvitationsScreen() {
                     placeholderTextColor={theme.textTertiary}
                     value={guestDetails[slot.index]?.phone || ''}
                     onChangeText={(v) => updateGuestDetail(slot.index, 'phone', v)}
+                    onFocus={handleInputFocus}
                     keyboardType="phone-pad"
                   />
                 </View>
@@ -770,8 +815,9 @@ export default function ManageInvitationsScreen() {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={{ flex: 1 }}
-        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 100 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 400 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="interactive"

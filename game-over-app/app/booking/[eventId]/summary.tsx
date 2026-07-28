@@ -242,9 +242,9 @@ export default function BookingSummaryScreen() {
           </XStack>
         </YStack>
 
-        {/* Cost Breakdown */}
+        {/* Cost Overview */}
         <Text fontSize={11} fontWeight="700" color={'rgba(255,255,255,0.72)'} textTransform="uppercase" letterSpacing={1} marginBottom="$2" marginLeft="$1">
-          Cost Breakdown
+          {(t.booking as any).costOverview ?? 'Cost Overview'}
         </Text>
         <YStack
           backgroundColor={'#1A2F47'}
@@ -255,15 +255,6 @@ export default function BookingSummaryScreen() {
           borderColor={'rgba(230,220,200,0.15)'}
           testID="cost-breakdown-card"
         >
-          <XStack justifyContent="space-between" marginBottom="$3">
-            <Text fontSize={14} color={'rgba(255,255,255,0.72)'}>Package Base</Text>
-            <Text fontSize={14} fontWeight="600" color="white">
-              {formatPriceWhole(Math.round(pricing.packagePriceCents / 100))}
-            </Text>
-          </XStack>
-
-          <YStack height={1} backgroundColor={'rgba(230,220,200,0.15)'} marginVertical="$2" />
-
           <XStack justifyContent="space-between">
             <Text fontSize={15} fontWeight="600" color="white">{t.booking.totalGroupCost}</Text>
             <Text fontSize={16} fontWeight="800" color={'#C6A75E'}>

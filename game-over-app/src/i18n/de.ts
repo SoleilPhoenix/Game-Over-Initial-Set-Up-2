@@ -312,6 +312,7 @@ const de: TranslationKeys = {
     participantsLabel: 'Teilnehmer',
     excludeHonoree: 'Ehrengast von Zahlung ausschließen',
     costBreakdown: 'Kostenaufschlüsselung',
+    costOverview: 'Kostenübersicht',
     packageBase: 'Paketpreis',
     perPersonCost: 'Pro Person',
     payingParticipants: 'zahlende Teilnehmer',

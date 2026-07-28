@@ -140,8 +140,12 @@ export default function BookingConfirmationScreen() {
   };
 
   const handleViewEvent = () => {
-    const { activeDraftId, deleteDraft } = useWizardStore.getState();
+    const { activeDraftId, deleteDraft, setCreatedEventId } = useWizardStore.getState();
     if (activeDraftId) deleteDraft(activeDraftId);
+    // Release the createdEventId lock so the freshly-booked event shows up on
+    // the Events tab (the tab hides any event whose id matches createdEventId
+    // to prevent flashing a half-created event while the wizard is still open).
+    setCreatedEventId(null);
     queryClient.invalidateQueries({ queryKey: eventKeys.all });
     if (isDraft) {
       goToEventsTab();
@@ -152,8 +156,9 @@ export default function BookingConfirmationScreen() {
   };
 
   const handleGoHome = () => {
-    const { activeDraftId, deleteDraft } = useWizardStore.getState();
+    const { activeDraftId, deleteDraft, setCreatedEventId } = useWizardStore.getState();
     if (activeDraftId) deleteDraft(activeDraftId);
+    setCreatedEventId(null);
     queryClient.invalidateQueries({ queryKey: eventKeys.all });
     goToEventsTab();
   };

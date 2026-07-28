@@ -1,9 +1,10 @@
-import React from 'react';
-import { Modal, View, Pressable, Share, Linking, Alert } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { Modal, View, Pressable, Share, Linking, Alert, ActivityIndicator } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
+import { useCreateInvite } from '@/hooks/queries/useInvites';
 
 const PLATFORMS = [
   { id: 'whatsapp',  label: 'WhatsApp',    icon: 'logo-whatsapp',  color: '#25D366', bg: 'rgba(37,211,102,0.15)' },
@@ -40,10 +41,35 @@ const APP_FALLBACKS: Record<string, string> = {
 
 export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModalProps) {
   const { theme } = useTheme();
-  const shareUrl  = `https://game-over.app/invite/${eventId ?? ''}`;
-  const shareMsg  = `Join us for ${eventTitle ?? 'an unforgettable event'}! 🎉 ${shareUrl}`;
+  const createInvite = useCreateInvite();
+  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  // Lazy-generate an invite code on first share action, then cache it for the modal lifetime.
+  // Never put the raw eventId into an /invite/ link — that URL will not resolve.
+  const getInviteUrl = useCallback(async (): Promise<string | null> => {
+    if (!eventId) return null;
+    if (inviteCode) return `https://game-over.app/invite/${inviteCode}`;
+    setIsGenerating(true);
+    try {
+      const invite = await createInvite.mutateAsync({ eventId });
+      setInviteCode(invite.code);
+      return `https://game-over.app/invite/${invite.code}`;
+    } catch {
+      return null;
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [eventId, inviteCode, createInvite]);
 
   const handlePlatform = async (id: PlatformId) => {
+    const shareUrl = await getInviteUrl();
+    if (!shareUrl) {
+      Alert.alert('Error', 'Could not generate invite link. Please try again.');
+      return;
+    }
+    const shareMsg = `Join us for ${eventTitle ?? 'an unforgettable event'}! 🎉 ${shareUrl}`;
+
     try {
       if (CLIPBOARD_OPEN_PLATFORMS.includes(id)) {
         // Copy link to clipboard, then open the app (user pastes in-app)
@@ -83,6 +109,11 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
   };
 
   const handleCopyLink = async () => {
+    const shareUrl = await getInviteUrl();
+    if (!shareUrl) {
+      Alert.alert('Error', 'Could not generate invite link. Please try again.');
+      return;
+    }
     await Clipboard.setStringAsync(shareUrl).catch(() => {});
     onClose();
     Alert.alert('Link copied!', 'Paste it anywhere to share.');
@@ -118,7 +149,8 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
               <Pressable
                 key={p.id}
                 onPress={() => handlePlatform(p.id)}
-                style={({ pressed }) => ({ alignItems: 'center', gap: 7, width: '30%', opacity: pressed ? 0.75 : 1 })}
+                disabled={isGenerating}
+                style={({ pressed }) => ({ alignItems: 'center', gap: 7, width: '30%', opacity: (pressed || isGenerating) ? 0.55 : 1 })}
               >
                 <View style={{
                   width: 68, height: 68, borderRadius: 20,
@@ -139,17 +171,22 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
           {/* Copy link — compact, filigree */}
           <Pressable
             onPress={handleCopyLink}
+            disabled={isGenerating}
             style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 7,
-              opacity: pressed ? 0.65 : 1,
+              opacity: (pressed || isGenerating) ? 0.55 : 1,
               paddingVertical: 8,
             })}
           >
-            <Ionicons name="copy-outline" size={14} color={theme.textTertiary} />
-            <Text style={{ fontSize: 12, fontWeight: '500', color: theme.textTertiary }}>Copy link</Text>
+            {isGenerating
+              ? <ActivityIndicator size="small" color={theme.textTertiary} />
+              : <Ionicons name="copy-outline" size={14} color={theme.textTertiary} />}
+            <Text style={{ fontSize: 12, fontWeight: '500', color: theme.textTertiary }}>
+              {isGenerating ? 'Preparing link…' : 'Copy link'}
+            </Text>
           </Pressable>
         </View>
       </View>
