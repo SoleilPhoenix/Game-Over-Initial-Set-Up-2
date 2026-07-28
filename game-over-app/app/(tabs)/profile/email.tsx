@@ -1,6 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -37,6 +38,20 @@ export default function ChangeEmailScreen() {
   const styles = useMemo(() => makeStyles(theme), [theme]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+
+  // The submit button lives in a pinned footer rather than at the end of the
+  // scroll content: with the password keyboard up there was no reliable way to
+  // reach it, and the tab bar sits on top of the last stretch of the scroll view.
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const shown = Keyboard.addListener(showEvent, () => setKeyboardOpen(true));
+    const hidden = Keyboard.addListener(hideEvent, () => setKeyboardOpen(false));
+    return () => { shown.remove(); hidden.remove(); };
+  }, []);
+
+  const currentEmail = user?.email ?? '';
 
   const schema = useMemo(() => z.object({
     newEmail: z.string().trim().email(t.changeEmail.validEmail),
@@ -45,7 +60,12 @@ export default function ChangeEmailScreen() {
   }).refine((data) => data.newEmail.toLowerCase() === data.confirmEmail.toLowerCase(), {
     message: t.changeEmail.validMatch,
     path: ['confirmEmail'],
-  }), [t]);
+  }).refine(
+    // Supabase accepts a no-op change and still reports success, which would
+    // send the user off to check an inbox for a confirmation that never comes.
+    (data) => !currentEmail || data.newEmail.toLowerCase() !== currentEmail.toLowerCase(),
+    { message: t.changeEmail.validSameAsCurrent, path: ['newEmail'] },
+  ), [t, currentEmail]);
 
   const {
     control,
@@ -125,7 +145,7 @@ export default function ChangeEmailScreen() {
 
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingTop: 24, paddingBottom: insets.bottom + 100 }}
+          contentContainerStyle={{ paddingTop: 24, paddingBottom: 24 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -217,27 +237,36 @@ export default function ChangeEmailScreen() {
               />
               <FieldError message={errors.currentPassword?.message} />
             </YStack>
-
-            <Pressable
-              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-              disabled={isSubmitting}
-              onPress={handleSubmit(onSubmit)}
-            >
-              {isSubmitting ? (
-                <XStack gap="$2" alignItems="center">
-                  <Spinner size="small" color={theme.textOnPrimary} />
-                  <Text color={theme.textOnPrimary} fontWeight="600">
-                    {t.changeEmail.submitting}
-                  </Text>
-                </XStack>
-              ) : (
-                <Text color={theme.textOnPrimary} fontWeight="600" fontSize={16}>
-                  {t.changeEmail.submit}
-                </Text>
-              )}
-            </Pressable>
           </YStack>
         </ScrollView>
+
+        <View
+          paddingHorizontal="$4"
+          paddingTop="$3"
+          paddingBottom={keyboardOpen ? 12 : insets.bottom + 88}
+          backgroundColor={theme.background}
+          borderTopWidth={1}
+          borderTopColor={theme.ghostBorder}
+        >
+          <Pressable
+            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+            disabled={isSubmitting}
+            onPress={handleSubmit(onSubmit)}
+          >
+            {isSubmitting ? (
+              <XStack gap="$2" alignItems="center">
+                <Spinner size="small" color={theme.textOnPrimary} />
+                <Text color={theme.textOnPrimary} fontWeight="600">
+                  {t.changeEmail.submitting}
+                </Text>
+              </XStack>
+            ) : (
+              <Text color={theme.textOnPrimary} fontWeight="600" fontSize={16}>
+                {t.changeEmail.submit}
+              </Text>
+            )}
+          </Pressable>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );

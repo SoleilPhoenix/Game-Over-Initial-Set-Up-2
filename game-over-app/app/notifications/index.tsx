@@ -110,7 +110,8 @@ export default function NotificationsScreen() {
                   .replace('{{event}}', eventName),
                 type: 'payment_claimed',
                 user_id: guestUrgentEvent.created_by,
-                action_url: `/event/${eventId}/budget`,
+                // claimedBy lets the budget screen point straight at this guest.
+                action_url: `/event/${eventId}/budget?claimedBy=${user.id}`,
               });
               if (notificationError) {
                 console.warn('[notifications] payment claim notification failed:', notificationError.message);
@@ -437,7 +438,6 @@ export default function NotificationsScreen() {
                         <View style={styles.unseenDot} />
                       )}
                     </Pressable>
-                    <View style={styles.rowDivider} />
                   </React.Fragment>
                 ))}
               </>
@@ -507,18 +507,25 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 100,
   },
-  // Unpaid urgency row — orange tint
+  // Urgency row — same card geometry as NotificationItem below it, so the
+  // "today" entry does not read as a different kind of object than the rest
+  // of the list. Only the tint separates unpaid (orange) from paid.
   urgencyRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    padding: 16,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(249, 115, 22, 0.35)',
     backgroundColor: 'rgba(249, 115, 22, 0.07)',
   },
-  // Paid urgency row — no tint, slightly dimmed
+  // Paid urgency row — neutral card, matching the plain notification surface
   urgencyRowPaid: {
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(26, 47, 71, 0.8)',
+    borderColor: 'rgba(230, 220, 200, 0.15)',
   },
   urgencyIconCircle: {
     width: 40,
@@ -536,11 +543,6 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: '#F97316',
-  },
-  rowDivider: {
-    height: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    marginLeft: 68,
   },
   guestPayCard: {
     marginHorizontal: 16,

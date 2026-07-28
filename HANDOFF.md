@@ -1,7 +1,88 @@
 # Handoff - Game Over App
 
 Kurzer Übergabestand, damit eine neue Session (z. B. von der iPhone-Claude-Code-App) nahtlos anknüpfen kann.
-Letzte Aktualisierung: 2026-07-27.
+Letzte Aktualisierung: 2026-07-28.
+
+**Diese Datei ist die Statusdatei des Projekts.** Ein `Status.md` gibt es bewusst nicht.
+Sie wird laut globaler `~/.claude/CLAUDE.md` nach jedem abgeschlossenen Fortschritt fortgeschrieben,
+und zwar im selben Commit wie die Änderung, die sie beschreibt.
+
+## Aktueller Stand (2026-07-28) - UI-Korrekturen aus dem Gerätetest, Runde 5
+
+Branch `claude/gastprofil-zahlungen-ui-c863e7`.
+`npm run typecheck`, `npm run lint`, `npx vitest run` (101 Tests) grün.
+
+### Nachtrag: sechs Commits standen nie hier drin
+
+Zwischen `bcfc85b94` (letzter Eintrag) und `dd5170bfc` sind sechs Commits gelandet, die in dieser
+Datei fehlten. Der Vollständigkeit halber, weil sonst der nächsten Session der halbe Kontext fehlt:
+
+- `8cb16cfed` Uhr-Icon für "Bestätigung ausstehend" im Budget.
+- `221b50330` Avatare: fremdes Foto beim Organisator, veraltetes Foto überall sonst.
+- `4bdeaf9ed` Gast darf Name und Telefon selbst ändern, Zahlstatus anderer Gäste ist privat.
+- `d451bb9c2` Erfolgsmeldungen als dezente Toasts unten statt als Dialog (`ToastHost`).
+- `ae6ece881` Benachrichtigungen auf zwei Farben reduziert (orange = handeln, grün = Information),
+  `action_url` an den Einfügestellen gesetzt, `guest_profile_updated` mit `guest_data_changed`
+  zusammengeführt. Restbetrag-Karte orange umrandet.
+- `dd5170bfc` Rückerstattungen in der DB (`event_refunds`) statt AsyncStorage, tägliche Erinnerung
+  per `pg_cron`, eigener Screen zum Ändern der E-Mail-Adresse.
+
+### Der eigentliche Fund dieser Runde: der Code war richtig, die Daten waren es nicht
+
+"Gastprofil aktualisiert" wurde weiter orange mit Standard-Glocke gezeichnet, obwohl `ae6ece881`
+die Farben längst korrigiert hatte. Grund war nicht der Code, sondern der Bestand:
+
+Die Zeilen in der Datenbank tragen `type = 'guest_profile_updated'`. Genau diesen Typ hat
+`ae6ece881` entfernt, er steht in `NOTIFICATION_CONFIG` also nicht mehr drin, und alles Unbekannte
+fällt auf `default` zurück - orange Glocke, was "du musst handeln" bedeutet.
+
+Zweiter Fund derselben Abfrage: **alle neun** Zeilen hatten `action_url = NULL`. `NotificationItem`
+routet seit jeher auf diese Spalte, gesetzt wurde sie aber erst ab `ae6ece881`. Jede historische
+Zeile war eine Sackgasse.
+
+**Merke: bei "der Fix wirkt nicht" zuerst die Live-Daten abfragen, nicht den Code noch einmal lesen.**
+Ein Typ, der aus dem Code verschwindet, verschwindet nicht aus der Tabelle.
+
+Behoben doppelt, absichtlich:
+- Migration `20260728180000_backfill_legacy_notifications.sql` trägt `action_url` nach und rettet den
+  Gastnamen aus dem fest verdrahteten englischen Satz nach `metadata`.
+- `NotificationItem` führt `guest_profile_updated` als Alias weiter, damit eine übersehene Zeile
+  nie wieder als orange Glocke auflaufen kann.
+
+### Weitere Korrekturen dieser Runde
+
+- **`guest_joined` war fest auf Englisch.** `app/invite/[code].tsx` schrieb "Guest Joined" als Text
+  in die DB. Jetzt derselbe Mechanismus wie bei `guest_data_changed`: Gastname in `metadata`,
+  Übersetzung erst beim Anzeigen in der Sprache des Lesers.
+- **"Zahlung ausstehend"** ist jetzt eine Karte mit derselben Geometrie wie die Zeilen darunter,
+  vorher ein randloser Streifen mit Trennlinie.
+- **Rückerstattungs-Maske:** `minimumDate` gesetzt (eine Frist in der Vergangenheit ist beim
+  Speichern schon überfällig und löst sofort die Erinnerung aus), Lücke zwischen Feld und Kalender
+  weg, unterer Freiraum von 120 auf 96, und der ScrollView scrollt beim Öffnen des Kalenders ans
+  Ende, damit der Bestätigen-Knopf auf kleinen Geräten erreichbar bleibt.
+- **Restbetrag-Karte:** rechte Spalte unten ausgerichtet, damit "Restbetrag bezahlen" und "Noch X
+  Tage" auf einer Grundlinie sitzen, beide 12pt; Chevron von 20 auf 30 in einem 52er Kreis.
+- **E-Mail ändern:** die eigene Adresse lief ohne Prüfung durch `updateUser`, Supabase meldete
+  Erfolg, und der Nutzer bekam "Prüfe deinen Posteingang" für eine Änderung, die es nicht gab.
+  Jetzt eine Zod-Prüfung gegen `user.email`.
+- **Toast** hielt 104pt über der Tab-Leiste frei und verdeckte damit den Chevron der Zeile darüber,
+  jetzt 76.
+- **Budget-Hervorhebung:** `payment_claimed` hängt `?claimedBy=<user id>` an die `action_url`, das
+  Budget umrandet die Zeile dieses Gastes für 4 Sekunden orange. Bewusst flüchtig, sonst staut sich
+  die Liste zu, wenn mehrere Gäste am selben Abend melden.
+
+### Offen aus dieser Runde
+
+- **Der Bestätigen-Knopf auf "E-Mail ändern" ist NICHT am Gerät verifiziert.**
+  Auf dem Screenshot des Users ist der goldene Knopf etwa halb so hoch wie vorgesehen und ohne
+  Beschriftung. Das passt zu keiner naheliegenden Erklärung: `textOnPrimary` ist `#0D1B2A` auf Gold,
+  `minHeight` steht auf 52, und `t.changeEmail.submit` existiert in beiden Sprachen mit echtem Text.
+  Der Knopf sitzt jetzt in einer fixierten Fußzeile außerhalb der ScrollView, was das gemeldete
+  Verstecken unter der Tastatur strukturell ausschließt - die halbe Höhe erklärt es aber nicht.
+  **Wenn das Symptom bleibt, hier weitersuchen, nicht am Layout.**
+- Reproduzieren ging nicht: `xcode-select` zeigt nicht auf Xcode, der Simulator ist blockiert.
+  Fix braucht das Passwort des Users:
+  `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`
 
 ## Aktueller Stand (2026-07-27) - Zwei hartnäckige Bugs endlich an der Wurzel
 

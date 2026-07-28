@@ -11,7 +11,9 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
 type Toast = ReturnType<typeof useUIStore.getState>['toasts'][number];
 
 // Clears the custom tab bar, including its raised center action button.
-const TAB_BAR_CLEARANCE = 104;
+// Just clears the tab bar and the floating "+". At 104 the toast rode high
+// enough to cover the chevron of the settings row above it.
+const TAB_BAR_CLEARANCE = 76;
 
 const toastIcons: Record<'success' | 'error' | 'warning' | 'info', IconName> = {
   success: 'checkmark-circle-outline',

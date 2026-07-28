@@ -142,11 +142,14 @@ export default function InviteScreen() {
               const guestFullName = currentUser.user_metadata?.full_name || currentUser.email || 'A guest';
               await supabase.from('notifications').insert({
                 event_id: joinedEventId,
-                title: 'Guest Joined',
-                body: `${guestFullName} has joined your event.`,
                 type: 'guest_joined',
                 user_id: eventData.created_by,
+                // Fallback text (guest's language) — NotificationItem re-renders it
+                // in the organizer's language from `metadata`.
+                title: t.notifications.guestJoinedTitle,
+                body: t.notifications.guestJoinedBody.replace('{{guest}}', guestFullName),
                 action_url: `/event/${joinedEventId}/participants`,
+                metadata: ({ guestName: guestFullName } as unknown) as Json,
               });
 
               // Detect any divergence from what the organizer originally entered.
