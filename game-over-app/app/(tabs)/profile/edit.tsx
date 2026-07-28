@@ -14,6 +14,12 @@ import { supabase } from '@/lib/supabase/client';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
 import { useTranslation } from '@/i18n';
 import { useUIStore } from '@/stores/uiStore';
+import type { Json } from '@/lib/supabase/types';
+import {
+  formatGuestChanges,
+  type GuestDataChange,
+  type GuestDataChangedMeta,
+} from '@/utils/guestDataChange';
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -92,11 +98,15 @@ export default function EditProfileScreen() {
       lastName: lastName.trim(),
       phone: phone.trim(),
     };
-    const changedFields = [
-      ...(nextValues.firstName !== savedValues.firstName ? [t.notifications.guestProfileFirstName] : []),
-      ...(nextValues.lastName !== savedValues.lastName ? [t.notifications.guestProfileLastName] : []),
-      ...(nextValues.phone !== savedValues.phone ? [t.notifications.guestProfilePhone] : []),
-    ];
+    const previousFullName = [savedValues.firstName, savedValues.lastName].filter(Boolean).join(' ');
+    const nextFullName = [nextValues.firstName, nextValues.lastName].filter(Boolean).join(' ');
+    const changes: GuestDataChange[] = [];
+    if (nextValues.firstName !== savedValues.firstName || nextValues.lastName !== savedValues.lastName) {
+      changes.push({ field: 'name', from: previousFullName, to: nextFullName });
+    }
+    if (nextValues.phone !== savedValues.phone) {
+      changes.push({ field: 'phone', from: savedValues.phone, to: nextValues.phone });
+    }
 
     setIsSaving(true);
     try {
@@ -117,7 +127,7 @@ export default function EditProfileScreen() {
 
       if (profileError) throw profileError;
 
-      if (changedFields.length > 0) {
+      if (changes.length > 0) {
         try {
           const { data: guestParticipations, error: participationError } = await supabase
             .from('event_participants')
@@ -136,21 +146,26 @@ export default function EditProfileScreen() {
 
             if (eventsError) throw eventsError;
 
-            const lastField = changedFields[changedFields.length - 1];
-            const formattedFields = changedFields.length === 1
-              ? lastField
-              : `${changedFields.slice(0, -1).join(', ')}${t.notifications.guestProfileFieldConjunction}${lastField}`;
+            const guestName = nextFullName || userEmail;
+            const changesText = formatGuestChanges(changes, {
+              name: t.notifications.fieldName,
+              email: t.notifications.fieldEmail,
+              phone: t.notifications.fieldPhone,
+            });
+            const metadata: GuestDataChangedMeta = { guestName, changes };
 
             const { error: notificationError } = await supabase
               .from('notifications')
               .insert((events || []).map((event) => ({
                 event_id: event.id,
-                title: t.notifications.guestProfileUpdatedTitle,
-                body: t.notifications.guestProfileUpdatedBody
-                  .replace('{{guest}}', fullNameCombined)
-                  .replace('{{fields}}', formattedFields),
-                type: 'guest_profile_updated',
+                title: t.notifications.guestDataChangedTitle,
+                body: t.notifications.guestDataChangedBody
+                  .replace('{{guest}}', guestName)
+                  .replace('{{changes}}', changesText),
+                type: 'guest_data_changed',
                 user_id: event.created_by,
+                action_url: `/event/${event.id}/participants`,
+                metadata: (metadata as unknown) as Json,
               })));
 
             if (notificationError) throw notificationError;

@@ -1253,11 +1253,9 @@ export default function BudgetDashboardScreen() {
                             params.set('totalCents', String(budgetStats.totalBudget));
                             router.push(`/booking/${selectedEventId}/payment?${params.toString()}` as any);
                           };
-                          const cardStyle = { backgroundColor: theme.surfaceCard, borderRadius: 16, overflow: 'hidden' as const, flexDirection: 'row' as const, borderWidth: 1, borderColor: isUrgent ? 'rgba(249,115,22,0.35)' : theme.ghostBorder };
+                          const cardStyle = { backgroundColor: theme.surfaceCard, borderRadius: 16, overflow: 'hidden' as const, flexDirection: 'row' as const, borderWidth: 1, borderColor: '#F97316' };
                           const cardInner = (
-                            <>
-                              <View style={{ width: 4, backgroundColor: isUrgent ? '#F97316' : theme.accentGold }} />
-                              <XStack flex={1} padding={20} alignItems="center" gap={12}>
+                            <XStack flex={1} padding={20} alignItems="center" gap={12}>
                                 <YStack flex={1} gap={4}>
                                   <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
                                     {t.budget.amountDue75Label}
@@ -1283,8 +1281,7 @@ export default function BudgetDashboardScreen() {
                                     </Text>
                                   </YStack>
                                 )}
-                              </XStack>
-                            </>
+                            </XStack>
                           );
                           return canPay ? (
                             <Pressable
@@ -1497,6 +1494,7 @@ export default function BudgetDashboardScreen() {
                                             .replace('{{event}}', eventName),
                                           type: 'payment_claimed',
                                           user_id: selectedEvent.created_by,
+                                          action_url: `/event/${selectedEventId}/budget`,
                                         });
                                         if (notificationError) {
                                           console.warn('[budget] payment claim notification failed:', notificationError.message);

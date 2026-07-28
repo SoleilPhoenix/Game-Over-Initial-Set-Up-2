@@ -146,6 +146,7 @@ export default function InviteScreen() {
                 body: `${guestFullName} has joined your event.`,
                 type: 'guest_joined',
                 user_id: eventData.created_by,
+                action_url: `/event/${joinedEventId}/participants`,
               });
 
               // Detect any divergence from what the organizer originally entered.

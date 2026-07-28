@@ -110,6 +110,7 @@ export default function NotificationsScreen() {
                   .replace('{{event}}', eventName),
                 type: 'payment_claimed',
                 user_id: guestUrgentEvent.created_by,
+                action_url: `/event/${eventId}/budget`,
               });
               if (notificationError) {
                 console.warn('[notifications] payment claim notification failed:', notificationError.message);

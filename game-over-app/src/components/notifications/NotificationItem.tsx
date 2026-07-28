@@ -25,11 +25,16 @@ const ACTION_LABEL_KEYS: Record<string, string> = {
   poll_closing: 'actionVoteNow',
   poll_closed: 'actionViewResults',
   event_update: 'actionViewEvent',
+  payment_claimed: 'actionConfirmPayment',
   guest_data_changed: 'actionViewParticipants',
 };
 
-// Dark theme colors
-// Notification type configuration with colors
+const ACTION_COLOR = '#F97316';
+const ACTION_BG_COLOR = 'rgba(249, 115, 22, 0.2)';
+const INFO_COLOR = '#22C55E';
+const INFO_BG_COLOR = 'rgba(34, 197, 94, 0.2)';
+
+// Orange means action/error; green means informational.
 const NOTIFICATION_CONFIG: Record<
   string,
   {
@@ -45,9 +50,9 @@ const NOTIFICATION_CONFIG: Record<
   // Relationship/Health notifications
   relationship_health: {
     icon: 'heart',
-    color: '#EC4899',
-    bgColor: 'rgba(236, 72, 153, 0.2)',
-    glowColor: 'rgba(236, 72, 153, 0.3)',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
+    glowColor: 'rgba(249, 115, 22, 0.3)',
     hasAction: true,
     actionLabel: 'View Insights',
   },
@@ -55,8 +60,8 @@ const NOTIFICATION_CONFIG: Record<
   // Conflict/Warning notifications
   conflict_detected: {
     icon: 'warning',
-    color: '#F59E0B',
-    bgColor: 'rgba(245, 158, 11, 0.2)',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
     hasAction: true,
     actionLabel: 'Resolve in Voting Tab',
     warningBorder: true,
@@ -64,121 +69,133 @@ const NOTIFICATION_CONFIG: Record<
 
   // Budget notifications
   budget_update: {
-    icon: 'cash',
-    color: '#22C55E',
-    bgColor: 'rgba(34, 197, 94, 0.2)',
+    icon: 'wallet',
+    color: INFO_COLOR,
+    bgColor: INFO_BG_COLOR,
   },
   payment_received: {
     icon: 'cash',
-    color: '#22C55E',
-    bgColor: 'rgba(34, 197, 94, 0.2)',
+    color: INFO_COLOR,
+    bgColor: INFO_BG_COLOR,
   },
   payment_failed: {
     icon: 'card',
-    color: '#EF4444',
-    bgColor: 'rgba(239, 68, 68, 0.2)',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
     warningBorder: true,
   },
   payment_reminder: {
     icon: 'card-outline',
-    color: '#F59E0B',
-    bgColor: 'rgba(245, 158, 11, 0.2)',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
     hasAction: true,
     actionLabel: 'Pay Now',
+  },
+  payment_claimed: {
+    icon: 'receipt-outline',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
+    hasAction: true,
+    actionLabel: 'Confirm Payment',
   },
 
   // Booking notifications
   booking_confirmed: {
     icon: 'checkmark-circle',
-    color: '#3B82F6',
-    bgColor: 'rgba(59, 130, 246, 0.2)',
+    color: INFO_COLOR,
+    bgColor: INFO_BG_COLOR,
   },
   booking_cancelled: {
     icon: 'close-circle',
-    color: '#EF4444',
-    bgColor: 'rgba(239, 68, 68, 0.2)',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
   },
   booking_reminder: {
     icon: 'alarm',
-    color: '#F59E0B',
-    bgColor: 'rgba(245, 158, 11, 0.2)',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
   },
 
   // Feedback notifications
   feedback_received: {
     icon: 'chatbox-ellipses',
-    color: '#8B5CF6',
-    bgColor: 'rgba(139, 92, 246, 0.2)',
+    color: INFO_COLOR,
+    bgColor: INFO_BG_COLOR,
   },
 
   // Poll notifications
   poll_created: {
     icon: 'bar-chart',
-    color: '#3B82F6',
-    bgColor: 'rgba(59, 130, 246, 0.2)',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
     hasAction: true,
     actionLabel: 'Vote Now',
   },
   poll_closing: {
     icon: 'time',
-    color: '#F59E0B',
-    bgColor: 'rgba(245, 158, 11, 0.2)',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
     hasAction: true,
     actionLabel: 'Vote Now',
   },
   poll_closed: {
     icon: 'checkmark-done',
-    color: '#22C55E',
-    bgColor: 'rgba(34, 197, 94, 0.2)',
+    color: INFO_COLOR,
+    bgColor: INFO_BG_COLOR,
     hasAction: true,
     actionLabel: 'View Results',
   },
   poll_vote: {
     icon: 'hand-left',
-    color: '#8B5CF6',
-    bgColor: 'rgba(139, 92, 246, 0.2)',
+    color: INFO_COLOR,
+    bgColor: INFO_BG_COLOR,
   },
 
   // Chat notifications
   new_message: {
     icon: 'chatbubble',
-    color: '#3B82F6',
-    bgColor: 'rgba(59, 130, 246, 0.2)',
+    color: INFO_COLOR,
+    bgColor: INFO_BG_COLOR,
   },
   mention: {
     icon: 'at',
-    color: '#EC4899',
-    bgColor: 'rgba(236, 72, 153, 0.2)',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
   },
 
   // Event notifications
   event_update: {
     icon: 'calendar',
-    color: '#3B82F6',
-    bgColor: 'rgba(59, 130, 246, 0.2)',
+    color: INFO_COLOR,
+    bgColor: INFO_BG_COLOR,
     hasAction: true,
     actionLabel: 'View Event',
   },
   event_cancelled: {
     icon: 'calendar-outline',
-    color: '#EF4444',
-    bgColor: 'rgba(239, 68, 68, 0.2)',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
     warningBorder: true,
   },
   invite_accepted: {
     icon: 'person-add',
-    color: '#22C55E',
-    bgColor: 'rgba(34, 197, 94, 0.2)',
+    color: INFO_COLOR,
+    bgColor: INFO_BG_COLOR,
   },
   new_participant: {
     icon: 'people',
-    color: '#8B5CF6',
-    bgColor: 'rgba(139, 92, 246, 0.2)',
+    color: INFO_COLOR,
+    bgColor: INFO_BG_COLOR,
+  },
+  guest_joined: {
+    icon: 'person-add-outline',
+    color: INFO_COLOR,
+    bgColor: INFO_BG_COLOR,
   },
   guest_data_changed: {
     icon: 'create',
-    color: '#C6A75E',
-    bgColor: 'rgba(198, 167, 94, 0.2)',
+    color: INFO_COLOR,
+    bgColor: INFO_BG_COLOR,
     hasAction: true,
     actionLabel: 'View Guests',
   },
@@ -186,8 +203,8 @@ const NOTIFICATION_CONFIG: Record<
   // Default
   default: {
     icon: 'notifications',
-    color: '#9CA3AF',
-    bgColor: 'rgba(156, 163, 175, 0.2)',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
   },
 };
 
@@ -369,16 +386,16 @@ const styles = StyleSheet.create({
   },
   warningBorder: {
     borderLeftWidth: 3,
-    borderLeftColor: '#F59E0B',
+    borderLeftColor: ACTION_COLOR,
   },
   pressed: {
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
   actionButton: {
     marginTop: 12,
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    backgroundColor: 'rgba(249, 115, 22, 0.1)',
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.2)',
+    borderColor: ACTION_BG_COLOR,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 8,
