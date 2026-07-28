@@ -28,10 +28,16 @@ google-service-account.json
 # Build outputs and logs
 *.log
 *.tsbuildinfo
-ios/build/
-android/build/
-android/app/build/
-android/.gradle/
+
+# Native Projekte: vollstaendig aus app.config.ts generiert.
+# Alle Build-Workflows (ci.yml, e2e.yml) rufen `npx expo prebuild` auf, die
+# iOS-Pipeline loescht die Podfile.lock sogar aktiv und macht `pod install
+# --repo-update`. Diese Ordner zu versionieren hiess also, einen Stand zu
+# pflegen, den niemand liest - und der entsprechend abgedriftet war
+# (Splash-Farbe, App-Icon, Info.plist, project.pbxproj).
+# Lokal neu erzeugen mit: npx expo prebuild
+/ios/
+/android/
 
 # Native builds
 *.jks
@@ -42,7 +48,6 @@ android/.gradle/
 *.orig.*
 
 # iOS
-ios/Pods/
 *.xcuserstate
 *.xcworkspacedata
 project.xcworkspace/
