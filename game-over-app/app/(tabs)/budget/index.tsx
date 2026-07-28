@@ -34,6 +34,19 @@ import { supabase } from '@/lib/supabase/client';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import type { EventWithDetails } from '@/repositories/events';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import {
+  useCreateRefund,
+  useDeleteRefund,
+  useEventRefunds,
+  useImportRefunds,
+  useUpdateRefund,
+} from '@/hooks/queries/useRefunds';
+import type {
+  CreateEventRefund,
+  EventRefund,
+  RefundStatus,
+} from '@/hooks/queries/useRefunds';
 
 /** Shows a profile image with graceful fallback to children when the URL fails to load. */
 function AvatarImage({ uri, style, fallback }: { uri: string; style: any; fallback: React.ReactNode }) {
@@ -80,9 +93,17 @@ const CUSTOM_COLORS = [
 ];
 
 function SwipeableRefundRow({
-  description, amount, processingLabel, processingText, showBorder, onDelete, icon, color, bg,
+  description, amount, detailText, statusText, status, overdue, showBorder, onDelete, onPress, icon, color, bg,
 }: {
-  description: string; amount: string; processingLabel: string; processingText: string; showBorder: boolean; onDelete: () => void;
+  description: string;
+  amount: string;
+  detailText: string;
+  statusText: string;
+  status: RefundStatus;
+  overdue: boolean;
+  showBorder: boolean;
+  onDelete: () => void;
+  onPress: () => void;
   icon?: string; color?: string; bg?: string;
 }) {
   const { theme } = useTheme();
@@ -113,25 +134,53 @@ function SwipeableRefundRow({
       style={[{ transform: [{ translateX }] }, showBorder && styles.contributionRowBorder]}
       {...panResponder.panHandlers}
     >
-      <View style={styles.refundRow}>
+      <Pressable
+        onPress={onPress}
+        style={[
+          styles.refundRow,
+          status === 'received' && styles.refundRowReceived,
+          overdue && styles.refundRowOverdue,
+        ]}
+      >
         <XStack alignItems="center" gap="$3" flex={1}>
           <View style={[styles.refundIcon, { backgroundColor: bg ?? 'rgba(255,255,255,0.08)' }]}>
-            <Ionicons name={(icon ?? 'receipt-outline') as any} size={18} color={color ?? theme.textSecondary} />
+            <Ionicons
+              name={(status === 'received' ? 'checkmark-circle-outline' : icon ?? 'receipt-outline') as any}
+              size={18}
+              color={status === 'received' ? '#22C55E' : overdue ? '#F97316' : color ?? theme.textSecondary}
+            />
           </View>
-          <YStack>
+          <YStack flex={1}>
             <Text style={{ fontSize: 14, fontWeight: '500', color: theme.textPrimary }}>{description}</Text>
-            <Text style={{ fontSize: 12, color: theme.textTertiary }}>{processingLabel}</Text>
+            <Text style={{ fontSize: 12, color: overdue ? '#F97316' : theme.textTertiary }}>{detailText}</Text>
           </YStack>
         </XStack>
         <YStack alignItems="flex-end">
-          <Text style={{ fontSize: 14, fontWeight: '500', color: theme.textPrimary }}>+€{amount}</Text>
-          <View style={styles.processingBadge}>
-            <Text style={styles.processingText}>{processingText}</Text>
+          <Text style={{ fontSize: 14, fontWeight: '500', color: status === 'received' ? '#22C55E' : theme.textPrimary }}>+{amount}</Text>
+          <View style={status === 'received' ? styles.receivedBadge : styles.processingBadge}>
+            <Text style={status === 'received' ? styles.receivedText : styles.processingText}>{statusText}</Text>
           </View>
         </YStack>
-      </View>
+      </Pressable>
     </Animated.View>
   );
+}
+
+function parseRefundAmountToCents(amount: string): number {
+  const normalized = amount.trim().replace(/\s/g, '').replace(',', '.');
+  const value = Number(normalized);
+  return Number.isFinite(value) ? Math.round(value * 100) : 0;
+}
+
+function dateFromISO(value: string): Date {
+  return new Date(`${value}T00:00:00`);
+}
+
+function dateToISO(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 
@@ -219,12 +268,24 @@ export default function BudgetDashboardScreen() {
   // Refund modal
   const [refundModal, setRefundModal] = useState<{
     visible: boolean;
+    editingId: string | null;
     templateKey: string | null;
     description: string;
     amount: string;
-  }>({ visible: false, templateKey: null, description: '', amount: '' });
-
-  const [addedRefunds, setAddedRefunds] = useState<{ description: string; amount: string; status: 'processing' | 'received'; icon?: string; color?: string; bg?: string; }[]>([]);
+    expectedBy: string | null;
+    status: RefundStatus;
+    receivedAt: string | null;
+  }>({
+    visible: false,
+    editingId: null,
+    templateKey: null,
+    description: '',
+    amount: '',
+    expectedBy: null,
+    status: 'pending',
+    receivedAt: null,
+  });
+  const [showRefundDatePicker, setShowRefundDatePicker] = useState(false);
 
   // Ref always holds latest contributors — avoids declaration-order TDZ issue with useCallback
   const allContributorsRef = useRef<{ id: string; name: string; userId?: string | null; role?: string }[]>([]);
@@ -309,29 +370,32 @@ export default function BudgetDashboardScreen() {
   }, [expenseModal, selectedEventId]);
 
   const openRefundModal = useCallback(() => {
-    setRefundModal({ visible: true, templateKey: null, description: '', amount: '' });
+    setShowRefundDatePicker(false);
+    setRefundModal({
+      visible: true,
+      editingId: null,
+      templateKey: null,
+      description: '',
+      amount: '',
+      expectedBy: null,
+      status: 'pending',
+      receivedAt: null,
+    });
   }, []);
 
-  const submitRefund = useCallback(() => {
-    if (!refundModal.description.trim() || !refundModal.amount.trim()) return;
-    const tmpl = REFUND_TEMPLATES.find(t => t.key === refundModal.templateKey);
-    setAddedRefunds(prev => {
-      const customColor = CUSTOM_COLORS[prev.length % CUSTOM_COLORS.length];
-      const updated = [{
-        description: refundModal.description.trim(),
-        amount: refundModal.amount.trim(),
-        status: 'processing' as const,
-        icon: tmpl?.icon ?? 'receipt-outline',
-        color: tmpl?.color ?? customColor.color,
-        bg: tmpl?.bg ?? customColor.bg,
-      }, ...prev];
-      if (selectedEventId) {
-        AsyncStorage.setItem(`gameover:refunds:${selectedEventId}`, JSON.stringify(updated));
-      }
-      return updated;
+  const openEditRefund = useCallback((refund: EventRefund) => {
+    setShowRefundDatePicker(false);
+    setRefundModal({
+      visible: true,
+      editingId: refund.id,
+      templateKey: refund.templateKey,
+      description: refund.description,
+      amount: (refund.amountCents / 100).toFixed(2),
+      expectedBy: refund.expectedBy,
+      status: refund.status,
+      receivedAt: refund.receivedAt,
     });
-    setRefundModal(prev => ({ ...prev, visible: false }));
-  }, [refundModal, selectedEventId]);
+  }, []);
 
   // Hide tab bar when opened from Event Summary (eventIdParam present).
   // Also refetch participants on focus so payment status reflects "I've Paid" from Notifications screen.
@@ -436,8 +500,142 @@ export default function BudgetDashboardScreen() {
 
   const selectedEvent = bookedEvents.find((e: EventWithDetails) => e.id === selectedEventId);
   const isOrganizer = selectedEvent?.created_by === user?.id;
+  const refundEventId = isOrganizer ? selectedEventId ?? undefined : undefined;
+  const {
+    data: addedRefunds = [],
+    isFetchedAfterMount: refundsFetchedFromDatabase,
+    isSuccess: refundsLoaded,
+  } = useEventRefunds(refundEventId);
+  const createRefund = useCreateRefund(refundEventId);
+  const importRefunds = useImportRefunds(refundEventId);
+  const updateRefund = useUpdateRefund(refundEventId);
+  const deleteRefund = useDeleteRefund(refundEventId);
+  const refundMigrationAttempted = useRef(new Set<string>());
   // Package costs freeze once the event has ended; Other Expenses stays editable
   const isPackageFrozen = selectedEvent ? isReadOnlyEvent(selectedEvent) : false;
+
+  // One-time bridge from the old device-local refund ledger. We wait for a
+  // network-backed query result so a persisted empty React Query cache cannot
+  // cause duplicate rows. The local key is cleared only after every row is
+  // successfully inserted.
+  useEffect(() => {
+    if (
+      !refundEventId ||
+      !user?.id ||
+      !refundsFetchedFromDatabase ||
+      !refundsLoaded ||
+      addedRefunds.length > 0 ||
+      refundMigrationAttempted.current.has(refundEventId)
+    ) {
+      return;
+    }
+
+    refundMigrationAttempted.current.add(refundEventId);
+    void (async () => {
+      const storageKey = `gameover:refunds:${refundEventId}`;
+      try {
+        const raw = await AsyncStorage.getItem(storageKey);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || parsed.length === 0) return;
+
+        const migrated: CreateEventRefund[] = [];
+        for (const item of parsed as unknown[]) {
+          if (!item || typeof item !== 'object') {
+            console.warn('[refunds] local migration kept malformed data for manual recovery');
+            return;
+          }
+          const local = item as Record<string, unknown>;
+          const description = typeof local.description === 'string' ? local.description.trim() : '';
+          const amountCents = typeof local.amount === 'string'
+            ? parseRefundAmountToCents(local.amount)
+            : 0;
+          if (!description || amountCents <= 0) {
+            console.warn('[refunds] local migration kept invalid data for manual recovery');
+            return;
+          }
+
+          const template = REFUND_TEMPLATES.find((candidate) =>
+            candidate.icon === local.icon &&
+            candidate.color === local.color &&
+            candidate.bg === local.bg
+          );
+          const status: RefundStatus = local.status === 'received' ? 'received' : 'pending';
+          migrated.push({
+            eventId: refundEventId,
+            createdBy: user.id,
+            templateKey: template?.key ?? null,
+            description,
+            amountCents,
+            status,
+            expectedBy: null,
+            receivedAt: status === 'received' ? new Date().toISOString() : null,
+          });
+        }
+
+        if (migrated.length === 0) return;
+        await importRefunds.mutateAsync(migrated);
+        await AsyncStorage.removeItem(storageKey);
+      } catch (error) {
+        refundMigrationAttempted.current.delete(refundEventId);
+        console.warn('[refunds] local migration failed:', error);
+      }
+    })();
+  }, [
+    addedRefunds.length,
+    importRefunds,
+    refundEventId,
+    refundsFetchedFromDatabase,
+    refundsLoaded,
+    user?.id,
+  ]);
+
+  const submitRefund = useCallback(async () => {
+    if (!refundEventId || !user?.id || !refundModal.description.trim()) return;
+    const amountCents = parseRefundAmountToCents(refundModal.amount);
+    if (amountCents <= 0) {
+      Alert.alert(t.common.error, t.budget.refundInvalidAmount);
+      return;
+    }
+
+    const receivedAt = refundModal.status === 'received'
+      ? refundModal.receivedAt ?? new Date().toISOString()
+      : null;
+    try {
+      if (refundModal.editingId) {
+        await updateRefund.mutateAsync({
+          id: refundModal.editingId,
+          patch: {
+            description: refundModal.description.trim(),
+            amountCents,
+            expectedBy: refundModal.expectedBy,
+            status: refundModal.status,
+            receivedAt,
+          },
+        });
+      } else {
+        await createRefund.mutateAsync({
+          eventId: refundEventId,
+          createdBy: user.id,
+          templateKey: refundModal.templateKey === 'custom' ? null : refundModal.templateKey,
+          description: refundModal.description.trim(),
+          amountCents,
+          status: refundModal.status,
+          expectedBy: refundModal.expectedBy,
+          receivedAt,
+        });
+      }
+      setShowRefundDatePicker(false);
+      setRefundModal((current) => ({ ...current, visible: false }));
+    } catch (error) {
+      console.error('[refunds] save failed:', error);
+      Alert.alert(t.common.error, t.budget.refundError);
+    }
+  }, [createRefund, refundEventId, refundModal, t, updateRefund, user?.id]);
+
+  const formatRefundDate = useCallback((value: string) => {
+    return dateFromISO(value).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US');
+  }, [language]);
 
   // Fetch invite codes to include non-registered invited guests in contributors list
   const { data: rawInviteGuests = [] } = useInviteGuests(selectedEventId ?? null);
@@ -453,23 +651,19 @@ export default function BudgetDashboardScreen() {
     [rawInviteGuests]
   );
 
-  // Load all persisted data when event changes
+  // Load device-local data that still belongs to the expense features.
   useEffect(() => {
     if (!selectedEventId) return;
     // Reset local state before loading new event's data
     setAddedExpenses([]);
-    setAddedRefunds([]);
     setCustomCategories([]);
     // Budget cache
     loadBudgetInfo(selectedEventId).then(info => setCachedBudget(info ?? null));
     loadDesiredParticipants(selectedEventId).then(count => setCachedParticipantCount(count ?? null));
     loadGuestDetails(selectedEventId).then(guests => setCachedGuests(guests ?? {}));
-    // Persisted expenses / refunds / custom categories
+    // Persisted expenses / custom categories
     AsyncStorage.getItem(`gameover:expenses:${selectedEventId}`).then(json => {
       if (json) try { setAddedExpenses(JSON.parse(json)); } catch {}
-    });
-    AsyncStorage.getItem(`gameover:refunds:${selectedEventId}`).then(json => {
-      if (json) try { setAddedRefunds(JSON.parse(json)); } catch {}
     });
     AsyncStorage.getItem(`gameover:custom_cats:${selectedEventId}`).then(json => {
       if (json) try { setCustomCategories(JSON.parse(json)); } catch {}
@@ -1691,8 +1885,8 @@ export default function BudgetDashboardScreen() {
               </View>
             </YStack>
 
-            {/* Refund Tracking */}
-            <YStack marginBottom="$6">
+            {/* Refund Tracking — the database ledger is organizer-only via RLS. */}
+            {isOrganizer && <YStack marginBottom="$6">
               <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
                 <Text fontSize={12} fontWeight="700" color={theme.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
                   {t.budget.refundTracking}
@@ -1712,29 +1906,48 @@ export default function BudgetDashboardScreen() {
                     <Text style={styles.emptyRefundText}>{t.budget.emptyRefundText}</Text>
                   </Pressable>
                 ) : (
-                  addedRefunds.map((refund, i) => (
-                    <SwipeableRefundRow
-                      key={i}
-                      description={refund.description}
-                      amount={refund.amount}
-                      icon={refund.icon}
-                      color={refund.color}
-                      bg={refund.bg}
-                      processingLabel={t.budget.securityHold}
-                      processingText={t.budget.processing}
-                      showBorder={i < addedRefunds.length - 1}
-                      onDelete={() => {
-                        const updated = addedRefunds.filter((_, idx) => idx !== i);
-                        setAddedRefunds(updated);
-                        if (selectedEventId) {
-                          AsyncStorage.setItem(`gameover:refunds:${selectedEventId}`, JSON.stringify(updated));
-                        }
-                      }}
-                    />
-                  ))
+                  addedRefunds.map((refund, i) => {
+                    const template = REFUND_TEMPLATES.find((candidate) => candidate.key === refund.templateKey);
+                    const customColor = CUSTOM_COLORS[i % CUSTOM_COLORS.length];
+                    const overdue = refund.status === 'pending' &&
+                      !!refund.expectedBy &&
+                      refund.expectedBy < dateToISO(new Date());
+                    const detailText = refund.status === 'received' && refund.receivedAt
+                      ? t.budget.refundSettledOn.replace(
+                          '{{date}}',
+                          new Date(refund.receivedAt).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US'),
+                        )
+                      : overdue && refund.expectedBy
+                        ? t.budget.refundOverdue.replace('{{date}}', formatRefundDate(refund.expectedBy))
+                        : refund.expectedBy
+                          ? t.budget.refundExpectedDate.replace('{{date}}', formatRefundDate(refund.expectedBy))
+                          : t.budget.securityHold;
+                    return (
+                      <SwipeableRefundRow
+                        key={refund.id}
+                        description={refund.description}
+                        amount={formatCurrency(refund.amountCents)}
+                        icon={template?.icon ?? 'receipt-outline'}
+                        color={template?.color ?? customColor.color}
+                        bg={template?.bg ?? customColor.bg}
+                        detailText={detailText}
+                        statusText={refund.status === 'received' ? t.budget.refundSettledStatus : t.budget.processing}
+                        status={refund.status}
+                        overdue={overdue}
+                        showBorder={i < addedRefunds.length - 1}
+                        onPress={() => openEditRefund(refund)}
+                        onDelete={() => {
+                          void deleteRefund.mutateAsync(refund.id).catch((error) => {
+                            console.error('[refunds] delete failed:', error);
+                            Alert.alert(t.common.error, t.budget.refundDeleteError);
+                          });
+                        }}
+                      />
+                    );
+                  })
                 )}
               </View>
-            </YStack>
+            </YStack>}
             </>
           )}
 
@@ -2079,7 +2292,7 @@ export default function BudgetDashboardScreen() {
                 </Pressable>
               </XStack>
               <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
-              {!refundModal.templateKey ? (
+              {!refundModal.templateKey && !refundModal.editingId ? (
                 /* Template selection */
                 <>
                   <Text style={styles.inputLabel}>{t.budget.chooseRefundType}</Text>
@@ -2132,16 +2345,144 @@ export default function BudgetDashboardScreen() {
                     onChangeText={v => setRefundModal(prev => ({ ...prev, amount: v }))}
                     keyboardType="decimal-pad"
                   />
+                  <Text style={styles.inputLabel}>{t.budget.refundExpectedBy}</Text>
                   <Pressable
-                    style={[styles.submitButton, { marginTop: 8 }, (!refundModal.description.trim() || !refundModal.amount.trim()) && styles.submitButtonDisabled]}
-                    onPress={submitRefund}
-                    disabled={!refundModal.description.trim() || !refundModal.amount.trim()}
+                    style={styles.refundDateInput}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setShowRefundDatePicker((current) => !current);
+                    }}
                   >
-                    <Text style={styles.submitButtonText}>{t.budget.refundSubmit}</Text>
+                    <Text style={{
+                      color: refundModal.expectedBy ? theme.textPrimary : theme.textTertiary,
+                      fontSize: 15,
+                    }}>
+                      {refundModal.expectedBy
+                        ? formatRefundDate(refundModal.expectedBy)
+                        : t.budget.refundExpectedByPlaceholder}
+                    </Text>
+                    <XStack alignItems="center" gap={10}>
+                      {refundModal.expectedBy && (
+                        <Pressable
+                          hitSlop={8}
+                          onPress={() => {
+                            setRefundModal((current) => ({ ...current, expectedBy: null }));
+                            setShowRefundDatePicker(false);
+                          }}
+                        >
+                          <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
+                        </Pressable>
+                      )}
+                      <Ionicons name="calendar-outline" size={20} color={theme.accentGold} />
+                    </XStack>
                   </Pressable>
-                  <Pressable style={{ marginTop: 12, marginBottom: 8, alignItems: 'center' }} onPress={() => setRefundModal(prev => ({ ...prev, templateKey: null }))}>
-                    <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{t.budget.refundChangeType}</Text>
+                  {showRefundDatePicker && (
+                    <View style={styles.refundDatePicker}>
+                      <DateTimePicker
+                        value={refundModal.expectedBy ? dateFromISO(refundModal.expectedBy) : new Date()}
+                        mode="date"
+                        display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                        themeVariant="dark"
+                        locale={language === 'de' ? 'de-DE' : 'en-US'}
+                        onChange={(_event, date) => {
+                          if (Platform.OS !== 'ios') setShowRefundDatePicker(false);
+                          if (date) {
+                            setRefundModal((current) => ({ ...current, expectedBy: dateToISO(date) }));
+                          }
+                        }}
+                      />
+                      {Platform.OS === 'ios' && (
+                        <Pressable
+                          style={styles.refundDateDone}
+                          onPress={() => setShowRefundDatePicker(false)}
+                        >
+                          <Text style={{ color: theme.textOnPrimary, fontWeight: '600' }}>{t.common.done}</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  )}
+                  {refundModal.editingId && (
+                    <Pressable
+                      style={[
+                        styles.refundStatusToggle,
+                        refundModal.status === 'received'
+                          ? styles.refundStatusReceived
+                          : styles.refundStatusPending,
+                      ]}
+                      onPress={() => setRefundModal((current) => ({
+                        ...current,
+                        status: current.status === 'received' ? 'pending' : 'received',
+                        receivedAt: current.status === 'received'
+                          ? null
+                          : current.receivedAt ?? new Date().toISOString(),
+                      }))}
+                    >
+                      <Ionicons
+                        name={refundModal.status === 'received' ? 'checkmark-circle' : 'time-outline'}
+                        size={20}
+                        color={refundModal.status === 'received' ? '#22C55E' : '#F97316'}
+                      />
+                      <Text style={{
+                        color: refundModal.status === 'received' ? '#22C55E' : '#F97316',
+                        fontSize: 14,
+                        fontWeight: '600',
+                      }}>
+                        {refundModal.status === 'received'
+                          ? t.budget.refundMarkPending
+                          : t.budget.refundMarkReceived}
+                      </Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    style={[
+                      styles.submitButton,
+                      { marginTop: 8 },
+                      (!refundModal.description.trim() ||
+                        !refundModal.amount.trim() ||
+                        createRefund.isPending ||
+                        updateRefund.isPending) &&
+                        styles.submitButtonDisabled,
+                    ]}
+                    onPress={() => void submitRefund()}
+                    disabled={
+                      !refundModal.description.trim() ||
+                      !refundModal.amount.trim() ||
+                      createRefund.isPending ||
+                      updateRefund.isPending
+                    }
+                  >
+                    {createRefund.isPending || updateRefund.isPending ? (
+                      <ActivityIndicator color={theme.textOnPrimary} />
+                    ) : (
+                      <Text style={styles.submitButtonText}>
+                        {refundModal.editingId ? t.budget.refundSave : t.budget.refundSubmit}
+                      </Text>
+                    )}
                   </Pressable>
+                  {refundModal.editingId ? (
+                    <Pressable
+                      style={styles.refundDeleteButton}
+                      disabled={deleteRefund.isPending}
+                      onPress={() => {
+                        if (!refundModal.editingId) return;
+                        void deleteRefund.mutateAsync(refundModal.editingId)
+                          .then(() => setRefundModal((current) => ({ ...current, visible: false })))
+                          .catch((error) => {
+                            console.error('[refunds] delete failed:', error);
+                            Alert.alert(t.common.error, t.budget.refundDeleteError);
+                          });
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color={theme.error} />
+                      <Text style={{ color: theme.error, fontSize: 13, fontWeight: '600' }}>
+                        {t.budget.refundDelete}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable style={{ marginTop: 12, marginBottom: 8, alignItems: 'center' }} onPress={() => setRefundModal(prev => ({ ...prev, templateKey: null }))}>
+                      <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{t.budget.refundChangeType}</Text>
+                    </Pressable>
+                  )}
                 </>
               )}
               </ScrollView>
@@ -2688,6 +3029,16 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
   },
+  refundRowReceived: {
+    backgroundColor: 'rgba(34,197,94,0.08)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#22C55E',
+  },
+  refundRowOverdue: {
+    backgroundColor: 'rgba(249,115,22,0.08)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#F97316',
+  },
   refundIcon: {
     width: 36,
     height: 36,
@@ -2711,7 +3062,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     color: 'rgba(249, 115, 22, 0.8)',
   },
   receivedBadge: {
-    backgroundColor: `${theme.success}1A`,
+    backgroundColor: 'rgba(34,197,94,0.1)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -3066,6 +3417,61 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
+  },
+  refundDateInput: {
+    minHeight: 48,
+    backgroundColor: theme.surfaceLow,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: theme.ghostBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  refundDatePicker: {
+    backgroundColor: theme.surfaceLow,
+    borderRadius: 12,
+    padding: 8,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  refundDateDone: {
+    backgroundColor: theme.accentGold,
+    borderRadius: 8,
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginHorizontal: 8,
+    marginBottom: 8,
+  },
+  refundStatusToggle: {
+    minHeight: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  refundStatusPending: {
+    backgroundColor: 'rgba(249,115,22,0.08)',
+    borderColor: 'rgba(249,115,22,0.35)',
+  },
+  refundStatusReceived: {
+    backgroundColor: 'rgba(34,197,94,0.08)',
+    borderColor: 'rgba(34,197,94,0.35)',
+  },
+  refundDeleteButton: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 8,
+    marginBottom: 4,
   },
   paidByButton: {
     flex: 1,

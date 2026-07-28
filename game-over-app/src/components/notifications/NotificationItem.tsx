@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import type { Database } from '@/lib/supabase/types';
 import { useTranslation, getCurrentLanguage } from '@/i18n';
 import { isGuestDataChangedMeta, formatGuestChanges } from '@/utils/guestDataChange';
+import { isRefundDueMeta } from '@/utils/refundDue';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
@@ -27,6 +28,7 @@ const ACTION_LABEL_KEYS: Record<string, string> = {
   event_update: 'actionViewEvent',
   payment_claimed: 'actionConfirmPayment',
   guest_data_changed: 'actionViewParticipants',
+  refund_due: 'actionViewBudget',
 };
 
 const ACTION_COLOR = '#F97316';
@@ -97,6 +99,14 @@ const NOTIFICATION_CONFIG: Record<
     bgColor: ACTION_BG_COLOR,
     hasAction: true,
     actionLabel: 'Confirm Payment',
+  },
+  refund_due: {
+    icon: 'return-down-back-outline',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
+    hasAction: true,
+    actionLabel: 'View Budget',
+    warningBorder: true,
   },
 
   // Booking notifications
@@ -241,6 +251,19 @@ export function NotificationItem({
     displayBody = ((t.notifications as any).guestDataChangedBody as string)
       .replace('{{guest}}', meta.guestName)
       .replace('{{changes}}', changesText);
+  } else if (notification.type === 'refund_due' && isRefundDueMeta(notification.metadata)) {
+    const meta = notification.metadata;
+    const locale = getCurrentLanguage() === 'de' ? 'de-DE' : 'en-US';
+    const amount = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: 'EUR',
+    }).format(meta.amountCents / 100);
+    const date = new Date(`${meta.expectedBy}T00:00:00`).toLocaleDateString(locale);
+    displayTitle = (t.notifications as any).refundDueTitle;
+    displayBody = ((t.notifications as any).refundDueBody as string)
+      .replace('{{description}}', meta.description)
+      .replace('{{amount}}', amount)
+      .replace('{{date}}', date);
   }
 
   const formatTime = (dateString: string) => {

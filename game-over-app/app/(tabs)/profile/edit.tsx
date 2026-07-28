@@ -27,18 +27,6 @@ export default function EditProfileScreen() {
   const user = useUser();
   const { t } = useTranslation();
 
-  // Guest email addresses are fixed, so show an explanatory banner for guest users.
-  const [isGuestUser, setIsGuestUser] = useState(false);
-  React.useEffect(() => {
-    if (!user?.id) return;
-    void supabase.from('event_participants')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'guest')
-      .limit(1)
-      .then(({ data }) => { if (data && data.length > 0) setIsGuestUser(true); });
-  }, [user?.id]);
-
   const metadataFullName = (user?.user_metadata?.full_name || '').trim();
   const metadataNameParts = metadataFullName.split(' ');
   const metadataFirstName = metadataNameParts[0] || '';
@@ -252,16 +240,6 @@ export default function EditProfileScreen() {
           </YStack>
 
           <YStack paddingHorizontal="$4" gap="$5">
-            {/* Guest lock banner */}
-            {isGuestUser && (
-              <View style={styles.guestLockBanner}>
-                <Ionicons name="lock-closed" size={16} color="#F59E0B" style={{ marginRight: 8 }} />
-                <Text fontSize={13} color="#F59E0B" flex={1}>
-                  {t.editProfile.guestLockBanner}
-                </Text>
-              </View>
-            )}
-
             {/* First Name Input */}
             <YStack gap="$2">
               <Text
@@ -352,12 +330,19 @@ export default function EditProfileScreen() {
               >
                 {t.editProfile.emailLabel}
               </Text>
-              <View style={[styles.inputContainer, styles.readOnlyContainer]}>
+              <Pressable
+                style={[styles.inputContainer, styles.readOnlyContainer]}
+                onPress={() => router.push('/(tabs)/profile/email')}
+                accessibilityRole="button"
+              >
                 <Text color="#6B7280" fontSize={16}>
                   {userEmail}
                 </Text>
-                <Ionicons name="lock-closed" size={16} color="#6B7280" />
-              </View>
+                <XStack alignItems="center" gap="$2">
+                  <Ionicons name="lock-closed" size={16} color="#6B7280" />
+                  <Ionicons name="chevron-forward" size={16} color="#6B7280" />
+                </XStack>
+              </Pressable>
               <Text
                 fontSize={11}
                 color={'rgba(255,255,255,0.72)'}
@@ -430,15 +415,5 @@ const styles = StyleSheet.create({
   },
   saveButtonDisabled: {
     opacity: 0.7,
-  },
-  guestLockBanner: {
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.3)',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
   },
 });

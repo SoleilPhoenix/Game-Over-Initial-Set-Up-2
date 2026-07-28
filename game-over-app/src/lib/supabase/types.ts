@@ -214,6 +214,59 @@ export type Database = {
           },
         ]
       }
+      event_refunds: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          created_by: string
+          description: string
+          event_id: string
+          expected_by: string | null
+          id: string
+          last_reminder_at: string | null
+          received_at: string | null
+          status: string
+          template_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          created_by: string
+          description: string
+          event_id: string
+          expected_by?: string | null
+          id?: string
+          last_reminder_at?: string | null
+          received_at?: string | null
+          status?: string
+          template_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          created_by?: string
+          description?: string
+          event_id?: string
+          expected_by?: string | null
+          id?: string
+          last_reminder_at?: string | null
+          received_at?: string | null
+          status?: string
+          template_key?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_refunds_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_preferences: {
         Row: {
           average_age: Database["public"]["Enums"]["age_range"] | null
@@ -903,6 +956,7 @@ export type Database = {
         Args: { p_event_id: string }
         Returns: boolean
       }
+      notify_due_refunds: { Args: never; Returns: number }
       get_invite_preview: {
         Args: { p_code: string }
         Returns: {
