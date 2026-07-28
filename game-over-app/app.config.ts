@@ -42,11 +42,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       UILaunchStoryboardName: 'SplashScreen',
       NSCalendarsWriteOnlyAccessUsageDescription:
         'Game Over needs to add your event to the calendar.',
-      CFBundleURLTypes: [
-        {
-          CFBundleURLSchemes: ['gameover'],
-        },
-      ],
+      // No CFBundleURLTypes here on purpose: setting it made Expo drop the
+      // top-level `scheme: 'gameover'` ("Ignoring abstract property scheme"),
+      // so the same scheme was declared twice and only the manual copy counted.
+      // Expo generates the entry from `scheme` itself.
+      //
       // Required so Linking.canOpenURL() can detect these apps on iOS.
       // Without this, canOpenURL() always returns false and share deep-links
       // silently fall back to opening the website in Safari instead of the app.
@@ -64,7 +64,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   android: {
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#101922',
+      backgroundColor: '#0D1B2A',
     },
     package: 'app.gameover.android',
     intentFilters: [
