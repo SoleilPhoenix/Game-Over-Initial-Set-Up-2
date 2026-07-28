@@ -93,6 +93,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     favicon: './assets/favicon.png',
   },
   plugins: [
+    // Setzt Androids colorPrimary auf die Markenfarbe - der einzige Wert in
+    // colors.xml, den Expo nicht aus dieser Config ableitet.
+    './plugins/withBrandAndroidColors',
     'expo-router',
     'expo-secure-store',
     'expo-apple-authentication',
