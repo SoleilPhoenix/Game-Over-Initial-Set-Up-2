@@ -13,7 +13,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   splash: {
     image: './assets/splash.png',
     resizeMode: 'contain',
-    backgroundColor: '#15181D', // Match DARK_THEME.background
+    // Midnight Navy - matches the splash asset's own background tile and the
+    // intro screen, so the handover from the native splash shows no colour step.
+    backgroundColor: '#0D1B2A',
   },
   // Bundle image assets only — excludes assets/store/*.md and assets/store/*.txt (app store copy)
   assetBundlePatterns: ['**/*.png', '**/*.jpg', '**/*.jpeg', '**/*.gif', '**/*.svg', '**/*.webp'],
@@ -25,11 +27,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     splash: {
       image: './assets/splash.png',
       resizeMode: 'contain',
-      backgroundColor: '#15181D',
+      backgroundColor: '#0D1B2A',
+      // Deliberately identical to the light variant above. `expo prebuild` warns
+      // that `userInterfaceStyle: 'dark'` prevents the dark splash variant from
+      // working properly, so which one iOS picks is not something we control.
+      // Keeping both on the same asset and the same navy makes that moot.
       dark: {
         image: './assets/splash.png',
         resizeMode: 'contain',
-        backgroundColor: '#15181D',
+        backgroundColor: '#0D1B2A',
       },
     },
     infoPlist: {
