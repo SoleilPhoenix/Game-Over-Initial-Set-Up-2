@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, Modal, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { ActivityIndicator, Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, Modal, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
@@ -159,6 +159,16 @@ export default function BudgetDashboardScreen() {
   const setTabBarHidden = useTabBarStore((s) => s.setHidden);
 
   const [shareModalVisible, setShareModalVisible] = useState(false);
+
+  // Track keyboard visibility so we can shrink the modal's bottom padding when it opens
+  // (otherwise the 120px "clear the tab bar" padding shows as an empty blue strip above the keyboard).
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardOpen(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+  const modalPaddingBottom = keyboardOpen ? 16 : insets.bottom + 120;
 
   // Remind-all channel picker modal
   const [remindModal, setRemindModal] = useState<{
@@ -1554,7 +1564,7 @@ export default function BudgetDashboardScreen() {
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Animated.View style={[styles.modalSheet, { paddingBottom: insets.bottom + 120, transform: [{ translateY: expenseSheetY }] }]}>
+            <Animated.View style={[styles.modalSheet, { paddingBottom: modalPaddingBottom, transform: [{ translateY: expenseSheetY }] }]}>
               <View {...expenseSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>
@@ -1861,7 +1871,7 @@ export default function BudgetDashboardScreen() {
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setRefundModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Animated.View style={[styles.modalSheet, { paddingBottom: insets.bottom + 120, transform: [{ translateY: refundSheetY }] }]}>
+            <Animated.View style={[styles.modalSheet, { paddingBottom: modalPaddingBottom, transform: [{ translateY: refundSheetY }] }]}>
               <View {...refundSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>
@@ -1948,7 +1958,7 @@ export default function BudgetDashboardScreen() {
         <View style={styles.popupOverlay} pointerEvents="box-none">
           <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setCustomCatModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Animated.View style={[styles.modalSheet, { paddingBottom: insets.bottom + 120, transform: [{ translateY: customCatSheetY }] }]}>
+            <Animated.View style={[styles.modalSheet, { paddingBottom: modalPaddingBottom, transform: [{ translateY: customCatSheetY }] }]}>
               <View {...customCatSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>

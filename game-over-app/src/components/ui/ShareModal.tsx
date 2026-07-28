@@ -4,8 +4,12 @@ import * as Clipboard from 'expo-clipboard';
 import { Text } from 'tamagui';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '@/hooks/useTheme';
-import { useCreateInvite } from '@/hooks/queries/useInvites';
+import { useCreateInvite, useInvitesByEvent } from '@/hooks/queries/useInvites';
 import { useTranslation } from '@/i18n';
+
+// Module-level cache so the sheet re-opens instantly without re-hitting the DB.
+// Keyed by eventId; the code stays valid until the invite's expiry (7 days by default).
+const INVITE_CODE_CACHE = new Map<string, string>();
 
 const PLATFORMS = [
   { id: 'whatsapp',  label: 'WhatsApp',    icon: 'logo-whatsapp',  color: '#25D366', bg: 'rgba(37,211,102,0.15)' },
@@ -44,27 +48,59 @@ export function ShareModal({ visible, onClose, eventId, eventTitle }: ShareModal
   const { theme } = useTheme();
   const { t } = useTranslation();
   const createInvite = useCreateInvite();
-  const [inviteCode, setInviteCode] = useState<string | null>(null);
+  // Reuse existing invites for this event instead of always minting a new one.
+  // useInvitesByEvent has a 2-min staleTime, so this is usually cache-only.
+  const { data: existingInvites } = useInvitesByEvent(visible && eventId ? eventId : undefined);
+  const [inviteCode, setInviteCode] = useState<string | null>(
+    eventId ? INVITE_CODE_CACHE.get(eventId) ?? null : null
+  );
   const [generating, setGenerating] = useState(false);
 
-  // Generate a fresh, shareable invite code each time the sheet opens.
+  // Get or create a shareable invite code when the sheet opens.
+  // Priority: (1) in-memory cache → (2) existing active invite in DB → (3) mint a new one.
   // `eventId` is the real event id — it must NEVER go into the link directly
   // (an event id is not a valid invite code and renders a dead "/invite/…" link).
   useEffect(() => {
     if (!visible || !eventId) {
-      setInviteCode(null);
       return;
     }
+
+    // (1) already cached — nothing to do
+    const cached = INVITE_CODE_CACHE.get(eventId);
+    if (cached) {
+      setInviteCode(cached);
+      return;
+    }
+
+    // (2) reuse the newest active, unexpired invite for this event if one exists
+    const now = Date.now();
+    const reusable = existingInvites?.find(inv =>
+      inv.is_active !== false &&
+      new Date(inv.expires_at).getTime() > now &&
+      (inv.max_uses === null || (inv.use_count ?? 0) < inv.max_uses)
+    );
+    if (reusable) {
+      INVITE_CODE_CACHE.set(eventId, reusable.code);
+      setInviteCode(reusable.code);
+      return;
+    }
+
+    // (3) no reusable code and query has finished — mint a new one
+    if (existingInvites === undefined) return; // still loading; wait for it
     let cancelled = false;
     setGenerating(true);
     createInvite
       .mutateAsync({ eventId })
-      .then(invite => { if (!cancelled) setInviteCode(invite.code); })
+      .then(invite => {
+        if (cancelled) return;
+        INVITE_CODE_CACHE.set(eventId, invite.code);
+        setInviteCode(invite.code);
+      })
       .catch(() => { if (!cancelled) setInviteCode(null); })
       .finally(() => { if (!cancelled) setGenerating(false); });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- createInvite is stable; regenerate only when the sheet opens or the event changes
-  }, [visible, eventId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- createInvite is stable; re-run only on visibility/event/invites changes
+  }, [visible, eventId, existingInvites]);
 
   const linkReady = !!inviteCode;
   const shareUrl  = inviteCode ? `https://game-over.app/invite/${inviteCode}` : '';

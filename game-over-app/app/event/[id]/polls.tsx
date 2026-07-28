@@ -58,7 +58,8 @@ export default function PollsScreen() {
     }
   }, [voteMutation]);
 
-  // Handle create poll
+  // Handle create poll — fire-and-forget so the modal closes instantly.
+  // useCreatePoll adds the poll to the cache optimistically; server confirms in the background.
   const handleCreatePoll = useCallback(async (data: {
     question: string;
     category: PollCategory;
@@ -66,8 +67,7 @@ export default function PollsScreen() {
     deadline?: Date;
   }) => {
     if (!eventId) return;
-
-    await createPollMutation.mutateAsync({
+    createPollMutation.mutate({
       poll: {
         event_id: eventId,
         title: data.question,
