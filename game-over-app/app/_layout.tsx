@@ -31,6 +31,7 @@ import { useEditorialFonts } from '@/hooks/useEditorialFonts';
 import { Logo } from '@/components/brand/Logo';
 import { ToastHost } from '@/components/ui/ToastHost';
 import { useSyncProfileEmail } from '@/hooks/useSyncProfileEmail';
+import { useSyncProfileLanguage } from '@/hooks/useSyncProfileLanguage';
 import config from '../tamagui.config';
 
 // Keep the native splash over the app until startup routing has settled. The
@@ -113,6 +114,7 @@ function RootLayoutNav() {
   const segments = useSegments();
   const router = useRouter();
   useSyncProfileEmail();
+  useSyncProfileLanguage();
 
   useEffect(() => {
     let cleanup: (() => void) | undefined;

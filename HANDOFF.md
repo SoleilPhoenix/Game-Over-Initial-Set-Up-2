@@ -7,6 +7,39 @@ Letzte Aktualisierung: 2026-07-29.
 Sie wird laut globaler `~/.claude/CLAUDE.md` nach jedem abgeschlossenen Fortschritt fortgeschrieben,
 und zwar im selben Commit wie die Änderung, die sie beschreibt.
 
+## Aufgeklärt (2026-07-29, Abend) - die App hat ihre Sprachwahl nie in die DB geschrieben
+
+Widerspruch, der lange verwirrte: die App lief auf Deutsch, aber alle 7 Profile hatten
+`profiles.language = 'en'`, weshalb Briefing und Erinnerungen englisch rausgingen.
+
+Ursache: `languageStore` persistiert nach **AsyncStorage**, also geräte-lokal. Die Spalte
+`profiles.language` hat DB-Default `'en'` und wurde von **keiner Stelle der App** je geschrieben
+(es gibt kein `src/repositories/profiles.ts`, und kein Update irgendwo setzt sie). Die Sprachwahl
+erreichte den Server also nie. Wer die App auf Deutsch stellte, bekam trotzdem englische Mails.
+
+Fix: neuer Hook `src/hooks/useSyncProfileLanguage.ts`, gemountet in `app/_layout.tsx` neben
+`useSyncProfileEmail`. Er spiegelt die lokale Sprachwahl nach `profiles.language`, überspringt den
+Write wenn die Spalte schon passt, und ist best-effort (ein Fehlschlag blockiert die App nicht und
+wird beim nächsten Mount erneut versucht). RLS erlaubt es: Policy
+"Users can update their own profile" mit `auth.uid() = id`.
+
+Alle 7 Profile am 29.07. auf `'de'` gesetzt.
+
+### Nebenbefund: die Geldspalten sind wirklich dicht
+
+Der Versuch, für einen Erinnerungstest eine bezahlte Anzahlung direkt per SQL einzusetzen, wurde vom
+Trigger `enforce_booking_financial_integrity` abgeräumt - **wie vorgesehen**. Auf INSERT rechnet er
+den Preis unabhängig vom Client aus dem Paket neu (`price_per_person × Teilnehmer + base`) und
+erzwingt `payment_status = 'pending'` mit `deposit_paid_at`, `fully_paid_at`,
+`deposit_amount_cents` und `remaining_amount_cents` auf NULL. Auf UPDATE dürfen Geldspalten nur von
+`auth.role() = 'service_role'` bewegt werden. Eine Anzahlung lässt sich also nicht faken -
+Zahlungen müssen durch den echten Stripe-Testfluss. Nicht umgehen.
+
+**Nebeneffekt, der hilft:** `app/(tabs)/budget/index.tsx` Zeile 700 nimmt den AsyncStorage-Cache
+nur, wenn **keine** DB-Buchung existiert (`if (!booking)`). Sobald eine echte Buchung da ist, zeigt
+der Screen die Wahrheit aus der DB statt der gecachten Demo-Zahlen. Genau das hat den Testfluss für
+Natalia entsperrt (Buchung `GO-376D44`, EUR 916, unbezahlt).
+
 ## Aktueller Stand (2026-07-29, Abend) - erster echter Buchungssatz, Client-Statuswrite entfernt
 
 Der erste echte Testkauf lief in einen Fehler: *"Booking created but event status update failed:
