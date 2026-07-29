@@ -7,6 +7,28 @@ Letzte Aktualisierung: 2026-07-29.
 Sie wird laut globaler `~/.claude/CLAUDE.md` nach jedem abgeschlossenen Fortschritt fortgeschrieben,
 und zwar im selben Commit wie die Änderung, die sie beschreibt.
 
+## WICHTIG (2026-07-29) - CI hat die Cron-Funktionen zweimal stillgelegt
+
+`deploy-edge-functions.yml` deployte `send-final-briefing` und `process-payment-reminders`
+**ohne `--no-verify-jwt`**. Da `config.toml` keine `[functions.*]`-Sektionen hatte, griff der
+CLI-Default `verify_jwt = true`. Folge: die Plattform weist den pg_cron-Aufruf mit
+**401 `UNAUTHORIZED_INVALID_JWT_FORMAT`** ab, *bevor* die Funktion läuft - der
+CRON_SECRET-Check im Code kommt nie zum Zug.
+
+Live nachgewiesen: derselbe Aufruf lieferte nach dem CI-Deploy `401`, nach einem Redeploy mit
+`--no-verify-jwt` wieder `200`. Das Briefing war dazwischen 15 Minuten lang kaputt, obwohl es
+kurz zuvor verifiziert funktioniert hatte.
+
+**Dauerhaft abgesichert an zwei Stellen:**
+- `supabase/config.toml` deklariert jetzt `[functions.send-final-briefing]` und
+  `[functions.process-payment-reminders]` mit `verify_jwt = false`. Damit ist die Einstellung
+  Teil des Repos und gilt unabhängig davon, wer deployt.
+- Der Workflow setzt zusätzlich `--no-verify-jwt` bei beiden, falls eine ältere CLI in CI die
+  Per-Function-Sektion ignoriert.
+
+**Merke: jede neue cron-getriggerte Funktion braucht beides.** Ein Deploy ohne das Flag sieht
+erfolgreich aus und legt den Job trotzdem still.
+
 ## Aktueller Stand (2026-07-29, zuletzt) - Neue Staffel für Zahlungserinnerungen
 
 Branch `claude/zahlungserinnerungen-neue-staffel`. `deno check`, `npm run typecheck`,

@@ -1,5 +1,23 @@
 # Supabase CLI Configuration for Game-Over App
 
+# ── Cron-triggered functions: JWT verification MUST stay off ──────────────────
+# These two are called by pg_cron with a CRON_SECRET bearer token, not a user JWT.
+# With verify_jwt = true the platform rejects the call with
+# 401 UNAUTHORIZED_INVALID_JWT_FORMAT *before* the function runs, so the guard
+# inside the code never gets a say and the job fails silently every morning.
+#
+# This is not theoretical: on 2026-07-29 deploy-edge-functions.yml redeployed
+# send-final-briefing without --no-verify-jwt, flipped it to true, and broke the
+# cron call 15 minutes after it had been fixed. Declaring it here makes the
+# setting part of the repo instead of a flag someone has to remember.
+# Both functions authenticate themselves via constant-time CRON_SECRET compare.
+
+[functions.send-final-briefing]
+verify_jwt = false
+
+[functions.process-payment-reminders]
+verify_jwt = false
+
 [api]
 enabled = true
 port = 54321
