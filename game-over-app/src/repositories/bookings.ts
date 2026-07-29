@@ -86,18 +86,19 @@ export const bookingsRepository = {
 
     if (error) throw error;
 
-    // Update event status to 'booked'
-    const { error: statusError } = await supabase
-      .from('events')
-      .update({ status: 'booked' })
-      .eq('id', booking.event_id);
-
-    if (statusError) {
-      throw new Error(
-        `Booking created but event status update failed: ${statusError?.message ?? JSON.stringify(statusError)}`
-      );
-    }
-
+    // NOTE: the event status is deliberately NOT set here.
+    //
+    // `enforce_event_status_integrity` locks the transition to 'booked' to the service
+    // role, so a client-side update is rejected with "Event can only be marked booked by
+    // the payment service" — and the throw that used to follow aborted the whole payment
+    // AFTER the booking row had already been written, leaving an orphaned booking on a
+    // draft event. That is exactly what happened on 2026-07-29 with GO-0614B6, the first
+    // real booking ever created, once seeded packages moved the app onto the real Stripe path.
+    //
+    // The transition belongs to the payment service and already happens there:
+    // stripe-webhook (~line 218) flips the event to 'booked' once payment succeeds, and
+    // confirm-demo-booking does it for the simulated path. Creating a booking is not the
+    // same event as paying for one, so the status must not move yet.
     return data;
   },
 
