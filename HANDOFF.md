@@ -7,6 +7,48 @@ Letzte Aktualisierung: 2026-07-29.
 Sie wird laut globaler `~/.claude/CLAUDE.md` nach jedem abgeschlossenen Fortschritt fortgeschrieben,
 und zwar im selben Commit wie die Änderung, die sie beschreibt.
 
+## Aktueller Stand (2026-07-29, zuletzt) - Neue Staffel für Zahlungserinnerungen
+
+Branch `claude/zahlungserinnerungen-neue-staffel`. `deno check`, `npm run typecheck`,
+`npm run lint`, `npx vitest run` (101 Tests) alle grün. Deployed und live verifiziert.
+
+Die alte Staffel war 21/18/16/14 mit Storno am **14.** Tag. Neu, von Soheil festgelegt:
+
+| Tage vor Event | Was passiert |
+|---|---|
+| 18 | Erste Info-Meldung |
+| 16 | Ausdrückliche Zahlungsaufforderung |
+| 14, 12 | Alle zwei Tage erinnern |
+| 10, 9, 8 | Täglich erinnern |
+| **7** | Finale Warnung - **das ist die Zahlungsfrist** |
+| **6** | **Stornierung**, 25 % Anzahlung wird einbehalten |
+
+**Warum Storno auf Tag 6 und nicht auf Tag 7:** der Job läuft einmal täglich um 09:15 UTC.
+Warnung und Stornierung im selben Lauf hiessen, dem Kunden eine Handlungsaufforderung für
+etwas zu schicken, das bereits vollzogen ist - und die Anzahlung wäre weg. Eine Fristsetzung
+ohne tatsächliche Frist ist im deutschen Verbraucherrecht zudem angreifbar. Konstanten dafür:
+`PAYMENT_DEADLINE_DAYS = 7`, `CANCEL_AT_DAYS = 6`.
+
+Umsetzungsdetails:
+- Der Storno-Durchlauf läuft als letzte Stufe in derselben `MILESTONES`-Liste, damit er die
+  Buchungsabfrage und den idempotenten `payment_reminders`-Insert mitbenutzt
+  (`UNIQUE(booking_id, days_before_event)` verhindert Doppelstornos). Die Schleife
+  verzweigt über `isCancellationPass`.
+- Auf dem Storno-Durchlauf wird **keine** Zahlungserinnerungs-Mail verschickt: die Vorlage
+  `getPaymentReminderEmailHtml` sagt "zahle heute, sonst wird storniert", was am Storno-Tag
+  falsch wäre. In-App-Benachrichtigung und Push tragen die Storno-Nachricht.
+  **Offen: eine eigene Storno-E-Mail-Vorlage gibt es noch nicht.**
+- Die frühere doppelte Storno-Benachrichtigung ist entfernt - Schritt 1 der Schleife schreibt
+  auf diesem Durchlauf bereits eine mit Typ `event_cancelled_nonpayment`.
+- `daysRemaining` im Mail-Template zählt jetzt bis zur **Zahlungsfrist** (Tag 7), nicht bis zum
+  Event: `Math.max(0, daysBefore - PAYMENT_DEADLINE_DAYS)`.
+- `payment_reminders.reminder_type` hat keine CHECK-Constraint, die neuen Typwerte
+  (`notice_18`, `request_16`, `followup_14`, `followup_12`, `urgent_10`, `urgent_9`,
+  `urgent_8`, `final_7`, `cancelled_6`) sind daher unproblematisch.
+
+Verifiziert über `net.http_post` mit den echten Vault-Secrets: **200 OK**, Antwort listet alle
+neun Stufen mit `processed: 0, errors: 0` (es gibt noch keine Buchungen).
+
 ## Aktueller Stand (2026-07-29, später) - Echte Buchungen, Stripe-Testmodus
 
 Branch `claude/echte-buchungen-stripe-test`.

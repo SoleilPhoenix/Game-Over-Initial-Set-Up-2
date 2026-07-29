@@ -1,12 +1,24 @@
 /**
  * Process Payment Reminders Edge Function
- * Runs daily (via pg_cron or GitHub Actions) to send payment reminders.
+ * Runs daily at 09:15 UTC via pg_cron to chase the outstanding balance.
  *
- * For each milestone (21, 18, 16, 14 days before event):
- * 1. Query bookings with deposit paid but not fully paid
- * 2. Skip if reminder already sent (idempotent via UNIQUE constraint)
- * 3. Send push notification + email + in-app notification
- * 4. At 14 days: auto-cancel unpaid events
+ * Ladder, in days before the event:
+ *   18       first heads-up
+ *   16       explicit request to pay
+ *   14, 12   every other day through the buffer
+ *   10, 9, 8 daily as it gets close
+ *   7        final notice - this is the payment deadline
+ *   6        cancellation, 25% deposit retained
+ *
+ * Cancellation deliberately sits one day AFTER the final notice. Warning and
+ * cancellation in the same daily run would announce a deadline that has already
+ * passed at the moment of writing, leaving no time to act.
+ *
+ * Per milestone:
+ * 1. Query bookings with deposit paid but not fully paid, event on that exact date
+ * 2. Skip if already handled (idempotent via UNIQUE(booking_id, days_before_event))
+ * 3. In-app notification + push; email on reminder passes only
+ * 4. On the day-6 pass: re-check payment, then cancel
  */
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
@@ -19,31 +31,73 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Milestone configuration
+// Payment deadline: the balance must be settled by PAYMENT_DEADLINE_DAYS before the event.
+// The event is cancelled a full day later, so the deadline the final notice announces
+// actually exists. Warning and cancellation in the same daily run would mean the customer
+// reads "act now or it is cancelled" about something already executed - and, under German
+// consumer law, a deadline without any time to act is no deadline at all.
+const PAYMENT_DEADLINE_DAYS = 7;
+const CANCEL_AT_DAYS = 6;
+
+// Reminder ladder, in days before the event:
+//   18      first heads-up
+//   16      explicit request to pay
+//   14, 12  every other day through the buffer
+//   10,9,8  daily as it gets close
+//   7       final notice, deadline day
+//   6       cancellation (handled separately below, sends no payment reminder)
 const MILESTONES = [
-  { daysBefore: 21, urgency: 'normal' as const, type: 'normal' },
-  { daysBefore: 18, urgency: 'moderate' as const, type: 'moderate' },
-  { daysBefore: 16, urgency: 'urgent' as const, type: 'urgent' },
-  { daysBefore: 14, urgency: 'final' as const, type: 'final' },
+  { daysBefore: 18, urgency: 'normal' as const, type: 'notice_18' },
+  { daysBefore: 16, urgency: 'moderate' as const, type: 'request_16' },
+  { daysBefore: 14, urgency: 'moderate' as const, type: 'followup_14' },
+  { daysBefore: 12, urgency: 'moderate' as const, type: 'followup_12' },
+  { daysBefore: 10, urgency: 'urgent' as const, type: 'urgent_10' },
+  { daysBefore: 9, urgency: 'urgent' as const, type: 'urgent_9' },
+  { daysBefore: 8, urgency: 'urgent' as const, type: 'urgent_8' },
+  { daysBefore: PAYMENT_DEADLINE_DAYS, urgency: 'final' as const, type: 'final_7' },
+  // Cancellation pass. Kept in the same list so it reuses the booking query and the
+  // idempotent payment_reminders insert; the loop branches on daysBefore below.
+  { daysBefore: CANCEL_AT_DAYS, urgency: 'final' as const, type: 'cancelled_6' },
 ] as const;
 
-// Notification messages per urgency level
+// Notification copy per milestone type. Days quoted are days left until the payment
+// deadline (day 7), not until the event.
 const MESSAGES: Record<string, { title: string; bodyTemplate: string }> = {
-  normal: {
+  notice_18: {
     title: 'Payment Due Soon',
-    bodyTemplate: 'Your final payment of {{amount}} is due within 7 days.',
+    bodyTemplate: 'Your remaining balance of {{amount}} is due in 11 days.',
   },
-  moderate: {
+  request_16: {
     title: 'Payment Reminder',
-    bodyTemplate: 'Reminder: Your final payment of {{amount}} is due in 4 days.',
+    bodyTemplate: 'Please settle your remaining balance of {{amount}} - due in 9 days.',
   },
-  urgent: {
+  followup_14: {
+    title: 'Payment Reminder',
+    bodyTemplate: 'Reminder: your remaining balance of {{amount}} is due in 7 days.',
+  },
+  followup_12: {
+    title: 'Payment Reminder',
+    bodyTemplate: 'Reminder: your remaining balance of {{amount}} is due in 5 days.',
+  },
+  urgent_10: {
     title: 'Urgent: Payment Due',
-    bodyTemplate: 'Urgent: Your final payment of {{amount}} is due in 2 days.',
+    bodyTemplate: 'Urgent: your remaining balance of {{amount}} is due in 3 days.',
   },
-  final: {
+  urgent_9: {
+    title: 'Urgent: Payment Due',
+    bodyTemplate: 'Urgent: your remaining balance of {{amount}} is due in 2 days.',
+  },
+  urgent_8: {
+    title: 'Urgent: Payment Due Tomorrow',
+    bodyTemplate: 'Urgent: your remaining balance of {{amount}} is due tomorrow.',
+  },
+  final_7: {
     title: 'Final Notice: Payment Due Today',
-    bodyTemplate: 'Final notice: Pay {{amount}} today or event is cancelled. Only 25% deposit retained.',
+    bodyTemplate: 'Final notice: pay {{amount}} today. Otherwise the event is cancelled tomorrow and only the 25% deposit is retained.',
+  },
+  cancelled_6: {
+    title: 'Event Cancelled',
+    bodyTemplate: 'The remaining balance of {{amount}} was not received in time. The event has been cancelled and the 25% deposit is retained.',
   },
 };
 
@@ -170,9 +224,18 @@ serve(async (req: Request) => {
             continue;
           }
 
+          // The last rung of the ladder is the cancellation pass, not a reminder.
+          const isCancellationPass = milestone.daysBefore === CANCEL_AT_DAYS;
+
           // Build notification message
           const messageConfig = MESSAGES[milestone.type];
           const body = messageConfig.bodyTemplate.replace('{{amount}}', amountStr);
+          const notificationType = isCancellationPass
+            ? 'event_cancelled_nonpayment'
+            : `payment_reminder_${milestone.type}`;
+          const actionUrl = isCancellationPass
+            ? `/event/${event.id}`
+            : `/booking/${event.id}/payment`;
 
           // 1. Create in-app notification
           const { data: notification } = await supabase
@@ -180,10 +243,10 @@ serve(async (req: Request) => {
             .insert({
               user_id: userId,
               event_id: event.id,
-              type: `payment_reminder_${milestone.type}`,
+              type: notificationType,
               title: messageConfig.title,
               body,
-              action_url: `/booking/${event.id}/payment`,
+              action_url: actionUrl,
             })
             .select('id')
             .single();
@@ -212,9 +275,9 @@ serve(async (req: Request) => {
                   title: messageConfig.title,
                   body,
                   data: {
-                    action_url: `/booking/${event.id}/payment`,
+                    action_url: actionUrl,
                     event_id: event.id,
-                    type: `payment_reminder_${milestone.type}`,
+                    type: notificationType,
                   },
                 },
               }),
@@ -238,12 +301,17 @@ serve(async (req: Request) => {
               .eq('id', userId)
               .single();
 
-            if (profile?.email && profile.email_notifications_enabled !== false) {
+            // The payment-reminder template tells the reader to pay before cancellation.
+            // On the cancellation pass that has already happened, so sending it would be
+            // actively wrong. In-app notification and push carry the cancellation message;
+            // a dedicated cancellation email template is still open work.
+            if (profile?.email && profile.email_notifications_enabled !== false && !isCancellationPass) {
               const html = getPaymentReminderEmailHtml({
                 honoreeName: event.honoree_name,
                 eventTitle: event.title,
                 amountDue: amountStr,
-                daysRemaining: milestone.daysBefore === 14 ? 0 : milestone.daysBefore - 14,
+                // Days left until the payment deadline (day 7), not until the event.
+                daysRemaining: Math.max(0, milestone.daysBefore - PAYMENT_DEADLINE_DAYS),
                 urgency: milestone.urgency,
                 paymentUrl: `https://game-over.app/booking/${event.id}/payment`,
               });
@@ -267,8 +335,9 @@ serve(async (req: Request) => {
             .eq('booking_id', booking.id)
             .eq('days_before_event', milestone.daysBefore);
 
-          // 4. At 14-day milestone: auto-cancel unpaid events
-          if (milestone.daysBefore === 14) {
+          // 4. Cancellation pass: a full day after the final notice on day 7, so the
+          //    deadline that notice announced was real and the customer had time to act.
+          if (isCancellationPass) {
             // Guard: only cancel events that are not already cancelled (idempotent)
             if (event.status !== 'cancelled') {
               // Race-condition guard: between the initial query (line ~210) and now,
@@ -300,7 +369,7 @@ serve(async (req: Request) => {
                 // NOTE: payment_reminders row was already inserted above, so the next cron run
                 // will skip via UNIQUE constraint. This is intentional: notifications were already
                 // sent, and a failed cancellation should be investigated manually, not retried blindly.
-                console.error(`[CRITICAL] Failed to cancel event ${event.id} at 14-day milestone:`, cancelError);
+                console.error(`[CRITICAL] Failed to cancel event ${event.id} at the ${CANCEL_AT_DAYS}-day cancellation pass:`, cancelError);
                 errors++;
                 // Don't count as processed — makes monitoring dashboards visible
               } else {
@@ -316,17 +385,9 @@ serve(async (req: Request) => {
                     }
                   });
 
-                // Create cancellation notification (non-blocking)
-                supabase.from('notifications').insert({
-                  user_id: userId,
-                  event_id: event.id,
-                  type: 'event_cancelled_nonpayment',
-                  title: 'Event Cancelled',
-                  body: `${event.honoree_name}'s ${event.title} has been cancelled due to non-payment. Your 25% deposit has been retained.`,
-                  action_url: `/event/${event.id}`,
-                }).then(({ error: notifError }) => {
-                  if (notifError) console.warn('Cancellation notification insert failed (non-blocking):', notifError.message);
-                });
+                // No separate cancellation notification here: step 1 above already wrote one
+                // with type 'event_cancelled_nonpayment' on this pass. Inserting a second
+                // would show the user the same bad news twice.
                 processed++;
               }
             } else {
