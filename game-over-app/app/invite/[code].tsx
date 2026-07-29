@@ -6,7 +6,7 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import {
   View, ScrollView, KeyboardAvoidingView, Platform,
-  Pressable, Alert, StyleSheet, Image, Linking,
+  Pressable, StyleSheet, Image, Linking,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
@@ -35,6 +35,7 @@ import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { feedback } from '@/stores/uiStore';
 
 type SignupForm = {
   firstName: string;
@@ -96,7 +97,7 @@ export default function InviteScreen() {
       // Get fresh session from Supabase directly (auth store may lag after signUp)
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (!currentUser) {
-        Alert.alert(t.invite.errorTitle, t.invite.authFailed);
+        feedback.error(t.invite.errorTitle, t.invite.authFailed);
         return;
       }
 
@@ -123,7 +124,7 @@ export default function InviteScreen() {
       try {
         const result = await acceptInvite.mutateAsync({ code: code! });
         if (!result.eventId) {
-          Alert.alert(t.invite.errorTitle, result.error || t.invite.couldNotJoin);
+          feedback.error(t.invite.errorTitle, result.error || t.invite.couldNotJoin);
           return;
         }
 
@@ -199,7 +200,7 @@ export default function InviteScreen() {
 
         router.replace(`/event/${result.eventId}?firstVisit=1`);
       } catch {
-        Alert.alert(t.invite.errorTitle, t.invite.joinFailed);
+        feedback.error(t.invite.errorTitle, t.invite.joinFailed);
       }
     } finally {
       isAcceptingRef.current = false;
@@ -293,11 +294,8 @@ export default function InviteScreen() {
           password: data.password,
         });
         if (signInError) {
-          Alert.alert(
-            t.invite.confirmEmailTitle,
-            t.invite.confirmEmailBody,
-            [{ text: t.invite.confirmEmailCta, onPress: () => router.push(`/(auth)/login?redirect=/invite/${code}`) }],
-          );
+          feedback.info(t.invite.confirmEmailTitle, t.invite.confirmEmailBody);
+          router.push(`/(auth)/login?redirect=/invite/${code}`);
           return;
         }
         freshSession = signInData.session;
@@ -305,7 +303,7 @@ export default function InviteScreen() {
 
       const currentUser = freshSession?.user;
       if (!currentUser) {
-        Alert.alert(t.invite.errorTitle, t.invite.authFailed);
+        feedback.error(t.invite.errorTitle, t.invite.authFailed);
         return;
       }
 
@@ -318,7 +316,7 @@ export default function InviteScreen() {
         const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 
         if (avatarSize != null && avatarSize > MAX_FILE_SIZE_BYTES) {
-          Alert.alert(t.invite.fileTooLargeTitle, t.invite.fileTooLargeBody);
+          feedback.warning(t.invite.fileTooLargeTitle, t.invite.fileTooLargeBody);
           return;
         }
 
@@ -336,15 +334,11 @@ export default function InviteScreen() {
         const path = `${currentUser.id}/${Date.now()}.jpg`;
 
         const chooseWhetherToContinue = (title: string, body: string) =>
-          new Promise<boolean>((resolve) => {
-            Alert.alert(
-              title,
-              body,
-              [
-                { text: t.invite.uploadFailedRetry, style: 'cancel', onPress: () => resolve(false) },
-                { text: t.invite.uploadFailedContinue, onPress: () => resolve(true) },
-              ],
-            );
+          feedback.confirm({
+            title,
+            message: body,
+            confirmLabel: t.invite.uploadFailedContinue,
+            cancelLabel: t.invite.uploadFailedRetry,
           });
 
         let { data: { session } } = await supabase.auth.getSession();
@@ -387,7 +381,7 @@ export default function InviteScreen() {
 
       await doAcceptInvite(data.phone, avatarUrl ?? undefined);
     } catch (e: any) {
-      Alert.alert(t.invite.signupFailedTitle, e.message || t.invite.tryAgain);
+      feedback.error(t.invite.signupFailedTitle, e.message || t.invite.tryAgain);
     } finally {
       setIsSubmitting(false);
     }

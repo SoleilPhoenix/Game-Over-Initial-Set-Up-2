@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react';
-import { ScrollView, Alert, Image, View, StyleSheet, Pressable, Text as RNText } from 'react-native';
+import { ScrollView, Image, View, StyleSheet, Pressable, Text as RNText } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useRouter } from 'expo-router';
@@ -21,6 +21,7 @@ import { assemblePackages } from '@/utils/packageAssembly';
 import { translateFeature } from '@/i18n/packageContent';
 import { TIER_SIZE_LABEL, getTierName } from '@/constants/packageTiers';
 import { useTranslation } from '@/i18n';
+import { feedback } from '@/stores/uiStore';
 
 // Feature counts by tier: S=3, M=4, L=5
 // Fallback packages when DB returns empty (for Berlin, Hamburg, Hannover)
@@ -335,7 +336,7 @@ export default function WizardStep4() {
 
       const eventData = wizardState.getEventData();
       if (!eventData) {
-        Alert.alert('Error', 'Please complete all required fields.');
+        feedback.warning('Error', 'Please complete all required fields.');
         return;
       }
       // Store hero image reference: remote URL string or local package slug (e.g. "hamburg-classic")
@@ -398,7 +399,7 @@ export default function WizardStep4() {
       router.push(`/booking/${eventId || 'draft'}/summary?packageId=${packageId}&cityId=${wizCityId}&participants=${wizParticipants}`);
     } catch (error) {
       console.error('Failed to create event:', error);
-      Alert.alert('Error', 'Failed to create event. Please try again.');
+      feedback.error('Error', 'Failed to create event. Please try again.');
     } finally {
       setIsCreating(false);
     }

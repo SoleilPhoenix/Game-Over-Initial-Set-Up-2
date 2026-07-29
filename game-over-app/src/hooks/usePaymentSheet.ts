@@ -4,9 +4,9 @@
  */
 
 import { useState, useCallback } from 'react';
-import { Alert } from 'react-native';
 import { useStripe, PaymentSheetError } from '@stripe/stripe-react-native';
 import { supabase } from '@/lib/supabase/client';
+import { feedback } from '@/stores/uiStore';
 
 interface PaymentSheetParams {
   bookingId: string;
@@ -121,11 +121,7 @@ export function usePaymentSheet() {
    * Show payment error alert
    */
   const showError = useCallback((message: string) => {
-    Alert.alert(
-      'Payment Error',
-      message,
-      [{ text: 'OK' }]
-    );
+    feedback.error('Payment Error', message);
   }, []);
 
   return {

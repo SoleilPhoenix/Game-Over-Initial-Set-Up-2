@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { Pressable, StyleSheet, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, View, Spinner } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -13,7 +13,7 @@ import { useUser } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
 import { useTranslation } from '@/i18n';
-import { useUIStore } from '@/stores/uiStore';
+import { feedback, useUIStore } from '@/stores/uiStore';
 import type { Json } from '@/lib/supabase/types';
 import {
   formatGuestChanges,
@@ -75,7 +75,7 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     if (!firstName.trim()) {
-      Alert.alert(t.editProfile.errorTitle, t.editProfile.firstNameRequired);
+      feedback.warning(t.editProfile.errorTitle, t.editProfile.firstNameRequired);
       return;
     }
 
@@ -171,7 +171,7 @@ export default function EditProfileScreen() {
       useUIStore.getState().showSuccess(t.editProfile.successTitle, t.editProfile.profileUpdated);
     } catch (error) {
       console.error('Profile update error:', error);
-      Alert.alert(t.editProfile.errorTitle, t.editProfile.updateFailed);
+      feedback.error(t.editProfile.errorTitle, t.editProfile.updateFailed);
     } finally {
       setIsSaving(false);
     }

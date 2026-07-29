@@ -7,6 +7,97 @@ Letzte Aktualisierung: 2026-07-29.
 Sie wird laut globaler `~/.claude/CLAUDE.md` nach jedem abgeschlossenen Fortschritt fortgeschrieben,
 und zwar im selben Commit wie die Änderung, die sie beschreibt.
 
+## Aktueller Stand (2026-07-29, spaeter) - Feedback-Schicht statt nativer Dialoge, Cron endlich gruen
+
+Branch `claude/budget-refunds-layout-errors-0302ea`.
+`npm run typecheck`, `npm run lint`, `npx vitest run` (102 Tests) gruen, von Claude selbst nachgefahren.
+UI-Batch via Codex (`gpt-5.6-sol`, Reasoning high), Diagnose/DB/Deploy von Claude.
+
+### 1. Ein Deploy hat den Cron-Job kaputt gemacht, und das war der nuetzlichste Fund des Tages
+
+`supabase functions deploy send-final-briefing` schaltet die JWT-Pruefung des Gateways **wieder ein**,
+weil `supabase/config.toml` bis heute **keinen `[functions]`-Abschnitt** hatte.
+Die Einstellung lebte nur als Zustand im Dashboard und ueberlebte keinen einzigen CLI-Deploy.
+
+Der Cron-Job schickt `Authorization: Bearer <CRON_SECRET>`, und das ist absichtlich kein JWT.
+Mit aktiver Pruefung wirft das Gateway die Anfrage mit `UNAUTHORIZED_INVALID_JWT_FORMAT` raus,
+**bevor** die Funktion laeuft, und ihre eigene `CRON_SECRET`-Pruefung kommt nie zum Zug.
+
+Betroffen waren drei Funktionen, die sich selbst autorisieren:
+`send-final-briefing`, `process-payment-reminders` und - der gefaehrlichste Fall - `stripe-webhook`,
+das die Stripe-Signatur selbst prueft. Ein beilaeufiges CLI-Deploy dort haette Zahlungen still gestoert.
+Alle drei stehen jetzt mit `verify_jwt = false` in `config.toml`, damit die Einstellung an jedem Deploy haengt.
+
+**Merke: nach jedem `functions deploy` einer selbst-autorisierenden Funktion einmal aufrufen und
+`net._http_response` lesen. Ein Deploy meldet Erfolg, auch wenn er die Funktion unerreichbar macht.**
+
+### 2. `send-final-briefing` laeuft erstmals end-to-end
+
+Vorher live: der alte deployte Code mit dem `profiles`-Join, HTTP 500.
+Der Fix lag seit der letzten Sitzung nur lokal, deployt war die kaputte Version.
+Jetzt deployt und verifiziert - nicht ueber den Deploy-Exit-Code, sondern ueber einen echten Aufruf
+mit dem Original-Cron-Kommando (`execute` des `cron.job.command`, damit das Secret die DB nie verlaesst):
+**HTTP 200, `{"results":[]}`**.
+
+Der Testaufruf war nebenwirkungsfrei, weil die Funktion nur den **Folgetag** trifft und das einzige
+Event am 02.08. liegt. Vor einem erneuten Testaufruf denselben Abstand pruefen.
+
+### 3. `ops_alert_recipients` war bereits befuellt, der HANDOFF war nur veraltet
+
+Die Zeile existiert seit 10:04 UTC. Der Watchdog hat **11 Sekunden spaeter** seinen ersten echten Alarm
+geschrieben und dabei genau den 500er von `send-final-briefing` gemeldet.
+Er ist damit nicht nur eingerichtet, sondern nachweislich wirksam - der Punkt aus dem vorigen Abschnitt ist erledigt.
+
+### 4. Keine nativen Dialoge mehr, app-eigenes Feedback ueberall
+
+Alle 78 `Alert.alert` in 27 Dateien sind weg, Endstand null Aufrufstellen.
+An ihrer Stelle:
+
+- `feedback.*` in `src/stores/uiStore.ts` - ein API fuer React und fuer imperative Helfer
+  (`src/utils/calendar.ts`, `src/hooks/usePaymentSheet.ts`, `src/i18n/index.ts` rufen aus Nicht-React-Kontext).
+- `src/components/ui/ConfirmSheet.tsx` - Sheet fuer Rueckfragen, montiert in `app/_layout.tsx`.
+  Deckt `confirm` (ja/nein, destruktiv rot) **und** `choose` fuer die Dialoge mit drei Knoepfen ab.
+- Der tote `activeModal`/`alert`-Pfad im `uiStore` ist geloescht statt liegengelassen.
+
+Toasts sitzen jetzt bewusst **ueber** der Tab-Leiste inklusive des goldenen Plus (vorher 76pt Abstand)
+und sind groesser (Mindesthoehe 52 auf 88, Titel 14 auf 16).
+Dauern in `TOAST_DURATIONS`: Fehler 6s, Erfolg 4s, Warnung/Info 2s.
+Die Staffelung ist eine Nutzerentscheidung: Fehler muss man ggf. zweimal lesen, ein
+"Profil aktualisiert" soll aus dem Weg sein. Jeder Toast ist antippbar, die Werte sind Obergrenzen.
+
+### 5. UI-Korrekturen aus dem Geraetetest, Runde 6
+
+- **Rueckerstattungs-Maske:** die 96pt Bodenabstand raeumten eine Tab-Leiste frei, die bei offenem
+  Sheet gar nicht sichtbar ist (`setTabBarHidden(true)` bei `eventIdParam`). Jetzt 16pt in diesem Fall,
+  96 nur noch wenn die Leiste wirklich steht. Gilt fuer alle drei Sheets im Budget.
+- **"Restbetrag bezahlen"** ohne `textTransform: 'uppercase'`, damit es zu "Noch 5 Tage" auf derselben
+  Grundlinie passt. Die Augenbrauen-Labels ("RESTBETRAG (75%)") bleiben bewusst versal.
+- **E-Mail aendern:** GoTrue-Fehlercodes werden uebersetzt statt roh durchgereicht
+  (`email_exists`, `email_address_invalid`, `over_email_send_rate_limit`), mit Fallback ueber
+  `error.code` statt Textvergleich. Das Passwortfeld scrollt bei Fokus in den sichtbaren Bereich.
+- **"Vom Gast angepasst":** zwei Zeilen statt Fliesstext, nur noch die **alten** Werte
+  (`formatPreviousGuestValues`), Name und Telefon mit "&" verbunden. Die neuen stehen schon in der Karte.
+
+### 6. Der offene Punkt "Bestaetigen-Knopf auf E-Mail aendern" ist erledigt
+
+Im vorigen Abschnitt stand er als ungeklaert (halbe Hoehe, ohne Beschriftung, "hier weitersuchen,
+nicht am Layout"). Die Geraete-Screenshots vom 29.07. zeigen ihn in voller Hoehe mit Text.
+Die Verlegung in die fixierte Fusszeile hat es geloest. Kein weiterer Handlungsbedarf.
+
+### Offen
+
+- **Nichts davon ist am Geraet gesehen.** Der ganze Batch ist statisch verifiziert
+  (typecheck/lint/102 Tests), aber Toast-Position, ConfirmSheet und die Budget-Maske brauchen einen
+  echten Durchlauf. `xcode-select` zeigt weiterhin nicht auf Xcode, der Simulator ist blockiert:
+  `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer` (braucht das Passwort des Users).
+- **Ursache von `email_address_invalid` ist nicht behoben, nur uebersetzt.** Die Auth-Logs zeigen den
+  400er reproduzierbar fuer `leonardino@web.de`, waehrend im selben Sekundenfenster ein `mail.send`
+  an dieselbe Adresse **erfolgreich** ist. Das ist eine Supabase-seitige Einstellung
+  (Auth -> Email), kein App-Fehler. Braucht einen Blick ins Dashboard.
+- Testevent "Soleil's Bachelor" (02.08.) hat weiter **keine Buchung mit `reference_number`**,
+  das Briefing wuerde `GO-XXXXXX` und `Classic (M)` verschicken.
+- Alle Profile stehen auf `en`, der deutsche Briefing-Text wird aktuell nirgends ausgeloest.
+
 ## Aktueller Stand (2026-07-29) - Cron-Jobs liefen seit Monaten ins Leere
 
 Branch `claude/mystifying-mcclintock-5bc8b4`.

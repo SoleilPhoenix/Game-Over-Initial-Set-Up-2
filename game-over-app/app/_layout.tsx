@@ -30,6 +30,7 @@ import { shouldPlayIntro } from '@/lib/introSession';
 import { useEditorialFonts } from '@/hooks/useEditorialFonts';
 import { Logo } from '@/components/brand/Logo';
 import { ToastHost } from '@/components/ui/ToastHost';
+import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { useSyncProfileEmail } from '@/hooks/useSyncProfileEmail';
 import config from '../tamagui.config';
 
@@ -226,6 +227,7 @@ function RootLayoutNav() {
         <Stack.Screen name="invite" />
       </Stack>
       <ToastHost />
+      <ConfirmSheet />
       <ToastViewport flexDirection="column-reverse" top="$4" left={0} right={0} />
     </>
   );

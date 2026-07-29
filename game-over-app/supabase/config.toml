@@ -63,3 +63,22 @@ redirect_uri = "env(SUPABASE_AUTH_FACEBOOK_REDIRECT_URI)"
 enabled = false
 port = 54327
 vector_port = 54328
+
+# ─── Edge Functions ───────────────────────────────────────────────────────────
+# These three do NOT receive a Supabase JWT and must not be gated on one:
+# the two cron jobs send `Authorization: Bearer <CRON_SECRET>` and Stripe sends
+# its own signature header. With the gateway's JWT check on, the request is
+# rejected as UNAUTHORIZED_INVALID_JWT_FORMAT before the function ever runs,
+# and each function's own authorization check never gets a say.
+#
+# This section exists because that setting previously lived only in the
+# dashboard: a plain `supabase functions deploy <name>` silently re-enabled the
+# check and took the function down. Recorded here, every deploy carries it.
+[functions.send-final-briefing]
+verify_jwt = false
+
+[functions.process-payment-reminders]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false

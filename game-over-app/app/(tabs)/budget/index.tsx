@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, Modal, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
+import { ActivityIndicator, Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Modal, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -23,7 +23,7 @@ import { ShareModal } from '@/components/ui/ShareModal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useActiveEventStore } from '@/stores/activeEventStore';
-import { useUIStore } from '@/stores/uiStore';
+import { feedback, useUIStore } from '@/stores/uiStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
@@ -236,9 +236,11 @@ export default function BudgetDashboardScreen() {
     const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardOpen(false));
     return () => { show.remove(); hide.remove(); };
   }, []);
-  // 96 clears the tab bar and the floating "+" without stranding the submit
-  // button far above it; the old 120 left a visible dead band.
-  const modalPaddingBottom = keyboardOpen ? 16 : insets.bottom + 96;
+  // Deep-linked budget screens hide the tab bar, while the normal Budget tab
+  // still needs to clear it. All three sheets share this bottom inset.
+  const modalPaddingBottom = keyboardOpen
+    ? 16
+    : insets.bottom + (eventIdParam ? 16 : 96);
 
   // Remind-all channel picker modal
   const [remindModal, setRemindModal] = useState<{
@@ -618,7 +620,7 @@ export default function BudgetDashboardScreen() {
     if (!refundEventId || !user?.id || !refundModal.description.trim()) return;
     const amountCents = parseRefundAmountToCents(refundModal.amount);
     if (amountCents <= 0) {
-      Alert.alert(t.common.error, t.budget.refundInvalidAmount);
+      feedback.warning(t.common.error, t.budget.refundInvalidAmount);
       return;
     }
 
@@ -653,7 +655,7 @@ export default function BudgetDashboardScreen() {
       setRefundModal((current) => ({ ...current, visible: false }));
     } catch (error) {
       console.error('[refunds] save failed:', error);
-      Alert.alert(t.common.error, t.budget.refundError);
+      feedback.error(t.common.error, t.budget.refundError);
     }
   }, [createRefund, refundEventId, refundModal, t, updateRefund, user?.id]);
 
@@ -786,7 +788,7 @@ export default function BudgetDashboardScreen() {
     if (effectiveEventId) {
       setShareModalVisible(true);
     } else {
-      Alert.alert(t.budget.noEventSelected, t.budget.noEventSelectedMsg);
+      feedback.info(t.budget.noEventSelected, t.budget.noEventSelectedMsg);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
   }, [selectedEventId, eventIdParam]);
@@ -826,13 +828,13 @@ export default function BudgetDashboardScreen() {
           const body = await (error as any).context?.json?.();
           if (body?.error) detail = body.error;
         } catch {}
-        Alert.alert(t.budget.sendFailed, detail);
+        feedback.error(t.budget.sendFailed, detail);
         setRemindModal(prev => ({ ...prev, sendStatus: 'idle' }));
         return;
       }
       setRemindModal(prev => ({ ...prev, results: data?.results ?? [], sendStatus: 'done' }));
     } catch {
-      Alert.alert(t.common.error, t.budget.errorSendingReminders);
+      feedback.error(t.common.error, t.budget.errorSendingReminders);
       setRemindModal(prev => ({ ...prev, sendStatus: 'idle' }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
@@ -1497,7 +1499,7 @@ export default function BudgetDashboardScreen() {
                                     <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(249,115,22,0.12)', alignItems: 'center', justifyContent: 'center' }}>
                                       <Ionicons name="chevron-forward" size={30} color="#F97316" />
                                     </View>
-                                    <Text fontSize={12} fontWeight="700" color="#F97316" letterSpacing={0.3} style={{ textTransform: 'uppercase', textAlign: 'center' }}>
+                                    <Text fontSize={12} fontWeight="700" color="#F97316" letterSpacing={0.3} textAlign="center">
                                       {(t.budget as any).payRemainingBtn}
                                     </Text>
                                   </YStack>
@@ -1669,18 +1671,16 @@ export default function BudgetDashboardScreen() {
                         <Pressable
                           style={[styles.markPaidButton, markingPaidUserId === user?.id && { opacity: 0.6 }]}
                           disabled={markingPaidUserId === user?.id}
-                          onPress={() => {
-                            Alert.alert(
-                              t.budget.confirmPayment,
-                              t.budget.confirmPaymentMsg,
-                              [
-                                { text: t.budget.notYet, style: 'cancel' },
-                                {
-                                  text: t.budget.yesPaid,
-                                  onPress: async () => {
-                                    if (!selectedEventId || !user?.id) return;
-                                    setMarkingPaidUserId(user.id);
-                                    try {
+                          onPress={async () => {
+                            const confirmed = await feedback.confirm({
+                              title: t.budget.confirmPayment,
+                              message: t.budget.confirmPaymentMsg,
+                              confirmLabel: t.budget.yesPaid,
+                              cancelLabel: t.budget.notYet,
+                            });
+                            if (!confirmed || !selectedEventId || !user?.id) return;
+                            setMarkingPaidUserId(user.id);
+                            try {
                                       const claimedAt = new Date().toISOString();
                                       const { error: claimError } = await supabase.rpc('mark_payment_claimed', {
                                         p_event_id: selectedEventId,
@@ -1728,15 +1728,11 @@ export default function BudgetDashboardScreen() {
                                         t.budget.thankYou,
                                         t.budget.paymentConfirmedMsg
                                       );
-                                    } catch (error: any) {
-                                      Alert.alert(t.common.error, error.message || t.budget.errorUpdatingStatus);
-                                    } finally {
-                                      setMarkingPaidUserId(null);
-                                    }
-                                  },
-                                },
-                              ]
-                            );
+                            } catch (error: any) {
+                              feedback.error(t.common.error, error.message || t.budget.errorUpdatingStatus);
+                            } finally {
+                              setMarkingPaidUserId(null);
+                            }
                           }}
                         >
                           <Ionicons name="checkmark-circle-outline" size={14} color={theme.background} />
@@ -1758,7 +1754,7 @@ export default function BudgetDashboardScreen() {
                               });
                               await queryClient.invalidateQueries({ queryKey: ['guestParticipations', participantUserId] });
                             } catch (error: any) {
-                              Alert.alert(t.common.error, error.message || t.budget.errorUpdatingStatus);
+                              feedback.error(t.common.error, error.message || t.budget.errorUpdatingStatus);
                             } finally {
                               setMarkingPaidUserId(null);
                             }
@@ -1969,7 +1965,7 @@ export default function BudgetDashboardScreen() {
                         onDelete={() => {
                           void deleteRefund.mutateAsync(refund.id).catch((error) => {
                             console.error('[refunds] delete failed:', error);
-                            Alert.alert(t.common.error, t.budget.refundDeleteError);
+                            feedback.error(t.common.error, t.budget.refundDeleteError);
                           });
                         }}
                       />
@@ -2511,7 +2507,7 @@ export default function BudgetDashboardScreen() {
                           .then(() => setRefundModal((current) => ({ ...current, visible: false })))
                           .catch((error) => {
                             console.error('[refunds] delete failed:', error);
-                            Alert.alert(t.common.error, t.budget.refundDeleteError);
+                            feedback.error(t.common.error, t.budget.refundDeleteError);
                           });
                       }}
                     >
@@ -3416,7 +3412,7 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     borderTopRightRadius: 24,
     padding: 24,
     paddingTop: 12,
-    // paddingBottom is set inline (insets.bottom + 96) so the submit button clears the tab bar
+    // paddingBottom is set inline based on whether the tab bar is visible
     borderTopWidth: 1,
     borderColor: theme.ghostBorder,
     maxHeight: '90%',

@@ -296,6 +296,9 @@ const en = {
     errorTitle: 'Email Change Failed',
     updateFailed: 'Could not change your email. Please try again.',
     passwordIncorrect: 'Your current password could not be verified.',
+    emailExists: 'An account already uses this email address.',
+    emailAddressInvalid: 'This email address is not valid. Check it and try again.',
+    emailRateLimited: 'Too many confirmation emails were requested. Please wait a while and try again.',
     validEmail: 'Enter a valid email address',
     validConfirmRequired: 'Please confirm the new email address',
     validMatch: 'Email addresses do not match',
@@ -673,7 +676,7 @@ const en = {
     airbnbDeposit: 'Hotel Security Deposit',
     uberAdjustment: 'Event Venue Deposit',
     dueInDays: '{{count}} days left',
-    payRemainingBtn: 'Pay Remaining Balance',
+    payRemainingBtn: 'Pay remaining balance',
     payRemainingSubtitle: '75% balance due before event',
     packageFrozen: 'Package costs are locked — the event has already taken place.',
     notif14DayTitle: 'Final Payment Due Soon',
@@ -1058,6 +1061,7 @@ const en = {
     guestUnitPlural: 'guests',
     duplicateTitle: 'Duplicate contact',
     guestAdjusted: 'Adjusted by guest',
+    guestBefore: 'Before',
   },
 
   // ─── Guest Invite Wizard ─────────────────────────

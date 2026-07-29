@@ -21,9 +21,10 @@ export {
 
 export {
   useUIStore,
+  feedback,
   useGlobalLoading,
   useToasts,
-  useActiveModal,
+  useActiveConfirm,
   useIsOnline,
   useKeyboard,
 } from './uiStore';

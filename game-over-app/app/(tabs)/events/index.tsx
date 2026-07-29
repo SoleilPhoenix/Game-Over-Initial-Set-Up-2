@@ -7,7 +7,6 @@
 import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  Alert,
   Animated,
   FlatList,
   RefreshControl,
@@ -47,6 +46,7 @@ import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import type { EventWithDetails } from '@/repositories';
 import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 import { isPastEvent, isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { feedback } from '@/stores/uiStore';
 
 type FilterTab = 'organizing' | 'attending';
 
@@ -398,32 +398,26 @@ export default function EventsScreen() {
   }, [rawDrafts, events, user?.id]);
   const hasDrafts = allDrafts.length > 0;
 
-  const handleCreateEvent = () => {
+  const handleCreateEvent = async () => {
     // Use filtered allDrafts (user-scoped) instead of store.hasDraft() to avoid
     // showing the dialog when the device has another user's drafts
     if (hasDrafts) {
       const tr = getTranslation();
-      Alert.alert(
-        tr.wizard.existingDraftTitle,
-        tr.wizard.existingDraftMessage,
-        [
-          { text: tr.wizard.cancel, style: 'cancel' },
-          {
-            text: tr.wizard.continueDraft,
-            onPress: () => {
-              if (allDrafts.length > 0) handleResumeDraft(allDrafts[0].id);
-            },
-          },
-          {
-            text: tr.wizard.startFresh,
-            style: 'destructive',
-            onPress: () => {
-              useWizardStore.getState().startNewDraft(user?.id);
-              router.push('/create-event');
-            },
-          },
-        ]
-      );
+      const choice = await feedback.choose({
+        title: tr.wizard.existingDraftTitle,
+        message: tr.wizard.existingDraftMessage,
+        cancelLabel: tr.wizard.cancel,
+        options: [
+          { value: 'continue', label: tr.wizard.continueDraft },
+          { value: 'fresh', label: tr.wizard.startFresh, destructive: true },
+        ],
+      });
+      if (choice === 'continue' && allDrafts.length > 0) {
+        handleResumeDraft(allDrafts[0].id);
+      } else if (choice === 'fresh') {
+        useWizardStore.getState().startNewDraft(user?.id);
+        router.push('/create-event');
+      }
       return;
     }
     useWizardStore.getState().startNewDraft(user?.id);
@@ -830,20 +824,16 @@ export default function EventsScreen() {
     if (draft.participantCount > 0) subtitleParts.push(`${draft.participantCount} ${t.events.participantsLabel || 'participants'}`);
     const subtitle = subtitleParts.length > 0 ? subtitleParts.join(' · ') : t.events.noCityLabel;
 
-    const handleDeleteDraft = (draftId: string, title: string) => {
+    const handleDeleteDraft = async (draftId: string, title: string) => {
       const tr = getTranslation();
-      Alert.alert(
-        tr.wizard.deleteDraftTitle || 'Delete Draft',
-        tr.wizard.deleteDraftMessage?.replace('{{name}}', title) || `Delete "${title}"?`,
-        [
-          { text: tr.wizard.cancel, style: 'cancel' },
-          {
-            text: tr.common?.delete || 'Delete',
-            style: 'destructive',
-            onPress: () => useWizardStore.getState().deleteDraft(draftId),
-          },
-        ]
-      );
+      const confirmed = await feedback.confirm({
+        title: tr.wizard.deleteDraftTitle || 'Delete Draft',
+        message: tr.wizard.deleteDraftMessage?.replace('{{name}}', title) || `Delete "${title}"?`,
+        confirmLabel: tr.common?.delete || 'Delete',
+        cancelLabel: tr.wizard.cancel,
+        destructive: true,
+      });
+      if (confirmed) useWizardStore.getState().deleteDraft(draftId);
     };
 
     const renderRightActions = (draftId: string, title: string) => {

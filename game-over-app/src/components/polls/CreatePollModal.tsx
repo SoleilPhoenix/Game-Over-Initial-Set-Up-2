@@ -4,12 +4,13 @@
  */
 
 import React, { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, TextInput, Alert } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui/Button';
 import type { Database } from '@/lib/supabase/types';
+import { feedback } from '@/stores/uiStore';
 
 type PollCategory = Database['public']['Tables']['polls']['Row']['category'];
 
@@ -57,7 +58,7 @@ export function CreatePollModal({
 
   const handleAddOption = () => {
     if (options.length >= 6) {
-      Alert.alert('Maximum Options', 'You can add up to 6 options per poll.');
+      feedback.warning('Maximum Options', 'You can add up to 6 options per poll.');
       return;
     }
     setOptions([...options, '']);
@@ -65,7 +66,7 @@ export function CreatePollModal({
 
   const handleRemoveOption = (index: number) => {
     if (options.length <= 2) {
-      Alert.alert('Minimum Options', 'A poll must have at least 2 options.');
+      feedback.warning('Minimum Options', 'A poll must have at least 2 options.');
       return;
     }
     setOptions(options.filter((_, i) => i !== index));
@@ -79,13 +80,13 @@ export function CreatePollModal({
 
   const validateForm = () => {
     if (!question.trim()) {
-      Alert.alert('Missing Question', 'Please enter a question for your poll.');
+      feedback.warning('Missing Question', 'Please enter a question for your poll.');
       return false;
     }
 
     const validOptions = options.filter((opt) => opt.trim().length > 0);
     if (validOptions.length < 2) {
-      Alert.alert('Insufficient Options', 'Please provide at least 2 options.');
+      feedback.warning('Insufficient Options', 'Please provide at least 2 options.');
       return false;
     }
 
@@ -106,7 +107,7 @@ export function CreatePollModal({
       handleClose();
     } catch (error) {
       console.error('Failed to create poll:', error);
-      Alert.alert('Error', 'Failed to create poll. Please try again.');
+      feedback.error('Error', 'Failed to create poll. Please try again.');
     } finally {
       setIsSubmitting(false);
     }

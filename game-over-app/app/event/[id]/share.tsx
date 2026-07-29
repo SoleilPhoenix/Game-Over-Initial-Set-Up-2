@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { Pressable, StyleSheet, Linking, Alert, Share, ScrollView, View, Image as RNImage } from 'react-native';
+import { Pressable, StyleSheet, Linking, Share, ScrollView, View, Image as RNImage } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
@@ -14,6 +14,7 @@ import { useEvent } from '@/hooks/queries/useEvents';
 import { useCreateInvite } from '@/hooks/queries/useInvites';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { getEventImage } from '@/constants/packageImages';
+import { feedback } from '@/stores/uiStore';
 
 // Social platform config — each opens native app, falls back to web
 const SOCIALS: {
@@ -162,7 +163,7 @@ export default function ShareEventScreen() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
-      Alert.alert('Error', 'Could not generate invite link. Please try again.');
+      feedback.error('Error', 'Could not generate invite link. Please try again.');
     }
   };
 
@@ -172,7 +173,7 @@ export default function ShareEventScreen() {
       const msg = `You're invited to "${eventTitle}"! 🎉`;
       await social.onPress(msg, url);
     } catch {
-      Alert.alert('Error', `Could not open ${social.label}.`);
+      feedback.error('Error', `Could not open ${social.label}.`);
     }
   };
 

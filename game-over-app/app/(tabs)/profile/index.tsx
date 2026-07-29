@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Alert, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { Pressable, StyleSheet, ScrollView } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useUser, useAuthStore } from '@/stores/authStore';
 import { useFavoritesStore } from '@/stores/favoritesStore';
-import { useUIStore } from '@/stores/uiStore';
+import { feedback, useUIStore } from '@/stores/uiStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { getPackageImage } from '@/constants/packageImages';
 import { supabase } from '@/lib/supabase/client';
@@ -145,7 +145,7 @@ export default function ProfileScreen() {
         `Verification email sent to ${userEmail}`
       );
     } catch {
-      Alert.alert('Error', 'Could not send verification email. Please try again.');
+      feedback.error('Error', 'Could not send verification email. Please try again.');
     } finally {
       setIsResendingVerification(false);
     }
@@ -158,20 +158,16 @@ export default function ProfileScreen() {
     .toUpperCase()
     .slice(0, 2);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     const tr = getTranslation();
-    Alert.alert(
-      tr.profile.logOutConfirmTitle,
-      tr.profile.logOutConfirmMessage,
-      [
-        { text: tr.profile.cancel, style: 'cancel' },
-        {
-          text: tr.profile.logOut,
-          style: 'destructive',
-          onPress: signOut,
-        },
-      ]
-    );
+    const confirmed = await feedback.confirm({
+      title: tr.profile.logOutConfirmTitle,
+      message: tr.profile.logOutConfirmMessage,
+      confirmLabel: tr.profile.logOut,
+      cancelLabel: tr.profile.cancel,
+      destructive: true,
+    });
+    if (confirmed) await signOut();
   };
 
   const handleLanguagePress = () => {

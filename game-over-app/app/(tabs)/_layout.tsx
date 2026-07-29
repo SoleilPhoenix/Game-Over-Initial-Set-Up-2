@@ -7,7 +7,7 @@
 import { Tabs, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { Alert, View, StyleSheet, Pressable, Platform, Text } from 'react-native';
+import { View, StyleSheet, Pressable, Platform, Text } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -17,6 +17,7 @@ import { useTabBarStore } from '@/stores/tabBarStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useUser } from '@/stores/authStore';
 import { useEvents } from '@/hooks/queries/useEvents';
+import { feedback } from '@/stores/uiStore';
 
 type IconName = 'calendar' | 'calendar-outline' | 'chatbubbles' | 'chatbubbles-outline' |
   'card' | 'card-outline' | 'person-circle' | 'person-circle-outline' | 'add';
@@ -81,36 +82,28 @@ function FABButton() {
   });
   const hasUserDrafts = userDrafts.length > 0;
 
-  const handlePress = () => {
+  const handlePress = async () => {
     const store = useWizardStore.getState();
     if (hasUserDrafts) {
       const tr = getTranslation();
-      Alert.alert(
-        tr.wizard.existingDraftTitle,
-        tr.wizard.existingDraftMessage,
-        [
-          { text: tr.wizard.cancel, style: 'cancel' },
-          {
-            text: tr.wizard.continueDraft,
-            onPress: () => {
-              if (userDrafts.length > 0) {
-                store.loadDraft(userDrafts[0].id);
-                const stepPaths = ['/create-event', '/create-event/preferences', '/create-event/participants', '/create-event/packages'];
-                const targetPath = stepPaths[Math.min(userDrafts[0].currentStep - 1, 3)];
-                router.push(targetPath as any);
-              }
-            },
-          },
-          {
-            text: tr.wizard.startFresh,
-            style: 'destructive',
-            onPress: () => {
-              store.startNewDraft(user?.id);
-              router.push('/create-event');
-            },
-          },
-        ]
-      );
+      const choice = await feedback.choose({
+        title: tr.wizard.existingDraftTitle,
+        message: tr.wizard.existingDraftMessage,
+        cancelLabel: tr.wizard.cancel,
+        options: [
+          { value: 'continue', label: tr.wizard.continueDraft },
+          { value: 'fresh', label: tr.wizard.startFresh, destructive: true },
+        ],
+      });
+      if (choice === 'continue' && userDrafts.length > 0) {
+        store.loadDraft(userDrafts[0].id);
+        const stepPaths = ['/create-event', '/create-event/preferences', '/create-event/participants', '/create-event/packages'];
+        const targetPath = stepPaths[Math.min(userDrafts[0].currentStep - 1, 3)];
+        router.push(targetPath as any);
+      } else if (choice === 'fresh') {
+        store.startNewDraft(user?.id);
+        router.push('/create-event');
+      }
       return;
     }
     store.startNewDraft(user?.id);

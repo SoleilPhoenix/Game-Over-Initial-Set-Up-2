@@ -5,7 +5,7 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { Alert, RefreshControl, Pressable, StyleSheet, SectionList, View } from 'react-native';
+import { RefreshControl, Pressable, StyleSheet, SectionList, View } from 'react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
@@ -27,6 +27,7 @@ import { useParticipants, participantKeys } from '@/hooks/queries/useParticipant
 import { useUser } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/types';
+import { feedback } from '@/stores/uiStore';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
@@ -59,18 +60,16 @@ export default function NotificationsScreen() {
   const { data: guestEventParticipants } = useParticipants(relevantGuestEvent?.id);
   const organizerName = guestEventParticipants?.find(p => p.role === 'organizer')?.profile?.full_name ?? (t.notifications as any).organizerFallback;
 
-  const handleGuestMarkAsPaid = () => {
-    Alert.alert(
-      t.notifications.confirmPayment,
-      t.notifications.confirmPaymentMsg.replace('{{name}}', organizerName),
-      [
-        { text: t.notifications.notYet, style: 'cancel' },
-        {
-          text: t.notifications.yesPaid,
-          onPress: async () => {
-            if (!guestUrgentEvent?.id || !user?.id) return;
-            setGuestPayConfirming(true);
-            try {
+  const handleGuestMarkAsPaid = async () => {
+    const confirmed = await feedback.confirm({
+      title: t.notifications.confirmPayment,
+      message: t.notifications.confirmPaymentMsg.replace('{{name}}', organizerName),
+      confirmLabel: t.notifications.yesPaid,
+      cancelLabel: t.notifications.notYet,
+    });
+    if (!confirmed || !guestUrgentEvent?.id || !user?.id) return;
+    setGuestPayConfirming(true);
+    try {
               const eventId = guestUrgentEvent.id;
               const claimedAt = new Date().toISOString();
               const { error: claimError } = await supabase.rpc('mark_payment_claimed', {
@@ -116,15 +115,11 @@ export default function NotificationsScreen() {
               if (notificationError) {
                 console.warn('[notifications] payment claim notification failed:', notificationError.message);
               }
-            } catch (e: any) {
-              Alert.alert(t.common.error, e.message || t.notifications.errorConfirmPayment);
-            } finally {
-              setGuestPayConfirming(false);
-            }
-          },
-        },
-      ]
-    );
+    } catch (e: any) {
+      feedback.error(t.common.error, e.message || t.notifications.errorConfirmPayment);
+    } finally {
+      setGuestPayConfirming(false);
+    }
   };
 
   // Fetch notifications

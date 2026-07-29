@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Alert, ScrollView } from 'react-native';
+import { ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -21,6 +21,7 @@ import { Button } from '@/components/ui/Button';
 import { useTranslation, getTranslation } from '@/i18n';
 import { setDesiredParticipants, setBudgetInfo } from '@/lib/participantCountCache';
 import { getCityTierName, getTierDisplayLabel, TIER_PRICE_PER_PERSON_CENTS } from '@/constants/packageTiers';
+import { feedback } from '@/stores/uiStore';
 
 // Fallback packages for draft mode — names + prices from packageTiers constants
 const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; price_per_person_cents: number }> = {
@@ -177,15 +178,11 @@ export default function PaymentScreen() {
 
       if (useSimulatedPayment) {
         const tr = getTranslation();
-        const confirmed = await new Promise<boolean>((resolve) => {
-          Alert.alert(
-            'Demo Mode',
-            'In production, Stripe\'s payment sheet would open here for card details. Continue with simulated payment?',
-            [
-              { text: tr.wizard.cancel, style: 'cancel', onPress: () => resolve(false) },
-              { text: 'Continue', onPress: () => resolve(true) },
-            ]
-          );
+        const confirmed = await feedback.confirm({
+          title: 'Demo Mode',
+          message: 'In production, Stripe\'s payment sheet would open here for card details. Continue with simulated payment?',
+          confirmLabel: 'Continue',
+          cancelLabel: tr.wizard.cancel,
         });
         if (!confirmed) return;
 
@@ -206,7 +203,7 @@ export default function PaymentScreen() {
           await supabase.auth.refreshSession().catch(() => {});
           const { data: { session } } = await supabase.auth.getSession();
           if (!session?.access_token) {
-            Alert.alert('Session expired', 'Please log out and log back in, then try booking again.');
+            feedback.error('Session expired', 'Please log out and log back in, then try booking again.');
             setPaymentStep('ready');
             return;
           }
@@ -223,7 +220,7 @@ export default function PaymentScreen() {
               const text = await ctx?.text?.();
               if (text) { const b = JSON.parse(text); if (b?.error) detail = b.error; }
             } catch { /* keep default */ }
-            Alert.alert('Booking not confirmed', detail);
+            feedback.error('Booking not confirmed', detail);
             setPaymentStep('ready');
             return;
           }
@@ -336,12 +333,11 @@ export default function PaymentScreen() {
 
       const errorMessage = error instanceof Error ? error.message : 'Payment failed';
       const tr = getTranslation();
-      Alert.alert(
+      feedback.error(
         tr.booking.paymentFailed,
         errorMessage === 'Payment cancelled'
           ? tr.booking.paymentCancelled
           : tr.booking.paymentErrorDetail.replace('{{error}}', errorMessage),
-        [{ text: tr.common.ok }]
       );
     }
   };

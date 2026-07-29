@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Alert, BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 
@@ -22,6 +22,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { getTierDisplayLabel } from '@/constants/packageTiers';
+import { feedback } from '@/stores/uiStore';
 
 const CITY_NAMES: Record<string, string> = {
   berlin: 'Berlin', hamburg: 'Hamburg', hannover: 'Hannover',
@@ -106,14 +107,14 @@ export default function BookingConfirmationScreen() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      Alert.alert('Error', 'Failed to copy to clipboard');
+      feedback.error('Error', 'Failed to copy to clipboard');
     }
   };
 
   const handleAddToCalendar = async () => {
     if (isDraft) {
       const tr = getTranslation();
-      Alert.alert(tr.booking.demoMode, tr.booking.demoCalendarMessage);
+      feedback.info(tr.booking.demoMode, tr.booking.demoCalendarMessage);
       return;
     }
     if (!event) return;

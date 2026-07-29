@@ -293,6 +293,9 @@ const de: TranslationKeys = {
     errorTitle: 'E-Mail-Änderung fehlgeschlagen',
     updateFailed: 'Deine E-Mail konnte nicht geändert werden. Bitte versuche es erneut.',
     passwordIncorrect: 'Dein aktuelles Passwort konnte nicht bestätigt werden.',
+    emailExists: 'Ein Konto verwendet diese E-Mail-Adresse bereits.',
+    emailAddressInvalid: 'Diese E-Mail-Adresse ist ungültig. Prüfe sie und versuche es erneut.',
+    emailRateLimited: 'Es wurden zu viele Bestätigungs-E-Mails angefordert. Bitte warte eine Weile und versuche es erneut.',
     validEmail: 'Gib eine gültige E-Mail-Adresse ein',
     validConfirmRequired: 'Bitte bestätige die neue E-Mail-Adresse',
     validMatch: 'Die E-Mail-Adressen stimmen nicht überein',
@@ -1042,6 +1045,7 @@ const de: TranslationKeys = {
     guestUnitPlural: 'Gäste',
     duplicateTitle: 'Doppelter Kontakt',
     guestAdjusted: 'Vom Gast angepasst',
+    guestBefore: 'Vorher',
   },
 
   // ─── Guest Invite Wizard ─────────────────────────

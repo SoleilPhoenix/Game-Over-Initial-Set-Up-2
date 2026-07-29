@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useCallback, useMemo } from 'react';
-import { FlatList, RefreshControl, Pressable, StyleSheet, Alert, SectionList } from 'react-native';
+import { FlatList, RefreshControl, Pressable, StyleSheet, SectionList } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -15,6 +15,7 @@ import { usePolls, useCreatePoll, useVote } from '@/hooks/queries/usePolls';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { PollCard, CreatePollModal } from '@/components/polls';
 import type { Database } from '@/lib/supabase/types';
+import { feedback } from '@/stores/uiStore';
 
 type TabType = 'chat' | 'voting' | 'decisions';
 type PollCategory = Database['public']['Tables']['polls']['Row']['category'];
@@ -111,7 +112,7 @@ export default function CommunicationCenterScreen() {
       await voteMutation.mutateAsync({ pollId, optionId });
     } catch (error) {
       console.error('Failed to vote:', error);
-      Alert.alert('Error', 'Failed to submit your vote. Please try again.');
+      feedback.error('Error', 'Failed to submit your vote. Please try again.');
     }
   }, [voteMutation]);
 
