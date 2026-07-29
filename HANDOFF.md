@@ -7,6 +7,49 @@ Letzte Aktualisierung: 2026-07-29.
 Sie wird laut globaler `~/.claude/CLAUDE.md` nach jedem abgeschlossenen Fortschritt fortgeschrieben,
 und zwar im selben Commit wie die Änderung, die sie beschreibt.
 
+## Aktueller Stand (2026-07-29, Abend) - erster echter Buchungssatz, Client-Statuswrite entfernt
+
+Der erste echte Testkauf lief in einen Fehler: *"Booking created but event status update failed:
+Event can only be marked booked by the payment service"*.
+
+Ursache: `bookingsRepository.create()` schrieb nach dem Insert clientseitig
+`update events set status = 'booked'`. Der Trigger `enforce_event_status_integrity` sperrt diese
+Transition auf die Service-Rolle - der Update wurde also **immer** abgewiesen. Der anschliessende
+`throw` brach die Zahlung ab, **nachdem** die Buchungszeile bereits geschrieben war. Ergebnis:
+ein verwaister Buchungssatz auf einem `draft`-Event, Stripe nie erreicht.
+
+Der Code war seit immer falsch, fiel aber nie auf, weil die App bis zum Paket-Seed durchgehend im
+Demo-Modus lief und der echte Pfad nie ausgefuehrt wurde. Der Seed hat den Fehler nicht erzeugt,
+sondern freigelegt.
+
+Fix: der Client setzt den Status nicht mehr. `stripe-webhook` (~Zeile 218) macht es serverseitig
+nach erfolgreicher Zahlung, `confirm-demo-booking` fuer den simulierten Pfad. Eine Buchung anlegen
+und eine Buchung bezahlen sind zwei verschiedene Ereignisse.
+
+Der frueher vorhandene Test hat das falsche Verhalten festgeschrieben ("throws if event status
+update fails"). Er ist ersetzt durch zwei Tests, die jetzt die richtige Invariante schuetzen:
+`create()` fasst die `events`-Tabelle gar nicht an, und ein fehlgeschlagener Insert wird
+durchgereicht. 102 Tests gruen.
+
+**Offen: verwaiste Buchung `GO-0614B6`** (Dana's Bachelor, EUR 895, `payment_status = 'pending'`,
+Event auf `draft`). Harmlos - `process-payment-reminders` ignoriert sie, weil `deposit_paid_at`
+NULL ist - aber sie sollte aufgeraeumt werden.
+
+### Widerlegt: der "event_participants/profiles"-Fehler ist NICHT mehr offen
+
+Eine andere Session hat notiert, ein taeglicher Cron-Job schlage weiterhin mit
+`Could not find a relationship between 'event_participants' and 'profiles' in the schema cache`
+fehl. Das ist **veraltet**. Nachgeprueft:
+- Der Join ist aus `send-final-briefing` entfernt (ersetzt durch `events.created_by`).
+- Es existiert genau **eine** `ops_cron_health`-Benachrichtigung, erzeugt am 29.07. um 10:04 beim
+  manuellen Watchdog-Test. Sie bezieht sich auf den 09:00-Lauf mit dem **alten** deployten Code,
+  also auf einen zu diesem Zeitpunkt bereits behobenen Fehler.
+- Seither keine neue Meldung; ein manueller Aufruf liefert 200.
+
+**Lehre fuer den Watchdog:** die Meldung nennt den Zeitpunkt des zugrundeliegenden Fehlschlags
+nicht, deshalb liest ein alter Alarm wie ein aktueller. Ein Zeitstempel im `body` wuerde das
+verhindern - noch offen.
+
 ## WICHTIG (2026-07-29) - CI hat die Cron-Funktionen zweimal stillgelegt
 
 `deploy-edge-functions.yml` deployte `send-final-briefing` und `process-payment-reminders`
