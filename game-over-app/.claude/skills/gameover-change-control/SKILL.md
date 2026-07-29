@@ -1,7 +1,7 @@
 ---
 name: gameover-change-control
 description: How changes are classified, gated, and reviewed in the Game Over project. Use before starting any non-trivial change (DB migration, edge function, CI workflow, new dependency, payment/RLS code, store/release work) to determine which gates apply, what is forbidden, and what needs owner approval.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Game Over — Change Control
@@ -22,6 +22,7 @@ non-negotiables, check the owner-approval list, then run the verification gates.
 | **Edge functions** | `game-over-app/supabase/functions/**` | Code Quality + shared-helper conventions (`_shared/http.ts`: CORS allowlist, constant-time secret compare) + **owner approval** — `deploy-edge-functions.yml` auto-deploys to the live project on merge to main; project must be restored from INACTIVE first |
 | **CI workflows** | `.github/workflows/*.yml` **at repo root only** | Manual review; test with `workflow_dispatch` where possible. Never under `game-over-app/.github/` (§2.5) |
 | **Deps / native modules** | `package.json`, config plugins, `expo prebuild` inputs | **Owner sign-off required** for any new dependency. npm only (§2.6). Native-module changes must pass both CI build jobs (iOS pod install, Android gradle) |
+| **Native assets / app config** | `assets/splash.png`, `assets/icon.png`, `assets/adaptive-icon.png`, `app.config.ts`, `plugins/*.js` | Code Quality + **verify via `npx expo prebuild`, never `expo export`** (§5.1). Colours must come from the palette in `CLAUDE.md`; never a deprecated value |
 | **Docs** | `README`, specs, `docs/` | Lightest gate: accuracy review. Tier-5 audit treated doc drift as fixable findings (PR #9, `284eab3d9`) |
 | **Store / release** | `eas.json`, `release.yml`, app store metadata | **Owner approval always.** Release builds must keep `SENTRY_DISABLE_AUTO_UPLOAD` handling intact (`ab10676a8`, `8841b689e`) |
 
@@ -153,6 +154,51 @@ npx vitest run
 PRs additionally get **Build iOS** and **Build Android** jobs (expo prebuild + native build).
 E2E (Detox) is manual-only (`workflow_dispatch`, `0d678dc44`).
 
+### 5.1 Native assets: verify with `prebuild`, never with `expo export`
+
+Assets referenced only from `app.config.ts` - `splash.png`, `icon.png`,
+`adaptive-icon.png`, `favicon.png` - **never enter the JS bundle**. Verified on
+2026-07-28 by hashing all four against every asset in a fresh
+`npx expo export --platform ios`: zero matches out of 62 bundled assets. A green
+`expo export` therefore proves only that the bundle builds; it says nothing about a
+splash or icon change.
+
+These assets reach the app exclusively through `npx expo prebuild`, which translates
+them into native resources:
+
+- iOS: `Images.xcassets/SplashScreenBackground.colorset` (colour as sRGB components),
+  `SplashScreenLegacy.imageset`, `AppIcon.appiconset`
+- Android: `values/colors.xml` (`splashscreen_background`, `iconBackground`) and
+  `drawable-*/splashscreen_logo.png` in five densities
+
+**To verify such a change:** run `npx expo prebuild`, read the generated file, then
+discard the native folders again. Do not trust the source asset alone.
+
+Two traps found the same day:
+
+- An `adaptive-icon.png` with an **opaque** background silently hides
+  `adaptiveIcon.backgroundColor` entirely - the colour is set correctly and has no
+  visible effect. Adaptive-icon foregrounds must be transparent, must not bake in
+  their own icon shape (the OS masks), and must stay inside the central 66% safe zone.
+- iOS app icons must be **RGB without an alpha channel**.
+
+Never produce brand assets by downsampling a larger render: Lanczos ringing pushed
+2026-07-28's splash gold to `#D9B664` across 12,364 pixels. Rasterise the SVG directly
+at the target size instead - antialiasing only ever darkens toward the background, so
+**any pixel brighter than `#C6A75E` is an artefact**.
+
+### 5.2 `ios/` and `android/` are not versioned
+
+Since `f25b57aac` both folders are gitignored; `expo prebuild` is the only source.
+They previously existed *and* every workflow ran prebuild, so the committed copy was
+never read and drifted unnoticed - it still carried the deprecated `#15181D` and a
+third splash motif that existed nowhere else.
+
+Consequences: never edit a native file to fix something; change `app.config.ts` or add
+a config plugin under `plugins/` (see `withBrandAndroidColors.js`, which sets
+`colorPrimary` - the one value Expo does not derive from the config). After a fresh
+clone, run `npx expo prebuild` before any local native build.
+
 ### Enforced guardrails (binding contract)
 
 **`.claude/security-patterns.yaml`** — pattern rules fired on matching edits:
@@ -217,3 +263,47 @@ Consequences until PR #11 merges:
 
 Date-stamp any similar "live is ahead of main" note you add — this section describes the
 state on **2026-07-08** and must be updated or deleted once PR #11 lands.
+
+### Update 2026-07-29: PR #11 still open, and migration history can block every push
+
+PR #11 is **still open**, so everything above continues to apply.
+
+Two things were verified on 2026-07-29 and change how much the gate in §1 actually bites:
+
+**The Supabase secrets are set.** `SUPABASE_ACCESS_TOKEN`, `SUPABASE_DB_PASSWORD` and
+`SUPABASE_PROJECT_ID` all exist in Actions (added ~2026-07-23). Earlier notes claiming
+`migrate.yml` is a no-op for lack of secrets are **wrong**. Merging a migration to main
+pushes it to the live project for real, so the owner-approval gate is the only thing
+standing between a merge and the production schema.
+
+**A missing local migration blocks the whole pipeline, not just one file.** Two runs
+that day failed with:
+
+```
+Remote migration versions not found in local migrations directory.
+supabase migration repair --status reverted 20260728182913
+```
+
+The live DB held a migration absent from `supabase/migrations/`. `supabase db push`
+aborts *before* applying anything, so nothing is half-applied - but until the local
+directory catches up, **no** migration reaches the live DB, and the failure is easy to
+miss because it looks like a single red run. Resolved the same day by committing the
+missing file; runs have been green since.
+
+If you see that error: do not run `migration repair` blindly. Find out which side is
+authoritative first - `supabase db pull` to inspect, and remember §7's premise that the
+live DB has legitimately been ahead of `main` for weeks.
+
+**Both live workflows are path-filtered**, so this only ever triggers on real changes:
+
+| Workflow | Fires only on |
+|---|---|
+| `migrate.yml` | `game-over-app/supabase/migrations/**` |
+| `deploy-edge-functions.yml` | `game-over-app/supabase/functions/**` |
+
+Checking those two globs against a PR's diff is a reliable way to answer "can this merge
+touch production?" before merging.
+
+Edge-function deploys also fail transiently: a `522` from `esm.sh` while bundling
+Deno imports is a CDN timeout, not a code error. Re-run the job; a silent failure here
+leaves the **old** function version live while main already shows the new code.
