@@ -118,7 +118,7 @@ serve(async (req) => {
     // iterating it would brief everyone twice.
     const { data: guests, error: guestsError } = await supabase
       .from('invite_codes')
-      .select('code, guest_first_name, guest_email, guest_phone')
+      .select('code, guest_first_name, guest_email, guest_phone, claimed_by')
       .eq('event_id', event.id)
       .eq('is_active', true)
       .is('declined_at', null);
@@ -146,6 +146,27 @@ serve(async (req) => {
     const channelByCode = new Map<string, string>();
     for (const row of (sendLog ?? [])) {
       if (row.invite_code) channelByCode.set(row.invite_code as string, row.channel as string);
+    }
+
+    // Guests who redeemed their code have a real, verified address in their profile.
+    // The organizer only ever typed a best guess into invite_codes.guest_email, and the
+    // two can differ — so prefer the profile once we know who claimed the code.
+    const claimedIds = (guests ?? [])
+      .map((g) => g.claimed_by as string | null)
+      .filter((id): id is string => !!id);
+
+    const profileByUserId = new Map<string, { email: string | null; full_name: string | null }>();
+    if (claimedIds.length > 0) {
+      const { data: claimers } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('id', claimedIds);
+      for (const c of (claimers ?? [])) {
+        profileByUserId.set(c.id as string, {
+          email: c.email as string | null,
+          full_name: c.full_name as string | null,
+        });
+      }
     }
 
     // Organizer's app language drives the copy for the whole event; guests have
@@ -179,9 +200,15 @@ serve(async (req) => {
     let failed = 0;
 
     for (const guest of (guests ?? [])) {
+      const claimer = guest.claimed_by ? profileByUserId.get(guest.claimed_by as string) : undefined;
+
       // Names are typed by hand in the app, so they arrive with stray whitespace.
-      const firstName = ((guest.guest_first_name as string | null) ?? '').trim() || undefined;
-      const email = (guest.guest_email as string | null)?.trim() || null;
+      const invitedFirstName = ((guest.guest_first_name as string | null) ?? '').trim();
+      const profileFirstName = (claimer?.full_name ?? '').trim().split(/\s+/)[0] ?? '';
+      const firstName = (profileFirstName || invitedFirstName) || undefined;
+
+      // Verified profile address beats the address the organizer typed.
+      const email = (claimer?.email ?? guest.guest_email as string | null)?.trim() || null;
       const phone = (guest.guest_phone as string | null)?.trim() || null;
 
       // Brief on the channel the guest was invited on; fall back to whatever

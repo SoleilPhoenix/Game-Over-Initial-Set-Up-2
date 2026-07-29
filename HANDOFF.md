@@ -7,6 +7,76 @@ Letzte Aktualisierung: 2026-07-29.
 Sie wird laut globaler `~/.claude/CLAUDE.md` nach jedem abgeschlossenen Fortschritt fortgeschrieben,
 und zwar im selben Commit wie die Änderung, die sie beschreibt.
 
+## Aktueller Stand (2026-07-29, später) - Echte Buchungen, Stripe-Testmodus
+
+Branch `claude/echte-buchungen-stripe-test`.
+
+### Die `packages`-Tabelle war leer, und das erklärte fast alles
+
+Kein Buchungs-Bug, sondern fehlende Stammdaten. Die Kette:
+
+1. `packages` hatte 0 Zeilen (`cities` hatte 3).
+2. Die App fiel deshalb auf ihre hartcodierte Paketliste zurück, deren Ids Slugs sind (`hamburg-classic`), keine UUIDs.
+3. `app/booking/[eventId]/payment.tsx` leitet daraus ab:
+   `isFallbackPackage = !UUID_REGEX.test(activePkg.id)` und
+   `useSimulatedPayment = isDraft || IS_E2E || !STRIPE_KEY || isFallbackPackage`.
+   `isFallbackPackage` war damit **immer** wahr - unabhängig vom gesetzten Stripe-Key.
+4. Der Demo-Zweig ruft `confirm-demo-booking`, und die macht ausschließlich
+   `update events set status = 'booked'`. Sie fasst `bookings` nie an.
+5. Folge: **nie ein `bookings`-Datensatz.** Daher keine `reference_number` (Briefing zeigte den
+   Platzhalter `GO-XXXXXX`), kein `package_id` (Briefing zeigte immer `Classic (M)`), und
+   `process-payment-reminders` konnte gegen die leere Tabelle **strukturell nie etwas finden**.
+   Ihr `200 OK` am 29.07. war ehrlich, aber hohl.
+
+Migration `20260729102334_seed_packages_for_real_bookings.sql` legt 9 Pakete an (3 Städte x 3 Stufen),
+feste UUIDs (`...4402xx`, Städte sind `...4401xx`), idempotent per `on conflict do update`.
+Preise gespiegelt aus `src/constants/packageTiers.ts`: 129 / 179 / 229 EUR pro Person, all-in,
+kein separates Service-Fee, daher `base_price_cents = 0`.
+Anzeigename kommt in der UI aus `tier` + Sprache (`getTierName(pkg.tier, language) || pkg.name`),
+die deutschen Namen in der DB sind nur Rückfall.
+
+**Damit greift ab sofort der echte Stripe-Pfad.** Das Projekt läuft auf `pk_test_`, also
+Stripe-**Testmodus**: echter Zahlungsdialog, Testkarten, kein Geld, keine Gebühren.
+Vor dem Livegang `pk_live_`/`sk_live_` setzen - das ist ein bewusster eigener Schritt.
+`STRIPE_SECRET_KEY` muss im selben Modus sein wie der Publishable Key, sonst schlägt jede Zahlung
+mit einem Mismatch fehl.
+
+### `accept_invite` hielt nicht fest, wer einen Code eingelöst hat
+
+Der Organisator tippt eine Adresse in `invite_codes.guest_email`, der Gast registriert sich aber
+womöglich mit einer anderen. Ohne Verknüpfung erreicht das Briefing nur die getippte Adresse.
+Über E-Mail zu matchen ist zirkulär: es gelingt genau dann, wenn es nichts zu korrigieren gibt.
+
+Migration `20260729102634_link_invite_to_claiming_user.sql`: Spalte `invite_codes.claimed_by`
+(FK auf `profiles`, partieller Index), `accept_invite()` setzt sie beim Einlösen -
+**Autorisierungslogik unverändert**, nur eine Spalte mehr im vorhandenen UPDATE. Rechte geprüft:
+`authenticated` darf ausführen, `anon` nicht. Backfill über Email-Gleichheit; wer sich unter einer
+anderen Adresse angemeldet hat, bleibt NULL (raten wäre schlimmer als offen lassen).
+
+`send-final-briefing` bevorzugt jetzt die Profil-Adresse und den Profil-Vornamen, sobald
+`claimed_by` gesetzt ist, und fällt sonst auf die Einladungsdaten zurück.
+
+### Wer bekommt ein Briefing
+
+Aktuell: alle Codes mit `is_active` und ohne `declined_at` - auch Eingeladene, die nie beigetreten sind.
+Bewusste Entscheidung: sie kommen möglicherweise trotzdem. Absagen sind sauber ausgeschlossen.
+
+### Verifiziert
+
+`deno check` grün. `send-final-briefing` deployed mit `--no-verify-jwt` (wichtig: `config.toml` hat
+keine Funktions-Sektion, der CLI-Default würde `verify_jwt = true` setzen und der Cron-Aufruf würde
+von der Plattform abgewiesen, bevor er den Code erreicht).
+Danach über `net.http_post` mit den echten Vault-Secrets ausgelöst: **200 OK, `{"results":[]}`**.
+
+### Offen
+
+- Ein echter Testkauf über den Stripe-Testdialog steht noch aus. Erst der erzeugt den ersten
+  `bookings`-Datensatz und damit die erste echte `reference_number`.
+- Erst danach lässt sich `process-payment-reminders` wirklich prüfen. **Vorsicht:** sie storniert
+  beim 14-Tage-Meilenstein automatisch (`status = 'cancelled'`, Anzahlung einbehalten).
+- Alle 7 Profile stehen weiterhin auf `language = 'en'`; der deutsche Briefing-Text ist fertig,
+  wird aber nirgends ausgelöst.
+
 ## Aktueller Stand (2026-07-29) - Cron-Jobs liefen seit Monaten ins Leere
 
 Branch `claude/mystifying-mcclintock-5bc8b4`.
