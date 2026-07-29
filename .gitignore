@@ -6,3 +6,6 @@
 # Geheimnisse gehoeren in den Passwortmanager, nie ins Repo
 *recovery_code*
 *.secret
+
+# Lokale Review-Artefakte (lavish), keine Projektdateien
+.lavish/

@@ -299,6 +299,7 @@ const en = {
     validEmail: 'Enter a valid email address',
     validConfirmRequired: 'Please confirm the new email address',
     validMatch: 'Email addresses do not match',
+    validSameAsCurrent: 'This is already your current email address.',
     validPasswordRequired: 'Current password is required',
   },
 
@@ -913,6 +914,9 @@ const en = {
     actionViewBudget: 'View Budget',
     refundDueTitle: 'Refund overdue',
     refundDueBody: '{{description}} ({{amount}}) was expected by {{date}} and is still outstanding.',
+    // Guest joined notification (organizer-facing, localized at render time)
+    guestJoinedTitle: 'Guest joined',
+    guestJoinedBody: '{{guest}} has joined your event.',
     // Guest data-change notification (organizer-facing)
     guestDataChangedTitle: 'Guest updated their details',
     guestDataChangedBody: '{{guest}} changed their details — {{changes}}. These now apply automatically.',

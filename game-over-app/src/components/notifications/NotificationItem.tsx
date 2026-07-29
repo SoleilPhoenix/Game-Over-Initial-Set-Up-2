@@ -11,7 +11,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import type { Database } from '@/lib/supabase/types';
 import { useTranslation, getCurrentLanguage } from '@/i18n';
-import { isGuestDataChangedMeta, formatGuestChanges } from '@/utils/guestDataChange';
+import { isGuestDataChangedMeta, isGuestJoinedMeta, formatGuestChanges } from '@/utils/guestDataChange';
 import { isRefundDueMeta } from '@/utils/refundDue';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
@@ -28,6 +28,7 @@ const ACTION_LABEL_KEYS: Record<string, string> = {
   event_update: 'actionViewEvent',
   payment_claimed: 'actionConfirmPayment',
   guest_data_changed: 'actionViewParticipants',
+  guest_profile_updated: 'actionViewParticipants',
   refund_due: 'actionViewBudget',
 };
 
@@ -209,6 +210,16 @@ const NOTIFICATION_CONFIG: Record<
     hasAction: true,
     actionLabel: 'View Guests',
   },
+  // Legacy alias. Rows written before guest_profile_updated was merged into
+  // guest_data_changed still sit in the database and would otherwise fall
+  // through to `default` — an orange bell, which reads as "you must act".
+  guest_profile_updated: {
+    icon: 'create',
+    color: INFO_COLOR,
+    bgColor: INFO_BG_COLOR,
+    hasAction: true,
+    actionLabel: 'View Guests',
+  },
 
   // Default
   default: {
@@ -240,7 +251,14 @@ export function NotificationItem({
   // guest's language). Falls back to the stored title/body for any other type.
   let displayTitle = notification.title;
   let displayBody = notification.body;
-  if (notification.type === 'guest_data_changed' && isGuestDataChangedMeta(notification.metadata)) {
+  if (notification.type === 'guest_joined' && isGuestJoinedMeta(notification.metadata)) {
+    displayTitle = (t.notifications as any).guestJoinedTitle;
+    displayBody = ((t.notifications as any).guestJoinedBody as string)
+      .replace('{{guest}}', notification.metadata.guestName);
+  } else if (
+    (notification.type === 'guest_data_changed' || notification.type === 'guest_profile_updated')
+    && isGuestDataChangedMeta(notification.metadata)
+  ) {
     const meta = notification.metadata;
     displayTitle = (t.notifications as any).guestDataChangedTitle;
     const changesText = formatGuestChanges(meta.changes, {

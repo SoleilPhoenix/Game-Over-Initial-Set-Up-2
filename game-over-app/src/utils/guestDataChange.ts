@@ -20,6 +20,20 @@ export interface GuestDataChangedMeta {
   changes: GuestDataChange[];
 }
 
+/**
+ * `guest_joined` carries only the guest's name, but for the same reason: the row
+ * is written on the guest's device and read by the organizer, so the text has to
+ * be rebuilt in the reader's language rather than stored pre-formatted.
+ */
+export interface GuestJoinedMeta {
+  guestName: string;
+}
+
+/** Narrow an untrusted `notifications.metadata` value to the guest_joined shape. */
+export function isGuestJoinedMeta(x: unknown): x is GuestJoinedMeta {
+  return !!x && typeof x === 'object' && typeof (x as Record<string, unknown>).guestName === 'string';
+}
+
 /** Narrow an untrusted `notifications.metadata` value to our shape. */
 export function isGuestDataChangedMeta(x: unknown): x is GuestDataChangedMeta {
   if (!x || typeof x !== 'object') return false;

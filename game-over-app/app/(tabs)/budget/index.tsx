@@ -192,8 +192,20 @@ export default function BudgetDashboardScreen() {
   const remindStyles = useMemo(() => makeRemindStyles(theme), [theme]);
   // eventId = opened via /(tabs)/budget?eventId=xxx (old approach, kept for safety)
   // id     = opened via /event/[id]/budget (event-stack, router.back() works correctly)
-  const { eventId: rawEventIdParam, id: pathId } = useLocalSearchParams<{ eventId?: string; id?: string }>();
+  const { eventId: rawEventIdParam, id: pathId, claimedBy } = useLocalSearchParams<{ eventId?: string; id?: string; claimedBy?: string }>();
   const eventIdParam = rawEventIdParam || pathId;
+
+  // Set when the organizer arrives from a "payment claimed" notification, so the
+  // list points at the person the notification was about instead of making the
+  // organizer hunt for them. Fades out on its own — a permanent marker would
+  // pile up once several guests report in the same evening.
+  const [highlightUserId, setHighlightUserId] = useState<string | null>(claimedBy ?? null);
+  useEffect(() => {
+    if (!claimedBy) return;
+    setHighlightUserId(claimedBy);
+    const timer = setTimeout(() => setHighlightUserId(null), 4000);
+    return () => clearTimeout(timer);
+  }, [claimedBy]);
   const insets = useSafeAreaInsets();
   const user = useUser();
   // Selected event is shared with the Chat tab via useActiveEventStore so that
@@ -224,7 +236,9 @@ export default function BudgetDashboardScreen() {
     const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardOpen(false));
     return () => { show.remove(); hide.remove(); };
   }, []);
-  const modalPaddingBottom = keyboardOpen ? 16 : insets.bottom + 120;
+  // 96 clears the tab bar and the floating "+" without stranding the submit
+  // button far above it; the old 120 left a visible dead band.
+  const modalPaddingBottom = keyboardOpen ? 16 : insets.bottom + 96;
 
   // Remind-all channel picker modal
   const [remindModal, setRemindModal] = useState<{
@@ -286,6 +300,16 @@ export default function BudgetDashboardScreen() {
     receivedAt: null,
   });
   const [showRefundDatePicker, setShowRefundDatePicker] = useState(false);
+  const refundScrollRef = useRef<ScrollView>(null);
+
+  // The inline calendar is tall enough to push the submit button past the bottom
+  // of the sheet on smaller phones. Opening it scrolls the button back into view
+  // instead of leaving the user with a form they cannot submit.
+  useEffect(() => {
+    if (!showRefundDatePicker) return;
+    const timer = setTimeout(() => refundScrollRef.current?.scrollToEnd({ animated: true }), 120);
+    return () => clearTimeout(timer);
+  }, [showRefundDatePicker]);
 
   // Ref always holds latest contributors — avoids declaration-order TDZ issue with useCallback
   const allContributorsRef = useRef<{ id: string; name: string; userId?: string | null; role?: string }[]>([]);
@@ -1449,7 +1473,10 @@ export default function BudgetDashboardScreen() {
                           };
                           const cardStyle = { backgroundColor: theme.surfaceCard, borderRadius: 16, overflow: 'hidden' as const, flexDirection: 'row' as const, borderWidth: 1, borderColor: '#F97316' };
                           const cardInner = (
-                            <XStack flex={1} padding={20} alignItems="center" gap={12}>
+                            // Bottom-aligned so "in X days" on the left and the
+                            // "pay balance" label on the right share one baseline
+                            // instead of the label floating above it.
+                            <XStack flex={1} padding={20} alignItems="flex-end" gap={12}>
                                 <YStack flex={1} gap={4}>
                                   <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
                                     {t.budget.amountDue75Label}
@@ -1466,11 +1493,11 @@ export default function BudgetDashboardScreen() {
                                 {canPay && (
                                   // "Pay balance" label under the chevron so the affordance is
                                   // discoverable — chevron alone left users guessing.
-                                  <YStack alignItems="center" gap={6}>
-                                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(249,115,22,0.12)', alignItems: 'center', justifyContent: 'center' }}>
-                                      <Ionicons name="chevron-forward" size={20} color="#F97316" />
+                                  <YStack alignItems="center" gap={8}>
+                                    <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(249,115,22,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                                      <Ionicons name="chevron-forward" size={30} color="#F97316" />
                                     </View>
-                                    <Text fontSize={10} fontWeight="700" color="#F97316" letterSpacing={0.4} style={{ textTransform: 'uppercase', textAlign: 'center' }}>
+                                    <Text fontSize={12} fontWeight="700" color="#F97316" letterSpacing={0.3} style={{ textTransform: 'uppercase', textAlign: 'center' }}>
                                       {(t.budget as any).payRemainingBtn}
                                     </Text>
                                   </YStack>
@@ -1561,8 +1588,10 @@ export default function BudgetDashboardScreen() {
                     : participantRole === 'guest' && !isCurrentUser;
                   const showPaymentStatus = isOrganizer || !isOtherGuestRow;
 
+                  const isHighlighted = !!highlightUserId && participantUserId === highlightUserId;
+
                   return (
-                    <View key={key} style={styles.contributionCard}>
+                    <View key={key} style={[styles.contributionCard, isHighlighted && styles.contributionCardHighlighted]}>
                       <View style={styles.contributionMainRow}>
                         {/* Avatar */}
                         {!isDemo && ((participantRaw as any).profile?.avatar_url || (isCurrentUser && userAvatar)) ? (
@@ -1688,7 +1717,8 @@ export default function BudgetDashboardScreen() {
                                             .replace('{{event}}', eventName),
                                           type: 'payment_claimed',
                                           user_id: selectedEvent.created_by,
-                                          action_url: `/event/${selectedEventId}/budget`,
+                                          // claimedBy lets the budget screen point straight at this guest.
+                                          action_url: `/event/${selectedEventId}/budget?claimedBy=${user.id}`,
                                         });
                                         if (notificationError) {
                                           console.warn('[budget] payment claim notification failed:', notificationError.message);
@@ -2291,7 +2321,13 @@ export default function BudgetDashboardScreen() {
                   <Ionicons name="close" size={22} color={theme.textSecondary} />
                 </Pressable>
               </XStack>
-              <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
+              <ScrollView
+                ref={refundScrollRef}
+                bounces={false}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 8 }}
+              >
               {!refundModal.templateKey && !refundModal.editingId ? (
                 /* Template selection */
                 <>
@@ -2347,7 +2383,10 @@ export default function BudgetDashboardScreen() {
                   />
                   <Text style={styles.inputLabel}>{t.budget.refundExpectedBy}</Text>
                   <Pressable
-                    style={styles.refundDateInput}
+                    // With the calendar open the field and the calendar are one
+                    // control, so the 16pt gap that separates form rows would
+                    // read as a seam running through the middle of it.
+                    style={[styles.refundDateInput, showRefundDatePicker && { marginBottom: 8 }]}
                     onPress={() => {
                       Keyboard.dismiss();
                       setShowRefundDatePicker((current) => !current);
@@ -2381,6 +2420,9 @@ export default function BudgetDashboardScreen() {
                       <DateTimePicker
                         value={refundModal.expectedBy ? dateFromISO(refundModal.expectedBy) : new Date()}
                         mode="date"
+                        // A deadline in the past is already overdue the moment it
+                        // is saved, which fires the reminder immediately.
+                        minimumDate={new Date()}
                         display={Platform.OS === 'ios' ? 'inline' : 'default'}
                         themeVariant="dark"
                         locale={language === 'de' ? 'de-DE' : 'en-US'}
@@ -2935,6 +2977,11 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.ghostBorder,
     overflow: 'hidden',
+  },
+  // Transient, set only when arriving from a "payment claimed" notification.
+  contributionCardHighlighted: {
+    borderColor: '#F97316',
+    backgroundColor: 'rgba(249, 115, 22, 0.09)',
   },
   contributionMainRow: {
     width: '100%',

@@ -296,6 +296,7 @@ const de: TranslationKeys = {
     validEmail: 'Gib eine gültige E-Mail-Adresse ein',
     validConfirmRequired: 'Bitte bestätige die neue E-Mail-Adresse',
     validMatch: 'Die E-Mail-Adressen stimmen nicht überein',
+    validSameAsCurrent: 'Das ist bereits deine aktuelle E-Mail-Adresse.',
     validPasswordRequired: 'Das aktuelle Passwort ist erforderlich',
   },
 
@@ -905,6 +906,9 @@ const de: TranslationKeys = {
     actionViewBudget: 'Budget ansehen',
     refundDueTitle: 'Rückerstattung überfällig',
     refundDueBody: '{{description}} ({{amount}}) wurde bis {{date}} erwartet und ist noch ausstehend.',
+    // Gast-Beitritt (für Organisator, wird erst beim Anzeigen übersetzt)
+    guestJoinedTitle: 'Gast beigetreten',
+    guestJoinedBody: '{{guest}} ist deinem Event beigetreten.',
     // Gast-Datenänderung (für Organisator)
     guestDataChangedTitle: 'Gast hat Angaben geändert',
     guestDataChangedBody: '{{guest}} hat Angaben geändert — {{changes}}. Diese gelten jetzt automatisch.',
