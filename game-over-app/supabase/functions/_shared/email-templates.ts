@@ -523,3 +523,162 @@ export function getGuestInviteEmailHtml(params: GuestInviteEmailParams): string 
   </table>
 </body></html>`;
 }
+
+// ─── Final Briefing Email ───────────────────────────────────
+
+interface FinalBriefingEmailParams {
+  guestFirstName?: string;
+  partyLabel: string;        // "Soleil Phoenix' Bachelor Party (JGA)"
+  partyTerm: string;         // "Bachelor Party (JGA)"
+  honoreeName: string;
+  dateStr: string;           // already localised by the caller
+  cityName: string;
+  packageTier: string;       // e.g. "Classic (M)"
+  bookingReference: string;
+  eventUrl?: string;
+  language?: 'de' | 'en';    // organizer's app language drives the copy
+  isOrganizer?: boolean;     // organizer gets the same briefing as a reminder
+}
+
+/**
+ * Sent ~24h before the event, mirroring the WhatsApp briefing copy.
+ * Uses the editorial palette directly rather than baseLayout, which still
+ * carries the deprecated pre-redesign blue.
+ *
+ * Language follows the organizer's profiles.language, the same convention
+ * getGuestInviteEmailHtml uses. German says "von {name}" rather than "{name}s"
+ * to dodge the genitive-s pitfall on names already ending in s.
+ */
+export function getFinalBriefingEmailHtml(params: FinalBriefingEmailParams): string {
+  const {
+    guestFirstName, partyLabel, partyTerm, honoreeName, dateStr,
+    cityName, packageTier, bookingReference, eventUrl, language, isOrganizer,
+  } = params;
+  const isDe = language === 'de';
+  const strong = (s: string) => `<strong style="color:#FFFFFF;">${s}</strong>`;
+
+  const C = isDe ? {
+    lang: 'de',
+    title: `Morgen ist es soweit: ${partyLabel}`,
+    kicker: 'Finales Briefing',
+    heroLine: 'Morgen ist es soweit',
+    greeting: guestFirstName ? `Hallo ${guestFirstName},` : 'Hallo,',
+    intro: isOrganizer
+      ? `morgen startet die ${partyTerm} für ${strong(honoreeName)}. Hier ist deine Erinnerung mit allen Eckdaten - dieselben Infos haben auch deine Gäste bekommen.`
+      : `morgen startet die ${partyTerm} für ${strong(honoreeName)}. Hier ist alles, was du wissen musst.`,
+    keep: 'Heb dir diese E-Mail auf, sie enthält deine Buchungsreferenz.',
+    labels: { date: 'Datum', city: 'Stadt', pkg: 'Paket', ref: 'Buchungsref.' },
+    closing: 'Sei pünktlich und mach dich bereit für etwas Unvergessliches. 🖤',
+    claimLines: 'Einer heiratet. Alle feiern. Keiner stresst.',
+    claimSub: 'Planen, feiern, abrechnen. Alles in einer App.',
+    cta: 'Details in der App ansehen &rarr;',
+    footer: 'Fragen?',
+  } : {
+    lang: 'en',
+    title: `Tomorrow is the day: ${partyLabel}`,
+    kicker: 'Final Briefing',
+    heroLine: 'Tomorrow is the day',
+    greeting: guestFirstName ? `Hi ${guestFirstName},` : 'Hey,',
+    intro: isOrganizer
+      ? `tomorrow the ${partyTerm} for ${strong(honoreeName)} kicks off. Here is your reminder with all the key facts - your guests received the same details.`
+      : `tomorrow the ${partyTerm} for ${strong(honoreeName)} kicks off. Here is everything you need to know.`,
+    keep: 'Keep this email, it has your booking reference.',
+    labels: { date: 'Date', city: 'City', pkg: 'Package', ref: 'Booking ref' },
+    closing: 'Be on time and get ready for something unforgettable. 🖤',
+    claimLines: 'One gets married. Everyone celebrates. Nobody stresses.',
+    claimSub: 'Plan it, party, settle up. All in one app.',
+    cta: 'View details in the app &rarr;',
+    footer: 'Questions?',
+  };
+
+  const NAVY = '#0D1B2A';
+  const CARD = '#1A2F47';
+  const GOLD = '#C6A75E';
+  const TEXT = '#E7ECF2';
+  const MUTED = '#AEB9C7';
+  const FAINT = '#7A8699';
+  const BORDER = 'rgba(198,167,94,0.22)';
+
+  const row = (label: string, value: string) => `
+    <tr>
+      <td style="padding:11px 0;border-bottom:1px solid ${BORDER};color:${MUTED};font-size:13px;white-space:nowrap;">${label}</td>
+      <td style="padding:11px 0 11px 18px;border-bottom:1px solid ${BORDER};color:#FFFFFF;font-size:14px;font-weight:600;text-align:right;">${value}</td>
+    </tr>`;
+
+  const ctaBlock = eventUrl ? `
+        <tr><td style="padding:26px 40px 0;" align="center">
+          <a href="${eventUrl}" style="display:inline-block;background:${GOLD};color:${NAVY};text-decoration:none;padding:14px 34px;border-radius:10px;font-size:15px;font-weight:700;">${C.cta}</a>
+        </td></tr>` : '';
+
+  return `<!DOCTYPE html>
+<html lang="${C.lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${C.title}</title></head>
+<body style="margin:0;padding:0;background:${NAVY};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${NAVY};">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:${CARD};border-radius:20px;overflow:hidden;border:1px solid ${BORDER};">
+
+        <!-- Header -->
+        <tr><td style="padding:34px 40px 26px;text-align:center;border-bottom:1px solid ${BORDER};">
+          <div style="font-size:13px;letter-spacing:6px;color:${GOLD};font-weight:700;">GAME&nbsp;OVER</div>
+          <div style="margin-top:9px;font-size:13px;color:${MUTED};">${C.kicker}</div>
+        </td></tr>
+
+        <!-- Hero -->
+        <tr><td style="padding:34px 40px 6px;text-align:center;">
+          <div style="font-size:36px;line-height:1;">🎉</div>
+          <p style="margin:14px 0 0;color:${MUTED};font-size:15px;">${C.heroLine}</p>
+          <p style="margin:6px 0 0;color:#FFFFFF;font-size:30px;font-weight:800;line-height:1.2;">${partyLabel}</p>
+        </td></tr>
+
+        <!-- Greeting -->
+        <tr><td style="padding:22px 40px 0;">
+          <p style="margin:0;color:${TEXT};font-size:15px;line-height:1.6;">${C.greeting}</p>
+          <p style="margin:12px 0 0;color:${TEXT};font-size:15px;line-height:1.6;">${C.intro}</p>
+        </td></tr>
+
+        <!-- Details -->
+        <tr><td style="padding:24px 40px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="background:${NAVY};border:1px solid ${BORDER};border-radius:14px;padding:8px 22px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                ${row(C.labels.date, dateStr)}
+                ${row(C.labels.city, cityName)}
+                ${row(C.labels.pkg, packageTier)}
+                ${row(C.labels.ref, bookingReference)}
+              </table>
+            </td></tr>
+          </table>
+        </td></tr>
+${ctaBlock}
+        <!-- Closing -->
+        <tr><td style="padding:26px 40px 0;">
+          <p style="margin:0;color:${TEXT};font-size:15px;line-height:1.6;">${C.closing}</p>
+        </td></tr>
+
+        <!-- Brand claim (verbatim from the welcome screen, src/i18n) -->
+        <tr><td style="padding:24px 40px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="border-top:1px solid ${BORDER};border-bottom:1px solid ${BORDER};padding:20px 0;text-align:center;">
+              <p style="margin:0;color:${GOLD};font-size:16px;font-weight:700;line-height:1.5;">${C.claimLines}</p>
+              <p style="margin:6px 0 0;color:${MUTED};font-size:13.5px;line-height:1.5;">${C.claimSub}</p>
+            </td></tr>
+          </table>
+        </td></tr>
+
+        <!-- Keep-this-email note -->
+        <tr><td style="padding:20px 40px 0;">
+          <p style="margin:0;color:${MUTED};font-size:13px;line-height:1.6;">${C.keep}</p>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:26px 40px 34px;text-align:center;">
+          <p style="margin:24px 0 0;color:${FAINT};font-size:12px;line-height:1.6;border-top:1px solid ${BORDER};padding-top:20px;">
+            ${C.footer} &middot; <a href="mailto:support@game-over.app" style="color:${GOLD};text-decoration:none;font-weight:600;">support@game-over.app</a>
+          </p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+}

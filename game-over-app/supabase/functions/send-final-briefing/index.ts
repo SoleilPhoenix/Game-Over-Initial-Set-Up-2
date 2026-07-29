@@ -2,7 +2,9 @@
  * send-final-briefing Edge Function
  *
  * Runs daily (via pg_cron or manual POST) to send a WhatsApp briefing to all
- * guests whose event is exactly 3 days away and whose briefing has not yet been sent.
+ * guests whose event starts the next calendar day and whose briefing has not yet
+ * been sent. The job fires at 09:00 UTC, so "24h before" in practice means
+ * between ~23h and ~38h ahead depending on the event's start time.
  *
  * What it sends:
  *   - Event date, city, package tier, honoree name, booking reference
@@ -19,6 +21,12 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { sendWhatsApp } from '../_shared/twilio.ts';
+import { sendEmail } from '../_shared/email.ts';
+import { getFinalBriefingEmailHtml } from '../_shared/email-templates.ts';
+import {
+  buildBriefingMessage, buildBriefingSubject, partyLabel, partyTerm,
+  type BriefingDetails, type PartyType,
+} from '../_shared/briefing.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -27,36 +35,8 @@ const corsHeaders = {
 
 // ─── Build briefing message ───────────────────────────────────
 
-function buildBriefingMessage(params: {
-  guestFirstName: string;
-  eventTitle: string;
-  honoreeName: string;
-  startDate: string;
-  cityName: string;
-  packageTier: string;
-  bookingReference: string;
-}): string {
-  const { guestFirstName, eventTitle, honoreeName, startDate, cityName, packageTier, bookingReference } = params;
-  const dateStr = new Date(startDate).toLocaleDateString('en-US', {
-    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
-  });
-
-  return [
-    `🎉 *Final Briefing – ${eventTitle}*`,
-    '',
-    `Hey ${guestFirstName || 'there'}! In just *3 days* the party starts. Here are the most important details:`,
-    '',
-    `📅 *Date:* ${dateStr}`,
-    `📍 *City:* ${cityName}`,
-    `🎁 *Package:* ${packageTier}`,
-    `🎊 *Celebrating:* ${honoreeName}`,
-    `📋 *Booking ref:* ${bookingReference}`,
-    '',
-    `Be on time and get ready for an unforgettable experience! 🖤`,
-    '',
-    `– Game Over`,
-  ].join('\n');
-}
+// Briefing copy lives in _shared/briefing.ts so it can be rendered for review
+// without importing this module (which would start the server).
 
 // ─── Main handler ─────────────────────────────────────────────
 
@@ -81,19 +61,18 @@ serve(async (req) => {
     { auth: { persistSession: false } }
   );
 
-  // ── Find events starting in exactly 3 days whose briefing hasn't been sent ──
+  // ── Find events starting tomorrow whose briefing hasn't been sent ──
   const today = new Date();
   const target = new Date(today);
-  target.setDate(today.getDate() + 3);
+  target.setDate(today.getDate() + 1);
   const targetDate = target.toISOString().slice(0, 10); // YYYY-MM-DD
 
   const { data: events, error: eventsError } = await supabase
     .from('events')
     .select(`
-      id, title, honoree_name, start_date, planning_checklist,
+      id, title, honoree_name, start_date, planning_checklist, created_by, party_type,
       city:cities(name),
-      bookings(reference_number, id),
-      event_participants(id, profile:profiles(id, full_name))
+      bookings(reference_number, id)
     `)
     .eq('status', 'booked')
     .gte('start_date', `${targetDate}T00:00:00`)
@@ -106,7 +85,9 @@ serve(async (req) => {
     });
   }
 
-  const results: Array<{ eventId: string; sent: number; failed: number; skipped: boolean }> = [];
+  const results: Array<{
+    eventId: string; sent: number; failed: number; skipped: boolean; error?: string;
+  }> = [];
 
   for (const event of (events ?? [])) {
     const checklist = (event.planning_checklist as Record<string, boolean> | null) ?? {};
@@ -131,63 +112,151 @@ serve(async (req) => {
     const tierLabel = tier === 'essential' ? 'Essential (S)' : tier === 'grand' ? 'Grand (L)' : 'Classic (M)';
     const cityName = (event.city as any)?.name ?? 'your city';
 
-    // Fetch guests with phone numbers from guest_invitations table
-    const { data: invitations } = await supabase
-      .from('guest_invitations')
-      .select('recipient_phone, recipient_name, recipient_first_name')
+    // invite_codes is the guest list: one row per guest, carrying the name and
+    // both contact details. guest_invitations is only a per-attempt SEND LOG —
+    // pressing "send invitations" twice appends a second row per guest, so
+    // iterating it would brief everyone twice.
+    const { data: guests, error: guestsError } = await supabase
+      .from('invite_codes')
+      .select('code, guest_first_name, guest_email, guest_phone')
       .eq('event_id', event.id)
-      .not('recipient_phone', 'is', null);
+      .eq('is_active', true)
+      .is('declined_at', null);
+
+    // Never swallow this. A failed lookup used to read as "no guests", which then
+    // satisfied the completion check below and flagged the briefing as done
+    // without sending anything — permanently, because the flag is never reset.
+    if (guestsError) {
+      console.error(
+        `[send-final-briefing] Guest lookup failed for event ${event.id}: ${guestsError.message}`
+      );
+      results.push({
+        eventId: event.id, sent: 0, failed: 0, skipped: false, error: guestsError.message,
+      });
+      continue;
+    }
+
+    // Which channel each guest was actually invited on. Latest log row wins.
+    const { data: sendLog } = await supabase
+      .from('guest_invitations')
+      .select('invite_code, channel, created_at')
+      .eq('event_id', event.id)
+      .order('created_at', { ascending: true });
+
+    const channelByCode = new Map<string, string>();
+    for (const row of (sendLog ?? [])) {
+      if (row.invite_code) channelByCode.set(row.invite_code as string, row.channel as string);
+    }
+
+    // Organizer's app language drives the copy for the whole event; guests have
+    // no language of their own. Same convention as the guest invite email.
+    const { data: organizer } = await supabase
+      .from('profiles')
+      .select('language, email, full_name, email_notifications_enabled')
+      .eq('id', event.created_by)
+      .maybeSingle();
+    const language: 'de' | 'en' = organizer?.language === 'de' ? 'de' : 'en';
+
+    const honoree = event.honoree_name || 'the honoree';
+    const type = event.party_type as PartyType;
+
+    const briefing: BriefingDetails = {
+      partyLabel: partyLabel(honoree, type, language),
+      partyTerm: partyTerm(type, language),
+      honoreeName: honoree,
+      dateStr: new Date(event.start_date!).toLocaleDateString(
+        language === 'de' ? 'de-DE' : 'en-US',
+        { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' },
+      ),
+      cityName,
+      packageTier: tierLabel,
+      bookingReference: bookingRef,
+      eventUrl: `https://game-over.app/event/${event.id}`,
+      language,
+    };
 
     let sent = 0;
     let failed = 0;
 
-    for (const inv of (invitations ?? [])) {
-      const phone = inv.recipient_phone as string | null;
-      if (!phone) continue;
+    for (const guest of (guests ?? [])) {
+      // Names are typed by hand in the app, so they arrive with stray whitespace.
+      const firstName = ((guest.guest_first_name as string | null) ?? '').trim() || undefined;
+      const email = (guest.guest_email as string | null)?.trim() || null;
+      const phone = (guest.guest_phone as string | null)?.trim() || null;
 
-      const firstName = (inv.recipient_first_name || inv.recipient_name || '').split(' ')[0] || 'there';
-      const message = buildBriefingMessage({
-        guestFirstName: firstName,
-        eventTitle: event.title || `${event.honoree_name}'s Party`,
-        honoreeName: event.honoree_name || 'the honoree',
-        startDate: event.start_date!,
-        cityName,
-        packageTier: tierLabel,
-        bookingReference: bookingRef,
-      });
+      // Brief on the channel the guest was invited on; fall back to whatever
+      // contact detail exists if this guest predates the send log.
+      const invitedOn = channelByCode.get(guest.code as string);
+      const useEmail = invitedOn === 'email' ? !!email : invitedOn === 'whatsapp' ? false : !!email;
+      const target = useEmail ? email : phone;
+      if (!target) continue;
 
-      // WhatsApp only — regular SMS has been removed as a channel.
-      // A failed WhatsApp briefing is counted as failed (no silent SMS fallback).
-      const result = await sendWhatsApp(phone, message);
+      const result = useEmail
+        ? await sendEmail({
+            to: target,
+            subject: buildBriefingSubject(briefing),
+            html: getFinalBriefingEmailHtml({ ...briefing, guestFirstName: firstName }),
+          })
+        : await sendWhatsApp(target, buildBriefingMessage(briefing, firstName));
+
       if (result.success) {
         sent++;
       } else {
         failed++;
-        console.error(`Send failed for ${phone}: ${result.error}`);
+        console.error(
+          `[send-final-briefing] ${useEmail ? 'email' : 'whatsapp'} send failed for code ${guest.code}: ${result.error}`
+        );
       }
     }
 
-    // Mark briefing as sent in planning_checklist
-    if (sent > 0 || (invitations?.length ?? 0) === 0) {
+    // The organizer gets the same briefing as a reminder. Counted separately so a
+    // failure here cannot make it look like guests were reached, and vice versa.
+    const organizerEmail = (organizer?.email as string | null)?.trim() || null;
+    if (organizerEmail && organizer?.email_notifications_enabled !== false) {
+      const organizerFirstName =
+        ((organizer?.full_name as string | null) ?? '').trim().split(' ')[0] || undefined;
+
+      const organizerResult = await sendEmail({
+        to: organizerEmail,
+        subject: buildBriefingSubject(briefing),
+        html: getFinalBriefingEmailHtml({
+          ...briefing, guestFirstName: organizerFirstName, isOrganizer: true,
+        }),
+      });
+      if (!organizerResult.success) {
+        console.error(`[send-final-briefing] Organizer reminder failed: ${organizerResult.error}`);
+      }
+    }
+
+    // Only flag the briefing as done once something actually went out. If every
+    // send failed, the flag stays open so the next daily run retries it and the
+    // cron watchdog can still surface the failure.
+    if (sent > 0) {
       await supabase
         .from('events')
         .update({ planning_checklist: { ...checklist, final_briefing: true } })
         .eq('id', event.id);
 
-      // Create in-app notification for the organizer
-      const organizerParticipant = Array.isArray(event.event_participants)
-        ? event.event_participants.find((p: any) => p.role === 'organizer' || !p.role)
-        : null;
-      const organizerProfileId = (organizerParticipant as any)?.profile?.id;
+      // In-app notification for the organizer. events.created_by is the organizer
+      // by definition; the previous lookup read `role` off a select that never
+      // fetched it, so it silently picked whichever participant came back first.
+      const organizerId = event.created_by as string | null;
 
-      if (organizerProfileId) {
-        await supabase.from('notifications').insert({
-          user_id: organizerProfileId,
+      if (organizerId) {
+        const { error: notifyError } = await supabase.from('notifications').insert({
+          user_id: organizerId,
+          event_id: event.id,
           type: 'briefing_sent',
           title: '📋 Final Briefing Sent',
-          body: `The 3-day briefing for "${event.title || `${event.honoree_name}'s Party`}" has been sent to ${sent} guest${sent !== 1 ? 's' : ''} via WhatsApp.`,
-          data: { eventId: event.id },
-        }).catch(() => {/* notifications table may not exist */});
+          body: `The 24-hour briefing for "${briefing.partyLabel}" has been sent to ${sent} guest${sent !== 1 ? 's' : ''}.`,
+          action_url: `/event/${event.id}`,
+          // Column is `metadata`, not `data`. Writing to `data` failed on every
+          // call, and the discarded result meant nobody ever found out.
+          metadata: { eventId: event.id, sentCount: sent, failedCount: failed },
+        });
+        if (notifyError) {
+          console.error(`[send-final-briefing] Organizer notification failed: ${notifyError.message}`);
+        }
       }
     }
 

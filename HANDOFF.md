@@ -1,11 +1,105 @@
 # Handoff - Game Over App
 
 Kurzer Übergabestand, damit eine neue Session (z. B. von der iPhone-Claude-Code-App) nahtlos anknüpfen kann.
-Letzte Aktualisierung: 2026-07-28.
+Letzte Aktualisierung: 2026-07-29.
 
 **Diese Datei ist die Statusdatei des Projekts.** Ein `Status.md` gibt es bewusst nicht.
 Sie wird laut globaler `~/.claude/CLAUDE.md` nach jedem abgeschlossenen Fortschritt fortgeschrieben,
 und zwar im selben Commit wie die Änderung, die sie beschreibt.
+
+## Aktueller Stand (2026-07-29) - Cron-Jobs liefen seit Monaten ins Leere
+
+Branch `claude/mystifying-mcclintock-5bc8b4`.
+`deno check` grün für `send-final-briefing`, `process-payment-reminders`, `send-guest-invitations`.
+
+### 1. `pg_net` war nie installiert - beide HTTP-Cron-Jobs schlugen bei jedem Lauf fehl
+
+Job 4 (`send-final-briefing-daily`, 09:00 UTC) und Job 5 (`process-payment-reminders`, 09:15 UTC) rufen beide `net.http_post(...)`.
+Die Extension war auf dem Projekt nie angelegt, jeder Lauf endete mit `ERROR: schema "net" does not exist`.
+Gemerkt hat es niemand, weil `cron.schedule()` sein Kommando als **reinen Text** speichert und erst zur Laufzeit parst:
+Ein prinzipiell nicht ausführbarer Job lässt sich anstandslos anlegen und sieht in `cron.job` gesund aus.
+Konsequenz: 24h-Briefing und Zahlungserinnerungen sind **nie** verschickt worden.
+
+Migration `20260728071825_enable_pg_net_for_cron_http.sql`, live per `supabase db push`.
+
+**Gegen eine naheliegende Fehlannahme:** die Cron-Kommandos mussten *nicht* auf `extensions.http_post` umgeschrieben werden.
+`pg_net` ist `relocatable = false` und legt in `sql/pg_net.sql` Zeile 1 sein eigenes Schema an (`create schema if not exists net;`);
+alle Funktionen heißen fest `net.http_post` usw. Ein `WITH SCHEMA extensions` trüge nur ein irreführendes Extension-Schema ein,
+während die Funktionen weiter in `net` liegen. Das bestehende `net.http_post` war immer korrekt.
+
+### 2. Vault-Secrets fehlten zusätzlich
+
+Beide Cron-Kommandos lesen `SUPABASE_URL` und `CRON_SECRET` zur Laufzeit aus `vault.decrypted_secrets`. Beide fehlten,
+`net.http_post` wäre gegen eine NULL-URL gelaufen. Von Soheil am 2026-07-28 gesetzt (Vault **und** Function-Secret).
+Verifiziert ohne Klartext: SHA256 des Vault-Werts == Digest des Function-Secrets.
+
+### 3. Watchdog gegen genau diese Fehlerklasse
+
+Migration `20260728120859_cron_health_watchdog.sql`, Job 7 `check-cron-health`, 09:45 UTC, reines SQL (Vorbild `notify-due-refunds`).
+Prüft `pg_net`, die Vault-Secrets, den letzten `cron.job_run_details`-Status **und** die HTTP-Antworten in `net._http_response`.
+Der letzte Punkt ist der entscheidende: `net.http_post` ist fire-and-forget, ein Job gilt als `succeeded`, sobald der Request
+in der Queue liegt - ein 401/500 der Edge Function wäre über den Job-Status allein unsichtbar.
+Empfänger in `public.ops_alert_recipients` (service-role-only).
+
+### 4. Migrations-Historie war beidseitig auseinandergelaufen
+
+Remote hatte `20260727102035` und `20260728070228`, lokal lagen dieselben Migrationen unter geratenen Zeitstempeln
+(`20260727101940` Avatar-RLS, `20260728090000` event_refunds).
+Nachgewiesen über **Wirkung** statt Vermutung: `public.event_refunds` existiert live, und die anonyme Rolle darf den
+Avatar-Bucket listen (also ist `avatars_public_read` aktiv). Danach nur die zwei Dateien umbenannt -
+**kein einziger Schreibzugriff auf die DB**. `supabase db push` läuft seitdem sauber.
+
+### 5. `send-final-briefing` hatte sechs Fehler, nicht einen
+
+- Zielte auf **3 Tage** statt 24 Stunden, obwohl überall 24h dokumentiert ist. Jetzt nächster Kalendertag.
+- Fragte `recipient_phone` / `recipient_name` / `recipient_first_name` auf `guest_invitations` ab - **keine dieser Spalten existiert**.
+- Der Fehler wurde nicht geprüft. Das Ergebnis las sich als "keine Gäste", erfüllte damit `sent > 0 || invitations.length === 0`
+  und setzte `planning_checklist.final_briefing = true`: die Funktion hakte sich **selbst als erledigt ab, ohne je zu senden**,
+  und zwar dauerhaft. Jetzt bricht ein fehlgeschlagener Lookup ab, der Haken fällt nur bei `sent > 0`.
+- Schrieb die Organisator-Benachrichtigung in Spalte `data` - die Tabelle hat `metadata`. Fehler per `.catch()` verschluckt.
+- Suchte den Organisator über `p.role`, obwohl das Select `role` nie geladen hat. Jetzt über `events.created_by`.
+- Der Join `event_participants(profile:profiles(...))` existiert im Schema-Cache nicht und warf live 500. Join ist entfallen.
+
+**Quelle der Gästeliste ist jetzt `invite_codes`, nicht `guest_invitations`.**
+`guest_invitations` ist ein Versand-**Protokoll**: zweimal "Einladungen senden" erzeugt zwei Zeilen pro Gast.
+Beim Testevent standen 3 Gäste als 6 Zeilen drin (10:42 und 10:44 Uhr) - über das Protokoll zu iterieren hätte jeden doppelt angeschrieben.
+`invite_codes` hat eine Zeile pro Gast inkl. `guest_first_name`, `guest_email`, `guest_phone`, `declined_at`.
+Der Kanal kommt weiter aus dem Protokoll (jüngste Zeile gewinnt).
+
+### 6. Briefing-Texte: zweisprachig, personalisiert, mit Claim
+
+Copy in `supabase/functions/_shared/briefing.ts` (WhatsApp + Betreff) und `_shared/email-templates.ts` (`getFinalBriefingEmailHtml`).
+Bewusst in `_shared`, damit ein Vorschau-Skript die echten Funktionen rendern kann, ohne `serve()` zu starten -
+eine handgebaute Vorschau wäre wertlos, weil sie driften kann.
+Sprache aus `profiles.language` des Organisators (Konvention wie bei der Einladungs-Mail).
+Titel/Betreff nutzen den **Vornamen** (`Soleils Bachelor Party (JGA)`), der Fließtext den vollen Namen.
+`(JGA)` nur im Deutschen.
+Der Claim ist wörtlich aus `src/i18n/{de,en}.ts` (`claim1-3` + `claimSub`) - **bei Änderung beide Stellen anfassen**.
+Genitiv über `possessive()`: Deutsch lässt das s nach s/ß/x/z weg (`Phoenix'`), Englisch nur nach s (`Phoenix's`, aber `Hans'`).
+Der Organisator bekommt dieselbe Mail als Erinnerung, mit eigenem Einleitungssatz und getrennter Fehlerzählung.
+
+### 7. Erster echter Lauf am 2026-07-29
+
+| Job | Cron-Status | Tatsächliche HTTP-Antwort |
+|---|---|---|
+| `process-payment-reminders` | succeeded | **200** - alle 4 Meilensteine geprüft, nichts fällig |
+| `send-final-briefing` | succeeded | **500** - alter deployter Code, `profiles`-Join |
+
+Beide gelten als "succeeded". Genau dafür existiert die HTTP-Prüfung im Watchdog.
+`process-payment-reminders` funktioniert damit **end-to-end** - erstmals.
+
+**Achtung bei Testläufen von `process-payment-reminders`:** die Funktion **storniert Events automatisch**
+(14-Tage-Meilenstein, `status = 'cancelled'`, Anzahlung wird einbehalten). Vor einem manuellen Aufruf immer prüfen,
+ob eine Buchung auf 21/18/16/14 Tagen steht.
+
+### Offen
+
+- **`ops_alert_recipients` befüllen**, sonst ist der Watchdog stumm. Er hat den 500er am 29.07. gesehen und nichts gemeldet, weil kein Empfänger eingetragen war.
+- Testevent "Soleil's Bachelor" (02.08.) hat **keine Buchung mit `reference_number`** - das Briefing verschickt den Platzhalter
+  `GO-XXXXXX` und `Classic (M)` als Paket-Default. Bewusst so belassen, vor echtem Kundenbetrieb klären.
+- Alle drei Gäste des Testevents teilen sich dieselbe Test-Mailadresse.
+- Alle 7 Profile stehen auf `en`; der deutsche Text ist fertig, würde aktuell aber nirgends ausgelöst.
+- Die Briefing-Mail hängt nicht am i18n-System, sondern trägt ihre Texte selbst (wie `getGuestInviteEmailHtml`).
 
 ## Aktueller Stand (2026-07-28) - UI-Korrekturen aus dem Gerätetest, Runde 5
 
