@@ -141,13 +141,44 @@ Die Benachrichtigung laeuft auf `metadata` um (Typ `booking_cancelled`), mit Ali
 `event_cancelled_nonpayment` in `NotificationItem`. Vor dem Umbenennen live geprueft:
 **null Zeilen** beider Typen in `notifications`, also kein Backfill noetig.
 
+### 8. `email_notifications_enabled` gated keinen Versand mehr, und alles ist deployt
+
+Der Schalter sass an drei Stellen und wurde uneinheitlich angewandt: `process-payment-reminders`
+(Erinnerung ja, Storno nein), `send-final-briefing`, und `send-email` (alles ausser `welcome`).
+Auf Wunsch des Owners ist er aus allen Versandpfaden **entfernt** statt dokumentiert.
+Vertretbar, weil jede betroffene Mail transaktional ist: Zahlungsfrist, Stornierung mit
+einbehaltener Anzahlung, Briefing zum gebuchten Event. Vertragsmitteilungen, kein Abo.
+
+**Offene Folge davon:** der Schalter "E-Mail-Benachrichtigungen" in
+`app/(tabs)/profile/notifications.tsx` hat jetzt **keine Wirkung mehr auf E-Mails**.
+Er schreibt weiter nach `profiles.email_notifications_enabled`, aber niemand liest die Spalte noch.
+Ein Schalter, der nichts tut, ist schlechter als keiner. Zwei saubere Auswege: entweder die
+E-Mail-Zeile aus dem Screen nehmen, oder sie auf wirklich optionale Mails verengen (dann braucht es
+erst eine solche Kategorie). **Nicht liegen lassen.**
+
+Deployt am 2026-07-30: `process-payment-reminders`, `send-final-briefing`, `send-email`,
+`send-guest-invitations`. `deno check` gruen fuer alle vier.
+Nach dem Deploy den Cron-Aufruf von Job 5 real geprueft: **HTTP 200**, alle Meilensteine
+`processed: 0`, keine Stornierung ausgeloest. Das ist gleichzeitig der Beweis, dass die
+`verify_jwt = false`-Eintragung in `config.toml` haelt - derselbe Deploy hat am Vormittag noch
+einen 401 produziert.
+
+Vorschau aller 15 Mail-Ansichten (9 App-Mails inkl. beider Sprachen, 6 Auth-Vorlagen) laesst sich
+jederzeit neu erzeugen, indem die Funktionen aus `_shared/email-templates.ts` per Deno gerendert und
+in eine HTML-Seite mit `iframe srcdoc` gelegt werden. Das ist der bessere Review-Weg als Testmails:
+alle Vorlagen gleichzeitig, ohne Empfaenger und ohne Rate-Limit.
+
 ### Offen
 
-- **`process-payment-reminders` ist NICHT neu deployt.** Die Storno-Mail liegt nur lokal.
-  Deploy noetig, damit sie live geht. Bedenken vorher: der naechste Cron-Lauf (09:15 UTC) verschickt
-  sie dann an jede Buchung, die am 14-Tage-Meilenstein steht.
 - **Die sechs Auth-Vorlagen sind noch nicht im Dashboard.** Bis dahin verschickt Supabase weiter
   seine nackten Standardtexte, jetzt lediglich ueber Resend statt den Testdienst.
+  Claude kann das nicht uebernehmen: der Management-API-Weg braucht ein Token, das im
+  macOS-Schluesselbund liegt, und Anmeldedaten dort auszulesen ist laut `~/.claude/CLAUDE.md`
+  ausgeschlossen. `supabase config push` authentifiziert sich selbst, ist aber disqualifiziert,
+  solange `config.toml` die Dev-`site_url` und ungesetzte OAuth-`env(...)` traegt.
+  **Wer das automatisieren will, muss zuerst Dev- und Prod-Werte in `config.toml` trennen** -
+  eigene, zu reviewende Aufgabe, kein Nebenbei-Fix.
+- **Der Schalter im Profil ist wirkungslos** (siehe oben).
 - **Nichts davon ist am Geraet gesehen.** Der ganze Batch ist statisch verifiziert
   (typecheck/lint/102 Tests), aber Toast-Position, ConfirmSheet und die Budget-Maske brauchen einen
   echten Durchlauf. `xcode-select` zeigt weiterhin nicht auf Xcode, der Simulator ist blockiert:

@@ -152,7 +152,7 @@ serve(async (req) => {
     // no language of their own. Same convention as the guest invite email.
     const { data: organizer } = await supabase
       .from('profiles')
-      .select('language, email, full_name, email_notifications_enabled')
+      .select('language, email, full_name')
       .eq('id', event.created_by)
       .maybeSingle();
     const language: 'de' | 'en' = organizer?.language === 'de' ? 'de' : 'en';
@@ -212,7 +212,7 @@ serve(async (req) => {
     // The organizer gets the same briefing as a reminder. Counted separately so a
     // failure here cannot make it look like guests were reached, and vice versa.
     const organizerEmail = (organizer?.email as string | null)?.trim() || null;
-    if (organizerEmail && organizer?.email_notifications_enabled !== false) {
+    if (organizerEmail) {
       const organizerFirstName =
         ((organizer?.full_name as string | null) ?? '').trim().split(' ')[0] || undefined;
 

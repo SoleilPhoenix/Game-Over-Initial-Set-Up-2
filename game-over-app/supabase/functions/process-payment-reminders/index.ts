@@ -253,14 +253,13 @@ serve(async (req: Request) => {
           let emailSent = false;
           let organizerProfile: {
             email: string | null;
-            email_notifications_enabled: boolean | null;
             full_name: string | null;
             language: string | null;
           } | null = null;
           try {
             const { data: profile, error: profileError } = await supabase
               .from('profiles')
-              .select('email, email_notifications_enabled, full_name, language')
+              .select('email, full_name, language')
               .eq('id', userId)
               .single();
             organizerProfile = profile;
@@ -272,7 +271,7 @@ serve(async (req: Request) => {
               );
             }
 
-            if (profile?.email && profile.email_notifications_enabled !== false) {
+            if (profile?.email) {
               const html = getPaymentReminderEmailHtml({
                 honoreeName: event.honoree_name,
                 eventTitle: event.title,
@@ -371,12 +370,6 @@ serve(async (req: Request) => {
                 // Send only after the events.status write above succeeded. This is
                 // deliberately non-blocking: delivery failure cannot undo or retry
                 // a confirmed cancellation.
-                //
-                // Note the deliberate difference from the reminder above, which
-                // honours `email_notifications_enabled`: this one does not. We are
-                // keeping the customer's deposit, so telling them is a transactional
-                // notice, not a notification they opted into. Do not "fix" this by
-                // adding the preference check.
                 const organizerEmail = organizerProfile?.email?.trim();
                 if (organizerEmail) {
                   const language: 'de' | 'en' =
