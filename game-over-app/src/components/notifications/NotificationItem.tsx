@@ -16,6 +16,19 @@ import { isRefundDueMeta } from '@/utils/refundDue';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
+interface BookingCancelledMeta {
+  honoreeName: string;
+  retainedDepositCents: number;
+}
+
+function isBookingCancelledMeta(value: unknown): value is BookingCancelledMeta {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const meta = value as Record<string, unknown>;
+  return typeof meta.honoreeName === 'string'
+    && typeof meta.retainedDepositCents === 'number'
+    && Number.isFinite(meta.retainedDepositCents);
+}
+
 // Maps a notification type to the i18n key used for its action-button label.
 // Kept as a plain lookup so NOTIFICATION_CONFIG below can stay a static const.
 const ACTION_LABEL_KEYS: Record<string, string> = {
@@ -117,6 +130,13 @@ const NOTIFICATION_CONFIG: Record<
     bgColor: INFO_BG_COLOR,
   },
   booking_cancelled: {
+    icon: 'close-circle',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
+  },
+  // Legacy alias for rows created by process-payment-reminders before the
+  // cancellation notification adopted the canonical booking_cancelled type.
+  event_cancelled_nonpayment: {
     icon: 'close-circle',
     color: ACTION_COLOR,
     bgColor: ACTION_BG_COLOR,
@@ -246,9 +266,9 @@ export function NotificationItem({
   const actionLabelKey = ACTION_LABEL_KEYS[notification.type];
   const actionLabel = actionLabelKey ? (t.notifications as any)[actionLabelKey] : undefined;
 
-  // guest_data_changed carries a structured diff in `metadata` so the text can be
-  // localized to the organizer's language at render time (it was created in the
-  // guest's language). Falls back to the stored title/body for any other type.
+  // Notifications with structured metadata are localized to the organizer's
+  // language at render time. Falls back to stored title/body for legacy rows
+  // whose metadata is absent or malformed.
   let displayTitle = notification.title;
   let displayBody = notification.body;
   if (notification.type === 'guest_joined' && isGuestJoinedMeta(notification.metadata)) {
@@ -282,6 +302,21 @@ export function NotificationItem({
       .replace('{{description}}', meta.description)
       .replace('{{amount}}', amount)
       .replace('{{date}}', date);
+  } else if (
+    (notification.type === 'booking_cancelled'
+      || notification.type === 'event_cancelled_nonpayment')
+    && isBookingCancelledMeta(notification.metadata)
+  ) {
+    const meta = notification.metadata;
+    const locale = getCurrentLanguage() === 'de' ? 'de-DE' : 'en-US';
+    const deposit = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: 'EUR',
+    }).format(meta.retainedDepositCents / 100);
+    displayTitle = (t.notifications as any).bookingCancelledTitle;
+    displayBody = ((t.notifications as any).bookingCancelledBody as string)
+      .replace('{{honoree}}', meta.honoreeName)
+      .replace('{{deposit}}', deposit);
   }
 
   const formatTime = (dateString: string) => {

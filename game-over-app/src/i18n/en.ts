@@ -917,6 +917,8 @@ const en = {
     actionViewBudget: 'View Budget',
     refundDueTitle: 'Refund overdue',
     refundDueBody: '{{description}} ({{amount}}) was expected by {{date}} and is still outstanding.',
+    bookingCancelledTitle: 'Booking cancelled',
+    bookingCancelledBody: "{{honoree}}'s event was cancelled because the remaining balance was not received. The {{deposit}} deposit has been retained.",
     // Guest joined notification (organizer-facing, localized at render time)
     guestJoinedTitle: 'Guest joined',
     guestJoinedBody: '{{guest}} has joined your event.',

@@ -38,8 +38,37 @@ enable_signup = true
 
 [auth.email]
 enable_signup = true
-double_confirm_changes = true
+# Off on purpose: only the NEW address confirms. The app already reauthenticates
+# with the current password before requesting the change, so the protection this
+# would add sits in the app rather than in the old mailbox. Must match the
+# "Secure email change" toggle under Authentication -> Providers -> Email; this
+# key only governs local development.
+double_confirm_changes = false
 enable_confirmations = false
+
+[auth.email.template.confirmation]
+subject = "E-Mail-Adresse bestätigen | Game Over"
+content_path = "./supabase/templates/auth/confirm-signup.html"
+
+[auth.email.template.recovery]
+subject = "Passwort zurücksetzen | Game Over"
+content_path = "./supabase/templates/auth/reset-password.html"
+
+[auth.email.template.email_change]
+subject = "Neue E-Mail-Adresse bestätigen | Game Over"
+content_path = "./supabase/templates/auth/change-email.html"
+
+[auth.email.template.magic_link]
+subject = "Dein Anmeldelink | Game Over"
+content_path = "./supabase/templates/auth/magic-link.html"
+
+[auth.email.template.invite]
+subject = "Du bist zu Game Over eingeladen"
+content_path = "./supabase/templates/auth/invite.html"
+
+[auth.email.template.reauthentication]
+subject = "Dein Bestätigungscode | Game Over"
+content_path = "./supabase/templates/auth/reauthentication.html"
 
 [auth.external.apple]
 enabled = true

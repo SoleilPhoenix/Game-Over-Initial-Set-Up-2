@@ -12,7 +12,11 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { sendEmail } from '../_shared/email.ts';
-import { getPaymentReminderEmailHtml } from '../_shared/email-templates.ts';
+import {
+  getBookingCancelledEmailHtml,
+  getPaymentReminderEmailHtml,
+} from '../_shared/email-templates.ts';
+import { partyLabel, type PartyType } from '../_shared/briefing.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -49,6 +53,20 @@ const MESSAGES: Record<string, { title: string; bodyTemplate: string }> = {
 
 function formatCents(cents: number): string {
   return `\u20AC${(cents / 100).toFixed(2)}`;
+}
+
+function formatCentsForLanguage(cents: number, language: 'de' | 'en'): string {
+  return new Intl.NumberFormat(language === 'de' ? 'de-DE' : 'en-US', {
+    style: 'currency',
+    currency: 'EUR',
+  }).format(cents / 100);
+}
+
+function formatEventDate(date: string, language: 'de' | 'en'): string {
+  return new Date(`${date.slice(0, 10)}T00:00:00`).toLocaleDateString(
+    language === 'de' ? 'de-DE' : 'en-US',
+    { year: 'numeric', month: 'long', day: 'numeric' },
+  );
 }
 
 function addDays(date: Date, days: number): string {
@@ -112,6 +130,7 @@ serve(async (req: Request) => {
           remaining_amount_cents,
           total_amount_cents,
           deposit_amount_cents,
+          reference_number,
           event_id,
           event:events!inner(
             id,
@@ -119,7 +138,8 @@ serve(async (req: Request) => {
             honoree_name,
             start_date,
             status,
-            created_by
+            created_by,
+            party_type
           )
         `)
         .not('deposit_paid_at', 'is', null)
@@ -231,12 +251,26 @@ serve(async (req: Request) => {
 
           // 3. Send email
           let emailSent = false;
+          let organizerProfile: {
+            email: string | null;
+            email_notifications_enabled: boolean | null;
+            full_name: string | null;
+            language: string | null;
+          } | null = null;
           try {
-            const { data: profile } = await supabase
+            const { data: profile, error: profileError } = await supabase
               .from('profiles')
-              .select('email, email_notifications_enabled')
+              .select('email, email_notifications_enabled, full_name, language')
               .eq('id', userId)
               .single();
+            organizerProfile = profile;
+
+            if (profileError) {
+              console.warn(
+                `[process-payment-reminders] Failed to load organizer profile ${userId}:`,
+                profileError.message,
+              );
+            }
 
             if (profile?.email && profile.email_notifications_enabled !== false) {
               const html = getPaymentReminderEmailHtml({
@@ -316,17 +350,82 @@ serve(async (req: Request) => {
                     }
                   });
 
-                // Create cancellation notification (non-blocking)
+                // Create cancellation notification (non-blocking). The structured
+                // values are localized when NotificationItem renders the row.
                 supabase.from('notifications').insert({
                   user_id: userId,
                   event_id: event.id,
-                  type: 'event_cancelled_nonpayment',
-                  title: 'Event Cancelled',
-                  body: `${event.honoree_name}'s ${event.title} has been cancelled due to non-payment. Your 25% deposit has been retained.`,
+                  type: 'booking_cancelled',
+                  title: 'Booking cancelled',
+                  body: 'Open the app for cancellation details.',
                   action_url: `/event/${event.id}`,
+                  metadata: {
+                    honoreeName: event.honoree_name,
+                    retainedDepositCents: booking.deposit_amount_cents ??
+                      (booking.total_amount_cents - remainingCents),
+                  },
                 }).then(({ error: notifError }) => {
                   if (notifError) console.warn('Cancellation notification insert failed (non-blocking):', notifError.message);
                 });
+
+                // Send only after the events.status write above succeeded. This is
+                // deliberately non-blocking: delivery failure cannot undo or retry
+                // a confirmed cancellation.
+                //
+                // Note the deliberate difference from the reminder above, which
+                // honours `email_notifications_enabled`: this one does not. We are
+                // keeping the customer's deposit, so telling them is a transactional
+                // notice, not a notification they opted into. Do not "fix" this by
+                // adding the preference check.
+                const organizerEmail = organizerProfile?.email?.trim();
+                if (organizerEmail) {
+                  const language: 'de' | 'en' =
+                    organizerProfile?.language === 'de' ? 'de' : 'en';
+                  const organizerFirstName =
+                    organizerProfile?.full_name?.trim().split(/\s+/)[0] || undefined;
+                  const retainedDepositCents = booking.deposit_amount_cents ??
+                    (booking.total_amount_cents - remainingCents);
+
+                  Promise.resolve()
+                    .then(() => sendEmail({
+                      to: organizerEmail,
+                      subject: language === 'de'
+                        ? 'Schade - wir mussten stornieren | Game Over'
+                        : 'We’re sorry - we had to cancel | Game Over',
+                      html: getBookingCancelledEmailHtml({
+                        organizerFirstName,
+                        partyLabel: partyLabel(
+                          event.honoree_name,
+                          event.party_type as PartyType,
+                          language,
+                        ),
+                        dateStr: formatEventDate(event.start_date, language),
+                        remainingAmount: formatCentsForLanguage(remainingCents, language),
+                        depositAmount: formatCentsForLanguage(retainedDepositCents, language),
+                        bookingReference: booking.reference_number ?? undefined,
+                        appUrl: 'https://game-over.app',
+                        language,
+                      }),
+                    }))
+                    .then((emailResult) => {
+                      if (!emailResult.success) {
+                        console.warn(
+                          `[process-payment-reminders] Cancellation email failed for booking ${booking.id} (non-blocking):`,
+                          emailResult.error,
+                        );
+                      }
+                    })
+                    .catch((emailError) => {
+                      console.warn(
+                        `[process-payment-reminders] Cancellation email failed for booking ${booking.id} (non-blocking):`,
+                        emailError instanceof Error ? emailError.message : String(emailError),
+                      );
+                    });
+                } else {
+                  console.warn(
+                    `[process-payment-reminders] Cancellation email skipped for booking ${booking.id}: organizer email unavailable`,
+                  );
+                }
                 processed++;
               }
             } else {

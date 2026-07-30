@@ -84,8 +84,70 @@ Im vorigen Abschnitt stand er als ungeklaert (halbe Hoehe, ohne Beschriftung, "h
 nicht am Layout"). Die Geraete-Screenshots vom 29.07. zeigen ihn in voller Hoehe mit Text.
 Die Verlegung in die fixierte Fusszeile hat es geloest. Kein weiterer Handlungsbedarf.
 
+### 7. Auth-Mails, Mail-Altlast und die fehlende Storno-Mail
+
+**Der eingebaute Supabase-Mailversand war die Ursache des `email_address_invalid`.**
+Auth-Mails liefen ueber `noreply@mail.app.supabase.io`, den Testdienst: 2 Mails/Stunde und
+eingeschraenkter Empfaengerkreis. Er hat `leonardino@web.de` als Empfaenger abgelehnt, und GoTrue
+nannte im 400er genau diese Adresse - deshalb wies der Fehler auf die *alte* statt die neue Adresse.
+Seit der Umstellung auf Resend-SMTP (vom User im Dashboard, 19:42 UTC) kein einziger 400er mehr.
+Im Log sichtbar: `GOTRUE_RATE_LIMIT_EMAIL_SENT ... from 2/1h to 30`.
+`422 email_exists` und `429 over_email_send_rate_limit` waren immer korrekte Antworten, nur
+unuebersetzt - das erledigt jetzt das Fehlercode-Mapping in `email.tsx`.
+
+**"Secure email change" ist aus** (vom User umgelegt). Nur die neue Adresse bestaetigt.
+Vertretbar, weil `email.tsx` vorher per `signInWithPassword` reauthentifiziert: der Schutz sitzt in
+der App statt im alten Postfach. `double_confirm_changes = false` in `config.toml` haelt den lokalen
+Stack synchron; das gehostete Projekt haengt am Dashboard-Schalter, nicht an dieser Datei.
+
+**Ein Layout statt drei.** `email-templates.ts` hatte zwei Generationen: `getGuestInviteEmailHtml`
+und `getFinalBriefingEmailHtml` markenkonform (jede mit eigener Layout-Kopie), daneben `baseLayout`
+mit `#15181D`/`#1E2329`/`#23272F`/`#5A7EB0` - alle vier laut `CLAUDE.md` verboten. Die
+**Buchungsbestaetigung ging also im Vor-Redesign-Look an Kunden.** Jetzt ein gemeinsames
+`emailLayout`, alle fuenf Vorlagen darauf, null deprecated Hex in der Datei.
+
+Dass der Umbau die zwei funktionierenden Mails nicht veraendert, ist **nachgewiesen, nicht zugesagt**:
+alte Dateiversion aus Git geholt, beide Funktionen in beiden Sprachen und fuer Organisator/Gast
+gerendert und auf Gleichheit geprueft (6 Faelle, alle identisch). Der Test war Wegwerfware und ist
+wieder entfernt - bei einem naechsten Layout-Eingriff lohnt es, ihn nochmal zu bauen.
+
+**Sechs Auth-Vorlagen** in `supabase/templates/auth/`, deutsch mit kurzer englischer Zeile,
+in `config.toml` unter `[auth.email.template.*]` verdrahtet.
+`reauthentication.html` zeigt `{{ .Token }}` als Code-Block, keinen Button.
+
+**Der manuelle Schritt und warum:** gehostetes Supabase liest diese Dateien nicht, die Vorlagen
+muessen ins Dashboard (Authentication -> Emails) kopiert werden. Zuordnung in
+`supabase/templates/auth/README.md`.
+`supabase config push` existiert und wuerde es automatisieren, **darf hier aber nicht laufen**:
+`config.toml` traegt `site_url = "exp://localhost:8081"` und die OAuth-Secrets als `env(...)`
+mit ungesetzten Variablen. Ein Push wuerde die Produktions-`site_url` auf die Expo-Dev-URL setzen,
+womit jeder Bestaetigungs- und Passwort-Link aus einer Kunden-Mail ins Nichts zeigt.
+**Erst wenn `config.toml` produktionstauglich getrennt ist, ist `config push` eine Option.**
+
+**Die Storno-Mail hat gefehlt, und das war das eigentliche Loch.**
+`process-payment-reminders` storniert am 14-Tage-Meilenstein, behaelt 25 % ein - und verschickte
+**keine Mail**. Es entstand nur eine In-App-Benachrichtigung, hartverdrahtet auf Englisch.
+Ein Kunde verlor die Anzahlung und erfuhr es nur, wenn er die App oeffnete.
+Jetzt `getBookingCancelledEmailHtml`, zweisprachig, Text nach der vom User gewaehlten Variante B
+(bedauernd, alle Zahlen genannt, Tuer offen), Claim wie ueberall wortgleich aus `src/i18n`.
+
+Zwei Entscheidungen dabei, die nicht wegoptimiert werden duerfen:
+- Die Mail ignoriert `email_notifications_enabled` bewusst, anders als die Erinnerung darueber.
+  Wir behalten Geld ein, das ist eine transaktionale Mitteilung, kein Abo. Steht als Kommentar dort.
+- Ohne `reference_number` entfaellt der Referenzblock ganz, statt eine rohe UUID zu zeigen.
+  Das Testevent hat genau diesen Fall.
+
+Die Benachrichtigung laeuft auf `metadata` um (Typ `booking_cancelled`), mit Alias auf den alten
+`event_cancelled_nonpayment` in `NotificationItem`. Vor dem Umbenennen live geprueft:
+**null Zeilen** beider Typen in `notifications`, also kein Backfill noetig.
+
 ### Offen
 
+- **`process-payment-reminders` ist NICHT neu deployt.** Die Storno-Mail liegt nur lokal.
+  Deploy noetig, damit sie live geht. Bedenken vorher: der naechste Cron-Lauf (09:15 UTC) verschickt
+  sie dann an jede Buchung, die am 14-Tage-Meilenstein steht.
+- **Die sechs Auth-Vorlagen sind noch nicht im Dashboard.** Bis dahin verschickt Supabase weiter
+  seine nackten Standardtexte, jetzt lediglich ueber Resend statt den Testdienst.
 - **Nichts davon ist am Geraet gesehen.** Der ganze Batch ist statisch verifiziert
   (typecheck/lint/102 Tests), aber Toast-Position, ConfirmSheet und die Budget-Maske brauchen einen
   echten Durchlauf. `xcode-select` zeigt weiterhin nicht auf Xcode, der Simulator ist blockiert:

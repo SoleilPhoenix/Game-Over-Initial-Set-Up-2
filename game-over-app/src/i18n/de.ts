@@ -909,6 +909,8 @@ const de: TranslationKeys = {
     actionViewBudget: 'Budget ansehen',
     refundDueTitle: 'Rückerstattung überfällig',
     refundDueBody: '{{description}} ({{amount}}) wurde bis {{date}} erwartet und ist noch ausstehend.',
+    bookingCancelledTitle: 'Buchung storniert',
+    bookingCancelledBody: 'Das Event für {{honoree}} wurde storniert, weil der Restbetrag nicht eingegangen ist. Die Anzahlung von {{deposit}} bleibt einbehalten.',
     // Gast-Beitritt (für Organisator, wird erst beim Anzeigen übersetzt)
     guestJoinedTitle: 'Gast beigetreten',
     guestJoinedBody: '{{guest}} ist deinem Event beigetreten.',
