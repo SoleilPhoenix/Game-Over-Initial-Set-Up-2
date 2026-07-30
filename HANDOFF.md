@@ -7,6 +7,135 @@ Letzte Aktualisierung: 2026-07-30.
 Sie wird laut globaler `~/.claude/CLAUDE.md` nach jedem abgeschlossenen Fortschritt fortgeschrieben,
 und zwar im selben Commit wie die Änderung, die sie beschreibt.
 
+## OFFEN (2026-07-30) - PR #11 ist vorbereitet und wartet auf eine eigene Session
+
+**Das ist die einzige offene Aufgabe aus der Marken-/Aufräum-Session vom 30.07.**
+PR #11 "Security hardening" war seit dem 6. Juli offen. Er ist jetzt entschärft und
+analysiert, aber bewusst **nicht** gemergt - der Rest gehört in eine eigene Session.
+
+### Was bereits erledigt ist
+
+**Die 9 doppelten Migrationen sind raus** (`fcb85fd3d` auf `claude/affectionate-bardeen-e9e00d`).
+Sie trugen geratene Zeitstempel (`20260705000000` ff.), während dieselben Migrationen
+längst in `main` unter den real aufgezeichneten Zeitstempeln liegen (`20260705162049` ff.).
+Ein Merge hätte sie ein zweites Mal eingeführt und `supabase db push` gegen eine Datenbank
+laufen lassen, in der die Objekte schon existieren - genau das Muster, das die
+Migrations-Pipeline diese Woche dreimal blockiert hat. Inhaltlich ging nichts verloren,
+der Unterschied waren nur die Kommentarblöcke der Originale.
+
+**Folge: PR #11 fasst keine Migrationen mehr an und löst `migrate.yml` nicht mehr aus.**
+`deploy-edge-functions.yml` löst er weiterhin aus, das ist gewollt.
+
+### Was der PR noch bringt (live gegengeprüft am 30.07.)
+
+Die **Basis-Härtung ist längst in `main` und live**: `create-payment-intent` nimmt
+`amount_cents` nicht vom Client, rechnet serverseitig, hat Währungs-Allowlist und
+Betragsobergrenze. Das war eine Fehlannahme in der Session und wurde korrigiert.
+
+Was **fehlt**, ist die zweite Stufe:
+
+| | in `main` / live | in PR #11 |
+|---|---|---|
+| CORS | `Allow-Origin: '*'` in **allen 8** Funktionen | Allowlist über `_shared/http.ts` |
+| Rate-Limiting | keins | `create-payment-intent` + `send-guest-invitations` (20/60s) |
+| Betragsquelle | gespeichertes `total_amount_cents` | Neuberechnung aus dem Paketpreis |
+
+`supabase/functions/_shared/http.ts` existiert **nur** im PR. Die dafür nötige
+`rate_limiting`-Migration ist live vorhanden, `checkRateLimit` würde also funktionieren.
+
+### Was noch zu tun ist (Schritt 3)
+
+Der PR ist vom 6. Juli und liegt über 100 Commits hinter `main`; `src/i18n` allein hat
+seither 36 Commits bekommen. Ein direkter Merge produziert dieselbe Konfliktlage wie bei
+den obsoleten wip-Branches. Deshalb: **Inhalt auf einem frischen Branch von `main` neu
+aufsetzen**, nicht mergen.
+
+Achtung, Live-Berührung: Jeder Merge, der `supabase/functions/**` anfasst, deployt
+sofort gegen das Live-Projekt. Nach Change-Control §1 braucht das Owner-Freigabe.
+
+### Auftragstext für die neue Session (kopierbar)
+
+```
+Setze den Inhalt von PR #11 (Security hardening) auf einem frischen Branch von main neu
+auf. Nicht mergen - der PR ist vom 6. Juli und über 100 Commits hinter main.
+
+Ausgangslage, bereits geprueft (siehe HANDOFF.md, Abschnitt "OFFEN (2026-07-30)"):
+- Die 9 doppelten Migrationen sind bereits aus dem PR entfernt (Commit fcb85fd3d).
+  Der PR fasst keine Migrationen mehr an. Nicht wieder hinzufuegen - main hat sie
+  unter den real aufgezeichneten Zeitstempeln 20260705162049 ff.
+- Die Basis-Haertung von create-payment-intent ist bereits in main UND live aktiv:
+  kein amount_cents vom Client, serverseitige Berechnung, Waehrungs-Allowlist,
+  Betragsobergrenze. Das ist erledigt, nicht nochmal bauen.
+
+Zu uebertragen ist nur die zweite Stufe:
+1. supabase/functions/_shared/http.ts anlegen (existiert nur im PR-Branch
+   claude/affectionate-bardeen-e9e00d): CORS-Allowlist statt Access-Control-Allow-Origin '*',
+   plus konstant-zeitiger Secret-Vergleich und checkRateLimit.
+2. Alle 8 Edge Functions auf diesen Helfer umstellen. Aktuell haben ALLE acht in main
+   noch CORS '*'.
+3. Rate-Limiting in create-payment-intent und send-guest-invitations (20 Anfragen/60s).
+   Die rate_limiting-Migration ist live vorhanden, checkRateLimit funktioniert.
+4. In create-payment-intent den Betrag aus dem Paketpreis neu berechnen statt aus dem
+   gespeicherten total_amount_cents.
+5. Aus dem PR ausserdem pruefen und uebernehmen, was noch passt: .github/dependabot.yml,
+   .github/workflows/security-audit.yml (ans REPO-ROOT, nicht unter game-over-app/,
+   siehe Change-Control §2.5), __tests__/unit/repositories/participants.test.ts.
+
+Vorgehen:
+- Zuerst den gameover-change-control Skill lesen, besonders §1, §5 und §7.
+- Den PR-Branch nur als Vorlage lesen (git show claude/affectionate-bardeen-e9e00d:<pfad>),
+  nichts von dort mergen oder cherry-picken.
+- Die i18n-Aenderungen des PRs NICHT uebernehmen ohne Abgleich - src/i18n hat seit dem
+  PR ueber 36 Commits bekommen. Falls Schluessel fehlen, den gameover-i18n Skill nutzen.
+- npm run typecheck, npm run lint und npx vitest run muessen gruen sein.
+- Als PR anlegen, nicht direkt nach main pushen.
+
+WICHTIG - Live-Berührung: Ein Merge, der supabase/functions/** anfasst, deployt sofort
+gegen das Live-Projekt stdbvehmjpmqbjyiodqg (deploy-edge-functions.yml, Pfad-Filter).
+Das braucht Owner-Freigabe. Vor dem Merge nachfragen.
+
+Wenn alles uebertragen ist: PR #11 schliessen (nicht mergen) mit Verweis auf den neuen PR.
+```
+
+---
+
+## Aktueller Stand (2026-07-30) - Marke auf Splash und Icons, native Ordner entkoppelt
+
+Sechs PRs, alle gemergt: #12 (Splash + native Ordner), #13/#14/#15 (gerettete Docs),
+#16 (App-Icon), #17 (Change-Control-Skill).
+
+**Splash und beide Icons zeigen jetzt dieselbe Marke.** Vorher zeigte der Splash ein
+Logo, das sonst nirgends vorkommt (Kreis mit Pfeil samt Claim), und hatte links und
+rechts je 204 px **weißen Rand** - knapp 20 % Bildschirmbreite pro Seite als helle
+Balken auf einer Dark-only-App. Das Android-Adaptive-Icon war durch einen deckend
+weißen Hintergrund faktisch ein weißes Icon; die gesetzte Hintergrundfarbe war dadurch
+wirkungslos. Das iOS-Icon trug die bei 60 pt unleserliche Wortmarke auf `#1B2635`.
+Alles drei neu aus `assets/brand/logo.svg`, alles auf `#0D1B2A`.
+
+**`ios/` und `android/` sind nicht mehr versioniert** (`f25b57aac`). Das Repo hielt
+vorher beide Welten gleichzeitig: committete native Projekte **und** `expo prebuild` in
+jedem Build-Workflow. Gelesen wurde immer nur das Prebuild-Ergebnis, der committete
+Stand driftete unbemerkt ab und trug noch `#15181D` plus ein drittes Splash-Motiv.
+
+> **Nach einem `git pull` gibt es keine `ios/` und `android/` Ordner mehr.**
+> Vor einem lokalen nativen Build einmal `npx expo prebuild` laufen lassen.
+
+Zwei Regeln, die das eine Menge Zeit gekostet hat, stehen jetzt im Change-Control-Skill
+(§5.1/§5.2): **`expo export` taugt nicht als Verifikation** für Splash- und Icon-Änderungen
+(diese Assets landen nie im JS-Bundle, per md5 gegen 62 gebundelte Assets belegt) - nur
+`expo prebuild`. Und: Markenassets nie durch Downsampling erzeugen, Lanczos-Ringing hob
+das Gold auf 12 364 Pixeln über `#C6A75E`.
+
+**Worktrees von 14 auf 3 reduziert.** Dabei wäre um ein Haar der ungetrackte
+Projekt-Skill `gameover-change-control` gelöscht worden (219 Zeilen, in keinem Branch) -
+er ist jetzt via #13 in `main`. Lehre: vor `git worktree remove` immer
+`git status --porcelain --untracked-files=all` **ungefiltert** lesen.
+
+Zwei obsolete wip-Branches liegen als Archiv auf origin und sollten **nicht** gemergt
+werden: `claude/session-9250cd` (optimistische Poll-Updates - `main` hat sie bereits) und
+`claude/guest-invitations-onboarding-11e27c` (WhatsApp→SMS-Fallback entfernen - in `main`
+längst geschehen). Beide sind 82 bzw. 93 Commits hinter `main`.
+
 ## Aktueller Stand (2026-07-30) - Zahlungserinnerungen zweisprachig, Editorial-Palette, Claim
 
 Die Zahlungserinnerungen sind jetzt auf demselben Stand wie das Briefing. Vorher: neun Meldungstexte
