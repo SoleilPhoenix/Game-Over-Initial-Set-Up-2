@@ -277,84 +277,160 @@ export function getBookingConfirmationEmailHtml(params: BookingConfirmationParam
 interface PaymentReminderParams {
   honoreeName: string;
   eventTitle: string;
-  amountDue: string;     // e.g. "€112.50"
-  daysRemaining: number;
+  amountDue: string;         // e.g. "€859.00"
+  daysRemaining: number;     // days left until the PAYMENT DEADLINE, not until the event
   urgency: 'normal' | 'moderate' | 'urgent' | 'final';
   paymentUrl?: string;
+  // Optional so the older `send-email` caller keeps compiling unchanged.
+  language?: 'de' | 'en';
+  partyLabel?: string;       // "Natalias Bachelorette Party (JGA)"
+  guestFirstName?: string;
+  bookingReference?: string;
 }
 
-const URGENCY_COLORS: Record<string, { accent: string; badge: string; badgeText: string }> = {
-  normal: { accent: '#5A7EB0', badge: '#E8F0FE', badgeText: '#1A73E8' },
-  moderate: { accent: '#F59E0B', badge: '#FEF3C7', badgeText: '#92400E' },
-  urgent: { accent: '#EF4444', badge: '#FEE2E2', badgeText: '#991B1B' },
-  final: { accent: '#DC2626', badge: '#FEE2E2', badgeText: '#991B1B' },
-};
-
-const URGENCY_LABELS: Record<string, string> = {
-  normal: 'Payment Due',
-  moderate: 'Reminder',
-  urgent: 'Urgent',
-  final: 'Final Notice',
+/**
+ * Urgency accents stay inside the editorial palette: Champagne Gold carries the brand for
+ * the calm rungs, and only the genuinely urgent ones borrow a warning tone. The previous
+ * version used baseLayout with #5A7EB0 / #15181D / #23272F, all three of which CLAUDE.md
+ * lists as deprecated pre-redesign colours.
+ */
+const URGENCY_ACCENT: Record<string, { accent: string; onAccent: string; badgeBg: string; badgeText: string }> = {
+  normal:   { accent: '#C6A75E', onAccent: '#0D1B2A', badgeBg: 'rgba(198,167,94,0.14)', badgeText: '#C6A75E' },
+  moderate: { accent: '#C6A75E', onAccent: '#0D1B2A', badgeBg: 'rgba(198,167,94,0.14)', badgeText: '#C6A75E' },
+  urgent:   { accent: '#E8A33D', onAccent: '#0D1B2A', badgeBg: 'rgba(232,163,61,0.16)', badgeText: '#F0B860' },
+  final:    { accent: '#EF4444', onAccent: '#FFFFFF', badgeBg: 'rgba(239,68,68,0.14)',  badgeText: '#FCA5A5' },
 };
 
 export function getPaymentReminderEmailHtml(params: PaymentReminderParams): string {
-  const { honoreeName, eventTitle, amountDue, daysRemaining, urgency, paymentUrl } = params;
-  const colors = URGENCY_COLORS[urgency] ?? URGENCY_COLORS.normal;
-  const label = URGENCY_LABELS[urgency] ?? 'Payment Due';
+  const {
+    honoreeName, eventTitle, amountDue, daysRemaining, urgency, paymentUrl,
+    language, partyLabel, guestFirstName, bookingReference,
+  } = params;
 
-  const ctaUrl = paymentUrl ?? 'https://game-over.app';
+  const isDe = language === 'de';
   const isFinal = urgency === 'final';
+  const a = URGENCY_ACCENT[urgency] ?? URGENCY_ACCENT.normal;
+  const ctaUrl = paymentUrl ?? 'https://game-over.app';
 
-  const bodyHtml = `
-    <!-- Urgency badge -->
-    <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-      <tr>
-        <td style="background-color:${colors.badge};color:${colors.badgeText};padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;">
-          ${daysRemaining === 0 ? 'Due Today' : `${daysRemaining} days remaining`}
-        </td>
-      </tr>
-    </table>
+  const NAVY = '#0D1B2A';
+  const CARD = '#1A2F47';
+  const GOLD = '#C6A75E';
+  const TEXT = '#E7ECF2';
+  const MUTED = '#AEB9C7';
+  const FAINT = '#7A8699';
+  const BORDER = 'rgba(198,167,94,0.22)';
 
-    <p style="margin:0 0 16px;color:#FFFFFF;font-size:16px;line-height:1.5;">
-      Hi there,
-    </p>
+  // Falls back to the old "<honoree> <eventTitle>" shape when the caller has no party label.
+  const subject = partyLabel ?? `${honoreeName} ${eventTitle}`.trim();
 
-    <p style="margin:0 0 24px;color:#D1D5DB;font-size:15px;line-height:1.6;">
-      Your final payment for <strong style="color:#FFFFFF;">${honoreeName}'s ${eventTitle}</strong> is due${daysRemaining > 0 ? ` in ${daysRemaining} days` : ' today'}.
-    </p>
+  const C = isDe ? {
+    lang: 'de',
+    kicker: isFinal ? 'Letzte Frist' : 'Restzahlung',
+    badge: daysRemaining <= 0 ? 'Heute fällig' : daysRemaining === 1 ? 'Morgen fällig' : `Noch ${daysRemaining} Tage`,
+    greeting: guestFirstName ? `Hallo ${guestFirstName},` : 'Hallo,',
+    intro: daysRemaining <= 0
+      ? `der Restbetrag für <strong style="color:#FFFFFF;">${subject}</strong> ist <strong style="color:#FFFFFF;">heute</strong> fällig.`
+      : `der Restbetrag für <strong style="color:#FFFFFF;">${subject}</strong> ist in ${daysRemaining} ${daysRemaining === 1 ? 'Tag' : 'Tagen'} fällig.`,
+    amountLabel: 'Offener Betrag',
+    refLabel: 'Buchungsref.',
+    warning: '<strong>Wichtig:</strong> Geht die Zahlung heute nicht ein, wird das Event morgen storniert und die Anzahlung (25 %) einbehalten.',
+    cta: 'Jetzt bezahlen &rarr;',
+    claimLines: 'Einer heiratet. Alle feiern. Keiner stresst.',
+    claimSub: 'Planen, feiern, abrechnen. Alles in einer App.',
+    footer: 'Fragen?',
+  } : {
+    lang: 'en',
+    kicker: isFinal ? 'Final Notice' : 'Balance Due',
+    badge: daysRemaining <= 0 ? 'Due today' : daysRemaining === 1 ? 'Due tomorrow' : `${daysRemaining} days left`,
+    greeting: guestFirstName ? `Hi ${guestFirstName},` : 'Hey,',
+    intro: daysRemaining <= 0
+      ? `your remaining balance for <strong style="color:#FFFFFF;">${subject}</strong> is due <strong style="color:#FFFFFF;">today</strong>.`
+      : `your remaining balance for <strong style="color:#FFFFFF;">${subject}</strong> is due in ${daysRemaining} ${daysRemaining === 1 ? 'day' : 'days'}.`,
+    amountLabel: 'Amount due',
+    refLabel: 'Booking ref',
+    warning: '<strong>Important:</strong> if payment does not arrive today, the event is cancelled tomorrow and the 25% deposit is retained.',
+    cta: 'Pay now &rarr;',
+    claimLines: 'One gets married. Everyone celebrates. Nobody stresses.',
+    claimSub: 'Plan it, party, settle up. All in one app.',
+    footer: 'Questions?',
+  };
 
-    <!-- Amount box -->
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
-      <tr>
-        <td style="background-color:#23272F;border-radius:12px;padding:24px;text-align:center;">
-          <p style="margin:0 0 4px;color:#9CA3AF;font-size:13px;text-transform:uppercase;letter-spacing:1px;">Amount Due</p>
-          <p style="margin:0;color:#FFFFFF;font-size:36px;font-weight:700;">${amountDue}</p>
-        </td>
-      </tr>
-    </table>
+  const refRow = bookingReference ? `
+        <tr><td style="padding:14px 40px 0;" align="center">
+          <p style="margin:0;color:${MUTED};font-size:13px;">${C.refLabel}: <strong style="color:#FFFFFF;letter-spacing:1px;">${bookingReference}</strong></p>
+        </td></tr>` : '';
 
-    ${isFinal ? `
-    <!-- Cancellation warning -->
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
-      <tr>
-        <td style="background-color:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:12px;padding:16px 20px;">
-          <p style="margin:0;color:#FCA5A5;font-size:14px;line-height:1.5;">
-            <strong style="color:#EF4444;">Important:</strong> If payment is not received today, your event will be cancelled and only the 25% deposit will be retained.
+  const warningBlock = isFinal ? `
+        <tr><td style="padding:22px 40px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="background:rgba(239,68,68,0.10);border:1px solid rgba(239,68,68,0.32);border-radius:12px;padding:16px 20px;">
+              <p style="margin:0;color:#FCA5A5;font-size:14px;line-height:1.55;">${C.warning}</p>
+            </td></tr>
+          </table>
+        </td></tr>` : '';
+
+  return `<!DOCTYPE html>
+<html lang="${C.lang}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${C.kicker} &ndash; ${subject}</title></head>
+<body style="margin:0;padding:0;background:${NAVY};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${NAVY};">
+    <tr><td align="center" style="padding:32px 16px;">
+      <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:${CARD};border-radius:20px;overflow:hidden;border:1px solid ${BORDER};">
+
+        <!-- Header -->
+        <tr><td style="padding:34px 40px 26px;text-align:center;border-bottom:1px solid ${BORDER};">
+          <div style="font-size:13px;letter-spacing:6px;color:${GOLD};font-weight:700;">GAME&nbsp;OVER</div>
+          <div style="margin-top:9px;font-size:13px;color:${MUTED};">${C.kicker}</div>
+        </td></tr>
+
+        <!-- Badge + greeting -->
+        <tr><td style="padding:30px 40px 0;" align="center">
+          <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+            <td style="background:${a.badgeBg};color:${a.badgeText};padding:7px 18px;border-radius:20px;font-size:13px;font-weight:700;">${C.badge}</td>
+          </tr></table>
+        </td></tr>
+
+        <tr><td style="padding:22px 40px 0;">
+          <p style="margin:0;color:${TEXT};font-size:15px;line-height:1.6;">${C.greeting}</p>
+          <p style="margin:12px 0 0;color:${TEXT};font-size:15px;line-height:1.6;">${C.intro}</p>
+        </td></tr>
+
+        <!-- Amount -->
+        <tr><td style="padding:24px 40px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="background:${NAVY};border:1px solid ${BORDER};border-radius:14px;padding:24px;text-align:center;">
+              <p style="margin:0 0 6px;color:${MUTED};font-size:11px;letter-spacing:2px;font-weight:700;text-transform:uppercase;">${C.amountLabel}</p>
+              <p style="margin:0;color:#FFFFFF;font-size:38px;font-weight:800;">${amountDue}</p>
+            </td></tr>
+          </table>
+        </td></tr>
+${refRow}
+${warningBlock}
+        <!-- CTA -->
+        <tr><td style="padding:26px 40px 0;" align="center">
+          <a href="${ctaUrl}" style="display:inline-block;background:${a.accent};color:${a.onAccent};text-decoration:none;padding:14px 34px;border-radius:10px;font-size:15px;font-weight:700;">${C.cta}</a>
+        </td></tr>
+
+        <!-- Brand claim (verbatim from the welcome screen, src/i18n) -->
+        <tr><td style="padding:28px 40px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="border-top:1px solid ${BORDER};border-bottom:1px solid ${BORDER};padding:20px 0;text-align:center;">
+              <p style="margin:0;color:${GOLD};font-size:16px;font-weight:700;line-height:1.5;">${C.claimLines}</p>
+              <p style="margin:6px 0 0;color:${MUTED};font-size:13.5px;line-height:1.5;">${C.claimSub}</p>
+            </td></tr>
+          </table>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="padding:26px 40px 34px;text-align:center;">
+          <p style="margin:0;color:${FAINT};font-size:12px;line-height:1.6;">
+            ${C.footer} &middot; <a href="mailto:support@game-over.app" style="color:${GOLD};text-decoration:none;font-weight:600;">support@game-over.app</a>
           </p>
-        </td>
-      </tr>
-    </table>
-    ` : ''}
+        </td></tr>
 
-    ${ctaButton('Complete Payment', ctaUrl, colors.accent)}
-    ${supportLine()}`;
-
-  return baseLayout({
-    title: label,
-    subtitle: label,
-    accentColor: colors.accent,
-    bodyHtml,
-  });
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
 }
 
 // ─── Guest Invite Email ─────────────────────────────────────

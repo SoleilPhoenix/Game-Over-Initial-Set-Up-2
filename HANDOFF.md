@@ -1,11 +1,49 @@
 # Handoff - Game Over App
 
 Kurzer Übergabestand, damit eine neue Session (z. B. von der iPhone-Claude-Code-App) nahtlos anknüpfen kann.
-Letzte Aktualisierung: 2026-07-29.
+Letzte Aktualisierung: 2026-07-30.
 
 **Diese Datei ist die Statusdatei des Projekts.** Ein `Status.md` gibt es bewusst nicht.
 Sie wird laut globaler `~/.claude/CLAUDE.md` nach jedem abgeschlossenen Fortschritt fortgeschrieben,
 und zwar im selben Commit wie die Änderung, die sie beschreibt.
+
+## Aktueller Stand (2026-07-30) - Zahlungserinnerungen zweisprachig, Editorial-Palette, Claim
+
+Die Zahlungserinnerungen sind jetzt auf demselben Stand wie das Briefing. Vorher: neun Meldungstexte
+nur auf Englisch, und `getPaymentReminderEmailHtml` lief noch über `baseLayout` mit `#5A7EB0`,
+`#15181D` und `#23272F` - alle drei laut CLAUDE.md **verbotene** Altfarben.
+
+- **Neu `supabase/functions/_shared/payment-reminder.ts`**: alle neun Stufen (`notice_18`,
+  `request_16`, `followup_14`, `followup_12`, `urgent_10`, `urgent_9`, `urgent_8`, `final_7`,
+  `cancelled_6`) in DE und EN, plus `reminderCopy()` und `reminderSubject()`. Liegt in `_shared`
+  wie `briefing.ts`, damit ein Vorschau-Skript die echten Strings rendern kann, ohne den Server
+  der Funktion zu starten.
+- **`getPaymentReminderEmailHtml` neu geschrieben**: Editorial-Palette (Navy/Champagne), Claim
+  wörtlich aus `src/i18n`, Buchungsreferenz, Betragskachel, Warnband nur auf der letzten Frist.
+  Dringlichkeit bleibt in der Palette - Gold für die ruhigen Stufen, Amber ab Tag 10, Rot nur am
+  Tag 7. Neue Felder (`language`, `partyLabel`, `guestFirstName`, `bookingReference`) sind
+  **optional**, damit der zweite Aufrufer `send-email` unverändert weiterläuft.
+- **Sprache** kommt aus `profiles.language` des Organisators. Das Profil wird jetzt **einmal** früh
+  im Loop geladen statt zweimal (vorher nochmal im E-Mail-Block), weil In-App-Benachrichtigung und
+  Push die Sprache ebenfalls brauchen - die waren vorher fest englisch.
+- Betreff über `reminderSubject()`, inklusive Genitiv-Helfer: "Natalias Bachelorette Party (JGA)".
+
+Gegengeprüft am gerenderten HTML: **0 Treffer** für alle fünf verbotenen Altfarben, Claim in beiden
+Sprachen vorhanden, Genitiv korrekt. `deno check` für `process-payment-reminders`, `send-email` und
+`send-final-briefing` grün, typecheck/lint/102 Tests grün. Beide Funktionen deployed mit
+`--no-verify-jwt`, danach über `net.http_post` ausgelöst: **200 OK**, alle neun Stufen, 0 Fehler.
+
+### Testfenster (Stand 30.07.)
+
+| Event | Datum | Entfernung | Trifft Stufe? |
+|---|---|---|---|
+| Soleil's Bachelor | 02.08. | 3 Tage | nein - aber **Briefing feuert am 01.08.** |
+| Dana's Bachelor | 08.08. | **9 Tage** | **ja** (`urgent_9`) - Buchung `GO-0614B6` da |
+| Natalia's Bachelorette | 16.08. | 17 Tage | nein - **16 Tage am 31.07.** |
+
+Beide Buchungen haben `deposit_paid_at = NULL`, deshalb greift die Abfrage nicht. Sobald eine
+Anzahlung über den echten Stripe-Testfluss gezahlt ist, feuert die Stufe. Alle Organisatoren stehen
+jetzt auf `language = 'de'`, die Mails kommen also deutsch.
 
 ## Aufgeklärt (2026-07-29, Abend) - die App hat ihre Sprachwahl nie in die DB geschrieben
 

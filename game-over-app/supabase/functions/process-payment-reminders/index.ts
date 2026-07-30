@@ -25,6 +25,8 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { sendEmail } from '../_shared/email.ts';
 import { getPaymentReminderEmailHtml } from '../_shared/email-templates.ts';
+import { reminderCopy, reminderSubject, type ReminderType } from '../_shared/payment-reminder.ts';
+import { partyLabel, type PartyType } from '../_shared/briefing.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -60,46 +62,9 @@ const MILESTONES = [
   { daysBefore: CANCEL_AT_DAYS, urgency: 'final' as const, type: 'cancelled_6' },
 ] as const;
 
-// Notification copy per milestone type. Days quoted are days left until the payment
-// deadline (day 7), not until the event.
-const MESSAGES: Record<string, { title: string; bodyTemplate: string }> = {
-  notice_18: {
-    title: 'Payment Due Soon',
-    bodyTemplate: 'Your remaining balance of {{amount}} is due in 11 days.',
-  },
-  request_16: {
-    title: 'Payment Reminder',
-    bodyTemplate: 'Please settle your remaining balance of {{amount}} - due in 9 days.',
-  },
-  followup_14: {
-    title: 'Payment Reminder',
-    bodyTemplate: 'Reminder: your remaining balance of {{amount}} is due in 7 days.',
-  },
-  followup_12: {
-    title: 'Payment Reminder',
-    bodyTemplate: 'Reminder: your remaining balance of {{amount}} is due in 5 days.',
-  },
-  urgent_10: {
-    title: 'Urgent: Payment Due',
-    bodyTemplate: 'Urgent: your remaining balance of {{amount}} is due in 3 days.',
-  },
-  urgent_9: {
-    title: 'Urgent: Payment Due',
-    bodyTemplate: 'Urgent: your remaining balance of {{amount}} is due in 2 days.',
-  },
-  urgent_8: {
-    title: 'Urgent: Payment Due Tomorrow',
-    bodyTemplate: 'Urgent: your remaining balance of {{amount}} is due tomorrow.',
-  },
-  final_7: {
-    title: 'Final Notice: Payment Due Today',
-    bodyTemplate: 'Final notice: pay {{amount}} today. Otherwise the event is cancelled tomorrow and only the 25% deposit is retained.',
-  },
-  cancelled_6: {
-    title: 'Event Cancelled',
-    bodyTemplate: 'The remaining balance of {{amount}} was not received in time. The event has been cancelled and the 25% deposit is retained.',
-  },
-};
+// Notification copy lives in _shared/payment-reminder.ts, bilingual, so it can be
+// rendered for review without starting this module's server. Language comes from the
+// organizer's profiles.language.
 
 function formatCents(cents: number): string {
   return `\u20AC${(cents / 100).toFixed(2)}`;
@@ -167,13 +132,15 @@ serve(async (req: Request) => {
           total_amount_cents,
           deposit_amount_cents,
           event_id,
+          reference_number,
           event:events!inner(
             id,
             title,
             honoree_name,
             start_date,
             status,
-            created_by
+            created_by,
+            party_type
           )
         `)
         .not('deposit_paid_at', 'is', null)
@@ -227,9 +194,27 @@ serve(async (req: Request) => {
           // The last rung of the ladder is the cancellation pass, not a reminder.
           const isCancellationPass = milestone.daysBefore === CANCEL_AT_DAYS;
 
+          // Organizer profile drives language, greeting and delivery. Fetched here rather
+          // than inside the email block, because the in-app notification and push need the
+          // language too — they used to be hardcoded English.
+          const { data: organizer } = await supabase
+            .from('profiles')
+            .select('email, full_name, language, email_notifications_enabled')
+            .eq('id', userId)
+            .maybeSingle();
+
+          const language: 'de' | 'en' = organizer?.language === 'de' ? 'de' : 'en';
+          const organizerFirstName =
+            ((organizer?.full_name as string | null) ?? '').trim().split(/\s+/)[0] || undefined;
+          const label = partyLabel(
+            event.honoree_name || 'the honoree',
+            event.party_type as PartyType,
+            language,
+          );
+
           // Build notification message
-          const messageConfig = MESSAGES[milestone.type];
-          const body = messageConfig.bodyTemplate.replace('{{amount}}', amountStr);
+          const messageConfig = reminderCopy(milestone.type as ReminderType, language, amountStr);
+          const body = messageConfig.body;
           const notificationType = isCancellationPass
             ? 'event_cancelled_nonpayment'
             : `payment_reminder_${milestone.type}`;
@@ -292,33 +277,35 @@ serve(async (req: Request) => {
             console.error('Push notification error:', pushError);
           }
 
-          // 3. Send email
+          // 3. Send email — organizer profile was already loaded above.
           let emailSent = false;
           try {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('email, email_notifications_enabled')
-              .eq('id', userId)
-              .single();
+            const organizerEmail = (organizer?.email as string | null)?.trim() || null;
 
             // The payment-reminder template tells the reader to pay before cancellation.
             // On the cancellation pass that has already happened, so sending it would be
             // actively wrong. In-app notification and push carry the cancellation message;
             // a dedicated cancellation email template is still open work.
-            if (profile?.email && profile.email_notifications_enabled !== false && !isCancellationPass) {
+            if (organizerEmail && organizer?.email_notifications_enabled !== false && !isCancellationPass) {
+              // Days left until the payment deadline (day 7), not until the event.
+              const daysRemaining = Math.max(0, milestone.daysBefore - PAYMENT_DEADLINE_DAYS);
+
               const html = getPaymentReminderEmailHtml({
                 honoreeName: event.honoree_name,
                 eventTitle: event.title,
                 amountDue: amountStr,
-                // Days left until the payment deadline (day 7), not until the event.
-                daysRemaining: Math.max(0, milestone.daysBefore - PAYMENT_DEADLINE_DAYS),
+                daysRemaining,
                 urgency: milestone.urgency,
                 paymentUrl: `https://game-over.app/booking/${event.id}/payment`,
+                language,
+                partyLabel: label,
+                guestFirstName: organizerFirstName,
+                bookingReference: (booking.reference_number as string | null) ?? undefined,
               });
 
               const emailResult = await sendEmail({
-                to: profile.email,
-                subject: `${messageConfig.title} — ${event.honoree_name}'s Party`,
+                to: organizerEmail,
+                subject: reminderSubject(milestone.type as ReminderType, language, amountStr, label),
                 html,
               });
 
