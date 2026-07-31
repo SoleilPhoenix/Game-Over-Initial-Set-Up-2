@@ -7,6 +7,77 @@ Letzte Aktualisierung: 2026-07-30.
 Sie wird laut globaler `~/.claude/CLAUDE.md` nach jedem abgeschlossenen Fortschritt fortgeschrieben,
 und zwar im selben Commit wie die Änderung, die sie beschreibt.
 
+## Aktueller Stand (2026-07-31) - Zahlungsintegritaet, Merge mit main, Marken-Assets
+
+Branch `claude/budget-refunds-layout-errors-0302ea`, dazu `claude/marken-assets-web` (gemergt).
+`npm run typecheck`, `npx vitest run` (107 Tests), `deno check` gruen, von Claude nachgefahren.
+
+### 1. Der Branch war von einem veralteten main abgezweigt
+
+Zehn Commits aus parallelen Sessions lagen auf `main`, teils an **denselben** Dateien:
+neue Erinnerungsstaffel mit `PAYMENT_DEADLINE_DAYS = 7` / `CANCEL_AT_DAYS = 6`, zweisprachige
+Erinnerungsmails, `verify_jwt` (unabhaengig zweimal repariert), Client-Statuswrite entfernt.
+
+Aufgeloest **nicht** per Rebase, sondern `main` in den Branch gemergt: ein Rebase haette die sechs
+Commits einzeln ueber zehn neue abgespielt und dieselben Konflikte mehrfach aufgeworfen.
+Bei den zwei Codedateien hat `main` gewonnen (`--theirs`), danach wurden die drei Beitraege des
+Branches gezielt daraufgesetzt. **Mains Staffel, Timing und Copy sind unveraendert.**
+
+**Merke fuer die naechste parallele Sitzung:** vor dem Abzweigen `main` pruefen, und lange Branches
+regelmaessig nachziehen. Der Aufwand hier war ein Vielfaches der eigentlichen Aenderung.
+
+### 2. Der Trigger hat einen Zahlungsausfall verhindert, nicht einen Formfehler
+
+`payment.tsx` rief nach der Stripe-Zahlung `updatePaymentStatus(..., 'completed')`.
+`enforce_booking_financial_integrity` wies das mit `P0001` ab - die Zahlung war durch, die App
+meldete Fehlschlag (Sven, GO-1B1063). Der Aufruf war zusaetzlich **inhaltlich falsch**: der Webhook
+schreibt nach einer Anzahlung `processing` und reserviert `completed` fuer die Vollzahlung.
+Ohne den Trigger stuende die Buchung als vollstaendig bezahlt in der DB, mit 1030,50 EUR offener
+Forderung, die keine Erinnerung und keine Stornierung je wieder eingefordert haette.
+
+`updatePaymentStatus`, der Hook und der Re-Export sind **geloescht**, nicht nur ungenutzt.
+Ein gesperrter Schreibpfad laedt zum erneuten Aufruf ein.
+
+`confirm-demo-booking` simuliert die Buchung jetzt vollstaendig: nimmt nur `eventId` und
+`paymentKind`, weist unbekannte Felder mit 400 ab, leitet die Betraege selbst aus
+`total_amount_cents` ab (`ceil(total/4)`), und schreibt die **Buchung vor dem Event-Status** -
+ein Fehlschlag hinterlaesst so kein gebuchtes Event ohne Zahlung.
+
+`bookings.create` gibt eine vorhandene Buchung des Events zurueck (23505 auf
+`bookings_event_id_key`) und faengt zusaetzlich das Insert-Rennen ab.
+
+### 3. Daten geradegezogen
+
+- **GO-376D44 (Natalia):** Anzahlung 22900, Rest 68700, `deposit_paid_at`, `processing`;
+  vier Teilnehmer auf je 22900. **Achtung: das dokumentiert einen Zahlungseingang, den es nie gab** -
+  bewusst so, weil Testevent.
+- **GO-1B1063 (Sven)** war bereits korrekt, nur der letzte Statusschritt fehlte.
+- **GO-0614B6 (Dana Flatulence)** auf Wunsch geloescht - verwaiste Buchung auf einem Draft-Event,
+  entstanden durch genau den Bug aus Punkt 2. Kaskade sauber, keine verwaisten Buchungen mehr.
+
+### 4. Marken-Assets fuer die Webseite
+
+Neu in `assets/web/`: `logo-mark.svg`, `logo-on-navy.svg`, `splash.svg`, `favicon.svg`,
+`intro.html` und `generate.py`. Alle Pfade woertlich aus `assets/brand/logo.svg`.
+
+**Splash und Adaptive-Icon bleiben PNG** - Expo laesst dort kein SVG zu, das ist eine
+Plattformgrenze. Umgestellt ist nur das Web-Favicon in `app.config.ts`.
+
+`intro.html` bildet den 4-Sekunden-Aufbau als reines CSS/SVG nach (kein JS, keine externe URL,
+`prefers-reduced-motion`). Eine mp4 gibt es weiterhin nicht; `INTRO_VIDEO_SOURCE` bleibt `null`.
+
+Zwei Korrekturen nach dem Ansehen der gerenderten Dateien - Parsen allein haette beide uebersehen:
+- Der Favicon trug `stroke-width="12"` als "optische Verstaerkung". Das verdickt auch die Haarlinien
+  der Diamantfacetten, der Stein lief zu einem Klumpen zusammen. Jetzt unveraenderte Pfade,
+  quadratischer viewBox mit 16% Luft, keine feste `width`/`height`.
+- `splash.svg` zeigte "Game-Over.app" zweimal: die Wortmarke steckt bereits in `logo.svg`.
+
+### 5. Boot-Screen und Tastatur
+
+Der Startbildschirm zeigte nur die Ringmarke, das Intro Marke + Wortmarke + Domain - der Uebergang
+las sich wie zwei Marken. Beide nutzen jetzt `BrandLockup` aus `AnimatedLogo.tsx`.
+In `profile/edit.tsx` scrollen alle Felder beim Fokus ueber die Tastatur.
+
 ## Aktueller Stand (2026-07-29, spaeter) - Feedback-Schicht statt nativer Dialoge, Cron endlich gruen
 
 Branch `claude/budget-refunds-layout-errors-0302ea`.
