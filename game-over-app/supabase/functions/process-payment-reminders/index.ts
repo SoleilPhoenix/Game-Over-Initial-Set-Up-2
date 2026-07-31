@@ -24,43 +24,22 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { sendEmail } from '../_shared/email.ts';
-import { getPaymentReminderEmailHtml } from '../_shared/email-templates.ts';
+import {
+  getBookingCancelledEmailHtml,
+  getPaymentReminderEmailHtml,
+} from '../_shared/email-templates.ts';
 import { reminderCopy, reminderSubject, type ReminderType } from '../_shared/payment-reminder.ts';
 import { partyLabel, type PartyType } from '../_shared/briefing.ts';
+import {
+  CANCEL_AT_DAYS,
+  MILESTONES,
+  PAYMENT_DEADLINE_DAYS,
+} from '../_shared/payment-reminder-milestones.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-// Payment deadline: the balance must be settled by PAYMENT_DEADLINE_DAYS before the event.
-// The event is cancelled a full day later, so the deadline the final notice announces
-// actually exists. Warning and cancellation in the same daily run would mean the customer
-// reads "act now or it is cancelled" about something already executed - and, under German
-// consumer law, a deadline without any time to act is no deadline at all.
-const PAYMENT_DEADLINE_DAYS = 7;
-const CANCEL_AT_DAYS = 6;
-
-// Reminder ladder, in days before the event:
-//   18      first heads-up
-//   16      explicit request to pay
-//   14, 12  every other day through the buffer
-//   10,9,8  daily as it gets close
-//   7       final notice, deadline day
-//   6       cancellation (handled separately below, sends no payment reminder)
-const MILESTONES = [
-  { daysBefore: 18, urgency: 'normal' as const, type: 'notice_18' },
-  { daysBefore: 16, urgency: 'moderate' as const, type: 'request_16' },
-  { daysBefore: 14, urgency: 'moderate' as const, type: 'followup_14' },
-  { daysBefore: 12, urgency: 'moderate' as const, type: 'followup_12' },
-  { daysBefore: 10, urgency: 'urgent' as const, type: 'urgent_10' },
-  { daysBefore: 9, urgency: 'urgent' as const, type: 'urgent_9' },
-  { daysBefore: 8, urgency: 'urgent' as const, type: 'urgent_8' },
-  { daysBefore: PAYMENT_DEADLINE_DAYS, urgency: 'final' as const, type: 'final_7' },
-  // Cancellation pass. Kept in the same list so it reuses the booking query and the
-  // idempotent payment_reminders insert; the loop branches on daysBefore below.
-  { daysBefore: CANCEL_AT_DAYS, urgency: 'final' as const, type: 'cancelled_6' },
-] as const;
 
 // Notification copy lives in _shared/payment-reminder.ts, bilingual, so it can be
 // rendered for review without starting this module's server. Language comes from the
@@ -68,6 +47,20 @@ const MILESTONES = [
 
 function formatCents(cents: number): string {
   return `\u20AC${(cents / 100).toFixed(2)}`;
+}
+
+function formatCentsForLanguage(cents: number, language: 'de' | 'en'): string {
+  return new Intl.NumberFormat(language === 'de' ? 'de-DE' : 'en-US', {
+    style: 'currency',
+    currency: 'EUR',
+  }).format(cents / 100);
+}
+
+function formatEventDate(date: string, language: 'de' | 'en'): string {
+  return new Date(`${date.slice(0, 10)}T00:00:00`).toLocaleDateString(
+    language === 'de' ? 'de-DE' : 'en-US',
+    { year: 'numeric', month: 'long', day: 'numeric' },
+  );
 }
 
 function addDays(date: Date, days: number): string {
@@ -284,9 +277,13 @@ serve(async (req: Request) => {
 
             // The payment-reminder template tells the reader to pay before cancellation.
             // On the cancellation pass that has already happened, so sending it would be
-            // actively wrong. In-app notification and push carry the cancellation message;
-            // a dedicated cancellation email template is still open work.
-            if (organizerEmail && organizer?.email_notifications_enabled !== false && !isCancellationPass) {
+            // actively wrong. The dedicated cancellation email is sent only after the
+            // cancellation write succeeds below.
+            if (
+              organizerEmail &&
+              (milestone.alwaysSend || organizer?.email_notifications_enabled !== false) &&
+              !isCancellationPass
+            ) {
               // Days left until the payment deadline (day 7), not until the event.
               const daysRemaining = Math.max(0, milestone.daysBefore - PAYMENT_DEADLINE_DAYS);
 
@@ -375,6 +372,53 @@ serve(async (req: Request) => {
                 // No separate cancellation notification here: step 1 above already wrote one
                 // with type 'event_cancelled_nonpayment' on this pass. Inserting a second
                 // would show the user the same bad news twice.
+
+                // Send only after the events.status write above succeeded. This is
+                // deliberately non-blocking: delivery failure cannot undo or retry
+                // a confirmed cancellation.
+                // Deliberately ignore email_notifications_enabled here: retaining
+                // the deposit makes this a contractual notice, not an optional mail.
+                const organizerEmail = (organizer?.email as string | null)?.trim();
+                if (organizerEmail) {
+                  const retainedDepositCents = booking.deposit_amount_cents ??
+                    (booking.total_amount_cents - remainingCents);
+
+                  Promise.resolve()
+                    .then(() => sendEmail({
+                      to: organizerEmail,
+                      subject: language === 'de'
+                        ? 'Schade - wir mussten stornieren | Game Over'
+                        : 'We’re sorry - we had to cancel | Game Over',
+                      html: getBookingCancelledEmailHtml({
+                        organizerFirstName,
+                        partyLabel: label,
+                        dateStr: formatEventDate(event.start_date, language),
+                        remainingAmount: formatCentsForLanguage(remainingCents, language),
+                        depositAmount: formatCentsForLanguage(retainedDepositCents, language),
+                        bookingReference: (booking.reference_number as string | null) ?? undefined,
+                        appUrl: 'https://game-over.app',
+                        language,
+                      }),
+                    }))
+                    .then((emailResult) => {
+                      if (!emailResult.success) {
+                        console.warn(
+                          `[process-payment-reminders] Cancellation email failed for booking ${booking.id} (non-blocking):`,
+                          emailResult.error,
+                        );
+                      }
+                    })
+                    .catch((emailError) => {
+                      console.warn(
+                        `[process-payment-reminders] Cancellation email failed for booking ${booking.id} (non-blocking):`,
+                        emailError instanceof Error ? emailError.message : String(emailError),
+                      );
+                    });
+                } else {
+                  console.warn(
+                    `[process-payment-reminders] Cancellation email skipped for booking ${booking.id}: organizer email unavailable`,
+                  );
+                }
                 processed++;
               }
             } else {
