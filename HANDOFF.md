@@ -54,13 +54,12 @@ Handlungszeit. Jeder Meilenstein trägt `alwaysSend`; der Nutzerschalter greift 
 
 ### Muss noch gemacht werden
 
-1. **Preis-Fallback ist still und teuer.** `src/hooks/useBookingFlow.ts:84`:
-   `totalParticipants = participantCountOverride || participants.length || 1`.
-   Fehlt der URL-Parameter aus dem Wizard, wird die Buchung auf die zufällige Zeilenzahl in
-   `event_participants` bepreist, ohne Hinweis. Bei Natalia (`GO-376D44`) hat das aus 5 gewählten
-   Personen eine Buchung über 4 gemacht - bei 229 EUR pro Kopf. **Der Fallback darf bei einer
-   preisbestimmenden Zahl nicht schweigen.**
-   Folge davon: die Events-Karte zeigt den gecachten Wunschwert (5), die Buchung den echten (4).
+1. ~~Preis-Fallback~~ **behoben am 31.07.** `useBookingFlow.ts` bepreist nur noch aus
+   ausdruecklichen Quellen: URL-Parameter, dann die bereits aufgezeichnete Kopfzahl der Buchung
+   (`paying_participants + exclude_honoree`), dann der gecachte Wunschwert - sonst **kein Preis**.
+   `participants.length` und `|| 1` sind raus; ein unbekannter Wert blockiert die Zahlung mit
+   Meldung statt still zu raten. Tests decken alle vier Faelle ab.
+   Natalias Buchung wurde auf 5 Personen korrigiert (114500).
 2. **Sechs Auth-Vorlagen sind nicht im Dashboard.** Bis dahin verschickt Supabase seine nackten
    Standardtexte, nur über Resend statt den Testdienst.
    `node scripts/push-auth-email-templates.mjs` (Trockenlauf) bzw. `--apply`, braucht

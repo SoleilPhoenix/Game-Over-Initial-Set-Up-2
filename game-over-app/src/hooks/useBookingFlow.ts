@@ -3,12 +3,13 @@
  * Derives pricing from server state - no separate store needed
  */
 
-import { useState, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useParticipants } from '@/hooks/queries/useParticipants';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { usePackage } from '@/hooks/queries/usePackages';
 import { calculateBookingPricing } from '@/utils/pricing';
+import { loadDesiredParticipants } from '@/lib/participantCountCache';
 import type { EventWithDetails } from '@/repositories/events';
 import type { ParticipantWithProfile } from '@/repositories/participants';
 import type { BookingWithDetails } from '@/repositories/bookings';
@@ -44,6 +45,8 @@ export interface UseBookingFlowResult {
   excludeHonoree: boolean;
   setExcludeHonoree: (value: boolean) => void;
   pricing: BookingPricing | null;
+  isParticipantCountLoading: boolean;
+  isParticipantCountUnavailable: boolean;
   isLoading: boolean;
   error: Error | null;
 }
@@ -61,6 +64,59 @@ const FALLBACK_PKG: Record<string, FallbackPackage> = {
   'hannover-grand':     { id: 'hannover-grand',     name: getCityTierName('hannover', 'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand,     base_price_cents: 0 },
 };
 
+type RecordedBookingHeadcount = Pick<BookingWithDetails, 'paying_participants' | 'exclude_honoree'>;
+
+interface PricingParticipantCountSources {
+  participantCountOverride?: number;
+  booking?: RecordedBookingHeadcount | null;
+  cachedParticipantCount?: number;
+}
+
+interface ResolveBookingPricingInput extends PricingParticipantCountSources {
+  pkg: Package | FallbackPackage | null | undefined;
+  excludeHonoree: boolean;
+}
+
+/** Resolve only from user decisions or the headcount recorded on an existing booking. */
+export function resolvePricingParticipantCount({
+  participantCountOverride,
+  booking,
+  cachedParticipantCount,
+}: PricingParticipantCountSources): number | undefined {
+  if (participantCountOverride !== undefined) return participantCountOverride;
+  if (booking) {
+    return booking.paying_participants + (booking.exclude_honoree === true ? 1 : 0);
+  }
+  return cachedParticipantCount;
+}
+
+/** Pure pricing adapter kept exportable so the charge-source chain has a regression net. */
+export function resolveBookingPricing({
+  pkg,
+  excludeHonoree,
+  ...participantCountSources
+}: ResolveBookingPricingInput): BookingPricing | null {
+  if (!pkg) return null;
+
+  const totalParticipants = resolvePricingParticipantCount(participantCountSources);
+  if (totalParticipants === undefined) return null;
+
+  const result = calculateBookingPricing({
+    pricePerPersonCents: pkg.price_per_person_cents,
+    baseFeeCents: (pkg as FallbackPackage).base_price_cents ?? 0,
+    totalParticipants,
+    excludeHonoree,
+  });
+
+  return {
+    packagePriceCents: result.packageBaseCents,
+    serviceFeeCents: result.serviceFeeCents,
+    totalCents: result.totalCents,
+    perPersonCents: result.perPersonCents,
+    payingParticipantCount: result.payingCount,
+  };
+}
+
 export function useBookingFlow(eventId: string | undefined, packageIdOverride?: string, participantCountOverride?: number): UseBookingFlowResult {
   const { data: event, isLoading: eventLoading, error: eventError } = useEvent(eventId);
   const { data: participants, isLoading: participantsLoading } = useParticipants(eventId);
@@ -77,31 +133,65 @@ export function useBookingFlow(eventId: string | undefined, packageIdOverride?: 
     booking?.exclude_honoree ?? true
   );
 
-  // Calculate pricing based on current state
-  const pricing = useMemo((): BookingPricing | null => {
-    if (!pkg) return null;
+  const [participantCountCacheResult, setParticipantCountCacheResult] = useState<{
+    eventId: string;
+    count: number | undefined;
+  } | null>(null);
+  const loggedMissingParticipantCount = useRef(new Set<string>());
 
-    // Use override (from URL params) > participant list > event count > fallback to 1
-    const totalParticipants = participantCountOverride ||
-      ((participants && participants.length > 0) ? participants.length : 1);
+  useEffect(() => {
+    if (!eventId) return;
 
-    const result = calculateBookingPricing({
-      pricePerPersonCents: pkg.price_per_person_cents,
-      baseFeeCents: (pkg as FallbackPackage).base_price_cents ?? 0,
-      totalParticipants,
-      excludeHonoree,
+    let cancelled = false;
+    loadDesiredParticipants(eventId).then((count) => {
+      if (!cancelled) setParticipantCountCacheResult({ eventId, count });
     });
 
-    return {
-      packagePriceCents: result.packageBaseCents,
-      serviceFeeCents: result.serviceFeeCents,
-      totalCents: result.totalCents,
-      perPersonCents: result.perPersonCents,
-      payingParticipantCount: result.payingCount,
+    return () => {
+      cancelled = true;
     };
-  }, [pkg, participants, excludeHonoree, participantCountOverride]);
+  }, [eventId]);
 
-  const isLoading = eventLoading || participantsLoading || bookingLoading || (packageLoading && !pkg);
+  const cachedParticipantCount = participantCountCacheResult && participantCountCacheResult.eventId === eventId
+    ? participantCountCacheResult.count
+    : undefined;
+  const isParticipantCountCacheLoading = Boolean(
+    eventId && participantCountCacheResult?.eventId !== eventId
+  );
+  const isParticipantCountLoading = participantCountOverride === undefined && (
+    bookingLoading || (!booking && isParticipantCountCacheLoading)
+  );
+  const resolvedParticipantCount = isParticipantCountLoading
+    ? undefined
+    : resolvePricingParticipantCount({
+        participantCountOverride,
+        booking,
+        cachedParticipantCount,
+      });
+  const isParticipantCountUnavailable = Boolean(
+    eventId && !isParticipantCountLoading && resolvedParticipantCount === undefined
+  );
+
+  useEffect(() => {
+    if (!eventId || !isParticipantCountUnavailable || loggedMissingParticipantCount.current.has(eventId)) return;
+    loggedMissingParticipantCount.current.add(eventId);
+    console.error(`[useBookingFlow] Cannot determine participant count for event ${eventId}; pricing refused.`);
+  }, [eventId, isParticipantCountUnavailable]);
+
+  // Calculate pricing based on current state
+  const pricing = useMemo((): BookingPricing | null => {
+    if (isParticipantCountLoading) return null;
+
+    return resolveBookingPricing({
+      pkg,
+      excludeHonoree,
+      participantCountOverride,
+      booking,
+      cachedParticipantCount,
+    });
+  }, [pkg, excludeHonoree, participantCountOverride, booking, cachedParticipantCount, isParticipantCountLoading]);
+
+  const isLoading = eventLoading || participantsLoading || bookingLoading || isParticipantCountLoading || (packageLoading && !pkg);
 
   return {
     event,
@@ -111,6 +201,8 @@ export function useBookingFlow(eventId: string | undefined, packageIdOverride?: 
     excludeHonoree,
     setExcludeHonoree,
     pricing,
+    isParticipantCountLoading,
+    isParticipantCountUnavailable,
     isLoading,
     error: eventError as Error | null,
   };
