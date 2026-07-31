@@ -48,5 +48,11 @@ jobs:
           supabase functions deploy send-email --project-ref "$SUPABASE_PROJECT_ID"
           supabase functions deploy send-push-notification --project-ref "$SUPABASE_PROJECT_ID"
           supabase functions deploy send-guest-invitations --project-ref "$SUPABASE_PROJECT_ID"
-          supabase functions deploy send-final-briefing --project-ref "$SUPABASE_PROJECT_ID"
-          supabase functions deploy process-payment-reminders --project-ref "$SUPABASE_PROJECT_ID"
+          # --no-verify-jwt is required for the two cron-triggered functions: pg_cron
+          # sends a CRON_SECRET bearer token, not a user JWT. Without the flag the
+          # platform answers 401 UNAUTHORIZED_INVALID_JWT_FORMAT before the function
+          # runs. This bit them on 2026-07-29. supabase/config.toml declares the same
+          # thing; the flag stays as belt and braces in case an older CLI in CI ignores
+          # the per-function config block.
+          supabase functions deploy send-final-briefing --project-ref "$SUPABASE_PROJECT_ID" --no-verify-jwt
+          supabase functions deploy process-payment-reminders --project-ref "$SUPABASE_PROJECT_ID" --no-verify-jwt

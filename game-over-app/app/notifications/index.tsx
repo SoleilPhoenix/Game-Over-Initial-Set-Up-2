@@ -186,19 +186,32 @@ export default function NotificationsScreen() {
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const renderSectionHeader = ({ section }: { section: { title: string } }) => (
-    <YStack paddingHorizontal="$4" paddingVertical="$3" marginLeft="$1">
-      <Text
-        fontSize={12}
-        fontWeight="700"
-        color={theme.textTertiary}
-        textTransform="uppercase"
-        letterSpacing={1}
-      >
-        {section.title}
-      </Text>
-    </YStack>
-  );
+  const organizerUrgentEvents = urgentEvents.filter(info => info.event.created_by === user?.id);
+  // Mirrors the condition guarding ListHeaderComponent below: whenever that block
+  // renders, it prints its own "today" label above the urgency rows.
+  const headerPrintsToday = organizerUrgentEvents.length > 0
+    || (isGuestContribution && !isOrganizer)
+    || ((!!guestClaimedRecentEvent || !!guestPaidRecentEvent) && !isOrganizer);
+
+  const renderSectionHeader = ({ section }: { section: { title: string } }) => {
+    // The urgency rows in ListHeaderComponent already print a "today" label, and
+    // they belong to the same day as this section. Printing it again puts the
+    // word twice on screen with a card wedged between the two.
+    if (section.title === t.notifications.today && headerPrintsToday) return null;
+    return (
+      <YStack paddingHorizontal="$4" paddingVertical="$3" marginLeft="$1">
+        <Text
+          fontSize={12}
+          fontWeight="700"
+          color={theme.textTertiary}
+          textTransform="uppercase"
+          letterSpacing={1}
+        >
+          {section.title}
+        </Text>
+      </YStack>
+    );
+  };
 
   const renderItem = ({ item }: { item: Notification }) => (
     <NotificationItem
@@ -217,7 +230,6 @@ export default function NotificationsScreen() {
   }
 
   const hasNotifications = groupedNotifications.length > 0;
-  const organizerUrgentEvents = urgentEvents.filter(info => info.event.created_by === user?.id);
   const hasAnyContent = hasNotifications
     || organizerUrgentEvents.length > 0
     || isGuestContribution
@@ -273,9 +285,7 @@ export default function NotificationsScreen() {
           stickySectionHeadersEnabled={false}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={
-            (organizerUrgentEvents.length > 0
-              || (isGuestContribution && !isOrganizer)
-              || ((!!guestClaimedRecentEvent || !!guestPaidRecentEvent) && !isOrganizer)) ? (
+            headerPrintsToday ? (
               <>
                 {/* TODAY label above all urgency rows */}
                 <YStack paddingHorizontal="$4" paddingTop="$3" paddingBottom="$1" marginLeft="$1">

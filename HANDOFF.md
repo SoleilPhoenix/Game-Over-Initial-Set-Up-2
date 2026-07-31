@@ -1,7 +1,7 @@
 # Handoff - Game Over App
 
 Kurzer Übergabestand, damit eine neue Session (z. B. von der iPhone-Claude-Code-App) nahtlos anknüpfen kann.
-Letzte Aktualisierung: 2026-07-29.
+Letzte Aktualisierung: 2026-07-30.
 
 **Diese Datei ist die Statusdatei des Projekts.** Ein `Status.md` gibt es bewusst nicht.
 Sie wird laut globaler `~/.claude/CLAUDE.md` nach jedem abgeschlossenen Fortschritt fortgeschrieben,
@@ -234,6 +234,253 @@ sonst repariert man weiter Symptome.
 - Testevent "Soleil's Bachelor" (02.08.) hat weiter **keine Buchung mit `reference_number`**,
   das Briefing wuerde `GO-XXXXXX` und `Classic (M)` verschicken.
 - Alle Profile stehen auf `en`, der deutsche Briefing-Text wird aktuell nirgends ausgeloest.
+## Aktueller Stand (2026-07-30) - Zahlungserinnerungen zweisprachig, Editorial-Palette, Claim
+
+Die Zahlungserinnerungen sind jetzt auf demselben Stand wie das Briefing. Vorher: neun Meldungstexte
+nur auf Englisch, und `getPaymentReminderEmailHtml` lief noch über `baseLayout` mit `#5A7EB0`,
+`#15181D` und `#23272F` - alle drei laut CLAUDE.md **verbotene** Altfarben.
+
+- **Neu `supabase/functions/_shared/payment-reminder.ts`**: alle neun Stufen (`notice_18`,
+  `request_16`, `followup_14`, `followup_12`, `urgent_10`, `urgent_9`, `urgent_8`, `final_7`,
+  `cancelled_6`) in DE und EN, plus `reminderCopy()` und `reminderSubject()`. Liegt in `_shared`
+  wie `briefing.ts`, damit ein Vorschau-Skript die echten Strings rendern kann, ohne den Server
+  der Funktion zu starten.
+- **`getPaymentReminderEmailHtml` neu geschrieben**: Editorial-Palette (Navy/Champagne), Claim
+  wörtlich aus `src/i18n`, Buchungsreferenz, Betragskachel, Warnband nur auf der letzten Frist.
+  Dringlichkeit bleibt in der Palette - Gold für die ruhigen Stufen, Amber ab Tag 10, Rot nur am
+  Tag 7. Neue Felder (`language`, `partyLabel`, `guestFirstName`, `bookingReference`) sind
+  **optional**, damit der zweite Aufrufer `send-email` unverändert weiterläuft.
+- **Sprache** kommt aus `profiles.language` des Organisators. Das Profil wird jetzt **einmal** früh
+  im Loop geladen statt zweimal (vorher nochmal im E-Mail-Block), weil In-App-Benachrichtigung und
+  Push die Sprache ebenfalls brauchen - die waren vorher fest englisch.
+- Betreff über `reminderSubject()`, inklusive Genitiv-Helfer: "Natalias Bachelorette Party (JGA)".
+
+Gegengeprüft am gerenderten HTML: **0 Treffer** für alle fünf verbotenen Altfarben, Claim in beiden
+Sprachen vorhanden, Genitiv korrekt. `deno check` für `process-payment-reminders`, `send-email` und
+`send-final-briefing` grün, typecheck/lint/102 Tests grün. Beide Funktionen deployed mit
+`--no-verify-jwt`, danach über `net.http_post` ausgelöst: **200 OK**, alle neun Stufen, 0 Fehler.
+
+### Testfenster (Stand 30.07.)
+
+| Event | Datum | Entfernung | Trifft Stufe? |
+|---|---|---|---|
+| Soleil's Bachelor | 02.08. | 3 Tage | nein - aber **Briefing feuert am 01.08.** |
+| Dana's Bachelor | 08.08. | **9 Tage** | **ja** (`urgent_9`) - Buchung `GO-0614B6` da |
+| Natalia's Bachelorette | 16.08. | 17 Tage | nein - **16 Tage am 31.07.** |
+
+Beide Buchungen haben `deposit_paid_at = NULL`, deshalb greift die Abfrage nicht. Sobald eine
+Anzahlung über den echten Stripe-Testfluss gezahlt ist, feuert die Stufe. Alle Organisatoren stehen
+jetzt auf `language = 'de'`, die Mails kommen also deutsch.
+
+## Aufgeklärt (2026-07-29, Abend) - die App hat ihre Sprachwahl nie in die DB geschrieben
+
+Widerspruch, der lange verwirrte: die App lief auf Deutsch, aber alle 7 Profile hatten
+`profiles.language = 'en'`, weshalb Briefing und Erinnerungen englisch rausgingen.
+
+Ursache: `languageStore` persistiert nach **AsyncStorage**, also geräte-lokal. Die Spalte
+`profiles.language` hat DB-Default `'en'` und wurde von **keiner Stelle der App** je geschrieben
+(es gibt kein `src/repositories/profiles.ts`, und kein Update irgendwo setzt sie). Die Sprachwahl
+erreichte den Server also nie. Wer die App auf Deutsch stellte, bekam trotzdem englische Mails.
+
+Fix: neuer Hook `src/hooks/useSyncProfileLanguage.ts`, gemountet in `app/_layout.tsx` neben
+`useSyncProfileEmail`. Er spiegelt die lokale Sprachwahl nach `profiles.language`, überspringt den
+Write wenn die Spalte schon passt, und ist best-effort (ein Fehlschlag blockiert die App nicht und
+wird beim nächsten Mount erneut versucht). RLS erlaubt es: Policy
+"Users can update their own profile" mit `auth.uid() = id`.
+
+Alle 7 Profile am 29.07. auf `'de'` gesetzt.
+
+### Nebenbefund: die Geldspalten sind wirklich dicht
+
+Der Versuch, für einen Erinnerungstest eine bezahlte Anzahlung direkt per SQL einzusetzen, wurde vom
+Trigger `enforce_booking_financial_integrity` abgeräumt - **wie vorgesehen**. Auf INSERT rechnet er
+den Preis unabhängig vom Client aus dem Paket neu (`price_per_person × Teilnehmer + base`) und
+erzwingt `payment_status = 'pending'` mit `deposit_paid_at`, `fully_paid_at`,
+`deposit_amount_cents` und `remaining_amount_cents` auf NULL. Auf UPDATE dürfen Geldspalten nur von
+`auth.role() = 'service_role'` bewegt werden. Eine Anzahlung lässt sich also nicht faken -
+Zahlungen müssen durch den echten Stripe-Testfluss. Nicht umgehen.
+
+**Nebeneffekt, der hilft:** `app/(tabs)/budget/index.tsx` Zeile 700 nimmt den AsyncStorage-Cache
+nur, wenn **keine** DB-Buchung existiert (`if (!booking)`). Sobald eine echte Buchung da ist, zeigt
+der Screen die Wahrheit aus der DB statt der gecachten Demo-Zahlen. Genau das hat den Testfluss für
+Natalia entsperrt (Buchung `GO-376D44`, EUR 916, unbezahlt).
+
+## Aktueller Stand (2026-07-29, Abend) - erster echter Buchungssatz, Client-Statuswrite entfernt
+
+Der erste echte Testkauf lief in einen Fehler: *"Booking created but event status update failed:
+Event can only be marked booked by the payment service"*.
+
+Ursache: `bookingsRepository.create()` schrieb nach dem Insert clientseitig
+`update events set status = 'booked'`. Der Trigger `enforce_event_status_integrity` sperrt diese
+Transition auf die Service-Rolle - der Update wurde also **immer** abgewiesen. Der anschliessende
+`throw` brach die Zahlung ab, **nachdem** die Buchungszeile bereits geschrieben war. Ergebnis:
+ein verwaister Buchungssatz auf einem `draft`-Event, Stripe nie erreicht.
+
+Der Code war seit immer falsch, fiel aber nie auf, weil die App bis zum Paket-Seed durchgehend im
+Demo-Modus lief und der echte Pfad nie ausgefuehrt wurde. Der Seed hat den Fehler nicht erzeugt,
+sondern freigelegt.
+
+Fix: der Client setzt den Status nicht mehr. `stripe-webhook` (~Zeile 218) macht es serverseitig
+nach erfolgreicher Zahlung, `confirm-demo-booking` fuer den simulierten Pfad. Eine Buchung anlegen
+und eine Buchung bezahlen sind zwei verschiedene Ereignisse.
+
+Der frueher vorhandene Test hat das falsche Verhalten festgeschrieben ("throws if event status
+update fails"). Er ist ersetzt durch zwei Tests, die jetzt die richtige Invariante schuetzen:
+`create()` fasst die `events`-Tabelle gar nicht an, und ein fehlgeschlagener Insert wird
+durchgereicht. 102 Tests gruen.
+
+**Offen: verwaiste Buchung `GO-0614B6`** (Dana's Bachelor, EUR 895, `payment_status = 'pending'`,
+Event auf `draft`). Harmlos - `process-payment-reminders` ignoriert sie, weil `deposit_paid_at`
+NULL ist - aber sie sollte aufgeraeumt werden.
+
+### Widerlegt: der "event_participants/profiles"-Fehler ist NICHT mehr offen
+
+Eine andere Session hat notiert, ein taeglicher Cron-Job schlage weiterhin mit
+`Could not find a relationship between 'event_participants' and 'profiles' in the schema cache`
+fehl. Das ist **veraltet**. Nachgeprueft:
+- Der Join ist aus `send-final-briefing` entfernt (ersetzt durch `events.created_by`).
+- Es existiert genau **eine** `ops_cron_health`-Benachrichtigung, erzeugt am 29.07. um 10:04 beim
+  manuellen Watchdog-Test. Sie bezieht sich auf den 09:00-Lauf mit dem **alten** deployten Code,
+  also auf einen zu diesem Zeitpunkt bereits behobenen Fehler.
+- Seither keine neue Meldung; ein manueller Aufruf liefert 200.
+
+**Lehre fuer den Watchdog:** die Meldung nennt den Zeitpunkt des zugrundeliegenden Fehlschlags
+nicht, deshalb liest ein alter Alarm wie ein aktueller. Ein Zeitstempel im `body` wuerde das
+verhindern - noch offen.
+
+## WICHTIG (2026-07-29) - CI hat die Cron-Funktionen zweimal stillgelegt
+
+`deploy-edge-functions.yml` deployte `send-final-briefing` und `process-payment-reminders`
+**ohne `--no-verify-jwt`**. Da `config.toml` keine `[functions.*]`-Sektionen hatte, griff der
+CLI-Default `verify_jwt = true`. Folge: die Plattform weist den pg_cron-Aufruf mit
+**401 `UNAUTHORIZED_INVALID_JWT_FORMAT`** ab, *bevor* die Funktion läuft - der
+CRON_SECRET-Check im Code kommt nie zum Zug.
+
+Live nachgewiesen: derselbe Aufruf lieferte nach dem CI-Deploy `401`, nach einem Redeploy mit
+`--no-verify-jwt` wieder `200`. Das Briefing war dazwischen 15 Minuten lang kaputt, obwohl es
+kurz zuvor verifiziert funktioniert hatte.
+
+**Dauerhaft abgesichert an zwei Stellen:**
+- `supabase/config.toml` deklariert jetzt `[functions.send-final-briefing]` und
+  `[functions.process-payment-reminders]` mit `verify_jwt = false`. Damit ist die Einstellung
+  Teil des Repos und gilt unabhängig davon, wer deployt.
+- Der Workflow setzt zusätzlich `--no-verify-jwt` bei beiden, falls eine ältere CLI in CI die
+  Per-Function-Sektion ignoriert.
+
+**Merke: jede neue cron-getriggerte Funktion braucht beides.** Ein Deploy ohne das Flag sieht
+erfolgreich aus und legt den Job trotzdem still.
+
+## Aktueller Stand (2026-07-29, zuletzt) - Neue Staffel für Zahlungserinnerungen
+
+Branch `claude/zahlungserinnerungen-neue-staffel`. `deno check`, `npm run typecheck`,
+`npm run lint`, `npx vitest run` (101 Tests) alle grün. Deployed und live verifiziert.
+
+Die alte Staffel war 21/18/16/14 mit Storno am **14.** Tag. Neu, von Soheil festgelegt:
+
+| Tage vor Event | Was passiert |
+|---|---|
+| 18 | Erste Info-Meldung |
+| 16 | Ausdrückliche Zahlungsaufforderung |
+| 14, 12 | Alle zwei Tage erinnern |
+| 10, 9, 8 | Täglich erinnern |
+| **7** | Finale Warnung - **das ist die Zahlungsfrist** |
+| **6** | **Stornierung**, 25 % Anzahlung wird einbehalten |
+
+**Warum Storno auf Tag 6 und nicht auf Tag 7:** der Job läuft einmal täglich um 09:15 UTC.
+Warnung und Stornierung im selben Lauf hiessen, dem Kunden eine Handlungsaufforderung für
+etwas zu schicken, das bereits vollzogen ist - und die Anzahlung wäre weg. Eine Fristsetzung
+ohne tatsächliche Frist ist im deutschen Verbraucherrecht zudem angreifbar. Konstanten dafür:
+`PAYMENT_DEADLINE_DAYS = 7`, `CANCEL_AT_DAYS = 6`.
+
+Umsetzungsdetails:
+- Der Storno-Durchlauf läuft als letzte Stufe in derselben `MILESTONES`-Liste, damit er die
+  Buchungsabfrage und den idempotenten `payment_reminders`-Insert mitbenutzt
+  (`UNIQUE(booking_id, days_before_event)` verhindert Doppelstornos). Die Schleife
+  verzweigt über `isCancellationPass`.
+- Auf dem Storno-Durchlauf wird **keine** Zahlungserinnerungs-Mail verschickt: die Vorlage
+  `getPaymentReminderEmailHtml` sagt "zahle heute, sonst wird storniert", was am Storno-Tag
+  falsch wäre. In-App-Benachrichtigung und Push tragen die Storno-Nachricht.
+  **Offen: eine eigene Storno-E-Mail-Vorlage gibt es noch nicht.**
+- Die frühere doppelte Storno-Benachrichtigung ist entfernt - Schritt 1 der Schleife schreibt
+  auf diesem Durchlauf bereits eine mit Typ `event_cancelled_nonpayment`.
+- `daysRemaining` im Mail-Template zählt jetzt bis zur **Zahlungsfrist** (Tag 7), nicht bis zum
+  Event: `Math.max(0, daysBefore - PAYMENT_DEADLINE_DAYS)`.
+- `payment_reminders.reminder_type` hat keine CHECK-Constraint, die neuen Typwerte
+  (`notice_18`, `request_16`, `followup_14`, `followup_12`, `urgent_10`, `urgent_9`,
+  `urgent_8`, `final_7`, `cancelled_6`) sind daher unproblematisch.
+
+Verifiziert über `net.http_post` mit den echten Vault-Secrets: **200 OK**, Antwort listet alle
+neun Stufen mit `processed: 0, errors: 0` (es gibt noch keine Buchungen).
+
+## Aktueller Stand (2026-07-29, später) - Echte Buchungen, Stripe-Testmodus
+
+Branch `claude/echte-buchungen-stripe-test`.
+
+### Die `packages`-Tabelle war leer, und das erklärte fast alles
+
+Kein Buchungs-Bug, sondern fehlende Stammdaten. Die Kette:
+
+1. `packages` hatte 0 Zeilen (`cities` hatte 3).
+2. Die App fiel deshalb auf ihre hartcodierte Paketliste zurück, deren Ids Slugs sind (`hamburg-classic`), keine UUIDs.
+3. `app/booking/[eventId]/payment.tsx` leitet daraus ab:
+   `isFallbackPackage = !UUID_REGEX.test(activePkg.id)` und
+   `useSimulatedPayment = isDraft || IS_E2E || !STRIPE_KEY || isFallbackPackage`.
+   `isFallbackPackage` war damit **immer** wahr - unabhängig vom gesetzten Stripe-Key.
+4. Der Demo-Zweig ruft `confirm-demo-booking`, und die macht ausschließlich
+   `update events set status = 'booked'`. Sie fasst `bookings` nie an.
+5. Folge: **nie ein `bookings`-Datensatz.** Daher keine `reference_number` (Briefing zeigte den
+   Platzhalter `GO-XXXXXX`), kein `package_id` (Briefing zeigte immer `Classic (M)`), und
+   `process-payment-reminders` konnte gegen die leere Tabelle **strukturell nie etwas finden**.
+   Ihr `200 OK` am 29.07. war ehrlich, aber hohl.
+
+Migration `20260729102334_seed_packages_for_real_bookings.sql` legt 9 Pakete an (3 Städte x 3 Stufen),
+feste UUIDs (`...4402xx`, Städte sind `...4401xx`), idempotent per `on conflict do update`.
+Preise gespiegelt aus `src/constants/packageTiers.ts`: 129 / 179 / 229 EUR pro Person, all-in,
+kein separates Service-Fee, daher `base_price_cents = 0`.
+Anzeigename kommt in der UI aus `tier` + Sprache (`getTierName(pkg.tier, language) || pkg.name`),
+die deutschen Namen in der DB sind nur Rückfall.
+
+**Damit greift ab sofort der echte Stripe-Pfad.** Das Projekt läuft auf `pk_test_`, also
+Stripe-**Testmodus**: echter Zahlungsdialog, Testkarten, kein Geld, keine Gebühren.
+Vor dem Livegang `pk_live_`/`sk_live_` setzen - das ist ein bewusster eigener Schritt.
+`STRIPE_SECRET_KEY` muss im selben Modus sein wie der Publishable Key, sonst schlägt jede Zahlung
+mit einem Mismatch fehl.
+
+### `accept_invite` hielt nicht fest, wer einen Code eingelöst hat
+
+Der Organisator tippt eine Adresse in `invite_codes.guest_email`, der Gast registriert sich aber
+womöglich mit einer anderen. Ohne Verknüpfung erreicht das Briefing nur die getippte Adresse.
+Über E-Mail zu matchen ist zirkulär: es gelingt genau dann, wenn es nichts zu korrigieren gibt.
+
+Migration `20260729102634_link_invite_to_claiming_user.sql`: Spalte `invite_codes.claimed_by`
+(FK auf `profiles`, partieller Index), `accept_invite()` setzt sie beim Einlösen -
+**Autorisierungslogik unverändert**, nur eine Spalte mehr im vorhandenen UPDATE. Rechte geprüft:
+`authenticated` darf ausführen, `anon` nicht. Backfill über Email-Gleichheit; wer sich unter einer
+anderen Adresse angemeldet hat, bleibt NULL (raten wäre schlimmer als offen lassen).
+
+`send-final-briefing` bevorzugt jetzt die Profil-Adresse und den Profil-Vornamen, sobald
+`claimed_by` gesetzt ist, und fällt sonst auf die Einladungsdaten zurück.
+
+### Wer bekommt ein Briefing
+
+Aktuell: alle Codes mit `is_active` und ohne `declined_at` - auch Eingeladene, die nie beigetreten sind.
+Bewusste Entscheidung: sie kommen möglicherweise trotzdem. Absagen sind sauber ausgeschlossen.
+
+### Verifiziert
+
+`deno check` grün. `send-final-briefing` deployed mit `--no-verify-jwt` (wichtig: `config.toml` hat
+keine Funktions-Sektion, der CLI-Default würde `verify_jwt = true` setzen und der Cron-Aufruf würde
+von der Plattform abgewiesen, bevor er den Code erreicht).
+Danach über `net.http_post` mit den echten Vault-Secrets ausgelöst: **200 OK, `{"results":[]}`**.
+
+### Offen
+
+- Ein echter Testkauf über den Stripe-Testdialog steht noch aus. Erst der erzeugt den ersten
+  `bookings`-Datensatz und damit die erste echte `reference_number`.
+- Erst danach lässt sich `process-payment-reminders` wirklich prüfen. **Vorsicht:** sie storniert
+  beim 14-Tage-Meilenstein automatisch (`status = 'cancelled'`, Anzahlung einbehalten).
+- Alle 7 Profile stehen weiterhin auf `language = 'en'`; der deutsche Briefing-Text ist fertig,
+  wird aber nirgends ausgelöst.
 
 ## Aktueller Stand (2026-07-29) - Cron-Jobs liefen seit Monaten ins Leere
 
