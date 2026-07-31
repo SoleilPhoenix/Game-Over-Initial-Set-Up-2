@@ -13,6 +13,7 @@ import type { Database } from '@/lib/supabase/types';
 import { useTranslation, getCurrentLanguage } from '@/i18n';
 import { isGuestDataChangedMeta, isGuestJoinedMeta, formatGuestChanges } from '@/utils/guestDataChange';
 import { isRefundDueMeta } from '@/utils/refundDue';
+import { useTheme } from '@/hooks/useTheme';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
@@ -27,6 +28,12 @@ function isBookingCancelledMeta(value: unknown): value is BookingCancelledMeta {
   return typeof meta.honoreeName === 'string'
     && typeof meta.retainedDepositCents === 'number'
     && Number.isFinite(meta.retainedDepositCents);
+}
+
+function getOpsAlertCheckKey(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const checkKey = (value as Record<string, unknown>).checkKey;
+  return typeof checkKey === 'string' && checkKey.length > 0 ? checkKey : null;
 }
 
 // Maps a notification type to the i18n key used for its action-button label.
@@ -262,7 +269,14 @@ export function NotificationItem({
 }: NotificationItemProps) {
   const router = useRouter();
   const { t } = useTranslation();
-  const config = NOTIFICATION_CONFIG[notification.type] || NOTIFICATION_CONFIG.default;
+  const { theme } = useTheme();
+  const config = notification.type === 'ops_cron_health'
+    ? {
+        icon: 'construct-outline' as const,
+        color: theme.textSecondary,
+        bgColor: theme.surfaceHigh,
+      }
+    : NOTIFICATION_CONFIG[notification.type] || NOTIFICATION_CONFIG.default;
   const actionLabelKey = ACTION_LABEL_KEYS[notification.type];
   const actionLabel = actionLabelKey ? (t.notifications as any)[actionLabelKey] : undefined;
 
@@ -317,6 +331,28 @@ export function NotificationItem({
     displayBody = ((t.notifications as any).bookingCancelledBody as string)
       .replace('{{honoree}}', meta.honoreeName)
       .replace('{{deposit}}', deposit);
+  } else if (notification.type === 'ops_cron_health') {
+    const checkKey = getOpsAlertCheckKey(notification.metadata);
+    displayTitle = t.notifications.opsAlertTitle;
+
+    if (checkKey === 'config:pg_net') {
+      displayBody = t.notifications.opsAlertPgNetMissing;
+    } else if (checkKey?.startsWith('config:vault:')) {
+      displayBody = t.notifications.opsAlertVaultSecretMissing
+        .replace('{{name}}', checkKey.slice('config:vault:'.length));
+    } else if (checkKey === 'http:no_response') {
+      displayBody = t.notifications.opsAlertHttpNoResponse;
+    } else if (checkKey && /^http:\d{3}$/.test(checkKey)) {
+      displayBody = t.notifications.opsAlertHttpError
+        .replace('{{status}}', checkKey.slice('http:'.length));
+    } else if (checkKey?.startsWith('job:')) {
+      displayBody = t.notifications.opsAlertJobFailed
+        .replace('{{job}}', checkKey.slice('job:'.length));
+    } else if (checkKey) {
+      displayBody = t.notifications.opsAlertUnknown.replace('{{checkKey}}', checkKey);
+    } else {
+      displayBody = t.notifications.opsAlertUnknownWithoutKey;
+    }
   }
 
   const formatTime = (dateString: string) => {

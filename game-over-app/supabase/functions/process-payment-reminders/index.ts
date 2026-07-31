@@ -2,7 +2,7 @@
  * Process Payment Reminders Edge Function
  * Runs daily (via pg_cron or GitHub Actions) to send payment reminders.
  *
- * For each milestone (21, 18, 16, 14 days before event):
+ * For each configured milestone before the event:
  * 1. Query bookings with deposit paid but not fully paid
  * 2. Skip if reminder already sent (idempotent via UNIQUE constraint)
  * 3. Send push notification + email + in-app notification
@@ -17,19 +17,12 @@ import {
   getPaymentReminderEmailHtml,
 } from '../_shared/email-templates.ts';
 import { partyLabel, type PartyType } from '../_shared/briefing.ts';
+import { PAYMENT_REMINDER_MILESTONES } from '../_shared/payment-reminder-milestones.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-// Milestone configuration
-const MILESTONES = [
-  { daysBefore: 21, urgency: 'normal' as const, type: 'normal' },
-  { daysBefore: 18, urgency: 'moderate' as const, type: 'moderate' },
-  { daysBefore: 16, urgency: 'urgent' as const, type: 'urgent' },
-  { daysBefore: 14, urgency: 'final' as const, type: 'final' },
-] as const;
 
 // Notification messages per urgency level
 const MESSAGES: Record<string, { title: string; bodyTemplate: string }> = {
@@ -114,7 +107,7 @@ serve(async (req: Request) => {
     const today = new Date();
     const results: Array<{ milestone: number; processed: number; errors: number }> = [];
 
-    for (const milestone of MILESTONES) {
+    for (const milestone of PAYMENT_REMINDER_MILESTONES) {
       const targetDate = addDays(today, milestone.daysBefore);
       let processed = 0;
       let errors = 0;
@@ -253,13 +246,14 @@ serve(async (req: Request) => {
           let emailSent = false;
           let organizerProfile: {
             email: string | null;
+            email_notifications_enabled: boolean | null;
             full_name: string | null;
             language: string | null;
           } | null = null;
           try {
             const { data: profile, error: profileError } = await supabase
               .from('profiles')
-              .select('email, full_name, language')
+              .select('email, email_notifications_enabled, full_name, language')
               .eq('id', userId)
               .single();
             organizerProfile = profile;
@@ -271,7 +265,10 @@ serve(async (req: Request) => {
               );
             }
 
-            if (profile?.email) {
+            if (
+              profile?.email
+              && (milestone.alwaysSend || profile.email_notifications_enabled !== false)
+            ) {
               const html = getPaymentReminderEmailHtml({
                 honoreeName: event.honoree_name,
                 eventTitle: event.title,
@@ -370,6 +367,8 @@ serve(async (req: Request) => {
                 // Send only after the events.status write above succeeded. This is
                 // deliberately non-blocking: delivery failure cannot undo or retry
                 // a confirmed cancellation.
+                // Deliberately ignore email_notifications_enabled here: retaining
+                // the deposit makes this a contractual notice, not an optional mail.
                 const organizerEmail = organizerProfile?.email?.trim();
                 if (organizerEmail) {
                   const language: 'de' | 'en' =

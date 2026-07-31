@@ -952,6 +952,7 @@ export type Database = {
       }
       is_event_creator: { Args: { p_event_id: string }; Returns: boolean }
       is_event_participant: { Args: { p_event_id: string }; Returns: boolean }
+      is_ops_alert_recipient: { Args: never; Returns: boolean }
       mark_payment_claimed: {
         Args: { p_event_id: string }
         Returns: boolean

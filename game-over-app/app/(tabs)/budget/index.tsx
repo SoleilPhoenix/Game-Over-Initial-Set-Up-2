@@ -723,30 +723,40 @@ export default function BudgetDashboardScreen() {
     }
 
     const totalBudget = booking!.total_amount_cents || 0;
+    const storedPerPersonCents = booking!.per_person_cents || 0;
+    // Derive the same per-participant share used by the rows before summing
+    // paid contributions. This is display-only and does not alter payment data.
+    const dbPayingCount = storedPerPersonCents > 0
+      ? Math.round(totalBudget / storedPerPersonCents)
+      : (participants?.length || 0);
+    const perParticipantShare = storedPerPersonCents > 0
+      ? storedPerPersonCents
+      : dbPayingCount > 0
+        ? Math.round(totalBudget / dbPayingCount)
+        : 0;
     let collected = 0;
     let paidCount = 0;
     let pendingCount = 0;
 
     (participants ?? []).forEach((p) => {
       if (p.payment_status === 'paid') {
-        collected += p.contribution_amount_cents || 0;
+        const contribution = p.contribution_amount_cents ?? 0;
+        collected += contribution > 0
+          ? contribution
+          : perParticipantShare;
         paidCount++;
       } else if (p.payment_status === 'pending') {
         pendingCount++;
       }
     });
 
-    const perPersonCents = booking!.per_person_cents || 0;
-    // Reverse-engineer paying count from total. No service fee — total = perPerson × count.
-    // This is display-only — not used for payment calculations
-    const dbPayingCount = perPersonCents > 0 ? Math.round(totalBudget / perPersonCents) : (participants?.length || 0);
     return {
       totalBudget,
       collected,
       pending: totalBudget - collected,
       percentage: totalBudget > 0 ? Math.round((collected / totalBudget) * 100) : 0,
       paidCount,
-      perPerson: perPersonCents,
+      perPerson: perParticipantShare,
       pendingCount,
       payingCount: dbPayingCount,
     };
@@ -1444,7 +1454,7 @@ export default function BudgetDashboardScreen() {
                           <XStack justifyContent="space-between" alignItems="flex-start">
                             <YStack flex={1}>
                               <Text fontSize={10} fontWeight="700" color={theme.accentGold} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
-                                {t.budget.depositPaidLabel}
+                                {t.budget.amountPaidLabel}
                               </Text>
                               <Text fontSize={36} fontWeight="700" color={theme.accentGold} letterSpacing={-1} style={{ marginTop: 4 }}>
                                 {fmtDeposit}
@@ -1481,7 +1491,7 @@ export default function BudgetDashboardScreen() {
                             <XStack flex={1} padding={20} alignItems="flex-end" gap={12}>
                                 <YStack flex={1} gap={4}>
                                   <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
-                                    {t.budget.amountDue75Label}
+                                    {t.budget.outstandingBalanceLabel}
                                   </Text>
                                   <Text fontSize={36} fontWeight="700" color="#F97316" letterSpacing={-1}>
                                     {fmtDue}
@@ -1570,12 +1580,15 @@ export default function BudgetDashboardScreen() {
                   const isPending = !isPaid;
                   const participantRole = isDemo ? null : (participantRaw as any).role;
                   const participantUserId = isDemo ? null : (participantRaw as any).user_id as string;
-                  const perPersonAmount = booking?.per_person_cents || budgetStats.perPerson || 0;
+                  const recordedContribution = isDemo
+                    ? 0
+                    : ((participantRaw as any).contribution_amount_cents ?? 0);
+                  const perPersonAmount = recordedContribution > 0
+                    ? recordedContribution
+                    : budgetStats.perPerson || 0;
                   const amountForRow = isDemo
                     ? (participantRaw as DemoP).amount
-                    : isOrganizerRow && budgetStats.percentage < 100
-                      ? budgetStats.collected
-                      : perPersonAmount;
+                    : perPersonAmount;
                   const isCurrentUser = isDemo
                     ? (participantRaw as DemoP).id === 'organizer'
                       ? selectedEvent?.created_by === user?.id

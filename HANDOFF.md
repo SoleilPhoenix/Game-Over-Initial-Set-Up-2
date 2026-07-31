@@ -168,8 +168,52 @@ jederzeit neu erzeugen, indem die Funktionen aus `_shared/email-templates.ts` pe
 in eine HTML-Seite mit `iframe srcdoc` gelegt werden. Das ist der bessere Review-Weg als Testmails:
 alle Vorlagen gleichzeitig, ohne Empfaenger und ohne Rate-Limit.
 
+### 9. Schalter verengt, Ops-Meldung raus aus dem Kundenfeed, Budget-Anzeige korrigiert
+
+**Der Schalter gilt jetzt nur fuer Optionales.** Die Einordnung steht als `alwaysSend` an jedem
+Meilenstein in `supabase/functions/_shared/payment-reminder-milestones.ts`, nicht als `if` an der
+Aufrufstelle: ein neuer Meilenstein **muss** sich einordnen. Ein Test haelt die Liste fest.
+
+| Immer, Schalter egal | Schalter entscheidet |
+|---|---|
+| Buchungsbestaetigung, Storno, Willkommen, Gasteinladungen | Final-Briefing |
+| Zahlungserinnerung **14, 9, 8, 7** Tage | Zahlungserinnerung **18, 16, 12, 10** Tage |
+
+Owner-Entscheidung, zweimal praezisiert. Die Storno-Mail bleibt unbedingt.
+Der Schalter im Profil heisst jetzt nach dem, was er tut, mit Erklaerzeile darunter.
+
+**`ops_cron_health` verschwindet aus dem Kundenfeed.** Die Zeile bleibt in der DB (Nachweis), wird
+aber in Liste, Zaehler und Realtime herausgefiltert, ausser der Leser steht in
+`ops_alert_recipients`. Dann erscheint sie uebersetzt, mit neutralem Werkzeug-Symbol statt
+Alarmglocke, Text ueber `metadata.checkKey` mit lesbarem Fallback.
+
+**Zwei Fallen dabei:**
+- Migration `20260731120000_ops_alert_recipient_helper.sql` (`is_ops_alert_recipient()`,
+  SECURITY DEFINER, gibt nur die eigene Mitgliedschaft zurueck, nie die Liste) ist geschrieben,
+  aber **NICHT angewendet**. Bis dahin faellt der Client bewusst auf "kein Empfaenger" zurueck.
+- `src/lib/supabase/types.ts` ist **von Hand** um `is_ops_alert_recipient` ergaenzt, damit typecheck
+  vor der Migration gruen ist. Die Datei ist generiert: **erst die Migration anwenden, dann
+  `gen types` laufen lassen.** Umgekehrt loescht die Regenerierung den Eintrag und typecheck bricht.
+
+**Budget: Kopf und Zeilen lasen dieselbe Tatsache aus verschiedenen Quellen.**
+`collected` summierte `event_participants.contribution_amount_cents` (live ueberall `0`), waehrend
+die Zeilen `total / payingCount` zeigten und "BEZAHLT" aus `payment_status`. Ergebnis beim Testevent:
+Zeilen behaupteten 687 EUR bezahlt, der Kopf 916 EUR offen. Jetzt **ein** abgeleiteter Pro-Kopf-Betrag
+fuer beide. Dazu waren "(25%)" und "(75%)" fest im Label verdrahtet und damit falsch, sobald keine
+Anzahlung geflossen ist; die Labels nennen jetzt den echten Stand.
+
+**Das war nur die Anzeige.** Darunter liegt echte Dateninkonsistenz, unveraendert offen:
+`events.status = 'booked'` bei `bookings.payment_status = 'pending'`, `deposit_amount_cents` und
+`remaining_amount_cents` NULL, `deposit_paid_at` NULL. Vermutlich die Demo-Zahlungsroute, die das
+Event auf "gebucht" setzt, ohne die Geldspalten zu schreiben. **Vor echtem Kundenbetrieb klaeren**,
+sonst repariert man weiter Symptome.
+
 ### Offen
 
+- **Migration `20260731120000` anwenden**, danach `gen types` (Reihenfolge siehe oben).
+- **Toast unbestaetigt.** Der Code stimmt (`TAB_BAR_CLEARANCE` ist weg, `paddingBottom: insets.bottom`),
+  aber die Geraete-Screenshots dazu trugen 23:10 Uhr und stammen zeitlich von **vor** dem Umbau.
+  Braucht `npx expo start -c` und einen echten Reload in Expo Go, Metro-Neustart allein reicht nicht.
 - **Die sechs Auth-Vorlagen sind noch nicht im Dashboard.** Bis dahin verschickt Supabase weiter
   seine nackten Standardtexte, jetzt lediglich ueber Resend statt den Testdienst.
   Claude kann das nicht uebernehmen: der Management-API-Weg braucht ein Token, das im
