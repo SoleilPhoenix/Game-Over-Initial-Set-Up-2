@@ -560,6 +560,9 @@ const de: TranslationKeys = {
     doNotClose: 'Schließe diesen Bildschirm nicht.',
     paymentCancelled: 'Du hast die Zahlung abgebrochen. Du kannst es jederzeit erneut versuchen.',
     paymentErrorDetail: 'Bei der Verarbeitung deiner Zahlung ist ein Fehler aufgetreten: {{error}}. Bitte versuche es erneut.',
+    participantCountUnavailableTitle: 'Teilnehmerzahl nicht verfügbar',
+    participantCountUnavailableMessage: 'Wir können nicht bestätigen, für wie viele Personen diese Buchung gilt. Die Zahlung wurde deshalb gesperrt. Gehe zurück und wähle die Teilnehmerzahl erneut aus.',
+    participantCountUnavailableBack: 'Zurück',
   },
 
   // ─── Auth Screens ──────────────────────────────

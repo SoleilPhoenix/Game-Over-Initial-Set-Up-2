@@ -3,7 +3,7 @@
  * Stripe Payment Sheet integration for package bookings
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
@@ -108,11 +108,11 @@ export default function PaymentScreen() {
   const event = isDraft
     ? { city: { name: cityFallback }, honoree_name: honoreeNameFallback }
     : (bookingFlow.event || { city: { name: cityFallback }, honoree_name: honoreeNameFallback });
-  // Use bookingFlow pricing when available, fallback to local pricing for instant render
-  const pricing = isDraft ? draftPricing : (bookingFlow.pricing || draftPricing);
+  // Real events must use the authoritative source chain in useBookingFlow.
+  const pricing = isDraft ? draftPricing : bookingFlow.pricing;
   const excludeHonoree = isDraft ? honoreeExcluded : bookingFlow.excludeHonoree;
-  // Don't show loading if we already have fallback data OR a direct amountCents param
-  const isLoading = isDraft ? false : (bookingFlow.isLoading && !draftPricing && !paramAmountCents);
+  // Real events remain loading until the authoritative booking-flow inputs are ready.
+  const isLoading = isDraft ? false : bookingFlow.isLoading;
 
   // When navigating from Budget with amountCents (no package in URL), create synthetic values
   const syntheticPkg = paramAmountCents > 0 && !pkg
@@ -132,6 +132,39 @@ export default function PaymentScreen() {
 
   const createBookingMutation = useCreateBooking();
   const { processPayment, isLoading: isPaymentLoading } = usePaymentSheet();
+  const participantCountFeedbackShown = useRef(false);
+
+  useEffect(() => {
+    if (!bookingFlow.isParticipantCountUnavailable) {
+      participantCountFeedbackShown.current = false;
+      return;
+    }
+    if (participantCountFeedbackShown.current) return;
+    participantCountFeedbackShown.current = true;
+    feedback.error(
+      t.booking.participantCountUnavailableTitle,
+      t.booking.participantCountUnavailableMessage,
+    );
+  }, [bookingFlow.isParticipantCountUnavailable, t.booking.participantCountUnavailableMessage, t.booking.participantCountUnavailableTitle]);
+
+  if (!isDraft && bookingFlow.isParticipantCountUnavailable) {
+    return (
+      <YStack flex={1} justifyContent="center" alignItems="center" gap="$4" padding="$6" backgroundColor="$background">
+        <Ionicons name="alert-circle-outline" size={48} color="#F97316" />
+        <Text fontSize="$6" fontWeight="700" color="$textPrimary" textAlign="center">
+          {t.booking.participantCountUnavailableTitle}
+        </Text>
+        <Text fontSize="$3" color="$textSecondary" textAlign="center">
+          {t.booking.participantCountUnavailableMessage}
+        </Text>
+        <Button onPress={() => router.back()} testID="participant-count-unavailable-back-button">
+          <Text color="#0D1B2A" fontWeight="700">
+            {t.booking.participantCountUnavailableBack}
+          </Text>
+        </Button>
+      </YStack>
+    );
+  }
 
   if (isLoading || !activePkg || !activePricing) {
     return (

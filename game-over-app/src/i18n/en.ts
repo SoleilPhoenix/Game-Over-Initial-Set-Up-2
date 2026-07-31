@@ -568,6 +568,9 @@ const en = {
     doNotClose: 'Do not close this screen.',
     paymentCancelled: 'You cancelled the payment. You can try again when ready.',
     paymentErrorDetail: 'There was an error processing your payment: {{error}}. Please try again.',
+    participantCountUnavailableTitle: 'Participant count unavailable',
+    participantCountUnavailableMessage: 'We cannot confirm how many people this booking is for, so payment has been blocked. Go back and select the participant count again.',
+    participantCountUnavailableBack: 'Go Back',
   },
 
   // ─── Auth Screens ──────────────────────────────
