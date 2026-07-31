@@ -6,7 +6,7 @@
  */
 
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { Alert, ScrollView, Pressable, StyleSheet, View, Modal } from 'react-native';
+import { ScrollView, Pressable, StyleSheet, View, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -34,6 +34,7 @@ import { assemblePackages } from '@/utils/packageAssembly';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { loadDesiredParticipants, loadChecklist, setChecklistItem, loadInvitedCount, loadBudgetInfo, type BudgetInfo } from '@/lib/participantCountCache';
+import { feedback } from '@/stores/uiStore';
 
 // ─── Planning Tools ─────────────────────────────
 // Icon tints kept as semantic colours — they encode tool identity
@@ -190,10 +191,9 @@ export default function EventSummaryScreen() {
   const handleToggleChecklist = (key: string, currentValue: boolean) => {
     if (!event || !id) return;
     if (isGuest) {
-      Alert.alert(
+      feedback.info(
         t.eventDetail.organizerOnly,
         t.eventDetail.organizerOnlyMsg,
-        [{ text: t.common.ok }]
       );
       return;
     }

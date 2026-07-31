@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { Pressable, StyleSheet, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, View, Spinner } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -14,7 +14,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { supabase } from '@/lib/supabase/client';
 import { useTranslation } from '@/i18n';
-import { useUIStore } from '@/stores/uiStore';
+import { feedback, useUIStore } from '@/stores/uiStore';
 
 type PasswordFormData = {
   currentPassword: string;
@@ -75,7 +75,7 @@ export default function SecurityScreen() {
       useUIStore.getState().showSuccess(t.security.passwordUpdatedTitle, t.security.passwordUpdatedMsg);
     } catch (error: any) {
       console.error('Password change error:', error);
-      Alert.alert(
+      feedback.error(
         t.security.errorTitle,
         error.message || t.security.updateFailedMsg
       );

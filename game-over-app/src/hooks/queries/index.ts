@@ -30,7 +30,6 @@ export {
   useBookingById,
   useBookingCosts,
   useCreateBooking,
-  useUpdatePaymentStatus,
   useRequestRefund,
   bookingKeys,
 } from './useBookings';

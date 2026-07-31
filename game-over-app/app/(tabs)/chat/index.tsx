@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Animated, PanResponder, ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar, Alert, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { Animated, PanResponder, ScrollView, RefreshControl, Pressable, StyleSheet, View, StatusBar, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadDesiredParticipants } from '@/lib/participantCountCache';
@@ -25,7 +25,7 @@ import { useUser } from '@/stores/authStore';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useTabBarStore } from '@/stores/tabBarStore';
 import { useActiveEventStore } from '@/stores/activeEventStore';
-import { useUIStore } from '@/stores/uiStore';
+import { feedback, useUIStore } from '@/stores/uiStore';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import type { Database } from '@/lib/supabase/types';
 
@@ -699,31 +699,26 @@ export default function CommunicationScreen() {
     if (selectedEventId) {
       setShareModalVisible(true);
     } else {
-      Alert.alert('Kein Event ausgewählt', 'Wähle zuerst ein Event aus, um es zu teilen.');
+      feedback.info('Kein Event ausgewählt', 'Wähle zuerst ein Event aus, um es zu teilen.');
     }
   };
 
-  const handleDeletePoll = (poll: import('@/repositories/polls').PollWithOptions) => {
+  const handleDeletePoll = async (poll: import('@/repositories/polls').PollWithOptions) => {
     const tr = getTranslation();
-    Alert.alert(
-      (tr.chat as any).deletePollTitle,
-      (tr.chat as any).deletePollMsg.replace('{{title}}', poll.title),
-      [
-        { text: tr.common.cancel, style: 'cancel' },
-        {
-          text: tr.common.delete,
-          style: 'destructive',
-          onPress: async () => {
-            setPollInfoModal(null);
-            try {
-              await deletePollMutation.mutateAsync(poll.id);
-            } catch {
-              Alert.alert((tr.chat as any).errorTitle, (tr.chat as any).deletePollFailed);
-            }
-          },
-        },
-      ]
-    );
+    const confirmed = await feedback.confirm({
+      title: (tr.chat as any).deletePollTitle,
+      message: (tr.chat as any).deletePollMsg.replace('{{title}}', poll.title),
+      confirmLabel: tr.common.delete,
+      cancelLabel: tr.common.cancel,
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setPollInfoModal(null);
+    try {
+      await deletePollMutation.mutateAsync(poll.id);
+    } catch {
+      feedback.error((tr.chat as any).errorTitle, (tr.chat as any).deletePollFailed);
+    }
   };
 
   const handleAddChannel = (category: ChannelCategory) => {
@@ -757,7 +752,7 @@ export default function CommunicationScreen() {
           useUIStore.getState().showSuccess(tr.budget.success, tr.chat.channelCreated);
         } else {
           console.error('Failed to create channel:', error);
-          Alert.alert(tr.common.error, tr.chat.channelCreateFailed);
+          feedback.error(tr.common.error, tr.chat.channelCreateFailed);
         }
       }
     } else {

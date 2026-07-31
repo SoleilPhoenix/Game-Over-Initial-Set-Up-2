@@ -4,9 +4,9 @@
  * Uses write-only permission — does NOT read existing calendars.
  */
 
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import * as Calendar from 'expo-calendar';
-import { useUIStore } from '@/stores/uiStore';
+import { feedback, useUIStore } from '@/stores/uiStore';
 
 export interface CalendarEventData {
   title: string;
@@ -147,10 +147,9 @@ export async function addEventToCalendarWithFeedback(eventData: CalendarEventDat
       `"${eventData.title}" has been added to your calendar.`
     );
   } else {
-    Alert.alert(
+    feedback.error(
       'Calendar Error',
       result.error || 'Failed to add event to calendar. Please try again.',
-      [{ text: 'OK' }]
     );
   }
 }

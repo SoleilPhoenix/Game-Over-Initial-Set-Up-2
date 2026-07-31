@@ -1,6 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -19,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase/client';
 import { useUser } from '@/stores/authStore';
 import { useTranslation } from '@/i18n';
-import { useUIStore } from '@/stores/uiStore';
+import { feedback, useUIStore } from '@/stores/uiStore';
 import { useTheme } from '@/hooks/useTheme';
 import type { EditorialTheme } from '@/constants/designSystem';
 
@@ -39,6 +38,18 @@ export default function ChangeEmailScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const passwordFieldY = useRef(0);
+  const passwordFocused = useRef(false);
+
+  const scrollPasswordIntoView = useCallback(() => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, passwordFieldY.current - 24),
+        animated: true,
+      });
+    });
+  }, []);
 
   // The submit button lives in a pinned footer rather than at the end of the
   // scroll content: with the password keyboard up there was no reliable way to
@@ -51,7 +62,49 @@ export default function ChangeEmailScreen() {
     return () => { shown.remove(); hidden.remove(); };
   }, []);
 
+  useEffect(() => {
+    if (keyboardOpen && passwordFocused.current) {
+      scrollPasswordIntoView();
+    }
+  }, [keyboardOpen, scrollPasswordIntoView]);
+
   const currentEmail = user?.email ?? '';
+
+  const getChangeEmailErrorMessage = useCallback((error: unknown, fallback: string) => {
+    const authError = error && typeof error === 'object'
+      ? error as { code?: unknown; message?: unknown }
+      : null;
+    const code = typeof authError?.code === 'string' ? authError.code : '';
+
+    switch (code) {
+      case 'email_exists':
+        return t.changeEmail.emailExists;
+      case 'email_address_invalid':
+        return t.changeEmail.emailAddressInvalid;
+      case 'over_email_send_rate_limit':
+        return t.changeEmail.emailRateLimited;
+      case 'invalid_credentials':
+        return t.changeEmail.passwordIncorrect;
+      default:
+        break;
+    }
+
+    // Older GoTrue clients did not always expose `code`; keep a narrow fallback
+    // without ever surfacing the raw backend message.
+    const message = typeof authError?.message === 'string'
+      ? authError.message.toLowerCase()
+      : '';
+    if (message.includes('already') && message.includes('email')) {
+      return t.changeEmail.emailExists;
+    }
+    if (message.includes('invalid') && message.includes('email')) {
+      return t.changeEmail.emailAddressInvalid;
+    }
+    if (message.includes('rate limit') || message.includes('too many')) {
+      return t.changeEmail.emailRateLimited;
+    }
+    return fallback;
+  }, [t]);
 
   const schema = useMemo(() => z.object({
     newEmail: z.string().trim().email(t.changeEmail.validEmail),
@@ -93,7 +146,10 @@ export default function ChangeEmailScreen() {
         password: data.currentPassword,
       });
       if (passwordError) {
-        Alert.alert(t.changeEmail.errorTitle, t.changeEmail.passwordIncorrect);
+        feedback.error(
+          t.changeEmail.errorTitle,
+          getChangeEmailErrorMessage(passwordError, t.changeEmail.passwordIncorrect),
+        );
         return;
       }
 
@@ -108,8 +164,10 @@ export default function ChangeEmailScreen() {
       );
     } catch (error) {
       console.error('[profile] email change failed:', error);
-      const message = error instanceof Error ? error.message : t.changeEmail.updateFailed;
-      Alert.alert(t.changeEmail.errorTitle, message);
+      feedback.error(
+        t.changeEmail.errorTitle,
+        getChangeEmailErrorMessage(error, t.changeEmail.updateFailed),
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -144,9 +202,11 @@ export default function ChangeEmailScreen() {
         </XStack>
 
         <ScrollView
+          ref={scrollRef}
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingTop: 24, paddingBottom: 24 }}
+          contentContainerStyle={{ paddingTop: 24, paddingBottom: keyboardOpen ? 160 : 24 }}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}
         >
           <YStack paddingHorizontal="$4" gap="$5">
@@ -209,7 +269,12 @@ export default function ChangeEmailScreen() {
               <FieldError message={errors.confirmEmail?.message} />
             </YStack>
 
-            <YStack gap="$2">
+            <YStack
+              gap="$2"
+              onLayout={(event) => {
+                passwordFieldY.current = event.nativeEvent.layout.y;
+              }}
+            >
               <Text style={styles.label}>{t.changeEmail.currentPasswordLabel}</Text>
               <Controller
                 control={control}
@@ -224,6 +289,13 @@ export default function ChangeEmailScreen() {
                       placeholderTextColor={theme.textTertiary}
                       secureTextEntry={!showPassword}
                       autoCapitalize="none"
+                      onFocus={() => {
+                        passwordFocused.current = true;
+                        scrollPasswordIntoView();
+                      }}
+                      onBlur={() => {
+                        passwordFocused.current = false;
+                      }}
                     />
                     <Pressable onPress={() => setShowPassword((current) => !current)}>
                       <Ionicons

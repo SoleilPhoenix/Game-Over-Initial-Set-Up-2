@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, Pressable, StyleSheet, Alert, Linking, Platform, View, ActivityIndicator } from 'react-native';
+import { ScrollView, Pressable, StyleSheet, Linking, Platform, View, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -15,7 +15,7 @@ import { useEvent } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
 import { useEventSchedule, scheduleKeys } from '@/hooks/queries/useSchedule';
 import { useAuthStore } from '@/stores/authStore';
-import { useUIStore } from '@/stores/uiStore';
+import { feedback, useUIStore } from '@/stores/uiStore';
 import { DARK_THEME } from '@/constants/theme';
 import { formatScheduleTime, generateDefaultSchedule, tierFromPackageSlug } from '@/utils/scheduleGenerator';
 import { scheduleRepository } from '@/repositories';
@@ -95,7 +95,7 @@ export default function EventDayScreen() {
   const handleNavigate = useCallback(() => {
     const target = meetingPoint || event?.city?.name;
     if (!target) {
-      Alert.alert('Kein Ziel', 'Treffpunkt ist nicht gesetzt.');
+      feedback.warning('Kein Ziel', 'Treffpunkt ist nicht gesetzt.');
       return;
     }
     const q = encodeURIComponent(target);
@@ -107,9 +107,9 @@ export default function EventDayScreen() {
     });
   }, [meetingPoint, event]);
 
-  const handleInformAll = useCallback(() => {
+  const handleInformAll = useCallback(async () => {
     if (!schedule || schedule.length === 0) {
-      Alert.alert('Kein Plan', 'Es gibt noch keinen Tagesplan zum Teilen.');
+      feedback.info('Kein Plan', 'Es gibt noch keinen Tagesplan zum Teilen.');
       return;
     }
     const lines = schedule.map((s: { start_time: string; title: string }) => `${formatScheduleTime(s.start_time)}  ${s.title}`).join('\n');
@@ -117,16 +117,18 @@ export default function EventDayScreen() {
     const msg = `🎉 Tagesplan für ${eventName}:\n\n${lines}\n\n— Game Over`;
     // TODO: wire send-push-notification edge function (organizer-only).
     // For now, surface the message so it can be copied/shared.
-    Alert.alert('Tagesplan an alle senden?', msg, [
-      { text: 'Abbrechen', style: 'cancel' },
-      {
-        text: 'Senden',
-        onPress: () => useUIStore.getState().showSuccess(
-          'Gesendet',
-          'Alle Teilnehmer wurden benachrichtigt.'
-        ),
-      },
-    ]);
+    const confirmed = await feedback.confirm({
+      title: 'Tagesplan an alle senden?',
+      message: msg,
+      confirmLabel: 'Senden',
+      cancelLabel: 'Abbrechen',
+    });
+    if (confirmed) {
+      useUIStore.getState().showSuccess(
+        'Gesendet',
+        'Alle Teilnehmer wurden benachrichtigt.'
+      );
+    }
   }, [schedule, event]);
 
   if (eventLoading || scheduleLoading) {

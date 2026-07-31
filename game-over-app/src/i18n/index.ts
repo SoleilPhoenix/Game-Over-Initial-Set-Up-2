@@ -20,7 +20,7 @@ export function useTranslation() {
 }
 
 /**
- * Non-hook version for use outside React components (e.g., Alert.alert).
+ * Non-hook version for use outside React components (e.g., global feedback).
  * Reads current language synchronously from the store.
  */
 export function getTranslation() {

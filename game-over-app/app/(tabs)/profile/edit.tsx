@@ -3,8 +3,8 @@
  * User profile editing with avatar upload
  */
 
-import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Keyboard, Pressable, StyleSheet, ScrollView, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, View, Spinner } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -13,7 +13,7 @@ import { useUser } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
 import { useTranslation } from '@/i18n';
-import { useUIStore } from '@/stores/uiStore';
+import { feedback, useUIStore } from '@/stores/uiStore';
 import type { Json } from '@/lib/supabase/types';
 import {
   formatGuestChanges,
@@ -48,6 +48,43 @@ export default function EditProfileScreen() {
     };
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const fieldPositions = useRef({ firstName: 0, lastName: 0, phone: 0 });
+  const focusedField = useRef<keyof typeof fieldPositions.current | null>(null);
+
+  const scrollFocusedFieldIntoView = useCallback(() => {
+    const field = focusedField.current;
+    if (!field) return;
+
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, fieldPositions.current[field] - 24),
+        animated: true,
+      });
+    });
+  }, []);
+
+  const handleFieldFocus = useCallback((field: keyof typeof fieldPositions.current) => {
+    focusedField.current = field;
+    scrollFocusedFieldIntoView();
+  }, [scrollFocusedFieldIntoView]);
+
+  // Match the email editor: keep the current field above the keyboard and the
+  // save action pinned in the remaining visible space.
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const shown = Keyboard.addListener(showEvent, () => setKeyboardOpen(true));
+    const hidden = Keyboard.addListener(hideEvent, () => setKeyboardOpen(false));
+    return () => { shown.remove(); hidden.remove(); };
+  }, []);
+
+  useEffect(() => {
+    if (keyboardOpen && focusedField.current) {
+      scrollFocusedFieldIntoView();
+    }
+  }, [keyboardOpen, scrollFocusedFieldIntoView]);
 
   // Profiles are authoritative for participant-facing contact details.
   React.useEffect(() => {
@@ -75,7 +112,7 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     if (!firstName.trim()) {
-      Alert.alert(t.editProfile.errorTitle, t.editProfile.firstNameRequired);
+      feedback.warning(t.editProfile.errorTitle, t.editProfile.firstNameRequired);
       return;
     }
 
@@ -171,7 +208,7 @@ export default function EditProfileScreen() {
       useUIStore.getState().showSuccess(t.editProfile.successTitle, t.editProfile.profileUpdated);
     } catch (error) {
       console.error('Profile update error:', error);
-      Alert.alert(t.editProfile.errorTitle, t.editProfile.updateFailed);
+      feedback.error(t.editProfile.errorTitle, t.editProfile.updateFailed);
     } finally {
       setIsSaving(false);
     }
@@ -212,13 +249,15 @@ export default function EditProfileScreen() {
         </XStack>
 
         <ScrollView
+          ref={scrollRef}
           style={{ flex: 1 }}
           contentContainerStyle={{
-            paddingBottom: insets.bottom + 100,
+            paddingBottom: keyboardOpen ? 160 : 24,
             paddingTop: 24,
           }}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
         >
           {/* Avatar Section */}
           <YStack alignItems="center" marginBottom="$8">
@@ -241,7 +280,12 @@ export default function EditProfileScreen() {
 
           <YStack paddingHorizontal="$4" gap="$5">
             {/* First Name Input */}
-            <YStack gap="$2">
+            <YStack
+              gap="$2"
+              onLayout={(event) => {
+                fieldPositions.current.firstName = event.nativeEvent.layout.y;
+              }}
+            >
               <Text
                 fontSize={11}
                 fontWeight="600"
@@ -261,13 +305,19 @@ export default function EditProfileScreen() {
                   placeholderTextColor="#6B7280"
                   autoCapitalize="words"
                   autoCorrect={false}
+                  onFocus={() => handleFieldFocus('firstName')}
                   testID="edit-profile-firstname-input"
                 />
               </View>
             </YStack>
 
             {/* Last Name Input */}
-            <YStack gap="$2">
+            <YStack
+              gap="$2"
+              onLayout={(event) => {
+                fieldPositions.current.lastName = event.nativeEvent.layout.y;
+              }}
+            >
               <Text
                 fontSize={11}
                 fontWeight="600"
@@ -287,13 +337,19 @@ export default function EditProfileScreen() {
                   placeholderTextColor="#6B7280"
                   autoCapitalize="words"
                   autoCorrect={false}
+                  onFocus={() => handleFieldFocus('lastName')}
                   testID="edit-profile-lastname-input"
                 />
               </View>
             </YStack>
 
             {/* Phone Input */}
-            <YStack gap="$2">
+            <YStack
+              gap="$2"
+              onLayout={(event) => {
+                fieldPositions.current.phone = event.nativeEvent.layout.y;
+              }}
+            >
               <Text
                 fontSize={11}
                 fontWeight="600"
@@ -313,6 +369,7 @@ export default function EditProfileScreen() {
                   placeholderTextColor="#6B7280"
                   keyboardType="phone-pad"
                   autoCorrect={false}
+                  onFocus={() => handleFieldFocus('phone')}
                   testID="edit-profile-phone-input"
                 />
               </View>
@@ -352,29 +409,36 @@ export default function EditProfileScreen() {
               </Text>
             </YStack>
 
-            <YStack marginTop="$4">
-              <Pressable
-                style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-                onPress={handleSave}
-                disabled={isSaving}
-                testID="edit-profile-save"
-              >
-                {isSaving ? (
-                  <XStack gap="$2" alignItems="center">
-                    <Spinner size="small" color="#0D1B2A" />
-                    <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
-                      {t.editProfile.saving}
-                    </Text>
-                  </XStack>
-                ) : (
-                  <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
-                    {t.editProfile.saveChanges}
-                  </Text>
-                )}
-              </Pressable>
-            </YStack>
           </YStack>
         </ScrollView>
+        <View
+          paddingHorizontal="$4"
+          paddingTop="$3"
+          paddingBottom={keyboardOpen ? 12 : insets.bottom + 88}
+          backgroundColor={'#0D1B2A'}
+          borderTopWidth={1}
+          borderTopColor={'rgba(230,220,200,0.15)'}
+        >
+          <Pressable
+            style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={isSaving}
+            testID="edit-profile-save"
+          >
+            {isSaving ? (
+              <XStack gap="$2" alignItems="center">
+                <Spinner size="small" color="#0D1B2A" />
+                <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
+                  {t.editProfile.saving}
+                </Text>
+              </XStack>
+            ) : (
+              <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
+                {t.editProfile.saveChanges}
+              </Text>
+            )}
+          </Pressable>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );

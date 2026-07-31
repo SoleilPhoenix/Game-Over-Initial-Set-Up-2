@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
 import { View, Text } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -15,6 +15,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { decode } from 'base64-arraybuffer';
 import { supabase } from '@/lib/supabase/client';
 import { useTranslation } from '@/i18n';
+import { feedback } from '@/stores/uiStore';
 
 // Security: validate uploaded avatars before sending to Supabase Storage.
 // MIME and size checks are first-line defence — the storage bucket policy is the second.
@@ -30,7 +31,7 @@ const ALLOWED_AVATAR_MIME_TYPES = [
 
 /**
  * Validates an asset returned by ImagePicker. Returns an error message
- * suitable for Alert.alert when invalid, or null when the asset passes.
+ * suitable for user feedback when invalid, or null when the asset passes.
  */
 function validateAvatarAsset(asset: ImagePicker.ImagePickerAsset): string | null {
   if (asset.fileSize != null && asset.fileSize > MAX_AVATAR_BYTES) {
@@ -76,7 +77,7 @@ export function AvatarUpload({
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (status !== 'granted') {
-      Alert.alert(
+      feedback.warning(
         'Permission Required',
         'Please grant camera roll access to change your avatar.'
       );
@@ -94,7 +95,7 @@ export function AvatarUpload({
       const asset = result.assets[0];
       const validationError = validateAvatarAsset(asset);
       if (validationError) {
-        Alert.alert('Invalid image', validationError);
+        feedback.warning('Invalid image', validationError);
         return;
       }
       await uploadAvatar(asset.uri);
@@ -105,7 +106,7 @@ export function AvatarUpload({
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
 
     if (status !== 'granted') {
-      Alert.alert(
+      feedback.warning(
         'Permission Required',
         'Please grant camera access to take a photo.'
       );
@@ -122,7 +123,7 @@ export function AvatarUpload({
       const asset = result.assets[0];
       const validationError = validateAvatarAsset(asset);
       if (validationError) {
-        Alert.alert('Invalid image', validationError);
+        feedback.warning('Invalid image', validationError);
         return;
       }
       await uploadAvatar(asset.uri);
@@ -158,7 +159,7 @@ export function AvatarUpload({
 
       console.log('[avatar upload] session present:', !!session?.access_token);
       if (!session?.access_token) {
-        Alert.alert(t.common.signInAgainTitle, t.common.signInAgainBody);
+        feedback.error(t.common.signInAgainTitle, t.common.signInAgainBody);
         return;
       }
 
@@ -203,18 +204,27 @@ export function AvatarUpload({
       onAvatarChange?.(publicUrl);
     } catch (error) {
       console.error('Avatar upload error:', error);
-      Alert.alert('Upload Failed', 'Failed to upload avatar. Please try again.');
+      feedback.error('Upload Failed', 'Failed to upload avatar. Please try again.');
     } finally {
       setIsUploading(false);
     }
   };
 
-  const showImageOptions = () => {
-    Alert.alert('Change Profile Photo', 'Choose an option', [
-      { text: 'Take Photo', onPress: takePhoto },
-      { text: 'Choose from Library', onPress: pickImage },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
+  const showImageOptions = async () => {
+    const choice = await feedback.choose({
+      title: 'Change Profile Photo',
+      message: 'Choose an option',
+      cancelLabel: 'Cancel',
+      options: [
+        { value: 'camera', label: 'Take Photo' },
+        { value: 'library', label: 'Choose from Library' },
+      ],
+    });
+    if (choice === 'camera') {
+      await takePhoto();
+    } else if (choice === 'library') {
+      await pickImage();
+    }
   };
 
   const innerSize = size - 6; // Account for gradient border

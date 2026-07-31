@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { ScrollView, Share, ActivityIndicator, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Modal, Alert, Image } from 'react-native';
+import { ScrollView, Share, ActivityIndicator, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Modal, Image } from 'react-native';
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -31,8 +31,9 @@ import { GoldButton } from '@/components/ui/editorial';
 import type { ParticipantWithProfile } from '@/repositories';
 import { loadDesiredParticipants, loadBudgetInfo, loadGuestDetails, saveGuestDetails, setInvitedCount, type GuestDetail } from '@/lib/participantCountCache';
 import { resolveGuestDisplay } from '@/utils/guestDisplay';
-import { formatGuestChanges, type GuestDataChange } from '@/utils/guestDataChange';
+import { formatPreviousGuestValues, type GuestDataChange } from '@/utils/guestDataChange';
 import { supabase } from '@/lib/supabase/client';
+import { feedback } from '@/stores/uiStore';
 
 // ─── Phone Formatting ──────────────────────────
 /** Auto-formats German phone numbers with dash after prefix */
@@ -537,7 +538,7 @@ export default function ManageInvitationsScreen() {
     // Block sending while any phone/email is duplicated within this event —
     // otherwise two slots would resolve to the same recipient.
     if (hasDuplicates) {
-      Alert.alert(
+      feedback.warning(
         t.manageInvitations.duplicateTitle,
         duplicatePhoneSlots.size > 0 ? dupPhoneMsg : dupEmailMsg,
       );
@@ -552,7 +553,7 @@ export default function ManageInvitationsScreen() {
     await supabase.auth.refreshSession().catch(() => {});
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData.session) {
-      Alert.alert('Session expired', 'Please log out and log in again.');
+      feedback.error('Session expired', 'Please log out and log in again.');
       setInviteSendStatus('idle');
       return;
     }
@@ -598,7 +599,7 @@ export default function ManageInvitationsScreen() {
           }
         }
       } catch {}
-      Alert.alert('Send failed', detail + statusCode);
+      feedback.error('Send failed', detail + statusCode);
       setInviteSendStatus('idle');
       return;
     }
@@ -621,7 +622,7 @@ export default function ManageInvitationsScreen() {
       const msg = `🎉 You're invited to celebrate ${event?.honoree_name || 'the party'}!\n\nJoin us on Game Over:\n${inviteLink}`;
       await Share.share({ message: msg, title: 'Game Over Invitation' });
     } catch {
-      Alert.alert(t.common.error, t.events.loadError);
+      feedback.error(t.common.error, t.events.loadError);
     }
   };
 
@@ -762,15 +763,19 @@ export default function ManageInvitationsScreen() {
             {slot.changed && (slot.changed.name || slot.changed.phone) && (
               <XStack alignItems="flex-start" gap={6} marginTop={4}>
                 <Ionicons name="information-circle-outline" size={13} color={theme.accentGold} style={{ marginTop: 1 }} />
-                <Text style={styles.adjustedHint} numberOfLines={3}>
-                  {t.manageInvitations.guestAdjusted}: {formatGuestChanges(
-                    ([
+                <YStack flex={1}>
+                  <Text style={styles.adjustedHint} numberOfLines={1}>
+                    {t.manageInvitations.guestAdjusted}:
+                  </Text>
+                  <Text style={styles.adjustedHint} numberOfLines={1}>
+                    {t.manageInvitations.guestBefore}: {formatPreviousGuestValues(
+                      ([
                       slot.changed.name && { field: 'name', ...slot.changed.name },
                       slot.changed.phone && { field: 'phone', ...slot.changed.phone },
-                    ].filter(Boolean) as GuestDataChange[]),
-                    { name: t.notifications.fieldName, email: t.notifications.fieldEmail, phone: t.notifications.fieldPhone },
-                  )}
-                </Text>
+                      ].filter(Boolean) as GuestDataChange[]),
+                    )}
+                  </Text>
+                </YStack>
               </XStack>
             )}
 
@@ -1369,10 +1374,9 @@ const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
     marginTop: 2,
   },
   adjustedHint: {
-    flex: 1,
-    fontSize: 11,
+    fontSize: 10,
     color: theme.accentGold,
-    lineHeight: 15,
+    lineHeight: 14,
   },
   dupError: {
     fontSize: 12,

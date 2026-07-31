@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import { ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -17,6 +17,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { feedback } from '@/stores/uiStore';
 
 const editEventSchema = z.object({
   title: z.string().min(1, 'Title is required'),
@@ -40,31 +41,25 @@ export default function EditEventScreen() {
   // Check if user is the organizer
   const isOrganizer = event?.created_by === user?.id;
 
-  const handleDeleteEvent = () => {
-    Alert.alert(
-      'Delete Event',
-      `Are you sure you want to delete "${event?.title || 'this event'}"? This action cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            if (!id) return;
-            setIsDeleting(true);
-            try {
-              await deleteEvent.mutateAsync(id);
-              router.replace('/(tabs)/events');
-            } catch (error) {
-              console.error('Failed to delete event:', error);
-              Alert.alert('Error', 'Failed to delete event. Please try again.');
-            } finally {
-              setIsDeleting(false);
-            }
-          },
-        },
-      ]
-    );
+  const handleDeleteEvent = async () => {
+    const confirmed = await feedback.confirm({
+      title: 'Delete Event',
+      message: `Are you sure you want to delete "${event?.title || 'this event'}"? This action cannot be undone.`,
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      destructive: true,
+    });
+    if (!confirmed || !id) return;
+    setIsDeleting(true);
+    try {
+      await deleteEvent.mutateAsync(id);
+      router.replace('/(tabs)/events');
+    } catch (error) {
+      console.error('Failed to delete event:', error);
+      feedback.error('Error', 'Failed to delete event. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const {

@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { ScrollView, Alert } from 'react-native';
+import { ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/Badge';
 
 import { TIER_DISPLAY_NAME, TIER_PRICE_PER_PERSON_CENTS, getTierName } from '@/constants/packageTiers';
 import { useTranslation } from '@/i18n';
+import { feedback } from '@/stores/uiStore';
 
 // Fallback package lookup for local IDs that don't exist in DB — names + prices from packageTiers
 const FALLBACK_PKG_MAP: Record<string, { name: string; tier: string; price_per_person_cents: number }> = {
@@ -71,7 +72,7 @@ export default function WizardStep5() {
     try {
       const eventData = wizardState.getEventData();
       if (!eventData) {
-        Alert.alert('Error', 'Please complete all required fields.');
+        feedback.warning('Error', 'Please complete all required fields.');
         return;
       }
       // Ensure dates have defaults for the API
@@ -89,7 +90,7 @@ export default function WizardStep5() {
       router.replace(`/booking/${newEvent.id}/summary?packageId=${packageId}`);
     } catch (error) {
       console.error('Failed to create event:', error);
-      Alert.alert('Error', 'Failed to create event. Please try again.');
+      feedback.error('Error', 'Failed to create event. Please try again.');
     } finally {
       setIsCreating(false);
     }

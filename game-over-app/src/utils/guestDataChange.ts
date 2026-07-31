@@ -60,3 +60,15 @@ export function formatGuestChanges(
     .map((c) => `${fieldLabels[c.field]}: ${c.from} → ${c.to}`)
     .join(', ');
 }
+
+/**
+ * Compact participant-card summary. The current values already appear above
+ * the note, so this intentionally includes only the previous name and phone.
+ */
+export function formatPreviousGuestValues(changes: GuestDataChange[]): string {
+  return changes
+    .filter((change) => change.field === 'name' || change.field === 'phone')
+    .map((change) => change.from.trim())
+    .filter(Boolean)
+    .join(' & ');
+}

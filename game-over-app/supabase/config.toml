@@ -56,8 +56,37 @@ enable_signup = true
 
 [auth.email]
 enable_signup = true
-double_confirm_changes = true
+# Off on purpose: only the NEW address confirms. The app already reauthenticates
+# with the current password before requesting the change, so the protection this
+# would add sits in the app rather than in the old mailbox. Must match the
+# "Secure email change" toggle under Authentication -> Providers -> Email; this
+# key only governs local development.
+double_confirm_changes = false
 enable_confirmations = false
+
+[auth.email.template.confirmation]
+subject = "E-Mail-Adresse bestätigen | Game Over"
+content_path = "./supabase/templates/auth/confirm-signup.html"
+
+[auth.email.template.recovery]
+subject = "Passwort zurücksetzen | Game Over"
+content_path = "./supabase/templates/auth/reset-password.html"
+
+[auth.email.template.email_change]
+subject = "Neue E-Mail-Adresse bestätigen | Game Over"
+content_path = "./supabase/templates/auth/change-email.html"
+
+[auth.email.template.magic_link]
+subject = "Dein Anmeldelink | Game Over"
+content_path = "./supabase/templates/auth/magic-link.html"
+
+[auth.email.template.invite]
+subject = "Du bist zu Game Over eingeladen"
+content_path = "./supabase/templates/auth/invite.html"
+
+[auth.email.template.reauthentication]
+subject = "Dein Bestätigungscode | Game Over"
+content_path = "./supabase/templates/auth/reauthentication.html"
 
 [auth.external.apple]
 enabled = true
@@ -81,3 +110,22 @@ redirect_uri = "env(SUPABASE_AUTH_FACEBOOK_REDIRECT_URI)"
 enabled = false
 port = 54327
 vector_port = 54328
+
+# ─── Edge Functions ───────────────────────────────────────────────────────────
+# These three do NOT receive a Supabase JWT and must not be gated on one:
+# the two cron jobs send `Authorization: Bearer <CRON_SECRET>` and Stripe sends
+# its own signature header. With the gateway's JWT check on, the request is
+# rejected as UNAUTHORIZED_INVALID_JWT_FORMAT before the function ever runs,
+# and each function's own authorization check never gets a say.
+#
+# This section exists because that setting previously lived only in the
+# dashboard: a plain `supabase functions deploy <name>` silently re-enabled the
+# check and took the function down. Recorded here, every deploy carries it.
+[functions.send-final-briefing]
+verify_jwt = false
+
+[functions.process-payment-reminders]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false

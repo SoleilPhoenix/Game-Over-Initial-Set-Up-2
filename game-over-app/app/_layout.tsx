@@ -9,7 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { LogBox, StyleSheet } from 'react-native';
+import { LogBox } from 'react-native';
 import { QueryClient } from '@tanstack/react-query';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
@@ -17,7 +17,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { TamaguiProvider, Theme, Spinner, YStack } from 'tamagui';
 import { ToastProvider, ToastViewport } from '@tamagui/toast';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StripeProviderWrapper } from '@/components/StripeProviderWrapper';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
@@ -28,8 +27,10 @@ import { preloadSportLogos, preloadShareImages } from '@/constants/sportLogos';
 import { initBudgetCache } from '@/lib/participantCountCache';
 import { shouldPlayIntro } from '@/lib/introSession';
 import { useEditorialFonts } from '@/hooks/useEditorialFonts';
-import { Logo } from '@/components/brand/Logo';
+import { BrandLockup } from '@/components/brand/AnimatedLogo';
+import { useTheme } from '@/hooks/useTheme';
 import { ToastHost } from '@/components/ui/ToastHost';
+import { ConfirmSheet } from '@/components/ui/ConfirmSheet';
 import { useSyncProfileEmail } from '@/hooks/useSyncProfileEmail';
 import { useSyncProfileLanguage } from '@/hooks/useSyncProfileLanguage';
 import config from '../tamagui.config';
@@ -111,6 +112,7 @@ const queryPersister = createAsyncStoragePersister({
 function RootLayoutNav() {
   const { isInitialized, isLoading, session, initialize } = useAuthStore();
   const { fontsLoaded } = useEditorialFonts();
+  const { theme } = useTheme();
   const segments = useSegments();
   const router = useRouter();
   useSyncProfileEmail();
@@ -195,16 +197,9 @@ function RootLayoutNav() {
 
   if (!isInitialized || isLoading || !fontsLoaded) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={'#0D1B2A'}>
-        <LinearGradient
-          colors={['#1A2F47', '#0D1B2A']}
-          style={StyleSheet.absoluteFill}
-        />
-        {/* Game Over Logo - Vektor statt des App-Icons. Es wird hier nur 150pt
-            gross gezeigt, das 1024er PNG kostete dafuer 752 KB im Bundle. */}
-        <Logo size={150} />
-        {/* Loading Spinner below logo */}
-        <Spinner size="large" color={'#C6A75E'} style={{ marginTop: 24 }} />
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={theme.background}>
+        <BrandLockup size={150} color={theme.textTertiary} testID="boot-brand-lockup" />
+        <Spinner size="large" color={theme.primary} style={{ marginTop: 24 }} />
       </YStack>
     );
   }
@@ -228,6 +223,7 @@ function RootLayoutNav() {
         <Stack.Screen name="invite" />
       </Stack>
       <ToastHost />
+      <ConfirmSheet />
       <ToastViewport flexDirection="column-reverse" top="$4" left={0} right={0} />
     </>
   );

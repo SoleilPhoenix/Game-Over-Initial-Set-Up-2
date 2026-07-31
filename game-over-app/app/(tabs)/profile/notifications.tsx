@@ -1,6 +1,6 @@
 /**
  * Notification Preferences Screen
- * Push and email notification settings
+ * Push notification and optional email-reminder settings
  */
 
 import React, { useState, useEffect } from 'react';
@@ -241,7 +241,7 @@ export default function NotificationsScreen() {
             <View style={styles.card}>
               <XStack paddingVertical="$3" paddingHorizontal="$4" alignItems="center" justifyContent="space-between"
                 accessibilityRole="switch"
-                accessibilityLabel="Email notifications for event updates"
+                accessibilityLabel={t.notificationPrefs.eventUpdates}
                 accessibilityState={{ checked: emailNotificationsEnabled, disabled: isSaving }}
               >
                 <XStack flex={1} alignItems="center" gap="$3" marginRight="$3">

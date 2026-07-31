@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useRef, useEffect, useState } from 'react';
-import { Animated, PanResponder, FlatList, KeyboardAvoidingView, Modal, Platform, Keyboard, Alert, Pressable, View, StyleSheet } from 'react-native';
+import { Animated, PanResponder, FlatList, KeyboardAvoidingView, Modal, Platform, Keyboard, Pressable, View, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
@@ -22,6 +22,7 @@ import { useAuthStore } from '@/stores/authStore';
 import { MessageBubble, MessageInput } from '@/components/chat';
 import { useTranslation, getTranslation } from '@/i18n';
 import type { MessageWithAuthor } from '@/repositories/messages';
+import { feedback } from '@/stores/uiStore';
 
 // A local channel has a timestamp ID (e.g. "1771618701111"), not a UUID.
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -111,47 +112,42 @@ export default function ChatChannelScreen() {
   // Delete channel mutation
   const deleteChannelMutation = useDeleteChannel();
 
-  const handleDeleteChannel = () => {
+  const handleDeleteChannel = async () => {
     const tr = getTranslation();
-    Alert.alert(
-      (tr.chat as any).channelDeleteTitle,
-      (tr.chat as any).channelDeleteMsg.replace('{{name}}', channelDisplayName),
-      [
-        { text: tr.common.cancel, style: 'cancel' },
-        {
-          text: tr.common.delete,
-          style: 'destructive',
-          onPress: async () => {
-            setInfoModalVisible(false);
-            if (!isDbChannel) {
-              // Local channel — remove messages AND channel entry from AsyncStorage
-              // Await all storage operations before navigating to avoid race condition
-              try {
-                await AsyncStorage.removeItem(`local-messages-${channelId}`);
-                const raw = await AsyncStorage.getItem('localChannelsByEvent');
-                if (raw) {
-                  const map = JSON.parse(raw) as Record<string, { id: string; channels: { id: string }[] }[]>;
-                  for (const eventKey of Object.keys(map)) {
-                    for (const section of map[eventKey]) {
-                      section.channels = section.channels.filter((ch: any) => ch.id !== channelId);
-                    }
-                  }
-                  await AsyncStorage.setItem('localChannelsByEvent', JSON.stringify(map));
-                }
-              } catch {}
-              router.back();
-            } else {
-              try {
-                await deleteChannelMutation.mutateAsync(channelId!);
-                router.back();
-              } catch {
-                Alert.alert((tr.chat as any).errorTitle, (tr.chat as any).channelDeleteFailed);
-              }
+    const confirmed = await feedback.confirm({
+      title: (tr.chat as any).channelDeleteTitle,
+      message: (tr.chat as any).channelDeleteMsg.replace('{{name}}', channelDisplayName),
+      confirmLabel: tr.common.delete,
+      cancelLabel: tr.common.cancel,
+      destructive: true,
+    });
+    if (!confirmed) return;
+    setInfoModalVisible(false);
+    if (!isDbChannel) {
+      // Local channel — remove messages AND channel entry from AsyncStorage
+      // Await all storage operations before navigating to avoid race condition
+      try {
+        await AsyncStorage.removeItem(`local-messages-${channelId}`);
+        const raw = await AsyncStorage.getItem('localChannelsByEvent');
+        if (raw) {
+          const map = JSON.parse(raw) as Record<string, { id: string; channels: { id: string }[] }[]>;
+          for (const eventKey of Object.keys(map)) {
+            for (const section of map[eventKey]) {
+              section.channels = section.channels.filter((ch: any) => ch.id !== channelId);
             }
-          },
-        },
-      ]
-    );
+          }
+          await AsyncStorage.setItem('localChannelsByEvent', JSON.stringify(map));
+        }
+      } catch {}
+      router.back();
+    } else {
+      try {
+        await deleteChannelMutation.mutateAsync(channelId!);
+        router.back();
+      } catch {
+        feedback.error((tr.chat as any).errorTitle, (tr.chat as any).channelDeleteFailed);
+      }
+    }
   };
 
   // Combine all messages from paginated data
@@ -245,12 +241,12 @@ export default function ChatChannelScreen() {
         const msg = error?.message || '';
         const tr = getTranslation();
         if (msg.includes('infinite recursion') || msg.includes('42P17')) {
-          Alert.alert(
+          feedback.error(
             tr.chat.dbConfigTitle,
             tr.chat.dbConfigMessage
           );
         } else {
-          Alert.alert(tr.common.error, tr.chat.sendFailed);
+          feedback.error(tr.common.error, tr.chat.sendFailed);
         }
         console.error('Failed to send message:', error);
       }

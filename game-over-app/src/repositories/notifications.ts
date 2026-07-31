@@ -17,19 +17,26 @@ export const notificationsRepository = {
    */
   async getByUserId(
     userId: string,
-    page: number = 0
+    page: number = 0,
+    includeOpsAlerts: boolean = false,
   ): Promise<{ notifications: Notification[]; hasMore: boolean }> {
     const from = page * PAGE_SIZE;
     // Over-fetch to compensate for client-side filtering of cancelled events
     const to = from + PAGE_SIZE * 2 - 1;
 
     type Joined = Notification & { event: { status: string } | null };
-    const { data, error } = await supabase
+    let query = supabase
       .from('notifications')
       .select('*, event:events(status)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .range(from, to);
+
+    if (!includeOpsAlerts) {
+      query = query.neq('type', 'ops_cron_health');
+    }
+
+    const { data, error } = await query;
 
     if (error) throw error;
 
@@ -54,19 +61,38 @@ export const notificationsRepository = {
   /**
    * Get unread notifications count
    */
-  async getUnreadCount(userId: string): Promise<number> {
+  async getUnreadCount(userId: string, includeOpsAlerts: boolean = false): Promise<number> {
     // Fetch with event status to exclude cancelled-event notifications from badge count
     type Joined = { event: { status: string } | null };
-    const { data, error } = await supabase
+    let query = supabase
       .from('notifications')
       .select('event:events(status)')
       .eq('user_id', userId)
       .eq('is_read', false);
 
+    if (!includeOpsAlerts) {
+      query = query.neq('type', 'ops_cron_health');
+    }
+
+    const { data, error } = await query;
+
     if (error) throw error;
     return ((data || []) as Joined[]).filter(
       (n) => !n.event || n.event.status !== 'cancelled',
     ).length;
+  },
+
+  /**
+   * Ask the narrow SECURITY DEFINER helper instead of exposing the protected
+   * ops_alert_recipients table. Fail closed while its migration is pending.
+   */
+  async isOpsAlertRecipient(): Promise<boolean> {
+    const { data, error } = await supabase.rpc('is_ops_alert_recipient');
+    if (error) {
+      console.warn('[notifications] Ops-recipient check unavailable:', error.message);
+      return false;
+    }
+    return data === true;
   },
 
   /**

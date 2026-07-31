@@ -13,8 +13,28 @@ import type { Database } from '@/lib/supabase/types';
 import { useTranslation, getCurrentLanguage } from '@/i18n';
 import { isGuestDataChangedMeta, isGuestJoinedMeta, formatGuestChanges } from '@/utils/guestDataChange';
 import { isRefundDueMeta } from '@/utils/refundDue';
+import { useTheme } from '@/hooks/useTheme';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
+
+interface BookingCancelledMeta {
+  honoreeName: string;
+  retainedDepositCents: number;
+}
+
+function isBookingCancelledMeta(value: unknown): value is BookingCancelledMeta {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const meta = value as Record<string, unknown>;
+  return typeof meta.honoreeName === 'string'
+    && typeof meta.retainedDepositCents === 'number'
+    && Number.isFinite(meta.retainedDepositCents);
+}
+
+function getOpsAlertCheckKey(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const checkKey = (value as Record<string, unknown>).checkKey;
+  return typeof checkKey === 'string' && checkKey.length > 0 ? checkKey : null;
+}
 
 // Maps a notification type to the i18n key used for its action-button label.
 // Kept as a plain lookup so NOTIFICATION_CONFIG below can stay a static const.
@@ -117,6 +137,13 @@ const NOTIFICATION_CONFIG: Record<
     bgColor: INFO_BG_COLOR,
   },
   booking_cancelled: {
+    icon: 'close-circle',
+    color: ACTION_COLOR,
+    bgColor: ACTION_BG_COLOR,
+  },
+  // Legacy alias for rows created by process-payment-reminders before the
+  // cancellation notification adopted the canonical booking_cancelled type.
+  event_cancelled_nonpayment: {
     icon: 'close-circle',
     color: ACTION_COLOR,
     bgColor: ACTION_BG_COLOR,
@@ -242,13 +269,20 @@ export function NotificationItem({
 }: NotificationItemProps) {
   const router = useRouter();
   const { t } = useTranslation();
-  const config = NOTIFICATION_CONFIG[notification.type] || NOTIFICATION_CONFIG.default;
+  const { theme } = useTheme();
+  const config = notification.type === 'ops_cron_health'
+    ? {
+        icon: 'construct-outline' as const,
+        color: theme.textSecondary,
+        bgColor: theme.surfaceHigh,
+      }
+    : NOTIFICATION_CONFIG[notification.type] || NOTIFICATION_CONFIG.default;
   const actionLabelKey = ACTION_LABEL_KEYS[notification.type];
   const actionLabel = actionLabelKey ? (t.notifications as any)[actionLabelKey] : undefined;
 
-  // guest_data_changed carries a structured diff in `metadata` so the text can be
-  // localized to the organizer's language at render time (it was created in the
-  // guest's language). Falls back to the stored title/body for any other type.
+  // Notifications with structured metadata are localized to the organizer's
+  // language at render time. Falls back to stored title/body for legacy rows
+  // whose metadata is absent or malformed.
   let displayTitle = notification.title;
   let displayBody = notification.body;
   if (notification.type === 'guest_joined' && isGuestJoinedMeta(notification.metadata)) {
@@ -282,6 +316,43 @@ export function NotificationItem({
       .replace('{{description}}', meta.description)
       .replace('{{amount}}', amount)
       .replace('{{date}}', date);
+  } else if (
+    (notification.type === 'booking_cancelled'
+      || notification.type === 'event_cancelled_nonpayment')
+    && isBookingCancelledMeta(notification.metadata)
+  ) {
+    const meta = notification.metadata;
+    const locale = getCurrentLanguage() === 'de' ? 'de-DE' : 'en-US';
+    const deposit = new Intl.NumberFormat(locale, {
+      style: 'currency',
+      currency: 'EUR',
+    }).format(meta.retainedDepositCents / 100);
+    displayTitle = (t.notifications as any).bookingCancelledTitle;
+    displayBody = ((t.notifications as any).bookingCancelledBody as string)
+      .replace('{{honoree}}', meta.honoreeName)
+      .replace('{{deposit}}', deposit);
+  } else if (notification.type === 'ops_cron_health') {
+    const checkKey = getOpsAlertCheckKey(notification.metadata);
+    displayTitle = t.notifications.opsAlertTitle;
+
+    if (checkKey === 'config:pg_net') {
+      displayBody = t.notifications.opsAlertPgNetMissing;
+    } else if (checkKey?.startsWith('config:vault:')) {
+      displayBody = t.notifications.opsAlertVaultSecretMissing
+        .replace('{{name}}', checkKey.slice('config:vault:'.length));
+    } else if (checkKey === 'http:no_response') {
+      displayBody = t.notifications.opsAlertHttpNoResponse;
+    } else if (checkKey && /^http:\d{3}$/.test(checkKey)) {
+      displayBody = t.notifications.opsAlertHttpError
+        .replace('{{status}}', checkKey.slice('http:'.length));
+    } else if (checkKey?.startsWith('job:')) {
+      displayBody = t.notifications.opsAlertJobFailed
+        .replace('{{job}}', checkKey.slice('job:'.length));
+    } else if (checkKey) {
+      displayBody = t.notifications.opsAlertUnknown.replace('{{checkKey}}', checkKey);
+    } else {
+      displayBody = t.notifications.opsAlertUnknownWithoutKey;
+    }
   }
 
   const formatTime = (dateString: string) => {

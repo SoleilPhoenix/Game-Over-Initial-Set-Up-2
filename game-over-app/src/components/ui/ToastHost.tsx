@@ -10,11 +10,6 @@ import { useUIStore } from '@/stores/uiStore';
 type IconName = ComponentProps<typeof Ionicons>['name'];
 type Toast = ReturnType<typeof useUIStore.getState>['toasts'][number];
 
-// Clears the custom tab bar, including its raised center action button.
-// Just clears the tab bar and the floating "+". At 104 the toast rode high
-// enough to cover the chevron of the settings row above it.
-const TAB_BAR_CLEARANCE = 76;
-
 const toastIcons: Record<'success' | 'error' | 'warning' | 'info', IconName> = {
   success: 'checkmark-circle-outline',
   error: 'alert-circle-outline',
@@ -76,7 +71,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
           },
         ]}
       >
-        <Ionicons name={toastIcons[toast.type]} size={20} color={accentColor} />
+        <Ionicons name={toastIcons[toast.type]} size={24} color={accentColor} />
         <View style={styles.copy}>
           <Text style={[styles.title, { color: theme.textPrimary }]}>
             {toast.title}
@@ -102,7 +97,7 @@ export function ToastHost() {
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.host, { paddingBottom: insets.bottom + TAB_BAR_CLEARANCE }]}
+      style={[styles.host, { paddingBottom: insets.bottom }]}
     >
       {toasts.map((toast) => (
         <ToastItem
@@ -119,6 +114,7 @@ const styles = StyleSheet.create({
   host: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000,
+    elevation: 1000,
     alignItems: 'center',
     justifyContent: 'flex-end',
     paddingHorizontal: SPACING.lg,
@@ -130,12 +126,12 @@ const styles = StyleSheet.create({
   },
   toast: {
     width: '100%',
-    minHeight: 52,
+    minHeight: 88,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.md,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xl,
+    paddingVertical: SPACING.lg,
     borderRadius: RADII.lg,
     borderWidth: StyleSheet.hairlineWidth,
     shadowOffset: { width: 0, height: 8 },
@@ -147,12 +143,12 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: FONTS.labelBold,
-    fontSize: 14,
-    lineHeight: 19,
+    fontSize: 16,
+    lineHeight: 22,
   },
   message: {
     fontFamily: FONTS.body,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 15,
+    lineHeight: 21,
   },
 });

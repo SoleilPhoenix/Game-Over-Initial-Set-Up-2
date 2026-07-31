@@ -7,6 +7,304 @@ Letzte Aktualisierung: 2026-07-30.
 Sie wird laut globaler `~/.claude/CLAUDE.md` nach jedem abgeschlossenen Fortschritt fortgeschrieben,
 und zwar im selben Commit wie die Änderung, die sie beschreibt.
 
+## Aktueller Stand (2026-07-31) - Zahlungsintegritaet, Merge mit main, Marken-Assets
+
+Branch `claude/budget-refunds-layout-errors-0302ea`, dazu `claude/marken-assets-web` (gemergt).
+`npm run typecheck`, `npx vitest run` (107 Tests), `deno check` gruen, von Claude nachgefahren.
+
+### 1. Der Branch war von einem veralteten main abgezweigt
+
+Zehn Commits aus parallelen Sessions lagen auf `main`, teils an **denselben** Dateien:
+neue Erinnerungsstaffel mit `PAYMENT_DEADLINE_DAYS = 7` / `CANCEL_AT_DAYS = 6`, zweisprachige
+Erinnerungsmails, `verify_jwt` (unabhaengig zweimal repariert), Client-Statuswrite entfernt.
+
+Aufgeloest **nicht** per Rebase, sondern `main` in den Branch gemergt: ein Rebase haette die sechs
+Commits einzeln ueber zehn neue abgespielt und dieselben Konflikte mehrfach aufgeworfen.
+Bei den zwei Codedateien hat `main` gewonnen (`--theirs`), danach wurden die drei Beitraege des
+Branches gezielt daraufgesetzt. **Mains Staffel, Timing und Copy sind unveraendert.**
+
+**Merke fuer die naechste parallele Sitzung:** vor dem Abzweigen `main` pruefen, und lange Branches
+regelmaessig nachziehen. Der Aufwand hier war ein Vielfaches der eigentlichen Aenderung.
+
+### 2. Der Trigger hat einen Zahlungsausfall verhindert, nicht einen Formfehler
+
+`payment.tsx` rief nach der Stripe-Zahlung `updatePaymentStatus(..., 'completed')`.
+`enforce_booking_financial_integrity` wies das mit `P0001` ab - die Zahlung war durch, die App
+meldete Fehlschlag (Sven, GO-1B1063). Der Aufruf war zusaetzlich **inhaltlich falsch**: der Webhook
+schreibt nach einer Anzahlung `processing` und reserviert `completed` fuer die Vollzahlung.
+Ohne den Trigger stuende die Buchung als vollstaendig bezahlt in der DB, mit 1030,50 EUR offener
+Forderung, die keine Erinnerung und keine Stornierung je wieder eingefordert haette.
+
+`updatePaymentStatus`, der Hook und der Re-Export sind **geloescht**, nicht nur ungenutzt.
+Ein gesperrter Schreibpfad laedt zum erneuten Aufruf ein.
+
+`confirm-demo-booking` simuliert die Buchung jetzt vollstaendig: nimmt nur `eventId` und
+`paymentKind`, weist unbekannte Felder mit 400 ab, leitet die Betraege selbst aus
+`total_amount_cents` ab (`ceil(total/4)`), und schreibt die **Buchung vor dem Event-Status** -
+ein Fehlschlag hinterlaesst so kein gebuchtes Event ohne Zahlung.
+
+`bookings.create` gibt eine vorhandene Buchung des Events zurueck (23505 auf
+`bookings_event_id_key`) und faengt zusaetzlich das Insert-Rennen ab.
+
+### 3. Daten geradegezogen
+
+- **GO-376D44 (Natalia):** Anzahlung 22900, Rest 68700, `deposit_paid_at`, `processing`;
+  vier Teilnehmer auf je 22900. **Achtung: das dokumentiert einen Zahlungseingang, den es nie gab** -
+  bewusst so, weil Testevent.
+- **GO-1B1063 (Sven)** war bereits korrekt, nur der letzte Statusschritt fehlte.
+- **GO-0614B6 (Dana Flatulence)** auf Wunsch geloescht - verwaiste Buchung auf einem Draft-Event,
+  entstanden durch genau den Bug aus Punkt 2. Kaskade sauber, keine verwaisten Buchungen mehr.
+
+### 4. Marken-Assets fuer die Webseite
+
+Neu in `assets/web/`: `logo-mark.svg`, `logo-on-navy.svg`, `splash.svg`, `favicon.svg`,
+`intro.html` und `generate.py`. Alle Pfade woertlich aus `assets/brand/logo.svg`.
+
+**Splash und Adaptive-Icon bleiben PNG** - Expo laesst dort kein SVG zu, das ist eine
+Plattformgrenze. Umgestellt ist nur das Web-Favicon in `app.config.ts`.
+
+`intro.html` bildet den 4-Sekunden-Aufbau als reines CSS/SVG nach (kein JS, keine externe URL,
+`prefers-reduced-motion`). Eine mp4 gibt es weiterhin nicht; `INTRO_VIDEO_SOURCE` bleibt `null`.
+
+Zwei Korrekturen nach dem Ansehen der gerenderten Dateien - Parsen allein haette beide uebersehen:
+- Der Favicon trug `stroke-width="12"` als "optische Verstaerkung". Das verdickt auch die Haarlinien
+  der Diamantfacetten, der Stein lief zu einem Klumpen zusammen. Jetzt unveraenderte Pfade,
+  quadratischer viewBox mit 16% Luft, keine feste `width`/`height`.
+- `splash.svg` zeigte "Game-Over.app" zweimal: die Wortmarke steckt bereits in `logo.svg`.
+
+### 5. Boot-Screen und Tastatur
+
+Der Startbildschirm zeigte nur die Ringmarke, das Intro Marke + Wortmarke + Domain - der Uebergang
+las sich wie zwei Marken. Beide nutzen jetzt `BrandLockup` aus `AnimatedLogo.tsx`.
+In `profile/edit.tsx` scrollen alle Felder beim Fokus ueber die Tastatur.
+
+## Aktueller Stand (2026-07-29, spaeter) - Feedback-Schicht statt nativer Dialoge, Cron endlich gruen
+
+Branch `claude/budget-refunds-layout-errors-0302ea`.
+`npm run typecheck`, `npm run lint`, `npx vitest run` (102 Tests) gruen, von Claude selbst nachgefahren.
+UI-Batch via Codex (`gpt-5.6-sol`, Reasoning high), Diagnose/DB/Deploy von Claude.
+
+### 1. Ein Deploy hat den Cron-Job kaputt gemacht, und das war der nuetzlichste Fund des Tages
+
+`supabase functions deploy send-final-briefing` schaltet die JWT-Pruefung des Gateways **wieder ein**,
+weil `supabase/config.toml` bis heute **keinen `[functions]`-Abschnitt** hatte.
+Die Einstellung lebte nur als Zustand im Dashboard und ueberlebte keinen einzigen CLI-Deploy.
+
+Der Cron-Job schickt `Authorization: Bearer <CRON_SECRET>`, und das ist absichtlich kein JWT.
+Mit aktiver Pruefung wirft das Gateway die Anfrage mit `UNAUTHORIZED_INVALID_JWT_FORMAT` raus,
+**bevor** die Funktion laeuft, und ihre eigene `CRON_SECRET`-Pruefung kommt nie zum Zug.
+
+Betroffen waren drei Funktionen, die sich selbst autorisieren:
+`send-final-briefing`, `process-payment-reminders` und - der gefaehrlichste Fall - `stripe-webhook`,
+das die Stripe-Signatur selbst prueft. Ein beilaeufiges CLI-Deploy dort haette Zahlungen still gestoert.
+Alle drei stehen jetzt mit `verify_jwt = false` in `config.toml`, damit die Einstellung an jedem Deploy haengt.
+
+**Merke: nach jedem `functions deploy` einer selbst-autorisierenden Funktion einmal aufrufen und
+`net._http_response` lesen. Ein Deploy meldet Erfolg, auch wenn er die Funktion unerreichbar macht.**
+
+### 2. `send-final-briefing` laeuft erstmals end-to-end
+
+Vorher live: der alte deployte Code mit dem `profiles`-Join, HTTP 500.
+Der Fix lag seit der letzten Sitzung nur lokal, deployt war die kaputte Version.
+Jetzt deployt und verifiziert - nicht ueber den Deploy-Exit-Code, sondern ueber einen echten Aufruf
+mit dem Original-Cron-Kommando (`execute` des `cron.job.command`, damit das Secret die DB nie verlaesst):
+**HTTP 200, `{"results":[]}`**.
+
+Der Testaufruf war nebenwirkungsfrei, weil die Funktion nur den **Folgetag** trifft und das einzige
+Event am 02.08. liegt. Vor einem erneuten Testaufruf denselben Abstand pruefen.
+
+### 3. `ops_alert_recipients` war bereits befuellt, der HANDOFF war nur veraltet
+
+Die Zeile existiert seit 10:04 UTC. Der Watchdog hat **11 Sekunden spaeter** seinen ersten echten Alarm
+geschrieben und dabei genau den 500er von `send-final-briefing` gemeldet.
+Er ist damit nicht nur eingerichtet, sondern nachweislich wirksam - der Punkt aus dem vorigen Abschnitt ist erledigt.
+
+### 4. Keine nativen Dialoge mehr, app-eigenes Feedback ueberall
+
+Alle 78 `Alert.alert` in 27 Dateien sind weg, Endstand null Aufrufstellen.
+An ihrer Stelle:
+
+- `feedback.*` in `src/stores/uiStore.ts` - ein API fuer React und fuer imperative Helfer
+  (`src/utils/calendar.ts`, `src/hooks/usePaymentSheet.ts`, `src/i18n/index.ts` rufen aus Nicht-React-Kontext).
+- `src/components/ui/ConfirmSheet.tsx` - Sheet fuer Rueckfragen, montiert in `app/_layout.tsx`.
+  Deckt `confirm` (ja/nein, destruktiv rot) **und** `choose` fuer die Dialoge mit drei Knoepfen ab.
+- Der tote `activeModal`/`alert`-Pfad im `uiStore` ist geloescht statt liegengelassen.
+
+Toasts sitzen jetzt bewusst **ueber** der Tab-Leiste inklusive des goldenen Plus (vorher 76pt Abstand)
+und sind groesser (Mindesthoehe 52 auf 88, Titel 14 auf 16).
+Dauern in `TOAST_DURATIONS`: Fehler 6s, Erfolg 4s, Warnung/Info 2s.
+Die Staffelung ist eine Nutzerentscheidung: Fehler muss man ggf. zweimal lesen, ein
+"Profil aktualisiert" soll aus dem Weg sein. Jeder Toast ist antippbar, die Werte sind Obergrenzen.
+
+### 5. UI-Korrekturen aus dem Geraetetest, Runde 6
+
+- **Rueckerstattungs-Maske:** die 96pt Bodenabstand raeumten eine Tab-Leiste frei, die bei offenem
+  Sheet gar nicht sichtbar ist (`setTabBarHidden(true)` bei `eventIdParam`). Jetzt 16pt in diesem Fall,
+  96 nur noch wenn die Leiste wirklich steht. Gilt fuer alle drei Sheets im Budget.
+- **"Restbetrag bezahlen"** ohne `textTransform: 'uppercase'`, damit es zu "Noch 5 Tage" auf derselben
+  Grundlinie passt. Die Augenbrauen-Labels ("RESTBETRAG (75%)") bleiben bewusst versal.
+- **E-Mail aendern:** GoTrue-Fehlercodes werden uebersetzt statt roh durchgereicht
+  (`email_exists`, `email_address_invalid`, `over_email_send_rate_limit`), mit Fallback ueber
+  `error.code` statt Textvergleich. Das Passwortfeld scrollt bei Fokus in den sichtbaren Bereich.
+- **"Vom Gast angepasst":** zwei Zeilen statt Fliesstext, nur noch die **alten** Werte
+  (`formatPreviousGuestValues`), Name und Telefon mit "&" verbunden. Die neuen stehen schon in der Karte.
+
+### 6. Der offene Punkt "Bestaetigen-Knopf auf E-Mail aendern" ist erledigt
+
+Im vorigen Abschnitt stand er als ungeklaert (halbe Hoehe, ohne Beschriftung, "hier weitersuchen,
+nicht am Layout"). Die Geraete-Screenshots vom 29.07. zeigen ihn in voller Hoehe mit Text.
+Die Verlegung in die fixierte Fusszeile hat es geloest. Kein weiterer Handlungsbedarf.
+
+### 7. Auth-Mails, Mail-Altlast und die fehlende Storno-Mail
+
+**Der eingebaute Supabase-Mailversand war die Ursache des `email_address_invalid`.**
+Auth-Mails liefen ueber `noreply@mail.app.supabase.io`, den Testdienst: 2 Mails/Stunde und
+eingeschraenkter Empfaengerkreis. Er hat `leonardino@web.de` als Empfaenger abgelehnt, und GoTrue
+nannte im 400er genau diese Adresse - deshalb wies der Fehler auf die *alte* statt die neue Adresse.
+Seit der Umstellung auf Resend-SMTP (vom User im Dashboard, 19:42 UTC) kein einziger 400er mehr.
+Im Log sichtbar: `GOTRUE_RATE_LIMIT_EMAIL_SENT ... from 2/1h to 30`.
+`422 email_exists` und `429 over_email_send_rate_limit` waren immer korrekte Antworten, nur
+unuebersetzt - das erledigt jetzt das Fehlercode-Mapping in `email.tsx`.
+
+**"Secure email change" ist aus** (vom User umgelegt). Nur die neue Adresse bestaetigt.
+Vertretbar, weil `email.tsx` vorher per `signInWithPassword` reauthentifiziert: der Schutz sitzt in
+der App statt im alten Postfach. `double_confirm_changes = false` in `config.toml` haelt den lokalen
+Stack synchron; das gehostete Projekt haengt am Dashboard-Schalter, nicht an dieser Datei.
+
+**Ein Layout statt drei.** `email-templates.ts` hatte zwei Generationen: `getGuestInviteEmailHtml`
+und `getFinalBriefingEmailHtml` markenkonform (jede mit eigener Layout-Kopie), daneben `baseLayout`
+mit `#15181D`/`#1E2329`/`#23272F`/`#5A7EB0` - alle vier laut `CLAUDE.md` verboten. Die
+**Buchungsbestaetigung ging also im Vor-Redesign-Look an Kunden.** Jetzt ein gemeinsames
+`emailLayout`, alle fuenf Vorlagen darauf, null deprecated Hex in der Datei.
+
+Dass der Umbau die zwei funktionierenden Mails nicht veraendert, ist **nachgewiesen, nicht zugesagt**:
+alte Dateiversion aus Git geholt, beide Funktionen in beiden Sprachen und fuer Organisator/Gast
+gerendert und auf Gleichheit geprueft (6 Faelle, alle identisch). Der Test war Wegwerfware und ist
+wieder entfernt - bei einem naechsten Layout-Eingriff lohnt es, ihn nochmal zu bauen.
+
+**Sechs Auth-Vorlagen** in `supabase/templates/auth/`, deutsch mit kurzer englischer Zeile,
+in `config.toml` unter `[auth.email.template.*]` verdrahtet.
+`reauthentication.html` zeigt `{{ .Token }}` als Code-Block, keinen Button.
+
+**Der manuelle Schritt und warum:** gehostetes Supabase liest diese Dateien nicht, die Vorlagen
+muessen ins Dashboard (Authentication -> Emails) kopiert werden. Zuordnung in
+`supabase/templates/auth/README.md`.
+`supabase config push` existiert und wuerde es automatisieren, **darf hier aber nicht laufen**:
+`config.toml` traegt `site_url = "exp://localhost:8081"` und die OAuth-Secrets als `env(...)`
+mit ungesetzten Variablen. Ein Push wuerde die Produktions-`site_url` auf die Expo-Dev-URL setzen,
+womit jeder Bestaetigungs- und Passwort-Link aus einer Kunden-Mail ins Nichts zeigt.
+**Erst wenn `config.toml` produktionstauglich getrennt ist, ist `config push` eine Option.**
+
+**Die Storno-Mail hat gefehlt, und das war das eigentliche Loch.**
+`process-payment-reminders` storniert am 14-Tage-Meilenstein, behaelt 25 % ein - und verschickte
+**keine Mail**. Es entstand nur eine In-App-Benachrichtigung, hartverdrahtet auf Englisch.
+Ein Kunde verlor die Anzahlung und erfuhr es nur, wenn er die App oeffnete.
+Jetzt `getBookingCancelledEmailHtml`, zweisprachig, Text nach der vom User gewaehlten Variante B
+(bedauernd, alle Zahlen genannt, Tuer offen), Claim wie ueberall wortgleich aus `src/i18n`.
+
+Zwei Entscheidungen dabei, die nicht wegoptimiert werden duerfen:
+- Die Mail ignoriert `email_notifications_enabled` bewusst, anders als die Erinnerung darueber.
+  Wir behalten Geld ein, das ist eine transaktionale Mitteilung, kein Abo. Steht als Kommentar dort.
+- Ohne `reference_number` entfaellt der Referenzblock ganz, statt eine rohe UUID zu zeigen.
+  Das Testevent hat genau diesen Fall.
+
+Die Benachrichtigung laeuft auf `metadata` um (Typ `booking_cancelled`), mit Alias auf den alten
+`event_cancelled_nonpayment` in `NotificationItem`. Vor dem Umbenennen live geprueft:
+**null Zeilen** beider Typen in `notifications`, also kein Backfill noetig.
+
+### 8. `email_notifications_enabled` gated keinen Versand mehr, und alles ist deployt
+
+Der Schalter sass an drei Stellen und wurde uneinheitlich angewandt: `process-payment-reminders`
+(Erinnerung ja, Storno nein), `send-final-briefing`, und `send-email` (alles ausser `welcome`).
+Auf Wunsch des Owners ist er aus allen Versandpfaden **entfernt** statt dokumentiert.
+Vertretbar, weil jede betroffene Mail transaktional ist: Zahlungsfrist, Stornierung mit
+einbehaltener Anzahlung, Briefing zum gebuchten Event. Vertragsmitteilungen, kein Abo.
+
+**Offene Folge davon:** der Schalter "E-Mail-Benachrichtigungen" in
+`app/(tabs)/profile/notifications.tsx` hat jetzt **keine Wirkung mehr auf E-Mails**.
+Er schreibt weiter nach `profiles.email_notifications_enabled`, aber niemand liest die Spalte noch.
+Ein Schalter, der nichts tut, ist schlechter als keiner. Zwei saubere Auswege: entweder die
+E-Mail-Zeile aus dem Screen nehmen, oder sie auf wirklich optionale Mails verengen (dann braucht es
+erst eine solche Kategorie). **Nicht liegen lassen.**
+
+Deployt am 2026-07-30: `process-payment-reminders`, `send-final-briefing`, `send-email`,
+`send-guest-invitations`. `deno check` gruen fuer alle vier.
+Nach dem Deploy den Cron-Aufruf von Job 5 real geprueft: **HTTP 200**, alle Meilensteine
+`processed: 0`, keine Stornierung ausgeloest. Das ist gleichzeitig der Beweis, dass die
+`verify_jwt = false`-Eintragung in `config.toml` haelt - derselbe Deploy hat am Vormittag noch
+einen 401 produziert.
+
+Vorschau aller 15 Mail-Ansichten (9 App-Mails inkl. beider Sprachen, 6 Auth-Vorlagen) laesst sich
+jederzeit neu erzeugen, indem die Funktionen aus `_shared/email-templates.ts` per Deno gerendert und
+in eine HTML-Seite mit `iframe srcdoc` gelegt werden. Das ist der bessere Review-Weg als Testmails:
+alle Vorlagen gleichzeitig, ohne Empfaenger und ohne Rate-Limit.
+
+### 9. Schalter verengt, Ops-Meldung raus aus dem Kundenfeed, Budget-Anzeige korrigiert
+
+**Der Schalter gilt jetzt nur fuer Optionales.** Die Einordnung steht als `alwaysSend` an jedem
+Meilenstein in `supabase/functions/_shared/payment-reminder-milestones.ts`, nicht als `if` an der
+Aufrufstelle: ein neuer Meilenstein **muss** sich einordnen. Ein Test haelt die Liste fest.
+
+| Immer, Schalter egal | Schalter entscheidet |
+|---|---|
+| Buchungsbestaetigung, Storno, Willkommen, Gasteinladungen | Final-Briefing |
+| Zahlungserinnerung **14, 9, 8, 7** Tage | Zahlungserinnerung **18, 16, 12, 10** Tage |
+
+Owner-Entscheidung, zweimal praezisiert. Die Storno-Mail bleibt unbedingt.
+Der Schalter im Profil heisst jetzt nach dem, was er tut, mit Erklaerzeile darunter.
+
+**`ops_cron_health` verschwindet aus dem Kundenfeed.** Die Zeile bleibt in der DB (Nachweis), wird
+aber in Liste, Zaehler und Realtime herausgefiltert, ausser der Leser steht in
+`ops_alert_recipients`. Dann erscheint sie uebersetzt, mit neutralem Werkzeug-Symbol statt
+Alarmglocke, Text ueber `metadata.checkKey` mit lesbarem Fallback.
+
+**Zwei Fallen dabei:**
+- Migration `20260731120000_ops_alert_recipient_helper.sql` (`is_ops_alert_recipient()`,
+  SECURITY DEFINER, gibt nur die eigene Mitgliedschaft zurueck, nie die Liste) ist geschrieben,
+  aber **NICHT angewendet**. Bis dahin faellt der Client bewusst auf "kein Empfaenger" zurueck.
+- `src/lib/supabase/types.ts` ist **von Hand** um `is_ops_alert_recipient` ergaenzt, damit typecheck
+  vor der Migration gruen ist. Die Datei ist generiert: **erst die Migration anwenden, dann
+  `gen types` laufen lassen.** Umgekehrt loescht die Regenerierung den Eintrag und typecheck bricht.
+
+**Budget: Kopf und Zeilen lasen dieselbe Tatsache aus verschiedenen Quellen.**
+`collected` summierte `event_participants.contribution_amount_cents` (live ueberall `0`), waehrend
+die Zeilen `total / payingCount` zeigten und "BEZAHLT" aus `payment_status`. Ergebnis beim Testevent:
+Zeilen behaupteten 687 EUR bezahlt, der Kopf 916 EUR offen. Jetzt **ein** abgeleiteter Pro-Kopf-Betrag
+fuer beide. Dazu waren "(25%)" und "(75%)" fest im Label verdrahtet und damit falsch, sobald keine
+Anzahlung geflossen ist; die Labels nennen jetzt den echten Stand.
+
+**Das war nur die Anzeige.** Darunter liegt echte Dateninkonsistenz, unveraendert offen:
+`events.status = 'booked'` bei `bookings.payment_status = 'pending'`, `deposit_amount_cents` und
+`remaining_amount_cents` NULL, `deposit_paid_at` NULL. Vermutlich die Demo-Zahlungsroute, die das
+Event auf "gebucht" setzt, ohne die Geldspalten zu schreiben. **Vor echtem Kundenbetrieb klaeren**,
+sonst repariert man weiter Symptome.
+
+### Offen
+
+- **Migration `20260731120000` anwenden**, danach `gen types` (Reihenfolge siehe oben).
+- **Toast unbestaetigt.** Der Code stimmt (`TAB_BAR_CLEARANCE` ist weg, `paddingBottom: insets.bottom`),
+  aber die Geraete-Screenshots dazu trugen 23:10 Uhr und stammen zeitlich von **vor** dem Umbau.
+  Braucht `npx expo start -c` und einen echten Reload in Expo Go, Metro-Neustart allein reicht nicht.
+- **Die sechs Auth-Vorlagen sind noch nicht im Dashboard.** Bis dahin verschickt Supabase weiter
+  seine nackten Standardtexte, jetzt lediglich ueber Resend statt den Testdienst.
+  Claude kann das nicht uebernehmen: der Management-API-Weg braucht ein Token, das im
+  macOS-Schluesselbund liegt, und Anmeldedaten dort auszulesen ist laut `~/.claude/CLAUDE.md`
+  ausgeschlossen. `supabase config push` authentifiziert sich selbst, ist aber disqualifiziert,
+  solange `config.toml` die Dev-`site_url` und ungesetzte OAuth-`env(...)` traegt.
+  **Wer das automatisieren will, muss zuerst Dev- und Prod-Werte in `config.toml` trennen** -
+  eigene, zu reviewende Aufgabe, kein Nebenbei-Fix.
+- **Der Schalter im Profil ist wirkungslos** (siehe oben).
+- **Nichts davon ist am Geraet gesehen.** Der ganze Batch ist statisch verifiziert
+  (typecheck/lint/102 Tests), aber Toast-Position, ConfirmSheet und die Budget-Maske brauchen einen
+  echten Durchlauf. `xcode-select` zeigt weiterhin nicht auf Xcode, der Simulator ist blockiert:
+  `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer` (braucht das Passwort des Users).
+- **Ursache von `email_address_invalid` ist nicht behoben, nur uebersetzt.** Die Auth-Logs zeigen den
+  400er reproduzierbar fuer `leonardino@web.de`, waehrend im selben Sekundenfenster ein `mail.send`
+  an dieselbe Adresse **erfolgreich** ist. Das ist eine Supabase-seitige Einstellung
+  (Auth -> Email), kein App-Fehler. Braucht einen Blick ins Dashboard.
+- Testevent "Soleil's Bachelor" (02.08.) hat weiter **keine Buchung mit `reference_number`**,
+  das Briefing wuerde `GO-XXXXXX` und `Classic (M)` verschicken.
+- Alle Profile stehen auf `en`, der deutsche Briefing-Text wird aktuell nirgends ausgeloest.
 ## Aktueller Stand (2026-07-30) - Zahlungserinnerungen zweisprachig, Editorial-Palette, Claim
 
 Die Zahlungserinnerungen sind jetzt auf demselben Stand wie das Briefing. Vorher: neun Meldungstexte
