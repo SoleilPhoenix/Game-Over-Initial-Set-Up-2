@@ -9,7 +9,6 @@ import { calculateBookingPricing } from '@/utils/pricing';
 
 type Booking = Database['public']['Tables']['bookings']['Row'];
 type BookingInsert = Database['public']['Tables']['bookings']['Insert'];
-type BookingUpdate = Database['public']['Tables']['bookings']['Update'];
 type Package = Database['public']['Tables']['packages']['Row'];
 
 export interface BookingWithDetails extends Booking {
@@ -78,13 +77,35 @@ export const bookingsRepository = {
    * Create a new booking
    */
   async create(booking: BookingInsert): Promise<Booking> {
+    const findExisting = async (): Promise<Booking | null> => {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('event_id', booking.event_id)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    };
+
+    const existing = await findExisting();
+    if (existing) return existing;
+
     const { data, error } = await supabase
       .from('bookings')
       .insert(booking)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // One event has one booking (`bookings_event_id_key`). If another request
+      // won the race after the lookup, reuse that row instead of surfacing 23505.
+      if (error.code === '23505') {
+        const concurrentBooking = await findExisting();
+        if (concurrentBooking) return concurrentBooking;
+      }
+      throw error;
+    }
 
     // NOTE: the event status is deliberately NOT set here.
     //
@@ -129,43 +150,6 @@ export const bookingsRepository = {
       payingParticipants: result.payingCount,
       perPersonCents: result.perPersonCents,
     };
-  },
-
-  /**
-   * Update payment status
-   */
-  async updatePaymentStatus(
-    bookingId: string,
-    status: Booking['payment_status'],
-    stripePaymentIntentId?: string
-  ): Promise<Booking> {
-    const updates: BookingUpdate = {
-      payment_status: status,
-    };
-
-    if (stripePaymentIntentId) {
-      updates.stripe_payment_intent_id = stripePaymentIntentId;
-    }
-
-    const { data, error } = await supabase
-      .from('bookings')
-      .update(updates)
-      .eq('id', bookingId)
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Atomically append to audit log (prevents race conditions on concurrent webhook retries)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    void (supabase as any).rpc('append_booking_audit_log', {
-      booking_id: bookingId,
-      entry: { action: 'payment_status_updated', status, timestamp: new Date().toISOString() },
-    }).catch((err: unknown) => {
-      console.error('[bookings] audit log append failed in updatePaymentStatus', err);
-    });
-
-    return data;
   },
 
   /**

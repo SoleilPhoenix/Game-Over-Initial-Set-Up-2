@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { bookingsRepository, BookingWithDetails } from '@/repositories';
+import { bookingsRepository } from '@/repositories';
 import { eventKeys } from './useEvents';
 import type { Database } from '@/lib/supabase/types';
 
@@ -80,39 +80,6 @@ export function useCreateBooking() {
         queryKey: eventKeys.detail(data.event_id),
       });
       queryClient.invalidateQueries({ queryKey: eventKeys.lists() });
-    },
-  });
-}
-
-/**
- * Update payment status
- */
-export function useUpdatePaymentStatus() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      bookingId,
-      status,
-      stripePaymentIntentId,
-    }: {
-      bookingId: string;
-      status: BookingWithDetails['payment_status'];
-      stripePaymentIntentId?: string;
-    }) => {
-      return bookingsRepository.updatePaymentStatus(
-        bookingId,
-        status,
-        stripePaymentIntentId
-      );
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({
-        queryKey: bookingKeys.detail(data.id),
-      });
-      queryClient.invalidateQueries({
-        queryKey: bookingKeys.byEvent(data.event_id),
-      });
     },
   });
 }

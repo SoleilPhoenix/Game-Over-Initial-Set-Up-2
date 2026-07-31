@@ -21,16 +21,18 @@ describe('bookingsRepository.create', () => {
    * stripe-webhook flips the event to 'booked' once payment actually succeeds.
    */
   it('inserts the booking and never touches the events table', async () => {
-    const single = vi.fn().mockResolvedValue({
-      data: { id: 'booking-1', event_id: 'event-1' },
-      error: null,
-    });
-
-    vi.mocked(supabase.from).mockImplementation(() => ({
-      insert: vi.fn().mockReturnThis(),
+    const chain = {
       select: vi.fn().mockReturnThis(),
-      single,
-    } as any));
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      insert: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: { id: 'booking-1', event_id: 'event-1' },
+        error: null,
+      }),
+    };
+
+    vi.mocked(supabase.from).mockReturnValue(chain as any);
 
     const { bookingsRepository } = await import('@/repositories/bookings');
     const result = await bookingsRepository.create({
@@ -45,10 +47,60 @@ describe('bookingsRepository.create', () => {
     expect(touchedTables).not.toContain('events');
   });
 
+  it('returns the existing booking for the event without inserting', async () => {
+    const existingBooking = { id: 'booking-existing', event_id: 'event-1' };
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: existingBooking, error: null }),
+      insert: vi.fn().mockReturnThis(),
+    };
+
+    vi.mocked(supabase.from).mockReturnValue(chain as any);
+
+    const { bookingsRepository } = await import('@/repositories/bookings');
+    const result = await bookingsRepository.create({
+      event_id: 'event-1',
+      package_id: 'pkg-1',
+    } as any);
+
+    expect(result).toEqual(existingBooking);
+    expect(chain.insert).not.toHaveBeenCalled();
+  });
+
+  it('reuses the booking created by a concurrent request after a 23505', async () => {
+    const concurrentBooking = { id: 'booking-concurrent', event_id: 'event-1' };
+    const chain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn()
+        .mockResolvedValueOnce({ data: null, error: null })
+        .mockResolvedValueOnce({ data: concurrentBooking, error: null }),
+      insert: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({
+        data: null,
+        error: { message: 'duplicate key', code: '23505' },
+      }),
+    };
+
+    vi.mocked(supabase.from).mockReturnValue(chain as any);
+
+    const { bookingsRepository } = await import('@/repositories/bookings');
+    const result = await bookingsRepository.create({
+      event_id: 'event-1',
+      package_id: 'pkg-1',
+    } as any);
+
+    expect(result).toEqual(concurrentBooking);
+    expect(chain.maybeSingle).toHaveBeenCalledTimes(2);
+  });
+
   it('propagates a failed booking insert', async () => {
     vi.mocked(supabase.from).mockImplementation(() => ({
-      insert: vi.fn().mockReturnThis(),
       select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      insert: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({
         data: null,
         error: { message: 'insert denied', code: '42501' },

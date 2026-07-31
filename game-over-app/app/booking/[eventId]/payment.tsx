@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBookingFlow } from '@/hooks/useBookingFlow';
 import { usePaymentSheet } from '@/hooks/usePaymentSheet';
-import { useCreateBooking, useUpdatePaymentStatus } from '@/hooks/queries/useBookings';
+import { useCreateBooking } from '@/hooks/queries/useBookings';
 import { eventKeys } from '@/hooks/queries/useEvents';
 import { useWizardStore } from '@/stores/wizardStore';
 import { supabase } from '@/lib/supabase/client';
@@ -131,7 +131,6 @@ export default function PaymentScreen() {
   const activePricing = pricing || syntheticPricing;
 
   const createBookingMutation = useCreateBooking();
-  const updatePaymentMutation = useUpdatePaymentStatus();
   const { processPayment, isLoading: isPaymentLoading } = usePaymentSheet();
 
   if (isLoading || !activePkg || !activePricing) {
@@ -209,7 +208,10 @@ export default function PaymentScreen() {
           }
           const { data: bookingData, error: bookingError } = await supabase.functions.invoke(
             'confirm-demo-booking',
-            { body: { eventId }, headers: { Authorization: `Bearer ${session.access_token}` } },
+            {
+              body: { eventId, paymentKind: isFullPayment ? 'full' : 'deposit' },
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            },
           );
           if (bookingError || !(bookingData as any)?.success) {
             // Surface the failure instead of swallowing it — a silent failure here
@@ -313,12 +315,8 @@ export default function PaymentScreen() {
         throw new Error(error || 'Payment failed');
       }
 
-      // Confirm booking
+      // The webhook owns payment state; a successful sheet can proceed immediately.
       setPaymentStep('confirming');
-      await updatePaymentMutation.mutateAsync({
-        bookingId: booking.id,
-        status: 'completed',
-      });
 
       // Pass package info so confirmation shows the correct tier image
       const realConfirmParams = new URLSearchParams();

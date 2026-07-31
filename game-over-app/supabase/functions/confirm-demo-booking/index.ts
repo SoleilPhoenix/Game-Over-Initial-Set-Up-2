@@ -1,7 +1,7 @@
 /**
  * confirm-demo-booking Edge Function
  *
- * Marks an event as 'booked' using the service role so the
+ * Settles the booking and marks its event as 'booked' using the service role so the
  * `enforce_event_status_integrity` DB trigger (which blocks clients from setting
  * status = 'booked') permits it. ONLY for the simulated/demo payment path — real
  * Stripe payments are confirmed by `stripe-webhook`.
@@ -12,6 +12,9 @@
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { deriveDepositAmounts } from '../_shared/booking-payment.ts';
+
+type PaymentKind = 'deposit' | 'full';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -53,13 +56,30 @@ serve(async (req: Request) => {
   }
 
   let eventId: string | undefined;
+  let paymentKind: PaymentKind | undefined;
   try {
-    const body = await req.json() as { eventId?: string };
-    eventId = body.eventId;
+    const body = await req.json() as unknown;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return json({ error: 'Invalid request body' }, 400);
+    }
+
+    const requestBody = body as Record<string, unknown>;
+    const unexpectedFields = Object.keys(requestBody).filter(
+      (key) => key !== 'eventId' && key !== 'paymentKind',
+    );
+    if (unexpectedFields.length > 0) {
+      return json({ error: `Unexpected request field '${unexpectedFields[0]}'` }, 400);
+    }
+
+    eventId = typeof requestBody.eventId === 'string' ? requestBody.eventId : undefined;
+    paymentKind = requestBody.paymentKind === 'deposit' || requestBody.paymentKind === 'full'
+      ? requestBody.paymentKind
+      : undefined;
   } catch {
     return json({ error: 'Invalid request body' }, 400);
   }
   if (!eventId) return json({ error: 'eventId is required' }, 400);
+  if (!paymentKind) return json({ error: "paymentKind must be 'deposit' or 'full'" }, 400);
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
 
@@ -82,6 +102,46 @@ serve(async (req: Request) => {
     return json({ error: `Cannot book an event with status '${event.status}'.` }, 409);
   }
 
+  const { data: booking, error: bookingError } = await supabase
+    .from('bookings')
+    .select('id, total_amount_cents, deposit_paid_at, fully_paid_at')
+    .eq('event_id', eventId)
+    .single();
+
+  if (bookingError || !booking) {
+    return json({ error: 'Booking not found for event' }, 409);
+  }
+
+  const paidAt = booking.deposit_paid_at ?? new Date().toISOString();
+  const paymentFields = paymentKind === 'deposit'
+    ? {
+        ...deriveDepositAmounts(booking.total_amount_cents),
+        paymentStatus: 'processing' as const,
+        fullyPaidAt: booking.fully_paid_at,
+      }
+    : {
+        depositAmountCents: booking.total_amount_cents,
+        remainingAmountCents: 0,
+        paymentStatus: 'completed' as const,
+        fullyPaidAt: booking.fully_paid_at ?? paidAt,
+      };
+
+  const { error: bookingUpdateError } = await supabase
+    .from('bookings')
+    .update({
+      deposit_amount_cents: paymentFields.depositAmountCents,
+      remaining_amount_cents: paymentFields.remainingAmountCents,
+      deposit_paid_at: paidAt,
+      fully_paid_at: paymentFields.fullyPaidAt,
+      payment_status: paymentFields.paymentStatus,
+    })
+    .eq('id', booking.id);
+
+  if (bookingUpdateError) {
+    console.error('[confirm-demo-booking] booking update failed:', bookingUpdateError.message);
+    return json({ error: 'Failed to settle booking', detail: bookingUpdateError.message }, 500);
+  }
+
   const { error: updateError } = await supabase
     .from('events')
     .update({ status: 'booked' })
@@ -92,6 +152,6 @@ serve(async (req: Request) => {
     return json({ error: 'Failed to mark event as booked', detail: updateError.message }, 500);
   }
 
-  console.log(`[confirm-demo-booking] event=${eventId} booked by user=${user.id}`);
-  return json({ success: true, eventId, status: 'booked' }, 200);
+  console.log(`[confirm-demo-booking] event=${eventId} booked by user=${user.id} payment=${paymentKind}`);
+  return json({ success: true, eventId, status: 'booked', paymentKind }, 200);
 });
