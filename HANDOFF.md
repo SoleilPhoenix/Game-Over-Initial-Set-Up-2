@@ -87,11 +87,12 @@ Drei Events, alle `booked`:
 | Ehrengast | Datum | Referenz | Total | Anzahlung | Status |
 |---|---|---|---|---|---|
 | Soleil Phoenix | 02.08. | - | keine Buchung | - | Briefing sendet Platzhalter `GO-XXXXXX` |
-| Natalia Schulz | 16.08. | `GO-376D44` | 91600 | 22900 | `processing` |
+| Natalia Schulz | 16.08. | `GO-376D44` | 114500 | 28625 | `processing`, 5 Personen |
 | Sven Ostermann | 22.08. | `GO-1B1063` | 137400 | 34350 | `processing` |
 
-Natalias Geldspalten und die vier Teilnehmerbeiträge wurden am 31.07. **von Hand gesetzt** - das
-dokumentiert einen Zahlungseingang, den es nie gab. Bewusst so, weil Testevent.
+Natalias Geldspalten und Teilnehmerbeiträge wurden am 31.07. **von Hand gesetzt** - das dokumentiert
+einen Zahlungseingang, den es nie gab. Bewusst so, weil Testevent. Es gibt erst 4 Teilnehmerzeilen;
+die Buchung laeuft bewusst ueber 5 Personen, der fuenfte ist noch nicht beigetreten.
 Bei einem Testlauf von `process-payment-reminders` vorher prüfen, ob eine Buchung auf einem
 Meilenstein steht - die Funktion storniert am Tag 6 automatisch.
 
