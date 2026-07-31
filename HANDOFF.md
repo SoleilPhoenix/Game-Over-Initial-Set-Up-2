@@ -22,6 +22,9 @@ Letzte Aktualisierung: 2026-07-31.
   `eslint-disable`-Kopfzeile weg, sie muss danach wieder rein.
 - Die App läuft aus `/Users/soleilphoenix/Desktop/GameOver/game-over-app` (Branch `main`).
   Worktrees unter `.claude/worktrees/` haben **kein** `node_modules` - von dort startet Expo nicht.
+- `SUPABASE_ACCESS_TOKEN` steht in `~/.zshrc`. Claudes Bash-Shell ist **nicht interaktiv** und liest
+  `.zshrc` deshalb nicht; `zsh -lc` auch nicht (Login != interaktiv). Wer die Variable braucht,
+  ruft über **`zsh -ic '<befehl>'`** auf.
 
 ## Nicht anfassen, ohne den Grund zu kennen
 
@@ -60,10 +63,10 @@ Handlungszeit. Jeder Meilenstein trägt `alwaysSend`; der Nutzerschalter greift 
    `participants.length` und `|| 1` sind raus; ein unbekannter Wert blockiert die Zahlung mit
    Meldung statt still zu raten. Tests decken alle vier Faelle ab.
    Natalias Buchung wurde auf 5 Personen korrigiert (114500).
-2. **Sechs Auth-Vorlagen sind nicht im Dashboard.** Bis dahin verschickt Supabase seine nackten
-   Standardtexte, nur über Resend statt den Testdienst.
-   `node scripts/push-auth-email-templates.mjs` (Trockenlauf) bzw. `--apply`, braucht
-   `SUPABASE_ACCESS_TOKEN` in der Umgebung. Anleitung: `supabase/templates/auth/README.md`.
+2. ~~Auth-Vorlagen~~ **erledigt am 31.07.** Alle sechs sind per
+   `zsh -ic 'node scripts/push-auth-email-templates.mjs --apply'` live und gegen den Server
+   verifiziert. Nach jeder Änderung an `supabase/templates/auth/*.html` erneut ausführen, sonst
+   driftet der Server von der Datei weg, ohne dass es jemand sieht.
 3. **Favicon bei 16x16 ungeprüft.** Der doppelte Ring könnte in der Tableiste zu einer Linie
    verschmelzen. Falls ja: eigene Kleinvariante mit einem Ring, **nicht** alle Linien verdicken -
    das hat die Diamantfacetten zerstört und musste zurückgebaut werden.
