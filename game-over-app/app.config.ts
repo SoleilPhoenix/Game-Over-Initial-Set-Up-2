@@ -90,7 +90,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   web: {
     bundler: 'metro',
     output: 'single',
-    favicon: './assets/favicon.png',
+    favicon: './assets/web/favicon.svg',
   },
   plugins: [
     // Setzt Androids colorPrimary auf die Markenfarbe - der einzige Wert in
