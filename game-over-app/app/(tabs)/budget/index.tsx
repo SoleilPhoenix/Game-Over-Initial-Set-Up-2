@@ -26,6 +26,7 @@ import { useActiveEventStore } from '@/stores/activeEventStore';
 import { feedback, useUIStore } from '@/stores/uiStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
+import { computeBookedBudgetStats } from '@/utils/budgetStats';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
 import { PastEventBanner } from '@/components/ui/PastEventBanner';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
@@ -722,44 +723,23 @@ export default function BudgetDashboardScreen() {
       };
     }
 
-    const totalBudget = booking!.total_amount_cents || 0;
-    const storedPerPersonCents = booking!.per_person_cents || 0;
-    // Derive the same per-participant share used by the rows before summing
-    // paid contributions. This is display-only and does not alter payment data.
-    const dbPayingCount = storedPerPersonCents > 0
-      ? Math.round(totalBudget / storedPerPersonCents)
-      : (participants?.length || 0);
-    const perParticipantShare = storedPerPersonCents > 0
-      ? storedPerPersonCents
-      : dbPayingCount > 0
-        ? Math.round(totalBudget / dbPayingCount)
-        : 0;
-    let collected = 0;
-    let paidCount = 0;
-    let pendingCount = 0;
-
-    (participants ?? []).forEach((p) => {
-      if (p.payment_status === 'paid') {
-        const contribution = p.contribution_amount_cents ?? 0;
-        collected += contribution > 0
-          ? contribution
-          : perParticipantShare;
-        paidCount++;
-      } else if (p.payment_status === 'pending') {
-        pendingCount++;
-      }
-    });
-
-    return {
-      totalBudget,
-      collected,
-      pending: totalBudget - collected,
-      percentage: totalBudget > 0 ? Math.round((collected / totalBudget) * 100) : 0,
-      paidCount,
-      perPerson: perParticipantShare,
-      pendingCount,
-      payingCount: dbPayingCount,
-    };
+    // `collected` und `pending` kommen aus der Buchung, nicht aus den
+    // Gaestebeitraegen - die beiden Karten oben beschriften das Kassenbuch
+    // gegenueber Game Over. Siehe src/utils/budgetStats.ts.
+    return computeBookedBudgetStats(
+      {
+        totalAmountCents: booking!.total_amount_cents ?? 0,
+        depositAmountCents: booking!.deposit_amount_cents ?? null,
+        remainingAmountCents: booking!.remaining_amount_cents ?? null,
+        perPersonCents: booking!.per_person_cents ?? null,
+        payingParticipants: booking!.paying_participants ?? null,
+        fullyPaid: booking!.fully_paid_at != null,
+      },
+      (participants ?? []).map((p) => ({
+        paymentStatus: p.payment_status ?? null,
+        contributionAmountCents: p.contribution_amount_cents ?? null,
+      })),
+    );
   }, [booking, participants, cachedBudget, cachedParticipantCount, cachedGuests]);
 
   // Format currency (with cents)
@@ -780,17 +760,21 @@ export default function BudgetDashboardScreen() {
     }).format(Math.round(cents / 100));
   };
 
-  // Format Deposit and Due so they always sum exactly to the rounded total.
-  // Deposit floors to avoid overcharging upfront; Due = total - deposit (no independent rounding).
-  const formatDepositAndDue = (collectedCents: number, totalCents: number) => {
-    const fmt = (euros: number) => new Intl.NumberFormat('de-DE', {
-      style: 'currency', currency: 'EUR',
-      minimumFractionDigits: 0, maximumFractionDigits: 0,
-    }).format(euros);
-    const depositEuros = Math.round(collectedCents / 100);
-    const totalEuros = Math.round(totalCents / 100);
-    const dueEuros = totalEuros - depositEuros;
-    return { deposit: fmt(depositEuros), due: fmt(dueEuros) };
+  // Betraege des Buchungs-Kassenbuchs: Cents nur zeigen, wenn es welche gibt.
+  // 114500 -> "1.145 €", 28625 -> "286,25 €". Frueher rundete diese Stelle auf
+  // ganze Euro und rechnete den Rest aus der Differenz aus; seit die Buchung
+  // `remaining_amount_cents` fuehrt, ist Runden weder noetig noch richtig -
+  // der Betrag, der spaeter abgebucht wird, steht exakt fest.
+  const formatCurrencySmart = (cents: number) => {
+    // Entweder keine oder zwei Nachkommastellen, nie eine: mit
+    // minimumFractionDigits 0 wuerde 57250 als "572,5 €" erscheinen.
+    const digits = cents % 100 === 0 ? 0 : 2;
+    return new Intl.NumberFormat('de-DE', {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    }).format(cents / 100);
   };
 
   const handleInvite = useCallback(() => {
@@ -1058,7 +1042,7 @@ export default function BudgetDashboardScreen() {
           body: (tr.budget as any).notif14DayBody
             .replace('{{eventName}}', eventName)
             .replace('{{count}}', String(daysUntilEvent))
-            .replace('{{amount}}', formatCurrencyRounded(budgetStats.pending)),
+            .replace('{{amount}}', formatCurrencySmart(budgetStats.pending)),
           data: { screen: '/(tabs)/budget', eventId: selectedEventId },
           sound: true,
         },
@@ -1445,7 +1429,8 @@ export default function BudgetDashboardScreen() {
                 ) : (
                   /* Deposit paid, remainder still due */
                   (() => {
-                    const { deposit: fmtDeposit, due: fmtDue } = formatDepositAndDue(budgetStats.collected, budgetStats.totalBudget);
+                    const fmtDeposit = formatCurrencySmart(budgetStats.collected);
+                    const fmtDue = formatCurrencySmart(budgetStats.pending);
                     const isUrgent = daysUntilEvent !== null && daysUntilEvent <= 14;
                     return (
                       <>
@@ -1539,7 +1524,7 @@ export default function BudgetDashboardScreen() {
                   <View style={styles.guestRemainingInfo}>
                     <Ionicons name="information-circle-outline" size={18} color={theme.textSecondary} />
                     <Text style={styles.guestRemainingText}>
-                      {t.budget.guestRemainingText.replace('{{amount}}', formatCurrencyRounded(budgetStats.pending))}
+                      {t.budget.guestRemainingText.replace('{{amount}}', formatCurrencySmart(budgetStats.pending))}
                     </Text>
                   </View>
                 )}
