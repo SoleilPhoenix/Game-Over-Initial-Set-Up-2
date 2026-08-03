@@ -43,11 +43,22 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
         run: |
+          # Der Schritt heisst "alle", war es aber nicht: confirm-demo-booking,
+          # send-payment-reminders, check-invite-delivery und crisp-identity
+          # fehlten in dieser Liste und wurden deshalb seit ihrer Entstehung nie
+          # deployt - Aenderungen daran liefen bei jedem Merge stillschweigend
+          # ins Leere. Am 03.08. ergaenzt. Wer eine neue Funktion anlegt, traegt
+          # sie hier ein; die Liste ist bewusst explizit, damit die beiden
+          # cron-getriebenen Funktionen unten ihr --no-verify-jwt behalten.
           supabase functions deploy create-payment-intent --project-ref "$SUPABASE_PROJECT_ID"
           supabase functions deploy stripe-webhook --project-ref "$SUPABASE_PROJECT_ID"
+          supabase functions deploy confirm-demo-booking --project-ref "$SUPABASE_PROJECT_ID"
           supabase functions deploy send-email --project-ref "$SUPABASE_PROJECT_ID"
           supabase functions deploy send-push-notification --project-ref "$SUPABASE_PROJECT_ID"
           supabase functions deploy send-guest-invitations --project-ref "$SUPABASE_PROJECT_ID"
+          supabase functions deploy send-payment-reminders --project-ref "$SUPABASE_PROJECT_ID"
+          supabase functions deploy check-invite-delivery --project-ref "$SUPABASE_PROJECT_ID"
+          supabase functions deploy crisp-identity --project-ref "$SUPABASE_PROJECT_ID"
           # --no-verify-jwt is required for the two cron-triggered functions: pg_cron
           # sends a CRON_SECRET bearer token, not a user JWT. Without the flag the
           # platform answers 401 UNAUTHORIZED_INVALID_JWT_FORMAT before the function
