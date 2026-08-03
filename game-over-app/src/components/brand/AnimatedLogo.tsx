@@ -129,10 +129,12 @@ interface BrandLockupProps {
 }
 
 /**
- * Immediate, non-animated version of the final logo frame. The vector already
- * carries both the mark and the wordmark, so nothing is written beneath it:
- * the domain line was dropped on 03.08. because the build-up states the brand
- * itself, and a domain read as a second, competing name.
+ * Immediate, non-animated version of the final logo frame. Nothing is written
+ * beneath it: `logo.svg` already carries the domain as its own lettering, so the
+ * separate grey `<Text>` line that used to sit here showed it a second time, in
+ * a different case and colour ("Game-Over.app" in gold over "game-over.app" in
+ * grey). Dropped on 03.08. — this component is now the artwork and nothing else,
+ * which also makes it identical to `assets/splash.png`.
  */
 export function BrandLockup({ size = 150, testID }: BrandLockupProps) {
   return (

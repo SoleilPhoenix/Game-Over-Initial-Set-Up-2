@@ -400,24 +400,33 @@ plus `paddingBottom: 160` bei offener Tastatur. **Am Geraet gezielt nachpruefen.
 Login (angeheftet) und E-Mail-Aendern (im Fluss) jetzt zwei verschiedene Muster - das ist die
 Folge zweier gegenlaeufiger Meldungen zum selben Bauteil und sollte einmal vereinheitlicht werden.
 
-### G - Boot und Splash. Code erledigt, Asset offen.
+### G - Boot und Splash. Erledigt. Es war eine Dublette.
 
 Die graue Zeile war eine gewoehnliche `<Text>`-Komponente (`BrandDomain` in `AnimatedLogo.tsx`),
 kein natives Asset - **kein `prebuild` noetig.** `BrandDomain` ist entfernt, ebenso beide
 Aufrufstellen (`app/_layout.tsx:201` Boot-Screen, `app/(auth)/intro.tsx:167` Aufbau); die
 `color`-Prop von `BrandLockup` ist damit entfallen.
 
-**Was Code nicht loesen kann:** `assets/splash.png` traegt die Domain **im Bild** - der native
-Splash zeigt Ring plus „Game-Over.app" in Gold, und das ist dort der einzige Text (eine
-Wortmarke „Game Over" enthaelt das PNG nicht). Zwei Folgen, beide Owner-Entscheidung:
-1. Die Markenregel vom 03.08. erlaubt die Domain im Logo-Lockup von **Splash und Boot**
-   ausdruecklich. G widerspricht dem fuer den Boot-Screen. Umgesetzt wurde G.
-2. Dadurch entsteht wieder eine Stufe im Uebergang: Splash **mit** Domain → Boot **ohne** →
-   Aufbau **ohne**. Genau diese Stufe wollte Commit `685fa537a` beseitigen. Wer sie schliessen
-   will, muss `splash.png` neu zeichnen (und dann per `expo prebuild` verifizieren, **nie** per
-   `expo export`).
-   Nebenbefund: das PNG schreibt „Game-Over.app" mit Bindestrich und Grossbuchstaben, die Regel
-   sagt `game-over.app`.
+**Der eigentliche Befund: es stand zweimal da.** `assets/brand/logo.svg` - die Quelle fuer
+`Logo`, fuer den Boot-Screen und fuer das Endbild des Aufbaus - traegt **selbst**
+„Game-Over.app" als Schriftzug, und das ist der **einzige** Text darin. Eine separate Wortmarke
+„Game Over" existiert im Vektor nicht. Der Boot-Screen zeigte die Domain also gold aus der
+Grafik und direkt darunter nochmal grau aus `BrandDomain`, in abweichender Schreibweise.
+Genau diese graue Dublette war die Meldung; sie ist weg, der Schriftzug der Grafik bleibt.
+
+**`assets/splash.png` bleibt unveraendert, und das ist jetzt richtig so.** Es zeigt exakt
+dieselbe Grafik. Nach der Aenderung sind Splash, Boot und Aufbau-Endbild deckungsgleich - die
+Stufe, die Commit `685fa537a` beseitigen wollte, ist damit geschlossen, nicht aufgerissen.
+
+**Wer den Schriftzug doch aus der Marke nehmen will, muss zwei Folgen einkalkulieren:**
+1. Die Marke traegt dann **nirgends** mehr Text - weder auf dem Splash noch im Boot noch am
+   Ende des Aufbaus. Es bliebe der Ring mit dem Diamanten.
+2. Phase 4 des Vier-Sekunden-Aufbaus animiert genau diesen Schriftzug
+   (`WORD_BAND = { top: 745, bottom: 872 }` in `logoGeometry.ts`, plus die Lichtwanderung
+   darueber). Ohne ihn laeuft eine Sekunde Choreografie ins Leere und muss neu gedacht werden.
+Das ist ein Markenauftrag, keine Aufraeumarbeit. Nebenbefund fuer diesen Fall: die Grafik
+schreibt „Game-Over.app" mit Bindestrich und Grossbuchstaben, die Regel vom 03.08. sagt
+`game-over.app`.
 
 **Der Screenshot „Downloading 86.10 %" ist nicht beeinflussbar.** Das ist der Ladebildschirm des
 Expo-Dev-Clients; den Text kontrolliert Expo, und im Store-Build existiert der Bildschirm nicht.
@@ -440,8 +449,18 @@ Nebenwirkung - **deshalb nicht eigenmaechtig entschieden**:
 2. Ops-Meldungen nie mehr in der App zeigen (den `includeOpsAlerts`-Zweig entfernen). Gleiche
    Folge: der Watchdog haette keinen Kanal mehr.
 3. Ein eigenes Betreiber-Konto (oder eine Ops-Mailadresse) als Empfaenger eintragen. Loest es
-   sauber, braucht aber ein zweites Konto. **Empfehlung.**
+   sauber, braucht aber ein zweites Konto.
 Alle drei schreiben in die Live-DB und brauchen ohnehin Freigabe.
+
+**Owner-Entscheidung 03.08.: Weg 3.** Naechste Schritte, in dieser Reihenfolge:
+1. **Der Owner legt das Betreiber-Konto selbst an** - Kontoanlage macht der Agent nicht.
+2. Dessen `profiles.id` heraussuchen.
+3. `insert into ops_alert_recipients (user_id) values ('<neue-id>');` - **freigabepflichtig**.
+4. Erst **danach** `delete from ops_alert_recipients where user_id =
+   '1e4b1cec-0202-4722-8fd0-d8781bc3737f';` Reihenfolge nicht tauschen: zwischen Loeschen und
+   Einfuegen haette die Ueberwachung keinen Empfaenger, und die zwei bestehenden Zeilen in
+   `notifications` bleiben davon unberuehrt (sie verschwinden aus der Liste, sobald
+   `is_ops_alert_recipient()` fuer das Owner-Konto false liefert).
 
 ### Was sonst offen blieb
 
