@@ -159,6 +159,25 @@ Workflow meldete Erfolg. Liste ergaenzt. **Wer eine neue Edge Function anlegt, t
 ein**; die Aufzaehlung bleibt bewusst explizit, damit die beiden cron-getriebenen Funktionen
 ihr `--no-verify-jwt` behalten.
 
+### Migration umbenannt statt repariert (03.08.)
+
+Vor dem Push lag genau die in §7 beschriebene Kollision vor: die Live-DB fuehrte
+`20260731103342_ops_alert_recipient_helper`, lokal lag dieselbe Migration als
+`20260731120000_...`. Ursache ist der uebliche Ablauf - jemand wendet sie per MCP
+`apply_migration` an (Supabase stempelt dabei seinen eigenen Zeitstempel) und committet die
+Datei danach mit einem anderen. `supabase db push` haette abgebrochen und damit **jede**
+kuenftige Migration blockiert.
+
+Geprueft und dann umbenannt statt `migration repair` zu rufen: `pg_get_functiondef` der
+Live-Funktion ist zeichengleich mit dem Dateiinhalt, die Migration ist also bereits angewendet.
+Die Datei traegt jetzt den Live-Zeitstempel, beide Seiten stimmen ueberein, die DB wurde nicht
+angefasst.
+
+**Regel daraus:** wer eine Migration per MCP anwendet, holt sich danach den vergebenen
+Zeitstempel aus `supabase_migrations.schema_migrations` und benennt die lokale Datei **sofort**
+danach. Sonst faellt es erst beim naechsten Push auf, und dann in einem roten CI-Lauf, dessen
+Ursache Wochen zurueckliegt.
+
 **Ebenfalls offen an A:** `budget/index.tsx:1462` zieht die Kopfzahl fuer die Zahlungs-URL
 weiter aus dem AsyncStorage-Cache statt aus der Buchung - bewusst nicht angefasst, weil die
 `+1`-Semantik dort ungeklaert ist.
