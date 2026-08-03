@@ -278,6 +278,29 @@ angefasst: nicht nutzersichtbar.
 **Offen an H:** die Aenderung an `create-payment-intent` ist eine Edge Function. Ein Merge nach
 main loest `deploy-edge-functions.yml` aus und deployt live - **braucht Owner-Freigabe.**
 
+### Build iOS ist rot - vorbestehend, braucht Owner-Entscheidung
+
+`Build iOS` scheitert in CI mit `exit code 65`. Die Ursache steht weit oben im Log:
+
+```
+ios/Pods/MMKVCore/Core/aes/AESCrypt.cpp:83:11: error: use of undeclared identifier 'memset_s'
+```
+
+`memset_s` ist C11 Annex K und nur sichtbar, wenn `__STDC_WANT_LIB_EXT1__` vor `<string.h>`
+definiert ist; Xcode 26.6 / iOS-SDK 26.5 stellen es nicht mehr implizit bereit, die eingebundene
+MMKVCore-Fassung rechnet noch damit.
+
+**Vorbestehend, nachgewiesen:** derselbe Job scheiterte am 30.07. genauso, vor allem, was seither
+geaendert wurde. `Code Quality`, `Build Android` und `Deploy Edge Functions` sind gruen.
+
+Beide Loesungswege sind freigabepflichtig - Dependency-Bump von `react-native-mmkv`, oder
+`__STDC_WANT_LIB_EXT1__=1` als Preprocessor-Define ueber ein Config-Plugin unter `plugins/`
+(**nicht** in `ios/`, der Ordner ist gitignored und wird von `prebuild` neu erzeugt).
+Ausfuehrlich im Playbook `.claude/skills/gameover-ci-triage/SKILL.md`.
+
+**Triage-Falle:** `--log-failed | tail` zeigt nur Warnungen zu Deployment-Targets. Immer
+`| grep -E "error:|The following build commands failed"`.
+
 ### Bekannt, bewusst so gelassen
 
 - `assets/brand/intro.mp4` existiert nicht, `INTRO_VIDEO_SOURCE` bleibt `null`. Der Intro-Aufbau

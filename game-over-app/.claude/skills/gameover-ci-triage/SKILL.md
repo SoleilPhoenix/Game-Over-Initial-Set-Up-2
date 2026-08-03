@@ -84,11 +84,46 @@ Do NOT add `planning_checklist` to DB schema — it does not exist in PostgREST 
 | Sentry source map upload blocks build | Set `SENTRY_DISABLE_AUTO_UPLOAD=true` in the EAS job env |
 | `react-native-crisp-chat-sdk` / `@crisp-chat` unresolved | Remove stale Crisp references from `ios/` native files and `app.config.ts` |
 | `libfbjni.so` duplicate | Add `packagingOptions.pickFirst` via `expo-build-properties` |
+| `MMKVCore/Core/aes/AESCrypt.cpp: error: use of undeclared identifier 'memset_s'` | Siehe unten - offen, braucht Owner-Freigabe |
 
 ```bash
 # To check current app.config.ts name
 grep -n '"name"' app.config.ts | head -5
 ```
+
+#### Offen: `memset_s` in MMKVCore unter Xcode 26.6
+
+**Symptom:** `Build iOS` endet mit `exit code 65`; die eigentliche Zeile steht weit oben im Log:
+
+```
+ios/Pods/MMKVCore/Core/aes/AESCrypt.cpp:83:11:
+error: use of undeclared identifier 'memset_s'
+```
+
+**Wichtig fuer die Triage:** der Log-*Schwanz* zeigt nur Warnungen zu Deployment-Targets und
+Hermes-Skriptphasen. Wer nur `--log-failed | tail` liest, sieht die Ursache nicht. Immer gezielt
+greppen:
+
+```bash
+gh run view --job <job-id> --log-failed | grep -E "error:|The following build commands failed"
+```
+
+**Ursache:** `memset_s` ist Teil von C11 Annex K und nur sichtbar, wenn `__STDC_WANT_LIB_EXT1__`
+vor `<string.h>` definiert ist. Aktuelle Apple-SDKs (hier iOS 26.5 unter Xcode 26.6) stellen es
+nicht mehr implizit bereit; die eingebundene MMKVCore-Fassung rechnet noch damit.
+
+**Status:** nicht behoben. Bestaetigt vorbestehend - derselbe Job scheiterte am 30.07. genauso,
+also unabhaengig von allem, was seither geaendert wurde. Kein Blocker fuer Code Quality, Build
+Android oder die Edge-Function-Deploys, die alle gruen sind.
+
+**Loesungswege, beide brauchen Owner-Freigabe (Abhaengigkeit bzw. native Buildkonfiguration):**
+
+1. `react-native-mmkv` und damit den MMKVCore-Pod auf eine Fassung heben, die das behebt - der
+   saubere Weg, aber ein Dependency-Bump nach §2.8 der Change-Control.
+2. `__STDC_WANT_LIB_EXT1__=1` als Preprocessor-Define fuer den MMKVCore-Pod setzen. **Nicht** in
+   `ios/` editieren: der Ordner ist gitignored und wird von `expo prebuild` neu erzeugt. Der
+   Eingriff gehoert in ein Config-Plugin unter `plugins/` (Vorbild: `withBrandAndroidColors.js`)
+   oder in `expo-build-properties`.
 
 ---
 
