@@ -8,7 +8,7 @@ nicht die Sitzungshistorie. Dauerhafte Lehren gehören ins Projektgedächtnis
 (`~/.claude/projects/-Users-soleilphoenix-Desktop-GameOver/memory/`), nicht hierher.
 Erledigtes wird gelöscht, nicht archiviert - `git log` ist das Archiv.
 
-Letzte Aktualisierung: 2026-07-31.
+Letzte Aktualisierung: 2026-08-03.
 
 ---
 
@@ -91,9 +91,21 @@ koennen, und gehoert deshalb nicht in die Wortmarke.
    nachgezeichneten Pfade tragen `stroke-width="0.5"` auf einer 1024er viewBox, eine Linie ist
    bei 16px also 0,008 Pixel breit und wird anteilig ins Navy gemischt.
    Neu: `assets/web/favicon-small.svg`, von Hand auf einer 16-Einheiten-viewBox gezeichnet
-   (eine Einheit = ein Pixel), ein Ring, kein Diamant. `app.config.ts` zeigt jetzt dorthin.
-   `generate.py` erzeugt diese Datei **nicht** und darf sie nicht ueberschreiben.
-   Nachpruefen mit `qlmanage -t -s 16 -o /tmp/fav assets/web/favicon-small.svg`.
+   (eine Einheit = ein Pixel). `app.config.ts` zeigt jetzt dorthin. `generate.py` erzeugt diese
+   Datei **nicht** und darf sie nicht ueberschreiben.
+
+   **Der Diamant ist drin** (Owner-Entscheidung 03.08.), aber als *massive* Raute statt als
+   facettierte Strichzeichnung: Flaeche ueberlebt das Runterrechnen, Haarlinien nicht.
+   Entscheidend war das Breitenverhaeltnis - Stein 4,8 Einheiten, Steg 1,8, rund 2,7:1. Zwei
+   Zwischenstaende wurden verworfen, weil beide bei 16px zu einem Nagel verschmolzen.
+   Ab 32px ist der Stein klar lesbar; bei 16px wird er zu einem kurzen Querbalken. Das ist die
+   bewusst getragene Einbusse, weil Browser auf Retina mit 32-40 Geraetepixeln rendern.
+
+   Die **Wortmarke bleibt draussen**: „game-over.app" sind 13 Zeichen, bei 16 Pixeln Breite
+   blieben 1,2 Pixel pro Zeichen. Sie gehoert auf den Boot-Screen und in den Mail-Kopf.
+
+   Nachpruefen mit `qlmanage -t -s 16 -o /tmp/fav assets/web/favicon-small.svg`; jedes Goldpixel
+   heller als `#C6A75E` ist ein Artefakt, Antialiasing kann nur Richtung Navy abdunkeln.
 
 ### Geraetetest 03.08. - 17 Befunde, gebuendelt zu acht Paketen
 
