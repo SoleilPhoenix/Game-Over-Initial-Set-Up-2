@@ -1,22 +1,10 @@
-# Supabase CLI Configuration for Game-Over App
-
-# ── Cron-triggered functions: JWT verification MUST stay off ──────────────────
-# These two are called by pg_cron with a CRON_SECRET bearer token, not a user JWT.
-# With verify_jwt = true the platform rejects the call with
-# 401 UNAUTHORIZED_INVALID_JWT_FORMAT *before* the function runs, so the guard
-# inside the code never gets a say and the job fails silently every morning.
+# Supabase CLI Configuration for Game Over
 #
-# This is not theoretical: on 2026-07-29 deploy-edge-functions.yml redeployed
-# send-final-briefing without --no-verify-jwt, flipped it to true, and broke the
-# cron call 15 minutes after it had been fixed. Declaring it here makes the
-# setting part of the repo instead of a flag someone has to remember.
-# Both functions authenticate themselves via constant-time CRON_SECRET compare.
-
-[functions.send-final-briefing]
-verify_jwt = false
-
-[functions.process-payment-reminders]
-verify_jwt = false
+# Die [functions.*]-Bloecke stehen gesammelt am Dateiende. Sie standen hier
+# einmal ein zweites Mal - eine Konfliktaufloesung im Merge cdecf9046 hatte sie
+# dupliziert. TOML verbietet doppelte Tabellen, weshalb die CLI jeden Deploy mit
+# ProjectConfigParseError abbrach, noch bevor die erste Funktion an der Reihe
+# war. Am 03.08. entfernt.
 
 [api]
 enabled = true
@@ -121,6 +109,13 @@ vector_port = 54328
 # This section exists because that setting previously lived only in the
 # dashboard: a plain `supabase functions deploy <name>` silently re-enabled the
 # check and took the function down. Recorded here, every deploy carries it.
+#
+# Not theoretical: on 2026-07-29 deploy-edge-functions.yml redeployed
+# send-final-briefing without --no-verify-jwt, flipped it to true, and broke the
+# cron call 15 minutes after it had been fixed. Both cron functions authenticate
+# themselves via a constant-time CRON_SECRET compare.
+#
+# Diese Bloecke gehoeren genau EINMAL in die Datei - siehe Kopfkommentar.
 [functions.send-final-briefing]
 verify_jwt = false
 
