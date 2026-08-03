@@ -162,9 +162,13 @@ in Betreff und Fliesstext dieselbe Zeichenkette. Quelle ist `events.party_type`,
 `events.title`: der lautet bereits „Natalia's Bachelorette", was zu „Natalia Schulz: Natalia's
 Bachelorette Party" gefuehrt haette.
 
-**Offen:** der Owner nannte am 03.08. als Beispielanrede „Hallo Django und Jane," - also zwei
-Namen. Woher der zweite kommen soll, ist ungeklaert (die Buchung kennt nur den Organisator);
-die Anrede spricht weiterhin nur den Organisator an. Vor dem naechsten Mail-Durchgang klaeren.
+Der Paketname erscheint **ohne Stadtpraefix**: die Pakete heissen „Berlin Legende", die Stadt
+steht in der Mail aber schon in einer eigenen Zeile darunter. Abgeschnitten wird datengetrieben
+anhand des Stadtnamens, nicht per Namensliste - neue Staedte funktionieren ohne Codeaenderung,
+und ein Paket ohne Praefix bleibt unveraendert.
+
+(Die zwischenzeitlich notierte Frage nach einer Anrede „Hallo Django und Jane," hat sich
+erledigt: „Jane" war ein Diktierfehler, es geht nur um den Organisator.)
 
 ### Deploy-Workflow deployte nie alle Funktionen (gefunden und behoben 03.08.)
 

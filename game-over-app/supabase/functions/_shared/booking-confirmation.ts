@@ -115,6 +115,16 @@ export async function sendBookingConfirmationEmail(
       ? await supabase.from('packages').select('name').eq('id', packageId).single()
       : { data: null };
 
+    // Die Pakete heissen "<Stadt> <Stufe>", etwa "Berlin Legende". In der Mail
+    // steht die Stadt direkt darunter in einer eigenen Zeile, das Praefix waere
+    // also eine Dopplung. Datengetrieben abgeschnitten statt per Namensliste,
+    // damit neue Staedte ohne Codeaenderung richtig aussehen.
+    const cityName = (city?.name as string | undefined) ?? '';
+    const rawPackageName = (pkg?.name as string | undefined) ?? '';
+    const packageName = cityName && rawPackageName.startsWith(`${cityName} `)
+      ? rawPackageName.slice(cityName.length + 1)
+      : rawPackageName;
+
     const totalCents = (booking.total_amount_cents as number | null) ?? 0;
     const depositCents = (booking.deposit_amount_cents as number | null) ?? 0;
     // Bei Vollzahlung bleibt deposit_amount_cents auf der urspruenglichen
@@ -136,8 +146,8 @@ export async function sendBookingConfirmationEmail(
       userName: (profile?.full_name as string | undefined) ?? undefined,
       honoreeName: event.honoree_name as string,
       eventTitle: event.title as string,
-      packageName: (pkg?.name as string | undefined) ?? '-',
-      city: (city?.name as string | undefined) ?? '-',
+      packageName: packageName || '-',
+      city: cityName || '-',
       eventDate: formatDate(event.start_date as string | null, language),
       participants: (booking.paying_participants as number | null) ?? 0,
       totalAmount: formatEur(totalCents, language),
