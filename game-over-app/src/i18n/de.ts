@@ -1058,6 +1058,7 @@ const de: TranslationKeys = {
     guestUnitPlural: 'Gäste',
     duplicateTitle: 'Doppelter Kontakt',
     guestAdjusted: 'Vom Gast angepasst',
+    guestAdjustedAnd: 'und',
     guestBefore: 'Vorher',
   },
 

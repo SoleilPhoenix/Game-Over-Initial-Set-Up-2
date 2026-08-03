@@ -1074,6 +1074,7 @@ const en = {
     guestUnitPlural: 'guests',
     duplicateTitle: 'Duplicate contact',
     guestAdjusted: 'Adjusted by guest',
+    guestAdjustedAnd: 'and',
     guestBefore: 'Before',
   },
 

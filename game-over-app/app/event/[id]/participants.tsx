@@ -764,8 +764,11 @@ export default function ManageInvitationsScreen() {
               <XStack alignItems="flex-start" gap={6} marginTop={4}>
                 <Ionicons name="information-circle-outline" size={13} color={theme.accentGold} style={{ marginTop: 1 }} />
                 <YStack flex={1}>
-                  <Text style={styles.adjustedHint} numberOfLines={1}>
-                    {t.manageInvitations.guestAdjusted}:
+                  <Text style={styles.adjustedHint} numberOfLines={2}>
+                    {t.manageInvitations.guestAdjusted}: {[
+                      slot.changed.name && t.notifications.fieldName,
+                      slot.changed.phone && t.notifications.fieldPhone,
+                    ].filter(Boolean).join(` ${t.manageInvitations.guestAdjustedAnd} `)}
                   </Text>
                   <Text style={styles.adjustedHint} numberOfLines={1}>
                     {t.manageInvitations.guestBefore}: {formatPreviousGuestValues(

@@ -198,7 +198,7 @@ function RootLayoutNav() {
   if (!isInitialized || isLoading || !fontsLoaded) {
     return (
       <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor={theme.background}>
-        <BrandLockup size={150} color={theme.textTertiary} testID="boot-brand-lockup" />
+        <BrandLockup size={150} testID="boot-brand-lockup" />
         <Spinner size="large" color={theme.primary} style={{ marginTop: 24 }} />
       </YStack>
     );

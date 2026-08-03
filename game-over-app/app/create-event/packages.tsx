@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react';
-import { ScrollView, Image, View, StyleSheet, Pressable, Text as RNText } from 'react-native';
+import { ScrollView, Image, View, StyleSheet, Pressable, Text as RNText, type ImageSourcePropType } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useRouter } from 'expo-router';
@@ -14,7 +14,8 @@ import { useWizardStore } from '@/stores/wizardStore';
 import { useMatchedPackages } from '@/hooks/queries/usePackages';
 import { useCreateEvent } from '@/hooks/queries/useEvents';
 import { WizardFooter } from '@/components/ui/WizardFooter';
-import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
+import { resolvePackageImage } from '@/constants/packageImages';
+import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 import { LinearGradient } from 'expo-linear-gradient';
 import { setDesiredParticipants, setBudgetInfo } from '@/lib/participantCountCache';
 import { assemblePackages } from '@/utils/packageAssembly';
@@ -25,13 +26,6 @@ import { feedback } from '@/stores/uiStore';
 
 // Feature counts by tier: S=3, M=4, L=5
 // Fallback packages when DB returns empty (for Berlin, Hamburg, Hannover)
-// UUIDs must match supabase/migrations/20260211000000_add_german_cities.sql
-const CITY_UUID_TO_SLUG: Record<string, string> = {
-  '550e8400-e29b-41d4-a716-446655440101': 'berlin',
-  '550e8400-e29b-41d4-a716-446655440102': 'hamburg',
-  '550e8400-e29b-41d4-a716-446655440103': 'hannover',
-};
-
 function formatPrice(cents: number): string {
   return '\u20AC' + (cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
@@ -41,9 +35,10 @@ interface DisplayPackage {
   id: string;
   name: string;
   tier: string;
+  city_id?: string;
   price_per_person_cents?: number;
   base_price_cents?: number;
-  hero_image_url?: unknown;
+  hero_image_url?: string | ImageSourcePropType | null;
   rating?: number;
   review_count?: number;
   features?: unknown[];
@@ -57,6 +52,7 @@ interface PackageSelectionCardProps {
   isSelected: boolean;
   pricingMode: 'per_person' | 'total_group';
   participantCount: number;
+  citySlug: string;
   onSelect: (id: string) => void;
   onViewDetails: (id: string) => void;
 }
@@ -68,6 +64,7 @@ function PackageSelectionCard({
   isSelected,
   pricingMode,
   participantCount,
+  citySlug,
   onSelect,
   onViewDetails,
 }: PackageSelectionCardProps) {
@@ -91,7 +88,13 @@ function PackageSelectionCard({
     ? (pkg.features as unknown[]).filter((f): f is string => typeof f === 'string').slice(0, featureLimit)
     : [];
 
-  const imageSource = resolveImageSource(pkg.hero_image_url || getPackageImage('berlin', 'essential'));
+  const imageSource = resolvePackageImage({
+    heroImageUrl: pkg.hero_image_url,
+    cityId: pkg.city_id,
+    citySlug,
+    tier: pkg.tier,
+    packageId: pkg.id,
+  });
   const cardHeight = isBestMatch ? 480 : 420;
 
   // Shared inner content — identical between selected (KenBurns) and unselected (static image) branches
@@ -504,6 +507,7 @@ export default function WizardStep4() {
               isSelected={selectedPackageId === pkg.id}
               pricingMode={pricingMode}
               participantCount={participantCount}
+              citySlug={citySlug}
               onSelect={handleSelectPackage}
               onViewDetails={handleViewDetails}
             />

@@ -15,12 +15,14 @@ import * as Clipboard from 'expo-clipboard';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEvent, eventKeys } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
+import { usePackage } from '@/hooks/queries/usePackages';
 import { useWizardStore } from '@/stores/wizardStore';
 import { addEventToCalendarWithFeedback } from '@/utils/calendar';
 import { useTranslation, getTranslation } from '@/i18n';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
+import { resolvePackageImage } from '@/constants/packageImages';
+import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 import { getTierDisplayLabel } from '@/constants/packageTiers';
 import { feedback } from '@/stores/uiStore';
 
@@ -77,6 +79,18 @@ export default function BookingConfirmationScreen() {
 
   const { data: event, isLoading: eventLoading } = useEvent(isDraft ? undefined : eventId);
   const { data: booking, isLoading: bookingLoading } = useBooking(isDraft ? undefined : eventId);
+  const { data: selectedPackage } = usePackage(packageId);
+
+  const fallbackCitySlug = cityId
+    ? (CITY_UUID_TO_SLUG[cityId] || cityId.toLowerCase())
+    : 'berlin';
+  const heroImage = resolvePackageImage({
+    heroImageUrl: selectedPackage?.hero_image_url,
+    cityId: selectedPackage?.city_id,
+    tier: selectedPackage?.tier,
+    packageId,
+    fallback: { citySlug: fallbackCitySlug, tier: 'classic' },
+  });
 
   if (!isDraft && (eventLoading || bookingLoading)) {
     return (
@@ -159,24 +173,7 @@ export default function BookingConfirmationScreen() {
         {/* Hero Image with Success Overlay */}
         <View style={confirmStyles.heroContainer}>
           <KenBurnsImage
-            source={resolveImageSource((() => {
-              // Derive city + tier from packageId slug (e.g., "hamburg-classic").
-              // Guard: UUIDs also contain hyphens — only accept slugs ending with a known tier.
-              const KNOWN_TIERS = ['classic', 'essential', 'grand'];
-              if (packageId) {
-                const parts = packageId.split('-');
-                const tier = parts[parts.length - 1];
-                const city = parts.slice(0, -1).join('-');
-                if (city && KNOWN_TIERS.includes(tier)) {
-                  return getPackageImage(city, tier);
-                }
-              }
-              // Fallback: use city image with 'classic' tier (better than forcing 'essential')
-              const slug = cityId
-                ? (CITY_NAMES[cityId]?.toLowerCase() || cityId.toLowerCase() || 'berlin')
-                : 'berlin';
-              return getPackageImage(slug, 'classic');
-            })())}
+            source={heroImage}
             style={StyleSheet.absoluteFillObject}
           />
           <View style={confirmStyles.heroOverlay}>

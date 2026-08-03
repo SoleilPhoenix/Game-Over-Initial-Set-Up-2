@@ -3,7 +3,7 @@
  * Tamagui-based text input with label, error state, and icon support
  */
 
-import React, { useState, forwardRef } from 'react';
+import React, { useRef, useState, forwardRef } from 'react';
 import { TextInput } from 'react-native';
 import { styled, Input as TamaguiInput, YStack, XStack, Text, GetProps } from 'tamagui';
 
@@ -126,6 +126,7 @@ export const Input = forwardRef<TextInput, InputProps>(
   ) => {
     const [isFocused, setIsFocused] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const inputRef = useRef<TextInput>(null);
 
     const hasError = Boolean(error);
 
@@ -143,6 +144,19 @@ export const Input = forwardRef<TextInput, InputProps>(
       setShowPassword(!showPassword);
     };
 
+    const setInputRef = (node: TextInput | null) => {
+      inputRef.current = node;
+      if (typeof ref === 'function') {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
+      }
+    };
+
+    const focusInput = () => {
+      if (!disabled) inputRef.current?.focus();
+    };
+
     return (
       <YStack width="100%" testID={containerTestID}>
         {label && (
@@ -154,10 +168,11 @@ export const Input = forwardRef<TextInput, InputProps>(
           focused={isFocused && !hasError}
           error={hasError}
           disabled={disabled}
+          onPress={focusInput}
         >
           {leftIcon && <XStack marginRight="$2">{leftIcon}</XStack>}
           <StyledInput
-            ref={ref as any}
+            ref={setInputRef as any}
             {...props}
             value={value}
             onFocus={handleFocus}
@@ -171,7 +186,10 @@ export const Input = forwardRef<TextInput, InputProps>(
           />
           {secureTextEntry && (
             <XStack
-              onPress={togglePasswordVisibility}
+              onPress={(event) => {
+                event.stopPropagation();
+                togglePasswordVisibility();
+              }}
               paddingLeft="$2"
               pressStyle={{ opacity: 0.7 }}
               testID={`${testID}-toggle-password`}
@@ -183,9 +201,12 @@ export const Input = forwardRef<TextInput, InputProps>(
           )}
           {rightIcon && !secureTextEntry && (
             <XStack
-              onPress={onRightIconPress}
+              onPress={onRightIconPress ? (event) => {
+                event.stopPropagation();
+                onRightIconPress();
+              } : focusInput}
               paddingLeft="$2"
-              pressStyle={{ opacity: 0.7 }}
+              {...(onRightIconPress ? { pressStyle: { opacity: 0.7 } } : {})}
             >
               {rightIcon}
             </XStack>

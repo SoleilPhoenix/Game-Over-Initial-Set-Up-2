@@ -6,6 +6,7 @@
 
 import { ImageSourcePropType } from 'react-native';
 import { Asset } from 'expo-asset';
+import { CITY_UUID_TO_SLUG } from './citySlugMap';
 
 const PACKAGE_IMAGES: Record<string, Record<string, ImageSourcePropType>> = {
   berlin: {
@@ -50,6 +51,54 @@ export function getPackageImage(citySlug: string, tier: string): ImageSourceProp
     PACKAGE_IMAGES[city]?.essential ||
     PACKAGE_IMAGES.berlin.essential
   );
+}
+
+export const PACKAGE_IMAGE_FALLBACK = {
+  citySlug: 'berlin',
+  tier: 'essential',
+} as const;
+
+interface PackageImageFallback {
+  citySlug: string;
+  tier: string;
+}
+
+export interface PackageImageHints {
+  heroImageUrl?: string | ImageSourcePropType | null;
+  cityId?: string | null;
+  citySlug?: string | null;
+  tier?: string | null;
+  packageId?: string | null;
+  fallback?: PackageImageFallback;
+}
+
+/**
+ * Resolve the image for a package from the strongest available package data.
+ * Only package IDs shaped like "<city>-<tier>" are treated as fallback slugs.
+ */
+export function resolvePackageImage({
+  heroImageUrl,
+  cityId,
+  citySlug,
+  tier,
+  packageId,
+  fallback = PACKAGE_IMAGE_FALLBACK,
+}: PackageImageHints): ImageSourcePropType {
+  if (heroImageUrl !== null && heroImageUrl !== undefined && heroImageUrl !== '') {
+    return resolveImageSource(heroImageUrl) as ImageSourcePropType;
+  }
+
+  const resolvedCitySlug = citySlug || (cityId ? CITY_UUID_TO_SLUG[cityId] : undefined);
+  if (resolvedCitySlug && tier) {
+    return getPackageImage(resolvedCitySlug, tier);
+  }
+
+  const slugMatch = packageId?.match(/^(.+)-(essential|classic|grand)$/i);
+  if (slugMatch) {
+    return getPackageImage(slugMatch[1], slugMatch[2]);
+  }
+
+  return getPackageImage(fallback.citySlug, fallback.tier);
 }
 
 /**

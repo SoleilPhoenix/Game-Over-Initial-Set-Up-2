@@ -33,11 +33,10 @@ import { router, useNavigation } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { AnimatedLogo, BrandDomain, LOGO_REVEAL_DURATION } from '@/components/brand/AnimatedLogo';
+import { AnimatedLogo, LOGO_REVEAL_DURATION } from '@/components/brand/AnimatedLogo';
 import { INTRO_VIDEO_SOURCE, INTRO_VIDEO_MAX_DURATION } from '@/components/brand/introVideo';
 import { markIntroPlayed } from '@/lib/introSession';
 import { useTranslation } from '@/i18n';
-import { useTheme } from '@/hooks/useTheme';
 
 /** A short beat after the reveal settles, so its final frame is actually seen. */
 const LOGO_HOLD_AFTER_REVEAL = 400;
@@ -66,7 +65,6 @@ export default function IntroScreen() {
   const navigation = useNavigation() as unknown as TransitionNavigation;
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
-  const { theme } = useTheme();
   const revealStartClaimed = React.useRef(false);
   const revealFrame = React.useRef<number | null>(null);
 
@@ -162,10 +160,7 @@ export default function IntroScreen() {
               its first frame. `force` because it must play even if something else
               mounted a logo first during startup. */}
           {ready && (
-            <>
-              <AnimatedLogo size={260} force testID="intro-logo" />
-              <BrandDomain size={260} color={theme.textTertiary} testID="intro-domain" />
-            </>
+            <AnimatedLogo size={260} force testID="intro-logo" />
           )}
         </Animated.View>
       ) : (

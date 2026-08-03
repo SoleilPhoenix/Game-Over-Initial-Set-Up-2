@@ -3,13 +3,14 @@
  * Dark glassmorphic design matching UI specifications
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   StyleSheet,
   StatusBar,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -37,7 +38,13 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export default function LoginScreen() {
   const [isLoading, setIsLoading] = React.useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const fieldPositions = useRef({ email: 0, password: 0 });
+  const focusedField = useRef<keyof typeof fieldPositions.current | null>(null);
   const { setError, error, clearError } = useAuthStore();
   const { t } = useTranslation();
   const { redirect } = useLocalSearchParams<{ redirect?: string }>();
@@ -53,6 +60,37 @@ export default function LoginScreen() {
       password: '',
     },
   });
+
+  const scrollFocusedFieldIntoView = useCallback(() => {
+    const field = focusedField.current;
+    if (!field) return;
+
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, fieldPositions.current[field] - 24),
+        animated: true,
+      });
+    });
+  }, []);
+
+  const handleFieldFocus = useCallback((field: keyof typeof fieldPositions.current) => {
+    focusedField.current = field;
+    scrollFocusedFieldIntoView();
+  }, [scrollFocusedFieldIntoView]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const shown = Keyboard.addListener(showEvent, () => setKeyboardOpen(true));
+    const hidden = Keyboard.addListener(hideEvent, () => setKeyboardOpen(false));
+    return () => { shown.remove(); hidden.remove(); };
+  }, []);
+
+  useEffect(() => {
+    if (keyboardOpen && focusedField.current) {
+      scrollFocusedFieldIntoView();
+    }
+  }, [keyboardOpen, scrollFocusedFieldIntoView]);
 
   const onSubmit = async (data: LoginFormData) => {
     try {
@@ -97,11 +135,13 @@ export default function LoginScreen() {
         style={styles.keyboardView}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
+            { paddingTop: insets.top + 16, paddingBottom: 24 },
           ]}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}
         >
           {/* Header with back button */}
@@ -137,19 +177,29 @@ export default function LoginScreen() {
 
               {/* Form */}
               <View style={styles.form}>
-                <View style={styles.inputWrapper}>
+                <View
+                  style={styles.inputWrapper}
+                  onLayout={(event) => {
+                    fieldPositions.current.email = event.nativeEvent.layout.y;
+                  }}
+                >
                   <Text style={styles.inputLabel}>{t.auth.email}</Text>
                   <Controller
                     control={control}
                     name="email"
                     render={({ field: { onChange, onBlur, value } }) => (
-                      <View style={[styles.inputContainer, errors.email && styles.inputError]}>
+                      <Pressable
+                        style={[styles.inputContainer, errors.email && styles.inputError]}
+                        onPress={() => emailInputRef.current?.focus()}
+                      >
                         <Ionicons name="mail-outline" size={20} color={'rgba(255,255,255,0.48)'} />
                         <TextInput
+                          ref={emailInputRef}
                           style={[styles.darkInput, { flex: 1 }]}
                           value={value}
                           onChangeText={onChange}
                           onBlur={onBlur}
+                          onFocus={() => handleFieldFocus('email')}
                           placeholder={t.auth.enterEmail}
                           placeholderTextColor={'rgba(255,255,255,0.48)'}
                           keyboardType="email-address"
@@ -158,7 +208,7 @@ export default function LoginScreen() {
                           textContentType="emailAddress"
                           testID="input-email"
                         />
-                      </View>
+                      </Pressable>
                     )}
                   />
                   {errors.email && (
@@ -166,19 +216,29 @@ export default function LoginScreen() {
                   )}
                 </View>
 
-                <View style={styles.inputWrapper}>
+                <View
+                  style={styles.inputWrapper}
+                  onLayout={(event) => {
+                    fieldPositions.current.password = event.nativeEvent.layout.y;
+                  }}
+                >
                   <Text style={styles.inputLabel}>{t.auth.password}</Text>
                   <Controller
                     control={control}
                     name="password"
                     render={({ field: { onChange, onBlur, value } }) => (
-                      <View style={[styles.inputContainer, errors.password && styles.inputError]}>
+                      <Pressable
+                        style={[styles.inputContainer, errors.password && styles.inputError]}
+                        onPress={() => passwordInputRef.current?.focus()}
+                      >
                         <Ionicons name="lock-closed-outline" size={20} color={'rgba(255,255,255,0.48)'} />
                         <TextInput
+                          ref={passwordInputRef}
                           style={[styles.darkInput, { flex: 1 }]}
                           value={value}
                           onChangeText={onChange}
                           onBlur={onBlur}
+                          onFocus={() => handleFieldFocus('password')}
                           placeholder={t.auth.enterPassword}
                           placeholderTextColor={'rgba(255,255,255,0.48)'}
                           secureTextEntry={!showPassword}
@@ -186,10 +246,15 @@ export default function LoginScreen() {
                           textContentType="password"
                           testID="input-password"
                         />
-                        <Pressable onPress={() => setShowPassword(!showPassword)}>
+                        <Pressable
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            setShowPassword(!showPassword);
+                          }}
+                        >
                           <Text style={styles.showHideText}>{showPassword ? 'Hide' : 'Show'}</Text>
                         </Pressable>
-                      </View>
+                      </Pressable>
                     )}
                   />
                   {errors.password && (
@@ -204,26 +269,6 @@ export default function LoginScreen() {
                 </Link>
               </View>
 
-              {/* Submit Button */}
-              <Pressable
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  pressed && styles.primaryButtonPressed,
-                  isLoading && styles.primaryButtonDisabled,
-                ]}
-                onPress={handleSubmit(onSubmit)}
-                disabled={isLoading}
-                testID="login-submit-button"
-              >
-                {isLoading ? (
-                  <Text style={styles.primaryButtonText}>{t.auth.signingIn}</Text>
-                ) : (
-                  <>
-                    <Text style={styles.primaryButtonText}>{t.auth.logIn}</Text>
-                    <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-                  </>
-                )}
-              </Pressable>
             </View>
           </BlurView>
 
@@ -237,6 +282,27 @@ export default function LoginScreen() {
             </Link>
           </View>
         </ScrollView>
+        <View style={[styles.submitFooter, { paddingBottom: keyboardOpen ? 12 : insets.bottom + 12 }]}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
+              isLoading && styles.primaryButtonDisabled,
+            ]}
+            onPress={handleSubmit(onSubmit)}
+            disabled={isLoading}
+            testID="login-submit-button"
+          >
+            {isLoading ? (
+              <Text style={styles.primaryButtonText}>{t.auth.signingIn}</Text>
+            ) : (
+              <>
+                <Text style={styles.primaryButtonText}>{t.auth.logIn}</Text>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+              </>
+            )}
+          </Pressable>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -375,6 +441,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     paddingLeft: 8,
+  },
+  submitFooter: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: '#0D1B2A',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(230,220,200,0.15)',
   },
   forgotPassword: {
     alignSelf: 'flex-end',

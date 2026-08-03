@@ -207,7 +207,7 @@ export default function EditProfileScreen() {
       router.back();
       useUIStore.getState().showSuccess(t.editProfile.successTitle, t.editProfile.profileUpdated);
     } catch (error) {
-      console.error('Profile update error:', error);
+      console.log('Profile update error:', error);
       feedback.error(t.editProfile.errorTitle, t.editProfile.updateFailed);
     } finally {
       setIsSaving(false);

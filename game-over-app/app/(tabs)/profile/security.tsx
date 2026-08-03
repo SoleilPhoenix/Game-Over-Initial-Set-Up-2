@@ -74,7 +74,7 @@ export default function SecurityScreen() {
       router.back();
       useUIStore.getState().showSuccess(t.security.passwordUpdatedTitle, t.security.passwordUpdatedMsg);
     } catch (error: any) {
-      console.error('Password change error:', error);
+      console.log('Password change error:', error);
       feedback.error(
         t.security.errorTitle,
         error.message || t.security.updateFailedMsg

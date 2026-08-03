@@ -20,7 +20,7 @@
  * asset itself.
  */
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native';
+import { StyleSheet, View, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   ReduceMotion,
@@ -122,44 +122,22 @@ export function resetLogoRevealSession() {
   hasPlayedThisSession = false;
 }
 
-interface BrandDomainProps {
+interface BrandLockupProps {
+  /** Width and height of the square vector logo. */
   size?: number;
-  color: string;
   testID?: string;
 }
 
-/** The domain line shared by the static and revealed brand lockups. */
-export function BrandDomain({ size = 150, color, testID }: BrandDomainProps) {
-  return (
-    <Text
-      testID={testID}
-      style={{
-        color,
-        fontSize: Math.max(11, Math.round(size * 0.065)),
-        fontWeight: '500',
-        letterSpacing: 0.4,
-        marginTop: Math.max(2, Math.round(size * 0.012)),
-      }}
-    >
-      game-over.app
-    </Text>
-  );
-}
-
-interface BrandLockupProps extends BrandDomainProps {
-  /** Width and height of the square vector logo. */
-  size?: number;
-}
-
 /**
- * Immediate, non-animated version of the final logo frame. The vector carries
- * the mark and wordmark; this adds its shared domain line beneath it.
+ * Immediate, non-animated version of the final logo frame. The vector already
+ * carries both the mark and the wordmark, so nothing is written beneath it:
+ * the domain line was dropped on 03.08. because the build-up states the brand
+ * itself, and a domain read as a second, competing name.
  */
-export function BrandLockup({ size = 150, color, testID }: BrandLockupProps) {
+export function BrandLockup({ size = 150, testID }: BrandLockupProps) {
   return (
     <View style={{ alignItems: 'center' }} testID={testID}>
       <Logo size={size} />
-      <BrandDomain size={size} color={color} />
     </View>
   );
 }

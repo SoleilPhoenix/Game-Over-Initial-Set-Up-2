@@ -8,7 +8,7 @@ nicht die Sitzungshistorie. Dauerhafte Lehren gehören ins Projektgedächtnis
 (`~/.claude/projects/-Users-soleilphoenix-Desktop-GameOver/memory/`), nicht hierher.
 Erledigtes wird gelöscht, nicht archiviert - `git log` ist das Archiv.
 
-Letzte Aktualisierung: 2026-07-31.
+Letzte Aktualisierung: 2026-08-03.
 
 ---
 
@@ -226,38 +226,9 @@ Entweder wurde die handgesetzte Zeile vom 31.07. mit dem falschen Schalter angel
 Erinnerung stimmt nicht. **Vor dem naechsten Test an Natalias Zahlen einmal klaeren**, sonst
 jagt jemand wieder einen Rechenfehler, den es nicht gibt.
 
-**B. Paketbilder.** In der Paketauswahl (Schritt 4) tragen alle drei Pakete dasselbe
-Hintergrundbild. Die Buchungsbestaetigung zeigt danach das *richtige* Bild pro Paket und Stadt -
-die Datenquelle stimmt also, die Auswahlliste greift auf einen falschen Index oder ein Fallback.
-Regression aus den letzten Buchungsprozess-Aenderungen.
-
-**C. Kanal loeschen (Chat).** Zwei Fehler uebereinander: der Knopf tut nichts (mehrfaches
-Druecken ohne Wirkung), und die Bestaetigung ist ein bildschirmfuellendes Sheet, wo die uebrigen
-Meldungen der App kleine Toasts sind. Erst pruefen, ob hinter dem Knopf ueberhaupt etwas haengt
-(`app/(tabs)/chat/[channelId].tsx`), dann auf das bestehende Toast-Muster vereinheitlichen -
-Bestaetigen darf bleiben, nur nicht in dieser Groesse.
-
-**D. Login.** Der „Anmelden"-Knopf verschwindet unter der Tastatur. Ausserdem brauchen E-Mail-
-und Passwortfeld zwei bis drei Taps, bis der Cursor sitzt; die *gesamte* Feldflaeche muss treffen,
-auch Briefumschlag- und Schlosssymbol. Verdacht: derselbe Mechanismus wie frueher schon - der
-Icon-Wrapper in `Input` schluckt Beruehrungen, wenn kein `onRightIconPress` gesetzt ist.
-
-**E. E-Mail aendern (Profil).** Bei einer bereits vergebenen Adresse erscheint der rote
-Console-Error-Overlay statt einer deutschen Meldung; Soll ist ein Toast, 6 s, kein Dialog in der
-Mitte. Dazu Layout: zwischen Passwortfeld und Knopf steht eine grosse tote Flaeche, die Felder
-gehoeren direkt ueber „Bestaetigungslink senden".
-
-**F. Benachrichtigungen.** „Vom Gast angepasst" soll benennen, *was* geaendert wurde (Name /
-E-Mail / Telefon, einzeln oder kombiniert) und auf zwei Zeilen umbrechen
-(`src/i18n/*.ts` → `manageInvitations.guestAdjusted`, `app/event/[id]/participants.tsx:768`).
-Ausserdem darf der „Betriebshinweis - geplanter Aufruf HTTP 500" beim Organisator gar nicht
-ankommen; das ist eine Betriebsmeldung, keine Nutzermeldung.
-
-**G. Boot und Splash.** Die graue Zeile `game-over.app` unter dem Logoaufbau soll weg; der
-Vier-Sekunden-Aufbau traegt die Marke bereits selbst.
-**Einschraenkung:** der zweite Screenshot („Downloading 86.10 %") zeigt den Ladebildschirm des
-Expo-Dev-Clients. Diesen Text kontrolliert Expo, nicht dieser Code, und im Store-Build existiert
-der Bildschirm nicht. Vor einer Zusage pruefen, was davon ueberhaupt beeinflussbar ist.
+**B bis G: umgesetzt am 03.08.**, Reihenfolge C-D-B-F-E-G wie geplant. Was dabei herauskam,
+steht weiter unten unter „Pakete B bis G - Ergebnis". Zwei Punkte blieben offen und brauchen
+eine Owner-Entscheidung: **F2** (Betriebshinweis) und **G/Splash** (Domain im PNG).
 
 **H. Marke in allen Mails.** ~~Grossteil~~ **weitgehend erledigt am 03.08. - die Annahme des
 Auftrags war falsch.** Eine Bestandsaufnahme zeigte: die Mails setzen die neue Regel bereits
@@ -332,112 +303,147 @@ Deployment-Targets. Immer `| grep -E "error:|The following build commands failed
 
 ---
 
-## Naechste Session - Pakete B bis G
+## Pakete B bis G - Ergebnis (03.08.)
 
-A und H sind erledigt und live. Was folgt, ist die Arbeitsvorbereitung fuer den Rest.
+Umgesetzt in der Reihenfolge C-D-B-F-E-G. Umsetzung ueberwiegend via Codex (`terra`, fuer B
+`sol`), Diagnose, DB-Abfragen und Abnahme bei Claude. Gates nach jedem Paket gruen:
+`npm run typecheck`, `npm run lint`, `npx vitest run` - zuletzt 122 Tests, 0 Lint-Warnungen.
+**Am Geraet ist nichts davon gesehen**, `xcode-select` zeigt weiterhin nicht auf Xcode.
 
-### Arbeitsteilung
+### C - Kanal loeschen. Behoben.
 
-Ziel ist, Claude-Token zu sparen, ohne Qualitaet zu verlieren. Die Trennlinie verlaeuft nicht
-nach Aufwand, sondern nach **Art der Arbeit**:
+Die Vermutung „vielleicht fehlt eine DELETE-Policy" war **nicht** die Ursache, und die
+naheliegende Diagnose haette in die Irre gefuehrt. Zwei Befunde:
 
-| Art | Wer | Warum |
-|---|---|---|
-| Breites Suchen („wo wird X gesetzt") | `codex exec -s read-only -m gpt-5.6-luna` | Jede Datei, die Claude liest, bleibt im Kontext und wird bei **jedem** weiteren Zug erneut gesendet. Breites Lesen ist der groesste vermeidbare Posten. |
-| Klar beschriebene Umsetzung | `gpt-5.6-terra` | Bounded, spezifiziert, kein Ermessen noetig. |
-| Mehrdateiige oder kniffelige Umsetzung | `gpt-5.6-sol` | Frontier-Modell, aber ChatGPT-Kontingent - gezielt einsetzen. |
-| Diagnose, DB, Deploy, Urteilsfragen | **Claude** | Braucht den Gespraechskontext und die Live-DB. |
-| Gestaltung, Copy, Abnahme | **Claude** | Taste-lastig; genau hier ist das Modell am staerksten. |
+1. **Die Ursache ist ein Fenster, kein Recht.** Der Loeschknopf sitzt in einem echten
+   React-Native-`<Modal>` (Kanal-Info). `feedback.confirm()` rendert das globale `ConfirmSheet`
+   dagegen als gewoehnliche View im Root-Layout. Ein RN-`Modal` ist auf iOS ein **eigenes
+   natives Fenster ueber dem gesamten React-Baum** - das ConfirmSheet erschien also unsichtbar
+   darunter, das `await` loeste sich nie auf, der Knopf wirkte tot. Jedes weitere Druecken
+   stapelte nur eine weitere haengende Zusage.
+   Fix: `setInfoModalVisible(false)` wandert **vor** das `await`
+   (`app/(tabs)/chat/[channelId].tsx:115`). Damit ist auch der zweite Teil der Meldung erledigt -
+   sichtbar wird jetzt genau das ConfirmSheet, das die App auch beim Poll- und Event-Loeschen
+   zeigt. Das Poll-Loeschen war nie betroffen, weil dessen Info-Sheet kein `Modal` ist.
+   **Merksatz:** `feedback.confirm()` / `feedback.error()` niemals aus einem offenen `<Modal>`
+   heraus aufrufen. Geprueft: es gibt im Projekt keine zweite solche Stelle
+   (der `feedback.confirm` in `budget/index.tsx:1673` liegt ausserhalb seines Modals).
 
-**Jede Codex-Delegation wird vorgeschlagen und erst nach ausdruecklicher Freigabe des Owners
-ausgefuehrt** - das gilt auch fuer read-only-Laeufe.
+2. **`chat_channels` ist tot.** Die Live-Tabelle hat **null Zeilen** und ausser einer
+   SELECT-Policy **gar keine** Policy - also auch keine fuer INSERT. Kein Kanal ist je in der DB
+   gelandet; jeder sichtbare Kanal ist ein lokaler AsyncStorage-Kanal mit Zeitstempel-ID.
+   Die in `CLAUDE.md` beschriebene Zusage „mit Event werden Kanaele in `chat_channels`
+   persistiert" trifft nicht zu. Der DB-Zweig in `useDeleteChannel` ist korrekt verdrahtet, aber
+   unerreichbar. **Offen, owner-freigabepflichtig** (Migration): entweder INSERT/DELETE-Policies
+   nachziehen und die Persistenz wirklich in Betrieb nehmen, oder den DB-Zweig als tot markieren.
 
-**Gates pro Gruppe, ohne Ausnahme:** `npm run typecheck`, `npm run lint`, `npx vitest run`,
-plus `deno check` fuer angefasste Edge Functions. Claude fuehrt nach Codex die billigste
-verlaessliche Pruefung selbst erneut aus, bevor etwas als fertig gemeldet wird.
+### D - Login. Behoben.
 
-### Empfohlene Reihenfolge
+- `src/components/ui/Input.tsx`: der Container fokussiert jetzt selbst; ein rechtes Icon **ohne**
+  eigene Aktion fokussiert ebenfalls und traegt kein `pressStyle` mehr. Letzteres war noetig,
+  weil ein Tamagui-`XStack` mit `pressStyle` Beruehrungen auch bei `onPress={undefined}` abfaengt -
+  die im Projekt bereits dokumentierte Falle. Ein rechtes Icon **mit** Aktion stoppt die
+  Weitergabe und fokussiert nicht zusaetzlich.
+- `app/(auth)/login.tsx` nutzt `Input.tsx` gar nicht, sondern rohe `TextInput`. Dort ist jetzt
+  der gesamte `inputContainer` ein `Pressable`, nicht nur die Symbole.
+- Fuer den Knopf ueber der Tastatur wurde das bestehende Mittel aus Commit `685fa537a`
+  uebernommen (`profile/edit.tsx`, `profile/email.tsx`): Feld-`onLayout` + `scrollTo` beim Fokus,
+  plus angehefteter Footer. Die `88` aus `edit.tsx` gehoeren zur Tab-Leiste und wurden bewusst
+  **nicht** uebernommen; Login hat keine.
 
-**C vor D vor B vor F vor E vor G.** Begruendung: C enthaelt eine womoeglich tote Funktion
-(schlimmster Zustand), D trifft jeden Nutzer beim Einstieg, B ist eine sichtbare Regression,
-F/E/G sind Feinschliff. G steht zuletzt, weil dort erst geklaert werden muss, was ueberhaupt
-beeinflussbar ist.
+### B - Paketbilder. Behoben, und die Meldung war zu klein gefasst.
 
-### C - Kanal loeschen
+Die Annahme „die Datenquelle stimmt, nur die Auswahlliste greift daneben" war falsch. **Beide**
+Bildschirme rieten:
 
-**Zuerst die Frage, ob der Knopf ueberhaupt verdrahtet ist.** Mehrfaches Druecken blieb ohne
-Wirkung. Ein schoenes Dialogfenster fuer eine Funktion, die nichts tut, waere verschwendete
-Arbeit - deshalb diese Reihenfolge.
+- Schritt 4 nahm eine Konstante: `getPackageImage('berlin', 'essential')` fuer jede Karte -
+  falsch in Stadt *und* Stufe. Der Fallback griff immer, weil `hero_image_url` in der Live-DB
+  bei **allen neun** Paketen `null` ist.
+- Die Bestaetigung zerlegte `packageId` als Slug `"<stadt>-<stufe>"`. DB-Pakete haben aber UUIDs,
+  der Zweig griff **nie**, und der Fallback nahm still immer `classic`. Essential und Grand
+  zeigten also seit jeher das Classic-Bild - unbemerkt, weil ein Classic-Bild plausibel aussieht.
 
-- **Schritt 1, luna read-only:** „Wo wird in `app/(tabs)/chat/[channelId].tsx` das Loeschen eines
-  Kanals ausgeloest, welche Repository- oder Hook-Funktion haengt daran, und existiert eine
-  RLS-Policy fuer DELETE auf `chat_channels`?" Antwort als Zusammenfassung, keine Dateiinhalte.
-- **Schritt 2, Claude:** Befund bewerten. Fehlt eine DELETE-Policy, ist das eine Migration und
-  damit **owner-freigabepflichtig**. Achtung `chat_channels`: laut CLAUDE.md liegen Kanaele ohne
-  Event nur im Komponentenstate - fuer die gibt es nichts zu loeschen.
-- **Schritt 3, Claude:** das bildschirmfuellende Sheet auf das bestehende Toast-/ConfirmSheet-
-  Muster ziehen. Taste-Arbeit, bleibt hier.
-- **Abnahme:** Kanal verschwindet wirklich (DB pruefen, nicht nur die Liste), Bestaetigung sieht
-  aus wie die uebrigen Meldungen der App.
+Neu: `resolvePackageImage()` in `src/constants/packageImages.ts` als einzige Aufloesung fuer
+beide Bildschirme. Reihenfolge: gesetztes `hero_image_url` → Stadt+Stufe aus den Paketfeldern
+(`city_id` ueber `CITY_UUID_TO_SLUG`) → Slug-ID der Fallback-Pakete → benannter Endfallback.
+Die Bestaetigung holt Stufe und Stadt ueber `usePackage(packageId)`; es wurden **keine** neuen
+URL-Parameter durch die Buchungsstrecke gefaedelt. 4 neue Tests. Nebenbei entfernt: die zweite
+Kopie von `CITY_UUID_TO_SLUG` in `packages.tsx`, jetzt Import aus `citySlugMap.ts`.
 
-### D - Login
+### F1 - „Vom Gast angepasst". Teilweise umgesetzt, mit Befund.
 
-Verdacht steht schon fest, das spart die Diagnose: der Icon-Wrapper in `Input` schluckt
-Beruehrungen, wenn kein `onRightIconPress` gesetzt ist - dasselbe Muster wie frueher.
+Die Zeile benennt jetzt die geaenderten Felder („Vom Gast angepasst: Name und Telefon",
+EN/DE gepflegt, `numberOfLines={2}`). Wiederverwendet wurden die vorhandenen Schluessel
+`notifications.field{Name,Email,Phone}`; neu ist nur `manageInvitations.guestAdjustedAnd`.
 
-- **terra**, klar beschreibbar: (1) gesamte Feldflaeche inklusive beider Symbole fokussiert das
-  Eingabefeld; (2) der „Anmelden"-Knopf bleibt ueber der Tastatur sichtbar.
-- Fuer (2) gibt es im Projekt bereits eine Loesung im Profil-Bereich (Commit `685fa537a`,
-  „Eingabefelder ueber der Tastatur") - **erst dort nachsehen und dasselbe Mittel verwenden**,
-  statt ein zweites Muster einzufuehren.
-- **Abnahme:** ein Tap genuegt, an jeder Stelle des Feldes; Knopf bei offener Tastatur sichtbar.
+**Die E-Mail liess sich nicht ergaenzen, und der Grund ist ein eigener Fehler:** die Einladungen
+werden in `app/event/[id]/participants.tsx:206` ueber `guest_email` indiziert und ueber die
+*aktuelle* Adresse des Teilnehmers nachgeschlagen. Wer sich mit einer anderen Adresse
+registriert, findet seine Einladung damit ueberhaupt nicht mehr - der Fall ist nicht nur
+unbeschriftet, er ist unsichtbar. Eine stabile Zuordnung (etwa ueber `claimed_by`) fehlt.
+Nicht auf Verdacht gebaut. **Offen.**
 
-### B - Paketbilder
+### E - E-Mail aendern. Behoben.
 
-Alle drei Pakete in Schritt 4 zeigen dasselbe Bild, die Buchungsbestaetigung danach das richtige.
-Die Datenquelle stimmt also - die Auswahlliste greift auf einen falschen Index oder ein Fallback.
+Der rote Overlay war **kein** fehlender Toast. Die deutsche 6-Sekunden-Meldung wurde die ganze
+Zeit korrekt erzeugt; sie lag nur unter der LogBox, die `console.error` im `catch` aufmacht
+(`email.tsx:166`). Ersetzt durch `console.log` - die Diagnose bleibt im Protokoll, die LogBox
+bleibt zu. Dieselbe Stelle lag in `profile/edit.tsx:210` und `profile/security.tsx:77` und wurde
+mitgenommen; die uebrigen ~36 `console.error` im Projekt sind bewusst unangetastet.
 
-- **luna read-only:** „Woher bezieht die Paketliste in Schritt 4 ihr Hintergrundbild, und
-  unterscheidet sich das von der Quelle auf dem Bestaetigungsbildschirm?" Kandidaten sind
-  `hero_image_url` aus `packages` und die Fallback-Maps.
-- **terra** fuer die Korrektur, sobald die Quelle benannt ist.
-- **Abnahme:** drei verschiedene Bilder, und zwar dieselben, die spaeter in der Bestaetigung
-  erscheinen.
+Die tote Flaeche: der Knopf sass in einem am unteren Rand angehefteten Footer, das Formular ist
+kurz. Er steht jetzt direkt unter dem Passwortfeld im Scrollfluss.
+**Zielkonflikt, bewusst zugunsten der Owner-Vorgabe entschieden:** der geloeschte Kommentar in
+`email.tsx:51` hielt fest, dass der Footer genau deshalb angeheftet war, weil der Knopf bei
+offener Tastatur sonst unerreichbar war. Sichtbar bleibt er jetzt ueber `scrollPasswordIntoView`
+plus `paddingBottom: 160` bei offener Tastatur. **Am Geraet gezielt nachpruefen.** Damit tragen
+Login (angeheftet) und E-Mail-Aendern (im Fluss) jetzt zwei verschiedene Muster - das ist die
+Folge zweier gegenlaeufiger Meldungen zum selben Bauteil und sollte einmal vereinheitlicht werden.
 
-### F - Benachrichtigungen
+### G - Boot und Splash. Code erledigt, Asset offen.
 
-Zwei unabhaengige Punkte, nicht vermischen.
+Die graue Zeile war eine gewoehnliche `<Text>`-Komponente (`BrandDomain` in `AnimatedLogo.tsx`),
+kein natives Asset - **kein `prebuild` noetig.** `BrandDomain` ist entfernt, ebenso beide
+Aufrufstellen (`app/_layout.tsx:201` Boot-Screen, `app/(auth)/intro.tsx:167` Aufbau); die
+`color`-Prop von `BrandLockup` ist damit entfallen.
 
-- **F1, terra + `gameover-i18n`-Skill:** „Vom Gast angepasst" soll benennen, *was* geaendert
-  wurde (Name / E-Mail / Telefon, einzeln oder kombiniert), Umbruch auf zwei Zeilen.
-  Einstieg: `src/i18n/{en,de}.ts` → `manageInvitations.guestAdjusted`,
-  `app/event/[id]/participants.tsx:768`. **EN/DE-Paritaet ist Pflicht**, der Test
-  `__tests__/i18n/parity.test.ts` faellt sonst.
-- **F2, Claude:** der „Betriebshinweis - geplanter Aufruf HTTP 500" darf beim Organisator nicht
-  ankommen. Beruehrt Benachrichtigungstypen und damit die Live-DB. **Vorher die Tabelle
-  abfragen**, nicht nur den Code lesen: es gibt hier die dokumentierte Falle, dass ein aus dem
-  Code entfernter Typ-String in alten Zeilen weiterlebt und still in den `default`-Zweig faellt.
+**Was Code nicht loesen kann:** `assets/splash.png` traegt die Domain **im Bild** - der native
+Splash zeigt Ring plus „Game-Over.app" in Gold, und das ist dort der einzige Text (eine
+Wortmarke „Game Over" enthaelt das PNG nicht). Zwei Folgen, beide Owner-Entscheidung:
+1. Die Markenregel vom 03.08. erlaubt die Domain im Logo-Lockup von **Splash und Boot**
+   ausdruecklich. G widerspricht dem fuer den Boot-Screen. Umgesetzt wurde G.
+2. Dadurch entsteht wieder eine Stufe im Uebergang: Splash **mit** Domain → Boot **ohne** →
+   Aufbau **ohne**. Genau diese Stufe wollte Commit `685fa537a` beseitigen. Wer sie schliessen
+   will, muss `splash.png` neu zeichnen (und dann per `expo prebuild` verifizieren, **nie** per
+   `expo export`).
+   Nebenbefund: das PNG schreibt „Game-Over.app" mit Bindestrich und Grossbuchstaben, die Regel
+   sagt `game-over.app`.
 
-### E - E-Mail aendern
+**Der Screenshot „Downloading 86.10 %" ist nicht beeinflussbar.** Das ist der Ladebildschirm des
+Expo-Dev-Clients; den Text kontrolliert Expo, und im Store-Build existiert der Bildschirm nicht.
 
-- **terra:** roter Console-Error-Overlay raus, stattdessen ein deutscher Toast (6 s) ueber der
-  Tab-Leiste - das Muster existiert bereits, nicht neu erfinden. Die grosse tote Flaeche zwischen
-  Passwortfeld und Knopf entfaellt, die Felder ruecken direkt ueber „Bestaetigungslink senden".
-- **Abnahme:** Wechsel auf eine vergebene Adresse zeigt einen deutschen Toast, keinen Dialog in
-  der Bildschirmmitte.
+### F2 - Betriebshinweis beim Organisator. Diagnose fertig, Entscheidung offen.
 
-### G - Boot und Splash
+Der Mechanismus arbeitet wie entworfen; die Kollision ist eine Personen-, keine Codefrage.
+Belege aus der Live-DB:
 
-- **Claude zuerst, kurz:** klaeren, was ueberhaupt beeinflussbar ist. Der Screenshot mit
-  „Downloading 86.10 %" zeigt den Ladebildschirm des **Expo-Dev-Clients**; diesen Text
-  kontrolliert Expo, und im Store-Build existiert der Bildschirm gar nicht. Erst danach eine
-  Zusage machen.
-- **luna/terra:** die graue Zeile `game-over.app` unter dem Logoaufbau entfernen.
-- **Achtung:** Splash und Icon sind native Assets. Verifikation laeuft ueber `npx expo prebuild`,
-  **niemals** ueber `expo export` - siehe §5.1 der Change-Control. Ein gruener Export beweist
-  hier nichts.
+- `notifications` fuehrt zwei Zeilen vom Typ `ops_cron_health` (29.07. HTTP 500, 02.08. Timeout).
+- Empfaenger beider Zeilen ist `1e4b1cec-0202-4722-8fd0-d8781bc3737f` = `leonardino@web.de`.
+- `ops_alert_recipients` enthaelt **genau diese eine Zeile** und sonst nichts.
+- Der Client filtert ops-Meldungen bereits heraus (`src/repositories/notifications.ts:36,74`),
+  aber nur, solange `is_ops_alert_recipient()` false liefert. Fuer dieses Konto liefert es true.
 
-### Was in dieser Session offen blieb
+Das Owner-Konto traegt also beide Rollen: Betreiber und Organisator. Drei Wege, keiner ohne
+Nebenwirkung - **deshalb nicht eigenmaechtig entschieden**:
+1. Zeile aus `ops_alert_recipients` loeschen. Dann haben die Alarme nirgendwo hin; die Migration
+   `20260728120859` warnt genau davor. Die Ueberwachung waere still.
+2. Ops-Meldungen nie mehr in der App zeigen (den `includeOpsAlerts`-Zweig entfernen). Gleiche
+   Folge: der Watchdog haette keinen Kanal mehr.
+3. Ein eigenes Betreiber-Konto (oder eine Ops-Mailadresse) als Empfaenger eintragen. Loest es
+   sauber, braucht aber ein zweites Konto. **Empfehlung.**
+Alle drei schreiben in die Live-DB und brauchen ohnehin Freigabe.
+
+### Was sonst offen blieb
 
 - **Geraetetest steht weiterhin aus.** `xcode-select` zeigt nicht auf Xcode; das braucht das
   Passwort des Owners: `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`.
@@ -447,6 +453,14 @@ Zwei unabhaengige Punkte, nicht vermischen.
 - **`.claude/*` und `game-over-app/deno.lock`** sind unversioniert. War schon vor dem 03.08. so,
   bewusst nicht mitcommittet - `security-patterns.yaml` und `claude-security-guidance.md` sind
   laut Change-Control bindende Vertraege und gehoeren eigentlich ins Repo. Eigene Entscheidung.
+- **Worktrees haben kein `node_modules`.** Damit die Gates dort laufen, genuegt ein Symlink auf
+  das Haupt-Checkout: `ln -s <haupt>/game-over-app/node_modules node_modules` im Worktree-App-
+  Verzeichnis. `tsc`, `eslint` und `vitest` brauchen nur die Modulaufloesung. Fuer
+  `expo run:ios` reicht das **nicht**.
+- **Codex-Laeufe ueberschreiten das 10-Minuten-Limit der Shell.** Im Hintergrund starten
+  (`nohup … &`) und auf die Report-Datei pollen, sonst killt SIGTERM den Lauf mitten im Test.
+  Zwei *schreibende* Laeufe duerfen nie gleichzeitig auf demselben Worktree arbeiten; ein
+  read-only-Lauf parallel dazu ist unbedenklich.
 
 ## Testdaten (Stand 31.07.)
 
@@ -484,6 +498,20 @@ Vom 03.08. kommt hinzu:
   Fassung ungetestet. **Gezielt prüfen:** überlebt die Supabase-Session einen App-Neustart, und
   bleibt ein Wizard-Entwurf erhalten? Beides läuft über MMKV.
 - **Favicon mit Diamant** - nur im Web-Build sichtbar.
+
+Vom 03.08. (Pakete B bis G) kommt hinzu - alles ungesehen:
+
+- **Kanal loeschen** muss beim *ersten* Druck wirken, und das Bestaetigungs-Sheet muss sichtbar
+  sein. Danach pruefen, ob der Kanal wirklich weg ist (er liegt in AsyncStorage, nicht in der DB).
+- **Login:** ein Tap an jeder Stelle des Feldes, auch auf Briefumschlag und Schloss; Auge-Symbol
+  schaltet weiterhin nur um. „Anmelden" bei offener Tastatur sichtbar.
+- **Paketauswahl Schritt 4:** drei verschiedene Bilder, passend zur gewaehlten Stadt. Danach in
+  der Bestaetigung dasselbe Bild - besonders bei Essential und Grand, die vorher beide das
+  Classic-Bild zeigten.
+- **E-Mail aendern:** vergebene Adresse → deutscher Toast, **kein** roter Overlay. Und der
+  heikle Punkt: sitzt der Knopf bei offener Tastatur noch im sichtbaren Bereich, nachdem er aus
+  dem angehefteten Footer in den Scrollfluss gewandert ist?
+- **Boot und Intro** ohne graue Domainzeile - der native Splash traegt sie weiterhin im Bild.
 
 `xcode-select` zeigt nicht auf Xcode, der Simulator ist blockiert. Braucht das Passwort des Users:
 `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`

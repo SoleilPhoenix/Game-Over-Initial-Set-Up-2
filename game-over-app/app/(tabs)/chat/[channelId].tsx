@@ -114,6 +114,10 @@ export default function ChatChannelScreen() {
 
   const handleDeleteChannel = async () => {
     const tr = getTranslation();
+    // Close the info sheet BEFORE asking. It is a native <Modal>, i.e. its own window
+    // above the whole React tree — the global ConfirmSheet renders in the root layout
+    // and would sit invisibly underneath it, leaving this await unresolved forever.
+    setInfoModalVisible(false);
     const confirmed = await feedback.confirm({
       title: (tr.chat as any).channelDeleteTitle,
       message: (tr.chat as any).channelDeleteMsg.replace('{{name}}', channelDisplayName),
@@ -122,7 +126,6 @@ export default function ChatChannelScreen() {
       destructive: true,
     });
     if (!confirmed) return;
-    setInfoModalVisible(false);
     if (!isDbChannel) {
       // Local channel — remove messages AND channel entry from AsyncStorage
       // Await all storage operations before navigating to avoid race condition
