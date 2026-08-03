@@ -68,22 +68,44 @@ function ctaButton(text: string, url: string): string {
 </table>`;
 }
 
-function supportLine(): string {
+const FOOTER_COPY = {
+  de: {
+    support: 'Fragen? Schreib uns an',
+    privacy: 'Datenschutz',
+    terms: 'AGB',
+    imprint: 'Impressum',
+  },
+  en: {
+    support: 'If you have any questions, contact us at',
+    privacy: 'Privacy',
+    terms: 'Terms',
+    imprint: 'Imprint',
+  },
+} as const;
+
+function supportLine(language: 'de' | 'en' = 'en'): string {
   return `<p style="margin:0;color:${MUTED};font-size:13px;line-height:1.5;text-align:center;">
-  If you have any questions, contact us at support@game-over.app
+  ${FOOTER_COPY[language].support} <a href="mailto:support@game-over.app" style="color:${MUTED};">support@game-over.app</a>
 </p>`;
 }
 
-function standardFooter(): string {
+/**
+ * Fusszeile ohne Werbeclaim. Die frueheren Zeile "Game Over - Plan unforgettable
+ * parties" war ein alter, englischer Claim und wurde am 03.08. auf Owner-Wunsch
+ * entfernt; die Wortmarke steht ohnehin schon in der Kopfzeile. Hier bleibt nur
+ * die Domain als Absenderkennung und die drei Pflichtlinks.
+ */
+function standardFooter(language: 'de' | 'en' = 'en'): string {
+  const c = FOOTER_COPY[language];
   return `          <p style="margin:24px 0 8px;color:${MUTED};font-size:12px;line-height:1.6;border-top:1px solid ${BORDER};padding-top:20px;">
-            Game Over &mdash; Plan unforgettable parties
+            game-over.app
           </p>
           <p style="margin:0;color:${FAINT};font-size:11px;">
-            <a href="https://game-over.app/privacy" style="color:${FAINT};text-decoration:underline;">Privacy</a>
+            <a href="https://game-over.app/privacy" style="color:${FAINT};text-decoration:underline;">${c.privacy}</a>
             &nbsp;&middot;&nbsp;
-            <a href="https://game-over.app/terms" style="color:${FAINT};text-decoration:underline;">Terms</a>
+            <a href="https://game-over.app/terms" style="color:${FAINT};text-decoration:underline;">${c.terms}</a>
             &nbsp;&middot;&nbsp;
-            <a href="https://game-over.app/impressum" style="color:${FAINT};text-decoration:underline;">Impressum</a>
+            <a href="https://game-over.app/impressum" style="color:${FAINT};text-decoration:underline;">${c.imprint}</a>
           </p>`;
 }
 
@@ -181,17 +203,67 @@ interface BookingConfirmationParams {
   depositAmount: string;     // e.g. "€149.25"
   bookingReference: string;  // e.g. "GO-A3F8K2"
   eventUrl?: string;
+  language?: 'de' | 'en';
+  /** Bei 'full' heisst der Betrag "Gesamt bezahlt", nicht "Anzahlung". */
+  paymentKind?: 'deposit' | 'full';
+}
+
+const BOOKING_CONFIRMATION_COPY = {
+  de: {
+    subject: 'Buchung bestätigt',
+    headerSubtitle: 'Buchung bestätigt',
+    greeting: (name?: string) => (name ? `Hallo ${name},` : 'Hallo,'),
+    lead: (honoree: string, title: string) =>
+      `Deine Buchung für <strong style="color:#FFFFFF;">${honoree}s ${title}</strong> ist bestätigt.`,
+    reference: 'Buchungsreferenz',
+    packageLabel: 'Paket',
+    city: 'Stadt',
+    participants: 'Teilnehmer',
+    peopleSuffix: 'Personen',
+    eventDate: 'Datum',
+    total: 'Gesamt',
+    deposit: 'Anzahlung bezahlt',
+    fullyPaid: 'Gesamt bezahlt',
+    cta: 'Event ansehen',
+  },
+  en: {
+    subject: 'Booking Confirmed',
+    headerSubtitle: 'Booking Confirmed',
+    greeting: (name?: string) => (name ? `Hi ${name},` : 'Hi there,'),
+    lead: (honoree: string, title: string) =>
+      `Your booking for <strong style="color:#FFFFFF;">${honoree}'s ${title}</strong> has been confirmed!`,
+    reference: 'Booking Reference',
+    packageLabel: 'Package',
+    city: 'City',
+    participants: 'Participants',
+    peopleSuffix: 'people',
+    eventDate: 'Event Date',
+    total: 'Total',
+    deposit: 'Deposit Paid',
+    fullyPaid: 'Total Paid',
+    cta: 'View Your Event',
+  },
+} as const;
+
+/** Betreffzeile der Buchungsbestaetigung. Wortmarke ohne Bindestrich, Domain nur in Links. */
+export function buildBookingConfirmationSubject(
+  language: 'de' | 'en',
+  partyLabel: string,
+): string {
+  return `${BOOKING_CONFIRMATION_COPY[language].subject} - ${partyLabel} | Game Over`;
 }
 
 export function getBookingConfirmationEmailHtml(params: BookingConfirmationParams): string {
   const {
     userName, honoreeName, eventTitle, packageName, city,
     eventDate, participants, totalAmount, depositAmount,
-    bookingReference, eventUrl,
+    bookingReference, eventUrl, language = 'en', paymentKind = 'deposit',
   } = params;
 
-  const greeting = userName ? `Hi ${userName},` : 'Hi there,';
+  const c = BOOKING_CONFIRMATION_COPY[language];
+  const greeting = c.greeting(userName);
   const viewUrl = eventUrl ?? 'https://game-over.app';
+  const paidLabel = paymentKind === 'full' ? c.fullyPaid : c.deposit;
 
   const bodyHtml = `
     <p style="margin:0 0 16px;color:#FFFFFF;font-size:16px;line-height:1.5;">
@@ -199,14 +271,14 @@ export function getBookingConfirmationEmailHtml(params: BookingConfirmationParam
     </p>
 
     <p style="margin:0 0 24px;color:${TEXT};font-size:15px;line-height:1.6;">
-      Your booking for <strong style="color:#FFFFFF;">${honoreeName}'s ${eventTitle}</strong> has been confirmed!
+      ${c.lead(honoreeName, eventTitle)}
     </p>
 
     <!-- Booking Reference -->
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
       <tr>
         <td style="background:${NAVY};border:1px solid ${BORDER};border-radius:12px;padding:24px;text-align:center;">
-          <p style="margin:0 0 4px;color:${MUTED};font-size:13px;text-transform:uppercase;letter-spacing:1px;">Booking Reference</p>
+          <p style="margin:0 0 4px;color:${MUTED};font-size:13px;text-transform:uppercase;letter-spacing:1px;">${c.reference}</p>
           <p style="margin:0;color:${GOLD};font-size:28px;font-weight:700;letter-spacing:2px;">${bookingReference}</p>
         </td>
       </tr>
@@ -219,7 +291,7 @@ export function getBookingConfirmationEmailHtml(params: BookingConfirmationParam
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             <tr>
               <td style="padding-bottom:16px;border-bottom:1px solid ${BORDER};">
-                <p style="margin:0;color:${MUTED};font-size:12px;text-transform:uppercase;letter-spacing:1px;">Package</p>
+                <p style="margin:0;color:${MUTED};font-size:12px;text-transform:uppercase;letter-spacing:1px;">${c.packageLabel}</p>
                 <p style="margin:4px 0 0;color:#FFFFFF;font-size:15px;font-weight:600;">${packageName}</p>
               </td>
             </tr>
@@ -228,12 +300,12 @@ export function getBookingConfirmationEmailHtml(params: BookingConfirmationParam
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
                     <td width="50%">
-                      <p style="margin:0;color:${MUTED};font-size:12px;text-transform:uppercase;letter-spacing:1px;">City</p>
+                      <p style="margin:0;color:${MUTED};font-size:12px;text-transform:uppercase;letter-spacing:1px;">${c.city}</p>
                       <p style="margin:4px 0 0;color:#FFFFFF;font-size:15px;">${city}</p>
                     </td>
                     <td width="50%">
-                      <p style="margin:0;color:${MUTED};font-size:12px;text-transform:uppercase;letter-spacing:1px;">Participants</p>
-                      <p style="margin:4px 0 0;color:#FFFFFF;font-size:15px;">${participants} people</p>
+                      <p style="margin:0;color:${MUTED};font-size:12px;text-transform:uppercase;letter-spacing:1px;">${c.participants}</p>
+                      <p style="margin:4px 0 0;color:#FFFFFF;font-size:15px;">${participants} ${c.peopleSuffix}</p>
                     </td>
                   </tr>
                 </table>
@@ -242,7 +314,7 @@ export function getBookingConfirmationEmailHtml(params: BookingConfirmationParam
             ${eventDate ? `
             <tr>
               <td style="padding:16px 0;border-bottom:1px solid ${BORDER};">
-                <p style="margin:0;color:${MUTED};font-size:12px;text-transform:uppercase;letter-spacing:1px;">Event Date</p>
+                <p style="margin:0;color:${MUTED};font-size:12px;text-transform:uppercase;letter-spacing:1px;">${c.eventDate}</p>
                 <p style="margin:4px 0 0;color:#FFFFFF;font-size:15px;">${eventDate}</p>
               </td>
             </tr>
@@ -252,11 +324,11 @@ export function getBookingConfirmationEmailHtml(params: BookingConfirmationParam
                 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
                   <tr>
                     <td width="50%">
-                      <p style="margin:0;color:${MUTED};font-size:12px;text-transform:uppercase;letter-spacing:1px;">Total</p>
+                      <p style="margin:0;color:${MUTED};font-size:12px;text-transform:uppercase;letter-spacing:1px;">${c.total}</p>
                       <p style="margin:4px 0 0;color:#FFFFFF;font-size:18px;font-weight:700;">${totalAmount}</p>
                     </td>
                     <td width="50%">
-                      <p style="margin:0;color:${MUTED};font-size:12px;text-transform:uppercase;letter-spacing:1px;">Deposit Paid</p>
+                      <p style="margin:0;color:${MUTED};font-size:12px;text-transform:uppercase;letter-spacing:1px;">${paidLabel}</p>
                       <p style="margin:4px 0 0;color:${GOLD};font-size:18px;font-weight:700;">${depositAmount}</p>
                     </td>
                   </tr>
@@ -268,13 +340,13 @@ export function getBookingConfirmationEmailHtml(params: BookingConfirmationParam
       </tr>
     </table>
 
-    ${ctaButton('View Your Event', viewUrl)}
-    ${supportLine()}`;
+    ${ctaButton(c.cta, viewUrl)}
+    ${supportLine(language)}`;
 
   return emailLayout({
-    lang: 'en',
-    title: 'Booking Confirmed - Game Over',
-    headerSubtitle: 'Booking Confirmed',
+    lang: language,
+    title: `${c.subject} - Game Over`,
+    headerSubtitle: c.headerSubtitle,
     bodyHtml: `
         <!-- Body -->
         <tr><td style="padding:40px;">
@@ -282,7 +354,7 @@ export function getBookingConfirmationEmailHtml(params: BookingConfirmationParam
         </td></tr>
 
 `,
-    footerHtml: standardFooter(),
+    footerHtml: standardFooter(language),
   });
 }
 

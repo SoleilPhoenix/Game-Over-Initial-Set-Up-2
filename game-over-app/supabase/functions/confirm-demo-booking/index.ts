@@ -13,6 +13,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { deriveDepositAmounts } from '../_shared/booking-payment.ts';
+import { sendBookingConfirmationEmail } from '../_shared/booking-confirmation.ts';
 
 type PaymentKind = 'deposit' | 'full';
 
@@ -153,5 +154,14 @@ serve(async (req: Request) => {
   }
 
   console.log(`[confirm-demo-booking] event=${eventId} booked by user=${user.id} payment=${paymentKind}`);
-  return json({ success: true, eventId, status: 'booked', paymentKind }, 200);
+
+  // Die Buchung ist zu diesem Zeitpunkt abgeschlossen. Der Mailversand darf sie
+  // nicht mehr gefaehrden, deshalb wirft der Helfer nicht und das Ergebnis
+  // fliesst nur informativ in die Antwort.
+  const confirmation = await sendBookingConfirmationEmail(supabase, booking.id, paymentKind);
+
+  return json(
+    { success: true, eventId, status: 'booked', paymentKind, confirmationEmailSent: confirmation.sent },
+    200,
+  );
 });
