@@ -291,9 +291,15 @@ ios/Pods/MMKVCore/Core/aes/AESCrypt.cpp:83:11: error: use of undeclared identifi
 bei jedem CI-Lauf die neueste Core-Fassung; irgendwann war das eine mit `memset_s`, und der Build
 brach, **ohne dass sich im Projekt etwas geaendert hatte**. Der Job war schon am 30.07. rot.
 
-Behoben durch **`react-native-mmkv` 4.3.2** plus **`react-native-nitro-modules` 0.36.5** als
+Angegangen mit **`react-native-mmkv` 4.3.2** plus **`react-native-nitro-modules` 0.36.5** als
 Peer. Dessen Podspec pinnt exakt auf `MMKVCore 2.4.0`; an der Quelle geprueft enthaelt dessen
-`AESCrypt.cpp` kein `memset_s`. Damit ist auch die Drift weg, nicht nur das Symptom.
+`AESCrypt.cpp` kein `memset_s`. Damit waere auch die Drift weg, nicht nur das Symptom.
+
+**Status der Verifikation:** `typecheck`, `lint` und 118 Tests sind gruen. Der **native
+iOS-Build war beim Schreiben dieser Zeilen noch nicht durch** - lokal nicht pruefbar, weil
+`xcode-select` nicht auf Xcode zeigt. Wer hier weiterarbeitet: **erst den CI-Lauf zu Commit
+`1a4e835ae` nachsehen**, bevor der Punkt als erledigt gilt. Schlaegt `Build iOS` weiter fehl,
+liegt es an etwas anderem als `memset_s` - dann den Log gezielt greppen, nicht das Ende lesen.
 
 **Wichtig fuer die Bewertung:** empfohlen war urspruenglich der kleinere Eingriff - ein
 Preprocessor-Define `__STDC_WANT_LIB_EXT1__=1` per Config-Plugin. Der Owner entschied sich fuer
@@ -326,6 +332,122 @@ Deployment-Targets. Immer `| grep -E "error:|The following build commands failed
 
 ---
 
+## Naechste Session - Pakete B bis G
+
+A und H sind erledigt und live. Was folgt, ist die Arbeitsvorbereitung fuer den Rest.
+
+### Arbeitsteilung
+
+Ziel ist, Claude-Token zu sparen, ohne Qualitaet zu verlieren. Die Trennlinie verlaeuft nicht
+nach Aufwand, sondern nach **Art der Arbeit**:
+
+| Art | Wer | Warum |
+|---|---|---|
+| Breites Suchen („wo wird X gesetzt") | `codex exec -s read-only -m gpt-5.6-luna` | Jede Datei, die Claude liest, bleibt im Kontext und wird bei **jedem** weiteren Zug erneut gesendet. Breites Lesen ist der groesste vermeidbare Posten. |
+| Klar beschriebene Umsetzung | `gpt-5.6-terra` | Bounded, spezifiziert, kein Ermessen noetig. |
+| Mehrdateiige oder kniffelige Umsetzung | `gpt-5.6-sol` | Frontier-Modell, aber ChatGPT-Kontingent - gezielt einsetzen. |
+| Diagnose, DB, Deploy, Urteilsfragen | **Claude** | Braucht den Gespraechskontext und die Live-DB. |
+| Gestaltung, Copy, Abnahme | **Claude** | Taste-lastig; genau hier ist das Modell am staerksten. |
+
+**Jede Codex-Delegation wird vorgeschlagen und erst nach ausdruecklicher Freigabe des Owners
+ausgefuehrt** - das gilt auch fuer read-only-Laeufe.
+
+**Gates pro Gruppe, ohne Ausnahme:** `npm run typecheck`, `npm run lint`, `npx vitest run`,
+plus `deno check` fuer angefasste Edge Functions. Claude fuehrt nach Codex die billigste
+verlaessliche Pruefung selbst erneut aus, bevor etwas als fertig gemeldet wird.
+
+### Empfohlene Reihenfolge
+
+**C vor D vor B vor F vor E vor G.** Begruendung: C enthaelt eine womoeglich tote Funktion
+(schlimmster Zustand), D trifft jeden Nutzer beim Einstieg, B ist eine sichtbare Regression,
+F/E/G sind Feinschliff. G steht zuletzt, weil dort erst geklaert werden muss, was ueberhaupt
+beeinflussbar ist.
+
+### C - Kanal loeschen
+
+**Zuerst die Frage, ob der Knopf ueberhaupt verdrahtet ist.** Mehrfaches Druecken blieb ohne
+Wirkung. Ein schoenes Dialogfenster fuer eine Funktion, die nichts tut, waere verschwendete
+Arbeit - deshalb diese Reihenfolge.
+
+- **Schritt 1, luna read-only:** „Wo wird in `app/(tabs)/chat/[channelId].tsx` das Loeschen eines
+  Kanals ausgeloest, welche Repository- oder Hook-Funktion haengt daran, und existiert eine
+  RLS-Policy fuer DELETE auf `chat_channels`?" Antwort als Zusammenfassung, keine Dateiinhalte.
+- **Schritt 2, Claude:** Befund bewerten. Fehlt eine DELETE-Policy, ist das eine Migration und
+  damit **owner-freigabepflichtig**. Achtung `chat_channels`: laut CLAUDE.md liegen Kanaele ohne
+  Event nur im Komponentenstate - fuer die gibt es nichts zu loeschen.
+- **Schritt 3, Claude:** das bildschirmfuellende Sheet auf das bestehende Toast-/ConfirmSheet-
+  Muster ziehen. Taste-Arbeit, bleibt hier.
+- **Abnahme:** Kanal verschwindet wirklich (DB pruefen, nicht nur die Liste), Bestaetigung sieht
+  aus wie die uebrigen Meldungen der App.
+
+### D - Login
+
+Verdacht steht schon fest, das spart die Diagnose: der Icon-Wrapper in `Input` schluckt
+Beruehrungen, wenn kein `onRightIconPress` gesetzt ist - dasselbe Muster wie frueher.
+
+- **terra**, klar beschreibbar: (1) gesamte Feldflaeche inklusive beider Symbole fokussiert das
+  Eingabefeld; (2) der „Anmelden"-Knopf bleibt ueber der Tastatur sichtbar.
+- Fuer (2) gibt es im Projekt bereits eine Loesung im Profil-Bereich (Commit `685fa537a`,
+  „Eingabefelder ueber der Tastatur") - **erst dort nachsehen und dasselbe Mittel verwenden**,
+  statt ein zweites Muster einzufuehren.
+- **Abnahme:** ein Tap genuegt, an jeder Stelle des Feldes; Knopf bei offener Tastatur sichtbar.
+
+### B - Paketbilder
+
+Alle drei Pakete in Schritt 4 zeigen dasselbe Bild, die Buchungsbestaetigung danach das richtige.
+Die Datenquelle stimmt also - die Auswahlliste greift auf einen falschen Index oder ein Fallback.
+
+- **luna read-only:** „Woher bezieht die Paketliste in Schritt 4 ihr Hintergrundbild, und
+  unterscheidet sich das von der Quelle auf dem Bestaetigungsbildschirm?" Kandidaten sind
+  `hero_image_url` aus `packages` und die Fallback-Maps.
+- **terra** fuer die Korrektur, sobald die Quelle benannt ist.
+- **Abnahme:** drei verschiedene Bilder, und zwar dieselben, die spaeter in der Bestaetigung
+  erscheinen.
+
+### F - Benachrichtigungen
+
+Zwei unabhaengige Punkte, nicht vermischen.
+
+- **F1, terra + `gameover-i18n`-Skill:** „Vom Gast angepasst" soll benennen, *was* geaendert
+  wurde (Name / E-Mail / Telefon, einzeln oder kombiniert), Umbruch auf zwei Zeilen.
+  Einstieg: `src/i18n/{en,de}.ts` → `manageInvitations.guestAdjusted`,
+  `app/event/[id]/participants.tsx:768`. **EN/DE-Paritaet ist Pflicht**, der Test
+  `__tests__/i18n/parity.test.ts` faellt sonst.
+- **F2, Claude:** der „Betriebshinweis - geplanter Aufruf HTTP 500" darf beim Organisator nicht
+  ankommen. Beruehrt Benachrichtigungstypen und damit die Live-DB. **Vorher die Tabelle
+  abfragen**, nicht nur den Code lesen: es gibt hier die dokumentierte Falle, dass ein aus dem
+  Code entfernter Typ-String in alten Zeilen weiterlebt und still in den `default`-Zweig faellt.
+
+### E - E-Mail aendern
+
+- **terra:** roter Console-Error-Overlay raus, stattdessen ein deutscher Toast (6 s) ueber der
+  Tab-Leiste - das Muster existiert bereits, nicht neu erfinden. Die grosse tote Flaeche zwischen
+  Passwortfeld und Knopf entfaellt, die Felder ruecken direkt ueber „Bestaetigungslink senden".
+- **Abnahme:** Wechsel auf eine vergebene Adresse zeigt einen deutschen Toast, keinen Dialog in
+  der Bildschirmmitte.
+
+### G - Boot und Splash
+
+- **Claude zuerst, kurz:** klaeren, was ueberhaupt beeinflussbar ist. Der Screenshot mit
+  „Downloading 86.10 %" zeigt den Ladebildschirm des **Expo-Dev-Clients**; diesen Text
+  kontrolliert Expo, und im Store-Build existiert der Bildschirm gar nicht. Erst danach eine
+  Zusage machen.
+- **luna/terra:** die graue Zeile `game-over.app` unter dem Logoaufbau entfernen.
+- **Achtung:** Splash und Icon sind native Assets. Verifikation laeuft ueber `npx expo prebuild`,
+  **niemals** ueber `expo export` - siehe §5.1 der Change-Control. Ein gruener Export beweist
+  hier nichts.
+
+### Was in dieser Session offen blieb
+
+- **Geraetetest steht weiterhin aus.** `xcode-select` zeigt nicht auf Xcode; das braucht das
+  Passwort des Owners: `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`.
+  Der gesamte Stand seit 30.07. ist am Geraet ungesehen, jetzt zusaetzlich der MMKV-Wechsel.
+- **`budget/index.tsx:1462`** zieht die Kopfzahl fuer die Zahlungs-URL weiter aus dem
+  AsyncStorage-Cache statt aus der Buchung; die `+1`-Semantik dort ist ungeklaert.
+- **`.claude/*` und `game-over-app/deno.lock`** sind unversioniert. War schon vor dem 03.08. so,
+  bewusst nicht mitcommittet - `security-patterns.yaml` und `claude-security-guidance.md` sind
+  laut Change-Control bindende Vertraege und gehoeren eigentlich ins Repo. Eigene Entscheidung.
+
 ## Testdaten (Stand 31.07.)
 
 Drei Events, alle `booked`:
@@ -346,9 +468,22 @@ Meilenstein steht - die Funktion storniert am Tag 6 automatisch.
 
 ## Zum Gerätetest offen
 
-Der gesamte Stand vom 30./31.07. ist auf `main`, aber **am Gerät ungesehen**:
+Der gesamte Stand seit dem 30.07. ist auf `main`, aber **am Gerät ungesehen**:
 Toasts über der Tab-Leiste (6/4/2 s), ConfirmSheet statt nativer Dialoge, Rückerstattungs-Maske,
 E-Mail-Fehlermeldungen auf Deutsch, Budget-Zahlen, Boot-Screen mit Wortmarke, Tastatur im Profil.
+
+Vom 03.08. kommt hinzu:
+
+- **Budget-Zahlen aus dem Buchungs-Kassenbuch.** Erwartung für Natalia: Gesamt 1.145 €,
+  bezahlt 286,25 €, offen 858,75 €. Sven's Buchung ist vollständig bezahlt und darf **keinen**
+  Restbetrag mehr fordern.
+- **Buchungsbestätigung per Mail.** Sie ging vorher auf keinem Weg raus. Bei einer Demo-Buchung
+  muss jetzt eine Mail ankommen, deutsch, mit Claim unter dem goldenen Knopf.
+- **MMKV 4.3.2.** Der heikelste Punkt: Nitro Modules laufen nicht in Expo Go. `storage.ts` fängt
+  das über `isExpoGo` und einen AsyncStorage-Rückfall ab, aber dieser Pfad ist mit der neuen
+  Fassung ungetestet. **Gezielt prüfen:** überlebt die Supabase-Session einen App-Neustart, und
+  bleibt ein Wizard-Entwurf erhalten? Beides läuft über MMKV.
+- **Favicon mit Diamant** - nur im Web-Build sichtbar.
 
 `xcode-select` zeigt nicht auf Xcode, der Simulator ist blockiert. Braucht das Passwort des Users:
 `sudo xcode-select -s /Applications/Xcode.app/Contents/Developer`
