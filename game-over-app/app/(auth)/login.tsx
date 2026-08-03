@@ -138,7 +138,7 @@ export default function LoginScreen() {
           ref={scrollRef}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: insets.top + 16, paddingBottom: 24 },
+            { paddingTop: insets.top + 16, paddingBottom: keyboardOpen ? 160 : insets.bottom },
           ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
@@ -262,6 +262,26 @@ export default function LoginScreen() {
                   )}
                 </View>
 
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.primaryButton,
+                    pressed && styles.primaryButtonPressed,
+                    isLoading && styles.primaryButtonDisabled,
+                  ]}
+                  onPress={handleSubmit(onSubmit)}
+                  disabled={isLoading}
+                  testID="login-submit-button"
+                >
+                  {isLoading ? (
+                    <Text style={styles.primaryButtonText}>{t.auth.signingIn}</Text>
+                  ) : (
+                    <>
+                      <Text style={styles.primaryButtonText}>{t.auth.logIn}</Text>
+                      <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+                    </>
+                  )}
+                </Pressable>
+
                 <Link href="/(auth)/forgot-password" asChild>
                   <Pressable style={styles.forgotPassword} testID="forgot-password-link">
                     <Text style={styles.forgotPasswordText}>{t.auth.forgotPassword}</Text>
@@ -282,27 +302,6 @@ export default function LoginScreen() {
             </Link>
           </View>
         </ScrollView>
-        <View style={[styles.submitFooter, { paddingBottom: keyboardOpen ? 12 : insets.bottom + 12 }]}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.primaryButton,
-              pressed && styles.primaryButtonPressed,
-              isLoading && styles.primaryButtonDisabled,
-            ]}
-            onPress={handleSubmit(onSubmit)}
-            disabled={isLoading}
-            testID="login-submit-button"
-          >
-            {isLoading ? (
-              <Text style={styles.primaryButtonText}>{t.auth.signingIn}</Text>
-            ) : (
-              <>
-                <Text style={styles.primaryButtonText}>{t.auth.logIn}</Text>
-                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-              </>
-            )}
-          </Pressable>
-        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -441,14 +440,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     paddingLeft: 8,
-  },
-  submitFooter: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 12,
-    backgroundColor: '#0D1B2A',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(230,220,200,0.15)',
   },
   forgotPassword: {
     alignSelf: 'flex-end',
