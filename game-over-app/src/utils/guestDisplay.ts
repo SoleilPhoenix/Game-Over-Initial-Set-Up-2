@@ -13,9 +13,11 @@
 export interface GuestDisplayInput {
   isRegistered: boolean;
   profileFullName: string | null;
+  profileEmail: string | null;
   profilePhone: string | null;
   inviteFirstName: string;
   inviteLastName: string;
+  inviteEmail: string;
   invitePhone: string;
 }
 
@@ -29,6 +31,7 @@ export interface GuestDisplay {
   phone: string;
   changedFromInvite: {
     name?: FieldChange;
+    email?: FieldChange;
     phone?: FieldChange;
   };
 }
@@ -55,6 +58,8 @@ export function resolveGuestDisplay(input: GuestDisplayInput): GuestDisplay {
 
   if (input.isRegistered) {
     const selfName = input.profileFullName?.trim() || '';
+    const selfEmail = input.profileEmail?.trim() || '';
+    const inviteEmail = input.inviteEmail.trim();
     const selfPhone = input.profilePhone?.trim() || '';
     const name = selfName || inviteName;
     const phone = selfPhone || input.invitePhone || '';
@@ -62,6 +67,10 @@ export function resolveGuestDisplay(input: GuestDisplayInput): GuestDisplay {
     // Name changed: organizer entered a name, guest registered with a different one.
     if (inviteName && selfName && selfName.toLowerCase() !== inviteName.toLowerCase()) {
       changedFromInvite.name = { from: inviteName, to: selfName };
+    }
+    // Email changed: organizer invited one address, guest registered with another one.
+    if (inviteEmail && selfEmail && selfEmail.toLowerCase() !== inviteEmail.toLowerCase()) {
+      changedFromInvite.email = { from: inviteEmail, to: selfEmail };
     }
     // Phone changed: organizer entered a phone, guest provided a different one.
     if (input.invitePhone && selfPhone &&

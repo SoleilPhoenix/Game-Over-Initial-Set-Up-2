@@ -276,6 +276,7 @@ export const invitesRepository = {
    */
   async getGuestsByEventId(eventId: string): Promise<{
     id: string;
+    claimed_by: string | null;
     guest_first_name: string | null;
     guest_last_name: string | null;
     guest_email: string | null;
@@ -284,7 +285,7 @@ export const invitesRepository = {
   }[]> {
     const { data, error } = await supabase
       .from('invite_codes')
-      .select('id, guest_first_name, guest_last_name, guest_email, guest_phone, declined_at')
+      .select('id, claimed_by, guest_first_name, guest_last_name, guest_email, guest_phone, declined_at')
       .eq('event_id', eventId);
 
     if (error) {

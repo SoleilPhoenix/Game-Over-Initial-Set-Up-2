@@ -31,7 +31,7 @@ import { GoldButton } from '@/components/ui/editorial';
 import type { ParticipantWithProfile } from '@/repositories';
 import { loadDesiredParticipants, loadBudgetInfo, loadGuestDetails, saveGuestDetails, setInvitedCount, type GuestDetail } from '@/lib/participantCountCache';
 import { resolveGuestDisplay } from '@/utils/guestDisplay';
-import { formatPreviousGuestValues, type GuestDataChange } from '@/utils/guestDataChange';
+import { formatPreviousGuestValues, joinList, type GuestDataChange } from '@/utils/guestDataChange';
 import { supabase } from '@/lib/supabase/client';
 import { feedback } from '@/stores/uiStore';
 
@@ -121,7 +121,11 @@ interface Slot {
   isExpanded: boolean;
   participant?: ParticipantWithProfile;
   // Fields a registered guest changed relative to the organizer's invite entry.
-  changed?: { name?: { from: string; to: string }; phone?: { from: string; to: string } };
+  changed?: {
+    name?: { from: string; to: string };
+    email?: { from: string; to: string };
+    phone?: { from: string; to: string };
+  };
 }
 
 export default function ManageInvitationsScreen() {
@@ -195,24 +199,34 @@ export default function ManageInvitationsScreen() {
   // (organizer-entered data is the source of truth)
   const { data: rawInviteGuests = [] } = useInviteGuests(id ?? null);
   const createInvite = useCreateInvite();
-  const invitesByEmail = useMemo(() => {
-    const map: Record<string, {
+  const { invitesByClaimedUserId, unclaimedInvitesByEmail } = useMemo(() => {
+    type InviteGuestData = {
+      email: string;
       phone: string;
       firstName: string;
       lastName: string;
       declinedAt: string | null;
-    }> = {};
+    };
+    const byClaimedUserId: Record<string, InviteGuestData> = {};
+    const unclaimedByEmail: Record<string, InviteGuestData> = {};
     for (const ic of rawInviteGuests) {
-      if (ic.guest_email) {
-        map[ic.guest_email.trim().toLowerCase()] = {
-          phone: ic.guest_phone || '',
-          firstName: ic.guest_first_name || '',
-          lastName: ic.guest_last_name || '',
-          declinedAt: ic.declined_at,
-        };
+      const inviteData = {
+        email: ic.guest_email || '',
+        phone: ic.guest_phone || '',
+        firstName: ic.guest_first_name || '',
+        lastName: ic.guest_last_name || '',
+        declinedAt: ic.declined_at,
+      };
+      if (ic.claimed_by) {
+        byClaimedUserId[ic.claimed_by] = inviteData;
+      } else if (ic.guest_email) {
+        unclaimedByEmail[ic.guest_email.trim().toLowerCase()] = inviteData;
       }
     }
-    return map;
+    return {
+      invitesByClaimedUserId: byClaimedUserId,
+      unclaimedInvitesByEmail: unclaimedByEmail,
+    };
   }, [rawInviteGuests]);
 
   // One event-scoped query supplies delivery history for every guest slot.
@@ -305,6 +319,14 @@ export default function ManageInvitationsScreen() {
     const dbGuestEmails = new Set<string>();
     const dbGuestPhones = new Set<string>();
 
+    const getInviteForParticipant = (participant: ParticipantWithProfile) => {
+      const emailKey = (participant.profile?.email || (participant as any)?.email || '')
+        .trim()
+        .toLowerCase();
+      return invitesByClaimedUserId[participant.user_id]
+        ?? (emailKey ? unclaimedInvitesByEmail[emailKey] : undefined);
+    };
+
     for (const dbGuest of guestParticipants) {
       const email = (dbGuest.profile?.email || (dbGuest as any)?.email || '')
         .trim()
@@ -312,7 +334,7 @@ export default function ManageInvitationsScreen() {
       if (email) dbGuestEmails.add(email);
 
       const profilePhone = ((dbGuest.profile as any)?.phone || '').trim();
-      const invitePhone = email ? invitesByEmail[email]?.phone || '' : '';
+      const invitePhone = getInviteForParticipant(dbGuest)?.phone || '';
       const phone = normalizePhoneKey(profilePhone || invitePhone);
       if (phone) dbGuestPhones.add(phone);
     }
@@ -323,7 +345,10 @@ export default function ManageInvitationsScreen() {
       participant?: ParticipantWithProfile,
     ): SlotStatus => {
       const emailKey = email.trim().toLowerCase();
-      if (emailKey && invitesByEmail[emailKey]?.declinedAt) return 'declined';
+      const inviteData = participant
+        ? getInviteForParticipant(participant)
+        : (emailKey ? unclaimedInvitesByEmail[emailKey] : undefined);
+      if (inviteData?.declinedAt) return 'declined';
       if (participant?.confirmed_at) return 'confirmed';
       if (participant?.user_id) return 'pending';
 
@@ -378,16 +403,18 @@ export default function ManageInvitationsScreen() {
         // profile data wins over the organizer-entered invite_codes data.
         const isCurrentUserGuest = dbGuest.user_id === user?.id;
         const guestEmail = dbGuest.profile?.email || (dbGuest as any)?.email || '';
-        const inviteData = invitesByEmail[guestEmail.trim().toLowerCase()];
+        const inviteData = getInviteForParticipant(dbGuest);
         const selfName = isCurrentUserGuest
           ? (ownProfile?.full_name || dbGuest.profile?.full_name || user?.user_metadata?.full_name || null)
           : (dbGuest.profile?.full_name || null);
         const display = resolveGuestDisplay({
           isRegistered: !!dbGuest.user_id,
           profileFullName: selfName,
+          profileEmail: guestEmail,
           profilePhone: (dbGuest.profile as any)?.phone ?? null,
           inviteFirstName: inviteData?.firstName || '',
           inviteLastName: inviteData?.lastName || '',
+          inviteEmail: inviteData?.email || '',
           invitePhone: inviteData?.phone || '',
         });
         result.push({
@@ -441,7 +468,7 @@ export default function ManageInvitationsScreen() {
     });
 
     return result;
-  }, [event, participants, user, guestDetails, expandedSlot, booking, cachedParticipants, cachedBudgetTotal, isGuest, invitesByEmail, ownProfile, guestInvitations]);
+  }, [event, participants, user, guestDetails, expandedSlot, booking, cachedParticipants, cachedBudgetTotal, isGuest, invitesByClaimedUserId, unclaimedInvitesByEmail, ownProfile, guestInvitations]);
 
   // Stats — "filled" = has email (contact info provided, not just a name)
   const filledCount = slots.filter(s => !!s.email).length;
@@ -760,20 +787,25 @@ export default function ManageInvitationsScreen() {
             )}
 
             {/* Guest adjusted their details vs the organizer's invite entry */}
-            {slot.changed && (slot.changed.name || slot.changed.phone) && (
+            {slot.changed && (slot.changed.name || slot.changed.email || slot.changed.phone) && (
               <XStack alignItems="flex-start" gap={6} marginTop={4}>
                 <Ionicons name="information-circle-outline" size={13} color={theme.accentGold} style={{ marginTop: 1 }} />
                 <YStack flex={1}>
                   <Text style={styles.adjustedHint} numberOfLines={2}>
-                    {t.manageInvitations.guestAdjusted}: {[
-                      slot.changed.name && t.notifications.fieldName,
-                      slot.changed.phone && t.notifications.fieldPhone,
-                    ].filter(Boolean).join(` ${t.manageInvitations.guestAdjustedAnd} `)}
+                    {t.manageInvitations.guestAdjusted}: {joinList(
+                      [
+                        slot.changed.name && t.notifications.fieldName,
+                        slot.changed.email && t.notifications.fieldEmail,
+                        slot.changed.phone && t.notifications.fieldPhone,
+                      ].filter(Boolean) as string[],
+                      t.manageInvitations.guestAdjustedAnd,
+                    )}
                   </Text>
-                  <Text style={styles.adjustedHint} numberOfLines={1}>
+                  <Text style={styles.adjustedHint} numberOfLines={2}>
                     {t.manageInvitations.guestBefore}: {formatPreviousGuestValues(
                       ([
                       slot.changed.name && { field: 'name', ...slot.changed.name },
+                      slot.changed.email && { field: 'email', ...slot.changed.email },
                       slot.changed.phone && { field: 'phone', ...slot.changed.phone },
                       ].filter(Boolean) as GuestDataChange[]),
                     )}

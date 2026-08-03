@@ -227,8 +227,8 @@ Erinnerung stimmt nicht. **Vor dem naechsten Test an Natalias Zahlen einmal klae
 jagt jemand wieder einen Rechenfehler, den es nicht gibt.
 
 **B bis G: umgesetzt am 03.08.**, Reihenfolge C-D-B-F-E-G wie geplant. Was dabei herauskam,
-steht weiter unten unter „Pakete B bis G - Ergebnis". Zwei Punkte blieben offen und brauchen
-eine Owner-Entscheidung: **F2** (Betriebshinweis) und **G/Splash** (Domain im PNG).
+steht weiter unten unter „Pakete B bis G - Ergebnis". Offen bleibt allein **F2**, und dort nur
+noch der Schritt, den der Owner selbst ausfuehrt (Betreiber-Konto anlegen).
 
 **H. Marke in allen Mails.** ~~Grossteil~~ **weitgehend erledigt am 03.08. - die Annahme des
 Auftrags war falsch.** Eine Bestandsaufnahme zeigte: die Mails setzen die neue Regel bereits
@@ -370,18 +370,33 @@ Die Bestaetigung holt Stufe und Stadt ueber `usePackage(packageId)`; es wurden *
 URL-Parameter durch die Buchungsstrecke gefaedelt. 4 neue Tests. Nebenbei entfernt: die zweite
 Kopie von `CITY_UUID_TO_SLUG` in `packages.tsx`, jetzt Import aus `citySlugMap.ts`.
 
-### F1 - „Vom Gast angepasst". Teilweise umgesetzt, mit Befund.
+### F1 - „Vom Gast angepasst". Vollstaendig geloest, ueber `claimed_by`.
 
-Die Zeile benennt jetzt die geaenderten Felder („Vom Gast angepasst: Name und Telefon",
-EN/DE gepflegt, `numberOfLines={2}`). Wiederverwendet wurden die vorhandenen Schluessel
-`notifications.field{Name,Email,Phone}`; neu ist nur `manageInvitations.guestAdjustedAnd`.
+Der erste Anlauf konnte die E-Mail nicht benennen und begruendete das damit, es fehle eine
+stabile Zuordnung Gast↔Einladung. **Das stimmte nicht.** `invite_codes.claimed_by` existiert und
+ist in der Live-DB bei allen vier angenommenen Einladungen gefuellt - der Client las die Spalte
+nur nirgends. Warum es niemandem auffiel: in den Testdaten hat noch nie jemand mit einer anderen
+Adresse angenommen als der eingeladenen.
 
-**Die E-Mail liess sich nicht ergaenzen, und der Grund ist ein eigener Fehler:** die Einladungen
-werden in `app/event/[id]/participants.tsx:206` ueber `guest_email` indiziert und ueber die
-*aktuelle* Adresse des Teilnehmers nachgeschlagen. Wer sich mit einer anderen Adresse
-registriert, findet seine Einladung damit ueberhaupt nicht mehr - der Fall ist nicht nur
-unbeschriftet, er ist unsichtbar. Eine stabile Zuordnung (etwa ueber `claimed_by`) fehlt.
-Nicht auf Verdacht gebaut. **Offen.**
+Die Zuordnung lief ueber die **E-Mail** (`invitesByEmail`, aufgebaut aus `guest_email`,
+nachgeschlagen mit der *aktuellen* Adresse des Teilnehmers). Wer sich mit einer anderen Adresse
+registrierte, verlor damit jeden Einladungsbezug - kein Namens-, kein Telefon- und
+selbstverstaendlich kein E-Mail-Abgleich. Der Fall war nicht unbeschriftet, er war unsichtbar.
+
+Jetzt: primaer `invite_codes.claimed_by === event_participants.user_id`, die E-Mail nur noch als
+Rueckfall fuer Einladungen **ohne** `claimed_by` (offene und Altbestand). `resolveGuestDisplay`
+vergleicht zusaetzlich die Einladungsadresse gegen die Kontoadresse, getrimmt und
+case-insensitiv - noetig, weil in den Echtdaten `Test-go4@action.ms` gegen `test-go4@action.ms`
+steht. Die „Vorher"-Zeile fuehrt jetzt alle drei Felder; der frueher dort stehende Ausschluss von
+E-Mail war nicht sachlich begruendet, denn die aktuellen Werte stehen bei **allen** dreien darueber.
+
+**Formulierung, mit Test festgehalten:** `joinList()` in `guestDataChange.ts` setzt „Name, E-Mail
+und Telefon" statt „Name und E-Mail und Telefon". Ein blosses `join(' und ')` liest sich bei drei
+Feldern in beiden Sprachen wie ein Fehler - und drei ist hier der Normalfall, weil ein Gast, der
+seine Angaben korrigiert, meist alle korrigiert.
+
+Im Datenbestand steckt uebrigens ein echter Fall: Code `5C2X5F6Y` wurde fuer „Svenja Schmidt"
+eingeladen, das Konto heisst „Susanne Lauch".
 
 ### E - E-Mail aendern. Behoben.
 
@@ -400,7 +415,7 @@ plus `paddingBottom: 160` bei offener Tastatur. **Am Geraet gezielt nachpruefen.
 Login (angeheftet) und E-Mail-Aendern (im Fluss) jetzt zwei verschiedene Muster - das ist die
 Folge zweier gegenlaeufiger Meldungen zum selben Bauteil und sollte einmal vereinheitlicht werden.
 
-### G - Boot und Splash. Erledigt. Es war eine Dublette.
+### G - Boot und Splash. Erledigt und abgeschlossen. Es war eine Dublette.
 
 Die graue Zeile war eine gewoehnliche `<Text>`-Komponente (`BrandDomain` in `AnimatedLogo.tsx`),
 kein natives Asset - **kein `prebuild` noetig.** `BrandDomain` ist entfernt, ebenso beide
@@ -418,15 +433,18 @@ Genau diese graue Dublette war die Meldung; sie ist weg, der Schriftzug der Graf
 dieselbe Grafik. Nach der Aenderung sind Splash, Boot und Aufbau-Endbild deckungsgleich - die
 Stufe, die Commit `685fa537a` beseitigen wollte, ist damit geschlossen, nicht aufgerissen.
 
-**Wer den Schriftzug doch aus der Marke nehmen will, muss zwei Folgen einkalkulieren:**
-1. Die Marke traegt dann **nirgends** mehr Text - weder auf dem Splash noch im Boot noch am
-   Ende des Aufbaus. Es bliebe der Ring mit dem Diamanten.
-2. Phase 4 des Vier-Sekunden-Aufbaus animiert genau diesen Schriftzug
+**Owner-Entscheidung 03.08.: der Schriftzug bleibt „Game-Over.app".** Damit ist das Thema
+abgeschlossen - an `logo.svg` und `assets/splash.png` ist **nichts** zu tun, und es braucht kein
+`prebuild`. Zu entfernen war nur die graue Dublette darunter, und die ist raus.
+
+Wer die Entscheidung spaeter doch aufmacht, muss zwei Folgen einkalkulieren:
+1. Der Schriftzug ist der einzige Text der Marke. Ohne ihn traegt sie **nirgends** mehr einen
+   Namen - weder auf dem Splash noch im Boot noch am Ende des Aufbaus.
+2. Phase 4 des Vier-Sekunden-Aufbaus animiert genau ihn
    (`WORD_BAND = { top: 745, bottom: 872 }` in `logoGeometry.ts`, plus die Lichtwanderung
-   darueber). Ohne ihn laeuft eine Sekunde Choreografie ins Leere und muss neu gedacht werden.
-Das ist ein Markenauftrag, keine Aufraeumarbeit. Nebenbefund fuer diesen Fall: die Grafik
-schreibt „Game-Over.app" mit Bindestrich und Grossbuchstaben, die Regel vom 03.08. sagt
-`game-over.app`.
+   darueber). Ohne ihn laeuft eine Sekunde Choreografie ins Leere.
+Der Text liegt als 35 ausgezeichnete Pfade vor, kein `<text>`-Element - eine Aenderung ist
+Vektorarbeit, keine Textersetzung.
 
 **Der Screenshot „Downloading 86.10 %" ist nicht beeinflussbar.** Das ist der Ladebildschirm des
 Expo-Dev-Clients; den Text kontrolliert Expo, und im Store-Build existiert der Bildschirm nicht.

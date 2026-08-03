@@ -62,13 +62,26 @@ export function formatGuestChanges(
 }
 
 /**
- * Compact participant-card summary. The current values already appear above
- * the note, so this intentionally includes only the previous name and phone.
+ * Joins a list the way a person writes one: "A", "A und B", "A, B und C".
+ * A plain `join(' und ')` produces "Name und E-Mail und Telefon", which reads
+ * as a mistake in both languages once there are three items — and three is the
+ * normal case here, since a guest who corrects their entry often corrects all
+ * of it. The conjunction is passed in because it is localized.
+ */
+export function joinList(items: string[], conjunction: string): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} ${conjunction} ${items[items.length - 1]}`;
+}
+
+/**
+ * Compact participant-card summary of every previous organizer-entered value
+ * whose corresponding registered-account value changed. Separated by "&" rather
+ * than a localized word: these are raw values, and a conjunction between an
+ * address and a phone number reads like part of the value itself.
  */
 export function formatPreviousGuestValues(changes: GuestDataChange[]): string {
-  return changes
-    .filter((change) => change.field === 'name' || change.field === 'phone')
-    .map((change) => change.from.trim())
-    .filter(Boolean)
-    .join(' & ');
+  return joinList(
+    changes.map((change) => change.from.trim()).filter(Boolean),
+    '&',
+  );
 }

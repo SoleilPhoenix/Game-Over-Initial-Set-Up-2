@@ -3,6 +3,7 @@ import {
   formatGuestChanges,
   formatPreviousGuestValues,
   isGuestDataChangedMeta,
+  joinList,
 } from '@/utils/guestDataChange';
 
 const labels = { name: 'Name', email: 'E-Mail', phone: 'Telefon' } as const;
@@ -28,14 +29,30 @@ describe('formatGuestChanges', () => {
 });
 
 describe('formatPreviousGuestValues', () => {
-  it('joins only previous name and phone values', () => {
+  it('joins previous name, email, and phone values', () => {
     expect(
       formatPreviousGuestValues([
         { field: 'name', from: 'Svenja Schmidt', to: 'Svenja Meier' },
         { field: 'email', from: 'old@example.com', to: 'new@example.com' },
         { field: 'phone', from: '0160-54864643', to: '0170-1234567' },
       ]),
-    ).toBe('Svenja Schmidt & 0160-54864643');
+    ).toBe('Svenja Schmidt, old@example.com & 0160-54864643');
+  });
+});
+
+describe('joinList', () => {
+  // Guards the wording: a plain join produces "Name und E-Mail und Telefon",
+  // which reads as a mistake — and three changed fields is the normal case,
+  // because a guest correcting their entry usually corrects all of it.
+  it('renders one, two and three items the way a person writes them', () => {
+    expect(joinList(['Name'], 'und')).toBe('Name');
+    expect(joinList(['Name', 'Telefon'], 'und')).toBe('Name und Telefon');
+    expect(joinList(['Name', 'E-Mail', 'Telefon'], 'und')).toBe('Name, E-Mail und Telefon');
+    expect(joinList(['Name', 'Email', 'Phone'], 'and')).toBe('Name, Email and Phone');
+  });
+
+  it('returns an empty string for an empty list', () => {
+    expect(joinList([], 'und')).toBe('');
   });
 });
 
