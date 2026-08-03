@@ -84,7 +84,7 @@ Do NOT add `planning_checklist` to DB schema — it does not exist in PostgREST 
 | Sentry source map upload blocks build | Set `SENTRY_DISABLE_AUTO_UPLOAD=true` in the EAS job env |
 | `react-native-crisp-chat-sdk` / `@crisp-chat` unresolved | Remove stale Crisp references from `ios/` native files and `app.config.ts` |
 | `libfbjni.so` duplicate | Add `packagingOptions.pickFirst` via `expo-build-properties` |
-| `MMKVCore/Core/aes/AESCrypt.cpp: error: use of undeclared identifier 'memset_s'` | Siehe unten - offen, braucht Owner-Freigabe |
+| `MMKVCore/Core/aes/AESCrypt.cpp: error: use of undeclared identifier 'memset_s'` | Behoben 03.08. durch `react-native-mmkv` 4.x - siehe unten |
 
 ```bash
 # To check current app.config.ts name
@@ -108,22 +108,30 @@ greppen:
 gh run view --job <job-id> --log-failed | grep -E "error:|The following build commands failed"
 ```
 
-**Ursache:** `memset_s` ist Teil von C11 Annex K und nur sichtbar, wenn `__STDC_WANT_LIB_EXT1__`
-vor `<string.h>` definiert ist. Aktuelle Apple-SDKs (hier iOS 26.5 unter Xcode 26.6) stellen es
-nicht mehr implizit bereit; die eingebundene MMKVCore-Fassung rechnet noch damit.
+**Ursache - und sie ist eine andere, als die Fehlermeldung nahelegt.** `memset_s` gehoert zu
+C11 Annex K und ist nur sichtbar, wenn `__STDC_WANT_LIB_EXT1__` vor `<string.h>` definiert ist.
+Der eigentliche Grund war aber **eine nicht gepinnte Abhaengigkeit**:
 
-**Status:** nicht behoben. Bestaetigt vorbestehend - derselbe Job scheiterte am 30.07. genauso,
-also unabhaengig von allem, was seither geaendert wurde. Kein Blocker fuer Code Quality, Build
-Android oder die Edge-Function-Deploys, die alle gruen sind.
+`react-native-mmkv` 2.12.2 deklarierte in seiner Podspec `s.dependency "MMKV", ">= 1.3.3"` -
+nach oben offen. CocoaPods zog damit bei jedem Lauf die jeweils neueste Core-Fassung. Irgendwann
+war das eine, die `memset_s` benutzt, und der Build brach - ohne dass sich im Projekt selbst
+etwas geaendert haette. Genau deshalb war der Fehler „ploetzlich" da.
 
-**Loesungswege, beide brauchen Owner-Freigabe (Abhaengigkeit bzw. native Buildkonfiguration):**
+**Behoben am 03.08.** durch `react-native-mmkv` 4.3.2 (plus `react-native-nitro-modules` als
+Peer). Dessen Podspec pinnt **exakt**: `s.dependency 'MMKVCore', '2.4.0'`. An der Quelle
+geprueft - `Core/aes/AESCrypt.cpp` in MMKVCore 2.4.0 enthaelt kein `memset_s`, nur normales
+`memset`.
 
-1. `react-native-mmkv` und damit den MMKVCore-Pod auf eine Fassung heben, die das behebt - der
-   saubere Weg, aber ein Dependency-Bump nach §2.8 der Change-Control.
-2. `__STDC_WANT_LIB_EXT1__=1` als Preprocessor-Define fuer den MMKVCore-Pod setzen. **Nicht** in
-   `ios/` editieren: der Ordner ist gitignored und wird von `expo prebuild` neu erzeugt. Der
-   Eingriff gehoert in ein Config-Plugin unter `plugins/` (Vorbild: `withBrandAndroidColors.js`)
-   oder in `expo-build-properties`.
+**Lehre:** ein Preprocessor-Define waere ebenfalls gegangen und war der zunaechst empfohlene,
+kleinere Eingriff. Er haette aber nur das Symptom kaschiert und die offene Versionsspanne stehen
+gelassen - der naechste Core-Sprung haette erneut zugeschlagen. Bei einem Fehler, der ohne eigene
+Aenderung auftaucht, lohnt der Blick in die Podspec auf **ungepinnte Abhaengigkeiten**, bevor man
+am Compiler dreht.
+
+Falls das Muster wiederkehrt und ein Bump gerade nicht geht: `__STDC_WANT_LIB_EXT1__=1` als
+Preprocessor-Define fuer den betroffenen Pod. **Nicht** in `ios/` editieren, der Ordner ist
+gitignored und wird von `expo prebuild` neu erzeugt - der Eingriff gehoert in ein Config-Plugin
+unter `plugins/` (Vorbild: `withBrandAndroidColors.js`).
 
 ---
 

@@ -278,28 +278,41 @@ angefasst: nicht nutzersichtbar.
 **Offen an H:** die Aenderung an `create-payment-intent` ist eine Edge Function. Ein Merge nach
 main loest `deploy-edge-functions.yml` aus und deployt live - **braucht Owner-Freigabe.**
 
-### Build iOS ist rot - vorbestehend, braucht Owner-Entscheidung
+### MMKV auf 4.3.2 - behebt den roten iOS-Build (03.08., Owner-Freigabe)
 
-`Build iOS` scheitert in CI mit `exit code 65`. Die Ursache steht weit oben im Log:
+`Build iOS` scheiterte mit `exit code 65`; die Ursache stand weit oben im Log:
 
 ```
 ios/Pods/MMKVCore/Core/aes/AESCrypt.cpp:83:11: error: use of undeclared identifier 'memset_s'
 ```
 
-`memset_s` ist C11 Annex K und nur sichtbar, wenn `__STDC_WANT_LIB_EXT1__` vor `<string.h>`
-definiert ist; Xcode 26.6 / iOS-SDK 26.5 stellen es nicht mehr implizit bereit, die eingebundene
-MMKVCore-Fassung rechnet noch damit.
+**Die Ursache war nicht der Compiler, sondern eine offene Versionsspanne.** `react-native-mmkv`
+2.12.2 deklarierte `s.dependency "MMKV", ">= 1.3.3"` - nach oben unbegrenzt. CocoaPods zog damit
+bei jedem CI-Lauf die neueste Core-Fassung; irgendwann war das eine mit `memset_s`, und der Build
+brach, **ohne dass sich im Projekt etwas geaendert hatte**. Der Job war schon am 30.07. rot.
 
-**Vorbestehend, nachgewiesen:** derselbe Job scheiterte am 30.07. genauso, vor allem, was seither
-geaendert wurde. `Code Quality`, `Build Android` und `Deploy Edge Functions` sind gruen.
+Behoben durch **`react-native-mmkv` 4.3.2** plus **`react-native-nitro-modules` 0.36.5** als
+Peer. Dessen Podspec pinnt exakt auf `MMKVCore 2.4.0`; an der Quelle geprueft enthaelt dessen
+`AESCrypt.cpp` kein `memset_s`. Damit ist auch die Drift weg, nicht nur das Symptom.
 
-Beide Loesungswege sind freigabepflichtig - Dependency-Bump von `react-native-mmkv`, oder
-`__STDC_WANT_LIB_EXT1__=1` als Preprocessor-Define ueber ein Config-Plugin unter `plugins/`
-(**nicht** in `ios/`, der Ordner ist gitignored und wird von `prebuild` neu erzeugt).
-Ausfuehrlich im Playbook `.claude/skills/gameover-ci-triage/SKILL.md`.
+**Wichtig fuer die Bewertung:** empfohlen war urspruenglich der kleinere Eingriff - ein
+Preprocessor-Define `__STDC_WANT_LIB_EXT1__=1` per Config-Plugin. Der Owner entschied sich fuer
+den Bump. Die anschliessende Pruefung gab ihm recht: das Define haette die ungepinnte
+Abhaengigkeit stehen gelassen, der naechste Core-Sprung haette erneut zugeschlagen.
 
-**Triage-Falle:** `--log-failed | tail` zeigt nur Warnungen zu Deployment-Targets. Immer
-`| grep -E "error:|The following build commands failed"`.
+**Migrationsaufwand war gering, weil die API gleich blieb.** `storage.ts` nutzt nur
+`new MMKV({id})`, `getString`, `set`, `delete` - alle unveraendert in 4.x. Die beiden Testmocks
+bilden genau diese Methoden ab und blieben gueltig. Expo SDK 54 hat die New Architecture
+ohnehin standardmaessig an, die 3.x+ voraussetzt.
+
+**Noch ungesehen:** MMKV 4 laeuft auf Nitro Modules und damit definitiv nicht in Expo Go.
+`storage.ts` faengt das ueber `isExpoGo` und einen try/catch mit AsyncStorage-Rueckfall bereits
+ab - das ist Code, der so schon vorher existierte, aber mit der neuen Fassung **am Geraet noch
+nicht erprobt** wurde. Beim naechsten Geraetetest gezielt pruefen, ob Zustand-Persistenz und
+Supabase-Session einen Neustart ueberleben.
+
+**Triage-Falle:** `--log-failed | tail` zeigt bei diesem Fehler nur Warnungen zu
+Deployment-Targets. Immer `| grep -E "error:|The following build commands failed"`.
 
 ### Bekannt, bewusst so gelassen
 
