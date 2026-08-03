@@ -90,7 +90,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   web: {
     bundler: 'metro',
     output: 'single',
-    favicon: './assets/web/favicon.svg',
+    // Bewusst die Kleinvariante: Browser zeigen das Favicon bei 16-32px, und
+    // dort verrechnet sich die grosse favicon.svg zu einem olivfarbenen Klumpen
+    // (bei 16px gerendert und geprueft). favicon-small.svg ist direkt auf
+    // dieser Groesse gezeichnet.
+    favicon: './assets/web/favicon-small.svg',
   },
   plugins: [
     // Setzt Androids colorPrimary auf die Markenfarbe - der einzige Wert in

@@ -198,7 +198,8 @@ serve(async (req: Request) => {
         user_email: profile?.email || user.email || '',
         payment_type: payment_type,
       },
-      description: `Game-Over: ${booking.event.title} - ${booking.event.honoree_name}'s party`,
+      // Wortmarke ohne Bindestrich - dieser Text landet auf der Kartenabrechnung.
+      description: `Game Over: ${booking.event.title} - ${booking.event.honoree_name}'s party`,
       receipt_email: profile?.email || user.email,
     });
 

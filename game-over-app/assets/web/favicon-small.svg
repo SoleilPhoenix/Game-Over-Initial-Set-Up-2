@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Kleinvariante des Favicons fuer 16x16 und 32x32.
+
+  Bewusst KEINE verkleinerte Fassung von favicon.svg: dort liegen die
+  haarfeinen Linien der nachgezeichneten Wortmarke unter einem Pixel,
+  der doppelte Ring verschmilzt zu einem und das Gold mischt sich mit
+  dem Navy zu einem matten Oliv.
+
+  Deshalb hier eine eigene Zeichnung nach denselben Regeln wie die
+  grosse: ein Ring statt zwei, Diamant weggelassen (waere bei 16px
+  drei Pixel Matsch), Strichstaerke so gewaehlt, dass sie bei 16px
+  auf ganzen Pixeln sitzt. Die viewBox ist 16 Einheiten breit, eine
+  Einheit ist also genau ein Pixel im kleinsten Fall.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"
+     role="img" aria-labelledby="t">
+  <title id="t">Game Over</title>
+
+  <rect width="16" height="16" rx="3" fill="#0D1B2A"/>
+
+  <g fill="none" stroke="#C6A75E" stroke-width="2" stroke-linecap="round">
+    <!-- Ring mit Luecke oben, das Power-Symbol der grossen Marke -->
+    <path d="M 10.38 5.18 A 4.5 4.5 0 1 1 5.62 5.18"/>
+    <!-- Steg in die Luecke hinein -->
+    <path d="M 8 3.4 L 8 7.6"/>
+  </g>
+</svg>
