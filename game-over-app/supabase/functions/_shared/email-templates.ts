@@ -83,6 +83,46 @@ const FOOTER_COPY = {
   },
 } as const;
 
+const BRAND_CLAIM = {
+  de: {
+    lines: 'Einer heiratet. Alle feiern. Keiner stresst.',
+    sub: 'Planen, feiern, abrechnen. Alles in einer App.',
+  },
+  en: {
+    lines: 'One gets married. Everyone celebrates. Nobody stresses.',
+    sub: 'Plan it, party, settle up. All in one app.',
+  },
+} as const;
+
+/**
+ * Markenclaim, wortgleich mit dem Willkommensbildschirm (`src/i18n`, claim1-3).
+ *
+ * Stand bis zum 03.08. dreimal als kopiertes Markup in dieser Datei und fehlte
+ * dafuer in Buchungsbestaetigung und Willkommensmail. Auf Owner-Wunsch traegt
+ * ihn jetzt jede Mail, direkt unter dem goldenen Knopf.
+ *
+ * Gibt nur die Tabelle zurueck, nicht die umgebende Zeile: manche Vorlagen
+ * setzen ihn als eigene `<tr>`, die Buchungsbestaetigung mitten in einen
+ * bestehenden Textblock.
+ */
+function brandClaimTable(language: 'de' | 'en'): string {
+  const c = BRAND_CLAIM[language];
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="border-top:1px solid ${BORDER};border-bottom:1px solid ${BORDER};padding:20px 0;text-align:center;">
+              <p style="margin:0;color:${GOLD};font-size:16px;font-weight:700;line-height:1.5;">${c.lines}</p>
+              <p style="margin:6px 0 0;color:${MUTED};font-size:13.5px;line-height:1.5;">${c.sub}</p>
+            </td></tr>
+          </table>`;
+}
+
+/** Der Claim als eigene Layoutzeile, fuer Vorlagen die aus `<tr>`-Bloecken bestehen. */
+function brandClaimRow(language: 'de' | 'en'): string {
+  return `        <!-- Brand claim (verbatim from the welcome screen, src/i18n) -->
+        <tr><td style="padding:28px 40px 0;">
+          ${brandClaimTable(language)}
+        </td></tr>`;
+}
+
 function supportLine(language: 'de' | 'en' = 'en'): string {
   return `<p style="margin:0;color:${MUTED};font-size:13px;line-height:1.5;text-align:center;">
   ${FOOTER_COPY[language].support} <a href="mailto:support@game-over.app" style="color:${MUTED};">support@game-over.app</a>
@@ -172,6 +212,11 @@ export function getWelcomeEmailHtml(params: WelcomeEmailParams): string {
     </table>
 
     ${ctaButton('Start Planning', 'https://game-over.app')}
+
+    <div style="margin-bottom:28px;">
+      ${brandClaimTable('en')}
+    </div>
+
     ${supportLine()}`;
 
   return emailLayout({
@@ -206,6 +251,27 @@ interface BookingConfirmationParams {
   language?: 'de' | 'en';
   /** Bei 'full' heisst der Betrag "Gesamt bezahlt", nicht "Anzahlung". */
   paymentKind?: 'deposit' | 'full';
+  /** `events.party_type`. Fehlt er, faellt die Anrede auf den Eventtitel zurueck. */
+  partyType?: 'bachelor' | 'bachelorette';
+}
+
+/**
+ * "Natalia Schulz: Bachelorette Party" - Owner-Vorgabe vom 03.08.
+ *
+ * Bewusst NICHT aus `events.title`: der lautet bereits "Natalia's Bachelorette",
+ * was zu "Natalia Schulz: Natalia's Bachelorette Party" fuehren wuerde. Das
+ * Format kommt aus `events.party_type`.
+ */
+export function buildPartyLabel(
+  honoreeName: string,
+  partyType?: 'bachelor' | 'bachelorette',
+  fallbackTitle?: string,
+): string {
+  if (!partyType) {
+    return fallbackTitle ? `${honoreeName}: ${fallbackTitle}` : honoreeName;
+  }
+  const label = partyType === 'bachelorette' ? 'Bachelorette' : 'Bachelor';
+  return `${honoreeName}: ${label} Party`;
 }
 
 const BOOKING_CONFIRMATION_COPY = {
@@ -213,8 +279,8 @@ const BOOKING_CONFIRMATION_COPY = {
     subject: 'Buchung bestätigt',
     headerSubtitle: 'Buchung bestätigt',
     greeting: (name?: string) => (name ? `Hallo ${name},` : 'Hallo,'),
-    lead: (honoree: string, title: string) =>
-      `Deine Buchung für <strong style="color:#FFFFFF;">${honoree}s ${title}</strong> ist bestätigt.`,
+    lead: (partyLabel: string) =>
+      `Deine Buchung für <strong style="color:#FFFFFF;">${partyLabel}</strong> ist bestätigt.`,
     reference: 'Buchungsreferenz',
     packageLabel: 'Paket',
     city: 'Stadt',
@@ -230,8 +296,8 @@ const BOOKING_CONFIRMATION_COPY = {
     subject: 'Booking Confirmed',
     headerSubtitle: 'Booking Confirmed',
     greeting: (name?: string) => (name ? `Hi ${name},` : 'Hi there,'),
-    lead: (honoree: string, title: string) =>
-      `Your booking for <strong style="color:#FFFFFF;">${honoree}'s ${title}</strong> has been confirmed!`,
+    lead: (partyLabel: string) =>
+      `Your booking for <strong style="color:#FFFFFF;">${partyLabel}</strong> has been confirmed!`,
     reference: 'Booking Reference',
     packageLabel: 'Package',
     city: 'City',
@@ -257,10 +323,11 @@ export function getBookingConfirmationEmailHtml(params: BookingConfirmationParam
   const {
     userName, honoreeName, eventTitle, packageName, city,
     eventDate, participants, totalAmount, depositAmount,
-    bookingReference, eventUrl, language = 'en', paymentKind = 'deposit',
+    bookingReference, eventUrl, language = 'en', paymentKind = 'deposit', partyType,
   } = params;
 
   const c = BOOKING_CONFIRMATION_COPY[language];
+  const partyLabel = buildPartyLabel(honoreeName, partyType, eventTitle);
   const greeting = c.greeting(userName);
   const viewUrl = eventUrl ?? 'https://game-over.app';
   const paidLabel = paymentKind === 'full' ? c.fullyPaid : c.deposit;
@@ -271,7 +338,7 @@ export function getBookingConfirmationEmailHtml(params: BookingConfirmationParam
     </p>
 
     <p style="margin:0 0 24px;color:${TEXT};font-size:15px;line-height:1.6;">
-      ${c.lead(honoreeName, eventTitle)}
+      ${c.lead(partyLabel)}
     </p>
 
     <!-- Booking Reference -->
@@ -341,6 +408,11 @@ export function getBookingConfirmationEmailHtml(params: BookingConfirmationParam
     </table>
 
     ${ctaButton(c.cta, viewUrl)}
+
+    <div style="margin-bottom:28px;">
+      ${brandClaimTable(language)}
+    </div>
+
     ${supportLine(language)}`;
 
   return emailLayout({
@@ -419,8 +491,6 @@ export function getPaymentReminderEmailHtml(params: PaymentReminderParams): stri
     refLabel: 'Buchungsref.',
     warning: '<strong>Wichtig:</strong> Geht die Zahlung heute nicht ein, wird das Event morgen storniert und die Anzahlung (25 %) einbehalten.',
     cta: 'Jetzt bezahlen &rarr;',
-    claimLines: 'Einer heiratet. Alle feiern. Keiner stresst.',
-    claimSub: 'Planen, feiern, abrechnen. Alles in einer App.',
     footer: 'Fragen?',
   } : {
     lang: 'en',
@@ -434,8 +504,6 @@ export function getPaymentReminderEmailHtml(params: PaymentReminderParams): stri
     refLabel: 'Booking ref',
     warning: '<strong>Important:</strong> if payment does not arrive today, the event is cancelled tomorrow and the 25% deposit is retained.',
     cta: 'Pay now &rarr;',
-    claimLines: 'One gets married. Everyone celebrates. Nobody stresses.',
-    claimSub: 'Plan it, party, settle up. All in one app.',
     footer: 'Questions?',
   };
 
@@ -494,15 +562,7 @@ ${warningBlock}
           <a href="${ctaUrl}" style="display:inline-block;background:${a.accent};color:${a.onAccent};text-decoration:none;padding:14px 34px;border-radius:10px;font-size:15px;font-weight:700;">${C.cta}</a>
         </td></tr>
 
-        <!-- Brand claim (verbatim from the welcome screen, src/i18n) -->
-        <tr><td style="padding:28px 40px 0;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="border-top:1px solid ${BORDER};border-bottom:1px solid ${BORDER};padding:20px 0;text-align:center;">
-              <p style="margin:0;color:${GOLD};font-size:16px;font-weight:700;line-height:1.5;">${C.claimLines}</p>
-              <p style="margin:6px 0 0;color:${MUTED};font-size:13.5px;line-height:1.5;">${C.claimSub}</p>
-            </td></tr>
-          </table>
-        </td></tr>
+${brandClaimRow(isDe ? 'de' : 'en')}
 
         <!-- Footer -->
         <tr><td style="padding:26px 40px 34px;text-align:center;">
@@ -727,8 +787,6 @@ export function getFinalBriefingEmailHtml(params: FinalBriefingEmailParams): str
     keep: 'Heb dir diese E-Mail auf, sie enthält deine Buchungsreferenz.',
     labels: { date: 'Datum', city: 'Stadt', pkg: 'Paket', ref: 'Buchungsref.' },
     closing: 'Sei pünktlich und mach dich bereit für etwas Unvergessliches. 🖤',
-    claimLines: 'Einer heiratet. Alle feiern. Keiner stresst.',
-    claimSub: 'Planen, feiern, abrechnen. Alles in einer App.',
     cta: 'Details in der App ansehen &rarr;',
     footer: 'Fragen?',
   } : {
@@ -743,8 +801,6 @@ export function getFinalBriefingEmailHtml(params: FinalBriefingEmailParams): str
     keep: 'Keep this email, it has your booking reference.',
     labels: { date: 'Date', city: 'City', pkg: 'Package', ref: 'Booking ref' },
     closing: 'Be on time and get ready for something unforgettable. 🖤',
-    claimLines: 'One gets married. Everyone celebrates. Nobody stresses.',
-    claimSub: 'Plan it, party, settle up. All in one app.',
     cta: 'View details in the app &rarr;',
     footer: 'Questions?',
   };
@@ -813,15 +869,7 @@ ${ctaBlock}
           <p style="margin:0;color:${TEXT};font-size:15px;line-height:1.6;">${C.closing}</p>
         </td></tr>
 
-        <!-- Brand claim (verbatim from the welcome screen, src/i18n) -->
-        <tr><td style="padding:24px 40px 0;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="border-top:1px solid ${BORDER};border-bottom:1px solid ${BORDER};padding:20px 0;text-align:center;">
-              <p style="margin:0;color:${GOLD};font-size:16px;font-weight:700;line-height:1.5;">${C.claimLines}</p>
-              <p style="margin:6px 0 0;color:${MUTED};font-size:13.5px;line-height:1.5;">${C.claimSub}</p>
-            </td></tr>
-          </table>
-        </td></tr>
+${brandClaimRow(isDe ? 'de' : 'en')}
 
         <!-- Keep-this-email note -->
         <tr><td style="padding:20px 40px 0;">
@@ -879,8 +927,6 @@ export function getBookingCancelledEmailHtml(params: BookingCancelledEmailParams
     deposit: `Die Anzahlung von ${strong(depositAmount)} bleibt einbehalten - so steht es in den Bedingungen, und wir wissen, dass sich das bitter anfühlt.`,
     reopen: 'Ihr wollt es trotzdem machen? Schreib uns. Neu planen geht schneller als du denkst.',
     referenceLabel: 'Buchungsreferenz',
-    claimLines: 'Einer heiratet. Alle feiern. Keiner stresst.',
-    claimSub: 'Planen, feiern, abrechnen. Alles in einer App.',
     cta: 'Neu planen',
     contact: 'Schreib uns',
   } : {
@@ -891,8 +937,6 @@ export function getBookingCancelledEmailHtml(params: BookingCancelledEmailParams
     deposit: `We’ve retained the ${strong(depositAmount)} deposit, as set out in the terms. We know that still stings.`,
     reopen: 'Still want to make it happen? Drop us a line. Starting fresh is quicker than you might think.',
     referenceLabel: 'Booking reference',
-    claimLines: 'One gets married. Everyone celebrates. Nobody stresses.',
-    claimSub: 'Plan it, party, settle up. All in one app.',
     cta: 'Plan again',
     contact: 'Contact us',
   };
@@ -926,15 +970,7 @@ export function getBookingCancelledEmailHtml(params: BookingCancelledEmailParams
           <a href="${destination}" style="display:inline-block;background:${GOLD};color:${NAVY};text-decoration:none;padding:14px 36px;border-radius:10px;font-size:15px;font-weight:700;">${C.cta}</a>
         </td></tr>
 
-        <!-- Brand claim (verbatim from the welcome screen, src/i18n) -->
-        <tr><td style="padding:26px 40px 0;">
-          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-            <tr><td style="border-top:1px solid ${BORDER};border-bottom:1px solid ${BORDER};padding:20px 0;text-align:center;">
-              <p style="margin:0;color:${GOLD};font-size:16px;font-weight:700;line-height:1.5;">${C.claimLines}</p>
-              <p style="margin:6px 0 0;color:${MUTED};font-size:13.5px;line-height:1.5;">${C.claimSub}</p>
-            </td></tr>
-          </table>
-        </td></tr>
+${brandClaimRow(isDe ? 'de' : 'en')}
 
 `,
     footerHtml: `          <p style="margin:24px 0 0;color:${FAINT};font-size:12px;line-height:1.6;border-top:1px solid ${BORDER};padding-top:20px;">

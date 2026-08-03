@@ -149,6 +149,23 @@ und deutsche Linklabel (Datenschutz / AGB / Impressum).
 (classic), `<Stadt> Legende` (grand) - **nicht** „Classic"/„M". Wer eine Vorschau baut, nimmt
 echte Werte; eine erfundene Beispielzeile hat am 03.08. eine falsche Fehlermeldung ausgeloest.
 
+### Markenclaim in jeder Mail, Partybezeichnung vereinheitlicht (03.08.)
+
+Der Claim „Einer heiratet. Alle feiern. Keiner stresst." stand dreimal als **kopiertes Markup**
+in `email-templates.ts` und fehlte dafuer in Buchungsbestaetigung und Willkommensmail. Jetzt
+liegt er als `brandClaimTable()` / `brandClaimRow()` an einer Stelle und steht in jeder Mail
+direkt unter dem goldenen Knopf. Die verwaisten `claimLines`/`claimSub`-Schluessel in den drei
+Copy-Objekten sind entfernt.
+
+Die Anrede der Buchung heisst jetzt **„<Ehrengast>: Bachelor(ette) Party"** (`buildPartyLabel`),
+in Betreff und Fliesstext dieselbe Zeichenkette. Quelle ist `events.party_type`, **nicht**
+`events.title`: der lautet bereits „Natalia's Bachelorette", was zu „Natalia Schulz: Natalia's
+Bachelorette Party" gefuehrt haette.
+
+**Offen:** der Owner nannte am 03.08. als Beispielanrede „Hallo Django und Jane," - also zwei
+Namen. Woher der zweite kommen soll, ist ungeklaert (die Buchung kennt nur den Organisator);
+die Anrede spricht weiterhin nur den Organisator an. Vor dem naechsten Mail-Durchgang klaeren.
+
 ### Deploy-Workflow deployte nie alle Funktionen (gefunden und behoben 03.08.)
 
 Der Schritt in `.github/workflows/deploy-edge-functions.yml` heisst „Deploy all edge functions",

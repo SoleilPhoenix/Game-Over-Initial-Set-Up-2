@@ -23,6 +23,7 @@ import type { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3
 import { sendEmail } from './email.ts';
 import {
   buildBookingConfirmationSubject,
+  buildPartyLabel,
   getBookingConfirmationEmailHtml,
 } from './email-templates.ts';
 
@@ -83,7 +84,7 @@ export async function sendBookingConfirmationEmail(
 
     const { data: event } = await supabase
       .from('events')
-      .select('id, title, honoree_name, start_date, city_id, created_by')
+      .select('id, title, honoree_name, start_date, city_id, created_by, party_type')
       .eq('id', eventId)
       .single();
 
@@ -120,7 +121,15 @@ export async function sendBookingConfirmationEmail(
     // Anzahlung stehen - der gezeigte Betrag ist dann der Gesamtbetrag.
     const paidCents = paymentKind === 'full' ? totalCents : depositCents;
 
-    const partyLabel = `${event.honoree_name as string}s ${event.title as string}`;
+    const partyTypeRaw = event.party_type as string | null;
+    const partyType = partyTypeRaw === 'bachelor' || partyTypeRaw === 'bachelorette'
+      ? partyTypeRaw
+      : undefined;
+    const partyLabel = buildPartyLabel(
+      event.honoree_name as string,
+      partyType,
+      event.title as string,
+    );
     const appBaseUrl = Deno.env.get('APP_BASE_URL') ?? 'https://game-over.app';
 
     const html = getBookingConfirmationEmailHtml({
@@ -137,6 +146,7 @@ export async function sendBookingConfirmationEmail(
       eventUrl: `${appBaseUrl}/event/${eventId}`,
       language,
       paymentKind,
+      partyType,
     });
 
     const result = await sendEmail({
