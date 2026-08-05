@@ -91,9 +91,21 @@ koennen, und gehoert deshalb nicht in die Wortmarke.
    nachgezeichneten Pfade tragen `stroke-width="0.5"` auf einer 1024er viewBox, eine Linie ist
    bei 16px also 0,008 Pixel breit und wird anteilig ins Navy gemischt.
    Neu: `assets/web/favicon-small.svg`, von Hand auf einer 16-Einheiten-viewBox gezeichnet
-   (eine Einheit = ein Pixel), ein Ring, kein Diamant. `app.config.ts` zeigt jetzt dorthin.
-   `generate.py` erzeugt diese Datei **nicht** und darf sie nicht ueberschreiben.
-   Nachpruefen mit `qlmanage -t -s 16 -o /tmp/fav assets/web/favicon-small.svg`.
+   (eine Einheit = ein Pixel). `app.config.ts` zeigt jetzt dorthin. `generate.py` erzeugt diese
+   Datei **nicht** und darf sie nicht ueberschreiben.
+
+   **Der Diamant ist drin** (Owner-Entscheidung 03.08.), aber als *massive* Raute statt als
+   facettierte Strichzeichnung: Flaeche ueberlebt das Runterrechnen, Haarlinien nicht.
+   Entscheidend war das Breitenverhaeltnis - Stein 4,8 Einheiten, Steg 1,8, rund 2,7:1. Zwei
+   Zwischenstaende wurden verworfen, weil beide bei 16px zu einem Nagel verschmolzen.
+   Ab 32px ist der Stein klar lesbar; bei 16px wird er zu einem kurzen Querbalken. Das ist die
+   bewusst getragene Einbusse, weil Browser auf Retina mit 32-40 Geraetepixeln rendern.
+
+   Die **Wortmarke bleibt draussen**: „game-over.app" sind 13 Zeichen, bei 16 Pixeln Breite
+   blieben 1,2 Pixel pro Zeichen. Sie gehoert auf den Boot-Screen und in den Mail-Kopf.
+
+   Nachpruefen mit `qlmanage -t -s 16 -o /tmp/fav assets/web/favicon-small.svg`; jedes Goldpixel
+   heller als `#C6A75E` ist ein Artefakt, Antialiasing kann nur Richtung Navy abdunkeln.
 
 ### Geraetetest 03.08. - 17 Befunde, gebuendelt zu acht Paketen
 
@@ -253,7 +265,7 @@ main loest `deploy-edge-functions.yml` aus und deployt live - **braucht Owner-Fr
 
 ### MMKV auf 4.3.2 - behebt den roten iOS-Build (03.08., Owner-Freigabe)
 
-`Build iOS` scheiterte mit `exit code 65`; die Ursache stand weit oben im Log:
+`Build iOS` scheiterte mit `exit code 65` (behoben, siehe unten); die Ursache stand weit oben im Log:
 
 ```
 ios/Pods/MMKVCore/Core/aes/AESCrypt.cpp:83:11: error: use of undeclared identifier 'memset_s'
@@ -264,15 +276,19 @@ ios/Pods/MMKVCore/Core/aes/AESCrypt.cpp:83:11: error: use of undeclared identifi
 bei jedem CI-Lauf die neueste Core-Fassung; irgendwann war das eine mit `memset_s`, und der Build
 brach, **ohne dass sich im Projekt etwas geaendert hatte**. Der Job war schon am 30.07. rot.
 
-Angegangen mit **`react-native-mmkv` 4.3.2** plus **`react-native-nitro-modules` 0.36.5** als
+Behoben mit **`react-native-mmkv` 4.3.2** plus **`react-native-nitro-modules` 0.36.5** als
 Peer. Dessen Podspec pinnt exakt auf `MMKVCore 2.4.0`; an der Quelle geprueft enthaelt dessen
-`AESCrypt.cpp` kein `memset_s`. Damit waere auch die Drift weg, nicht nur das Symptom.
+`AESCrypt.cpp` kein `memset_s`. Damit ist auch die Drift weg, nicht nur das Symptom.
 
-**Status der Verifikation:** `typecheck`, `lint` und 118 Tests sind gruen. Der **native
-iOS-Build war beim Schreiben dieser Zeilen noch nicht durch** - lokal nicht pruefbar, weil
-`xcode-select` nicht auf Xcode zeigt. Wer hier weiterarbeitet: **erst den CI-Lauf zu Commit
-`1a4e835ae` nachsehen**, bevor der Punkt als erledigt gilt. Schlaegt `Build iOS` weiter fehl,
-liegt es an etwas anderem als `memset_s` - dann den Log gezielt greppen, nicht das Ende lesen.
+**Verifiziert:** CI-Lauf `30840786969` zu Commit `1a4e835ae` - `Code Quality`, `Build Android`
+und `Build iOS` alle **gruen**. Damit ist der iOS-Build erstmals seit mindestens dem 30.07.
+wieder in Ordnung, und Android hat den neuen nativen Nitro-Teil ebenfalls gebaut.
+
+**Lehre fuer die Empfehlung:** vorgeschlagen war der kleinere Eingriff, ein Preprocessor-Define
+per Config-Plugin. Der Owner entschied sich fuer den Bump, und die Pruefung gab ihm recht - das
+Define haette die offene Versionsspanne stehen gelassen und der naechste Core-Sprung haette
+erneut zugeschlagen. Bei einem Fehler, der **ohne eigene Aenderung** auftaucht, lohnt der Blick
+in die Podspec auf ungepinnte Abhaengigkeiten, bevor man am Compiler dreht.
 
 **Wichtig fuer die Bewertung:** empfohlen war urspruenglich der kleinere Eingriff - ein
 Preprocessor-Define `__STDC_WANT_LIB_EXT1__=1` per Config-Plugin. Der Owner entschied sich fuer
