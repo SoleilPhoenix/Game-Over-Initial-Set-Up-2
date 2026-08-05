@@ -213,6 +213,32 @@ zuerst kaputtgeht.
 Events ohne Buchungszeile, der aus dem Cache liest. Er ist jetzt schwerer zu treffen, aber nicht
 weg. Wer dort Zahlen aendert, muss beide Zweige anfassen.
 
+### Gruppenbeitraege: Aufteilung, Ehrengast, Erinnern-Knopf (05.08., zweite Runde)
+
+**Die Zeilenbetraege kamen aus `contribution_amount_cents`** - dem beim Beitritt eingefrorenen
+Wert. Der driftet danach von der Buchung weg: bei Natalia standen 229 € je Zeile, waehrend vier
+sichtbare Zeilen 916 € statt 1145 € ergaben. Sie kommen jetzt aus `splitPerPerson(total,
+paying_participants)`, der Organisator traegt die Differenz. Damit passt die Summe immer.
+
+**Neue Regel: der Ehrengast erscheint als Beitragszeile, wenn er mitzahlt** (`exclude_honoree =
+false`). Er hat keine `event_participants`-Zeile, solange er nicht selbst beitritt - deshalb
+eine synthetische Zeile in `sortedParticipants`.
+
+**Deren Grenze, bewusst so:** die Zeile steht auf „offen". Ob der Ehrengast gezahlt hat, weiss
+die App nicht, weil es keine Zeile gibt, an der ein Status haengen koennte. „Bezahlt" waere eine
+Behauptung ohne Grundlage. Sie zaehlt aus demselben Grund nicht in `pendingCount` mit, wirkt
+also nicht auf den Erinnern-Knopf. **Wer das aufloesen will, braucht eine echte
+Teilnehmerzeile fuer den Ehrengast** - das waere eine Datenaenderung, keine Anzeigefrage.
+
+**„Alle erinnern"** verschwindet nicht mehr, wenn niemand offen ist, sondern wird ausgegraut.
+Das **„DU"-Abzeichen** hinter dem eigenen Namen ist raus - der Nutzer weiss, wie er heisst.
+
+**Natalias Buchungszeile bleibt der Ausreisser.** Drei von vier Events haben
+`exclude_honoree = true` mit 4 Zahlenden; Natalia hat `false` mit 5. Das ist die von Hand
+gesetzte Testzeile vom 31.07. Mit der neuen Ehrengast-Regel ist sie **in sich stimmig**
+(5 Zeilen a 229 € = 1145 €), weicht aber vom Muster der anderen Events ab. Wer sie angleichen
+will, aendert Geldspalten - das schreibt nur der Server, und es braucht Owner-Freigabe.
+
 ### Markenclaim in jeder Mail, Partybezeichnung vereinheitlicht (03.08.)
 
 Der Claim „Einer heiratet. Alle feiern. Keiner stresst." stand dreimal als **kopiertes Markup**
