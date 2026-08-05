@@ -1661,6 +1661,18 @@ export default function BudgetDashboardScreen() {
 
                   const isHighlighted = !!highlightUserId && participantUserId === highlightUserId;
 
+                  // Der Ehrengast zahlt seinen Anteil mit, wird dafuer aber nie
+                  // vor der Party angegangen - das wuerde die Ueberraschung
+                  // verderben. Statt eines Mahnstatus nennt seine Zeile die
+                  // Rolle und sagt, wann kassiert wird (Owner-Wunsch 05.08.).
+                  const isHonoreeRow = !isDemo && participantRole === 'honoree';
+                  const honoreeRoleLabel = (() => {
+                    const pt = (selectedEvent as any)?.party_type;
+                    if (pt === 'bachelorette') return (t.budget as any).honoreeRoleBachelorette;
+                    if (pt === 'bachelor') return (t.budget as any).honoreeRoleBachelor;
+                    return (t.budget as any).honoreeRoleGeneric;
+                  })();
+
                   return (
                     <View key={key} style={[styles.contributionCard, isHighlighted && styles.contributionCardHighlighted]}>
                       <View style={styles.contributionMainRow}>
@@ -1693,6 +1705,14 @@ export default function BudgetDashboardScreen() {
                               {name}
                             </Text>
                           </XStack>
+                          {isHonoreeRow && (
+                            <Text
+                              style={{ fontSize: 11, color: theme.textTertiary, marginTop: 2 }}
+                              numberOfLines={1}
+                            >
+                              {honoreeRoleLabel}
+                            </Text>
+                          )}
                         </View>
 
                         {/* Amount + status stacked on the right */}
@@ -1704,7 +1724,19 @@ export default function BudgetDashboardScreen() {
                               green for paid, one orange for everything still open - so
                               "awaiting confirmation" is set apart by a clock rather than
                               by a third shade. */}
-                          {showPaymentStatus ? (
+                          {isHonoreeRow && !isPaid ? (
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: '600',
+                                color: theme.textTertiary,
+                                textAlign: 'right',
+                              }}
+                              numberOfLines={2}
+                            >
+                              {(t.budget as any).honoreeCollectedAfter}
+                            </Text>
+                          ) : showPaymentStatus ? (
                             <XStack alignItems="center" justifyContent="flex-end" gap={4} flexShrink={1}>
                               {isClaimed && (
                                 <Ionicons name="time-outline" size={12} color={unpaidColor} />

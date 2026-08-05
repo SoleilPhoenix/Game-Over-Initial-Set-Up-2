@@ -224,11 +224,20 @@ paying_participants)`, der Organisator traegt die Differenz. Damit passt die Sum
 false`). Er hat keine `event_participants`-Zeile, solange er nicht selbst beitritt - deshalb
 eine synthetische Zeile in `sortedParticipants`.
 
-**Deren Grenze, bewusst so:** die Zeile steht auf „offen". Ob der Ehrengast gezahlt hat, weiss
-die App nicht, weil es keine Zeile gibt, an der ein Status haengen koennte. „Bezahlt" waere eine
-Behauptung ohne Grundlage. Sie zaehlt aus demselben Grund nicht in `pendingCount` mit, wirkt
-also nicht auf den Erinnern-Knopf. **Wer das aufloesen will, braucht eine echte
-Teilnehmerzeile fuer den Ehrengast** - das waere eine Datenaenderung, keine Anzeigefrage.
+**Die Zeile zeigt keinen Mahnstatus** (Owner-Wunsch 05.08.). Statt „Ausstehend" nennt sie unter
+dem Namen die Rolle - „Bachelorette" bzw. „Bachelor" aus `events.party_type` - und unter dem
+Betrag „Wird nach dem Event eingezogen". Der Grund ist fachlich: der Ehrengast soll von der
+Party nichts wissen, also darf er vorher nicht zur Zahlung gedraengt werden. Ein Mahnstatus an
+dieser Stelle waere nicht nur haesslich, sondern sachlich falsch.
+
+Passend dazu ist der Ehrengast von „Alle erinnern" ausgenommen: `reminderRecipients` filtert auf
+`role === 'guest' && !!user_id`. Und er zaehlt nicht in `pendingCount`, weil `budgetStats` aus
+den echten `participants` rechnet, nicht aus `sortedParticipants` mit der synthetischen Zeile -
+der Erinnern-Knopf bleibt also nicht seinetwegen aktiv. **Beides ist Absicht, nicht Zufall.**
+
+**Was die App nicht weiss:** ob der Ehrengast tatsaechlich gezahlt hat. Es gibt keine Zeile, an
+der ein Status haengen koennte. Wer das aufloesen will, braucht eine echte Teilnehmerzeile fuer
+den Ehrengast - das waere eine Datenaenderung, keine Anzeigefrage.
 
 **„Alle erinnern"** verschwindet nicht mehr, wenn niemand offen ist, sondern wird ausgegraut.
 Das **„DU"-Abzeichen** hinter dem eigenen Namen ist raus - der Nutzer weiss, wie er heisst.

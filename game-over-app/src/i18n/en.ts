@@ -669,6 +669,13 @@ const en = {
     remindAll: 'Remind All',
     // Placeholder rows in Group Contributions: a share that is part of the
     // booking but has nobody entered for it yet.
+    // The honoree pays their own share, but is never chased for it before the
+    // party — that would spoil the surprise. Their row says who they are and
+    // when the money is collected, instead of showing a dunning status.
+    honoreeRoleBachelor: 'Bachelor',
+    honoreeRoleBachelorette: 'Bachelorette',
+    honoreeRoleGeneric: 'Guest of honour',
+    honoreeCollectedAfter: 'Collected after the event',
     openSlotTitle: 'Guest not entered yet',
     openSlotMessage: 'This share is part of your booking, but nobody is entered for it. Add the guest under Invitation with email and phone number so they can be invited and reminded.',
     you: '(You)',
