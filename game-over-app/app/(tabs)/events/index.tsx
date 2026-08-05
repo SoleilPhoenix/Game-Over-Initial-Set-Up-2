@@ -460,20 +460,38 @@ export default function EventsScreen() {
     router.push('/notifications');
   };
 
+  /**
+   * Zahlungsstand fuer die Kachel. Quelle ist die Buchung, nicht der
+   * AsyncStorage-Cache - der war der Grund fuer Widersprueche zum
+   * Budget-Bildschirm: bei Natalia sagte der Cache 100 %, die Buchung 25 %;
+   * bei Sven genau umgekehrt (Befund 05.08.).
+   *
+   * Der frueher fest verdrahtete Rueckfall auf 25 % ist raus. Er behauptete
+   * eine Anzahlung, wann immer der Cache fehlte - auch bei einer vollstaendig
+   * bezahlten Buchung. Ohne belastbare Quelle wird jetzt lieber nichts gezeigt.
+   */
   const getPaymentStatus = (event: EventWithDetails): { label: string; fullyPaid: boolean } | null => {
     const formatPct = (pct: number) => (t.events as any).paidPct.replace('{{pct}}', String(pct));
     if (event.status === 'completed') {
       return { label: formatPct(100), fullyPaid: true };
     }
-    if (event.status === 'booked') {
-      const budget = budgetInfos[event.id];
-      if (budget && budget.totalCents > 0) {
-        const paid = budget.paidAmountCents || 0;
-        if (paid >= budget.totalCents) return { label: formatPct(100), fullyPaid: true };
-        const pct = Math.round((paid / budget.totalCents) * 100);
-        return { label: formatPct(pct), fullyPaid: false };
-      }
-      return { label: formatPct(25), fullyPaid: false };
+    if (event.status !== 'booked') return null;
+
+    const booking = event.booking;
+    if (booking?.total_amount_cents) {
+      if (booking.fully_paid_at) return { label: formatPct(100), fullyPaid: true };
+      const paid = booking.deposit_amount_cents ?? 0;
+      const pct = Math.round((paid / booking.total_amount_cents) * 100);
+      return { label: formatPct(pct), fullyPaid: paid >= booking.total_amount_cents };
+    }
+
+    // Rueckfall nur fuer Events ohne sichtbare Buchungszeile (z. B. Gast ohne
+    // Leserecht). Kein Ratewert mehr, wenn auch der Cache nichts weiss.
+    const budget = budgetInfos[event.id];
+    if (budget && budget.totalCents > 0) {
+      const paid = budget.paidAmountCents || 0;
+      if (paid >= budget.totalCents) return { label: formatPct(100), fullyPaid: true };
+      return { label: formatPct(Math.round((paid / budget.totalCents) * 100)), fullyPaid: false };
     }
     return null;
   };

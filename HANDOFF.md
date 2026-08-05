@@ -181,6 +181,18 @@ korrekt; alle vier Fehler lagen in der Anzeige, und drei davon hatten dieselbe W
    damit 286,25 € statt 229 €.
 4. **Zwei Waehrungsformate auf demselben Bildschirm.** In der Zahlungsuebersicht standen
    Gesamtbetrag und Anzahlung glatt, der Anteil pro Person mit zwei Nachkommastellen.
+5. **Die Prozentangabe auf der Eventkachel** (`(tabs)/events/index.tsx`, `getPaymentStatus`)
+   las ebenfalls den Cache - **und hatte einen fest verdrahteten Rueckfall auf 25 %**, der
+   immer dann log, wenn der Cache fehlte. Genau der Fall Sven: Kachel „25 % bezahlt",
+   Buchung vollstaendig bezahlt. Der Ratewert ist raus; ohne belastbare Quelle wird lieber
+   nichts angezeigt.
+
+   Dafuer laedt die Eventliste jetzt die Buchung mit
+   (`booking:bookings(total_amount_cents, deposit_amount_cents, fully_paid_at)`).
+   **Zwei Fallen dabei:** PostgREST liefert eine eingebettete Beziehung als **Array**, auch
+   bei genau einer Buchung - `firstBooking()` in `events.ts` normalisiert das. Und die
+   Einbettung funktioniert nur, weil `bookings_event_id_fkey` existiert; ohne Fremdschluessel
+   scheitert die ganze Abfrage zur Laufzeit und die Liste bliebe leer. Am 05.08. geprueft.
 
 **Owner-Regel vom 05.08., jetzt in `src/utils/money.ts` an einer Stelle:**
 
