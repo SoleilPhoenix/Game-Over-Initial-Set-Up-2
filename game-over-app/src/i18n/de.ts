@@ -937,6 +937,60 @@ const de: TranslationKeys = {
     bookingCancelledBody: 'Das Event für {{honoree}} wurde storniert, weil der Restbetrag nicht eingegangen ist. Die Anzahlung von {{deposit}} bleibt einbehalten.',
     paymentSuccessTitle: 'Zahlung erfolgreich!',
     paymentSuccessBody: 'Deine Buchung für „{{event}}“ wurde bestätigt.',
+    paymentReminders: {
+      notice_18: {
+        title: 'Restzahlung steht an',
+        body: 'Der Restbetrag von {{amount}} ist in 11 Tagen fällig.',
+      },
+      request_16: {
+        title: 'Bitte Restbetrag zahlen',
+        body: 'Bitte gleich den Restbetrag von {{amount}} begleichen - fällig in 9 Tagen.',
+      },
+      followup_14: {
+        title: 'Erinnerung: Restzahlung',
+        body: 'Erinnerung: der Restbetrag von {{amount}} ist in 7 Tagen fällig.',
+      },
+      followup_12: {
+        title: 'Erinnerung: Restzahlung',
+        body: 'Erinnerung: der Restbetrag von {{amount}} ist in 5 Tagen fällig.',
+      },
+      urgent_10: {
+        title: 'Wichtig: Restzahlung fällig',
+        body: 'Wichtig: der Restbetrag von {{amount}} ist in 3 Tagen fällig.',
+      },
+      urgent_9: {
+        title: 'Wichtig: Restzahlung fällig',
+        body: 'Wichtig: der Restbetrag von {{amount}} ist in 2 Tagen fällig.',
+      },
+      urgent_8: {
+        title: 'Morgen ist Zahlungsfrist',
+        body: 'Morgen läuft die Frist ab: der Restbetrag von {{amount}} muss bis dahin da sein.',
+      },
+      final_7: {
+        title: 'Letzte Frist: heute zahlen',
+        body: 'Letzte Frist: zahle heute {{amount}}. Sonst wird das Event morgen storniert und die Anzahlung (25 %) einbehalten.',
+      },
+      cancelled_6: {
+        title: 'Event storniert',
+        body: 'Der Restbetrag von {{amount}} ist nicht rechtzeitig eingegangen. Das Event ist storniert, die Anzahlung (25 %) wird einbehalten.',
+      },
+      normal: {
+        title: 'Restzahlung steht an',
+        body: 'Der Restbetrag von {{amount}} ist innerhalb von 7 Tagen fällig.',
+      },
+      moderate: {
+        title: 'Erinnerung: Restzahlung',
+        body: 'Erinnerung: der Restbetrag von {{amount}} ist in 4 Tagen fällig.',
+      },
+      urgent: {
+        title: 'Wichtig: Restzahlung fällig',
+        body: 'Wichtig: der Restbetrag von {{amount}} ist in 2 Tagen fällig.',
+      },
+      final: {
+        title: 'Letzte Frist: heute zahlen',
+        body: 'Letzte Frist: zahle heute {{amount}}. Sonst wird das Event morgen storniert und die Anzahlung (25 %) einbehalten.',
+      },
+    },
     opsAlertTitle: 'Betriebshinweis',
     opsAlertPgNetMissing: 'Geplante Aufrufe sind nicht verfügbar, weil die HTTP-Erweiterung nicht installiert ist.',
     opsAlertVaultSecretMissing: 'Das Geheimnis „{{name}}“ für geplante Aufrufe fehlt.',

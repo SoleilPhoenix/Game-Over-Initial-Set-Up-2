@@ -107,15 +107,16 @@ interface UIActions {
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
 /**
- * How long each kind of toast stays up, in ms. Errors get the longest run
- * because they are the only ones the user may have to read twice; a passing
- * "profile updated" is gone before it can get in the way. Every toast is
- * tappable, so these are ceilings, not waiting times.
+ * How long each kind of toast stays up, in ms. Errors and warnings both need
+ * enough time to be read before the user can continue; the short two seconds
+ * are reserved for pure information. A passing "profile updated" is gone
+ * before it can get in the way. Every toast is tappable, so these are ceilings,
+ * not waiting times. Owner decision from 2026-08-05.
  */
 const TOAST_DURATIONS: Record<ToastType, number> = {
   error: 6000,
   success: 4000,
-  warning: 2000,
+  warning: 6000,
   info: 2000,
 };
 

@@ -14,6 +14,7 @@ import { useTranslation, getCurrentLanguage } from '@/i18n';
 import { isGuestDataChangedMeta, isGuestJoinedMeta, formatGuestChanges } from '@/utils/guestDataChange';
 import { isRefundDueMeta } from '@/utils/refundDue';
 import { useTheme } from '@/hooks/useTheme';
+import { resolvePaymentReminderCopy } from './paymentReminderCopy';
 import { resolvePaymentSuccessCopy } from './paymentSuccessCopy';
 import type { NotificationEventSummary } from '@/repositories/notifications';
 
@@ -284,12 +285,21 @@ export function NotificationItem({
   const actionLabelKey = ACTION_LABEL_KEYS[notification.type];
   const actionLabel = actionLabelKey ? (t.notifications as any)[actionLabelKey] : undefined;
 
-  // Notifications with structured metadata are localized to the organizer's
-  // language at render time. Falls back to stored title/body for legacy rows
-  // whose metadata is absent or malformed.
+  // Notifications whose copy can be rebuilt are localized to the organizer's
+  // language at render time. Falls back to stored title/body when the required
+  // source data is absent or malformed.
   const paymentSuccessCopy = resolvePaymentSuccessCopy(notification, t.notifications);
-  let displayTitle = paymentSuccessCopy.title;
-  let displayBody = paymentSuccessCopy.body;
+  const paymentReminderCopy = resolvePaymentReminderCopy(
+    notification,
+    t.notifications.paymentReminders,
+    getCurrentLanguage(),
+  );
+  let displayTitle = notification.type.startsWith('payment_reminder_')
+    ? paymentReminderCopy.title
+    : paymentSuccessCopy.title;
+  let displayBody = notification.type.startsWith('payment_reminder_')
+    ? paymentReminderCopy.body
+    : paymentSuccessCopy.body;
   if (notification.type === 'guest_joined' && isGuestJoinedMeta(notification.metadata)) {
     displayTitle = (t.notifications as any).guestJoinedTitle;
     displayBody = ((t.notifications as any).guestJoinedBody as string)

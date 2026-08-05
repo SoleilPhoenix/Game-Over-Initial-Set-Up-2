@@ -945,6 +945,60 @@ const en = {
     bookingCancelledBody: "{{honoree}}'s event was cancelled because the remaining balance was not received. The {{deposit}} deposit has been retained.",
     paymentSuccessTitle: 'Payment successful!',
     paymentSuccessBody: 'Your booking for {{event}} has been confirmed.',
+    paymentReminders: {
+      notice_18: {
+        title: 'Payment Due Soon',
+        body: 'Your remaining balance of {{amount}} is due in 11 days.',
+      },
+      request_16: {
+        title: 'Please Settle Your Balance',
+        body: 'Please settle your remaining balance of {{amount}} - due in 9 days.',
+      },
+      followup_14: {
+        title: 'Payment Reminder',
+        body: 'Reminder: your remaining balance of {{amount}} is due in 7 days.',
+      },
+      followup_12: {
+        title: 'Payment Reminder',
+        body: 'Reminder: your remaining balance of {{amount}} is due in 5 days.',
+      },
+      urgent_10: {
+        title: 'Urgent: Payment Due',
+        body: 'Urgent: your remaining balance of {{amount}} is due in 3 days.',
+      },
+      urgent_9: {
+        title: 'Urgent: Payment Due',
+        body: 'Urgent: your remaining balance of {{amount}} is due in 2 days.',
+      },
+      urgent_8: {
+        title: 'Payment Deadline Is Tomorrow',
+        body: 'The deadline is tomorrow: your remaining balance of {{amount}} has to be in by then.',
+      },
+      final_7: {
+        title: 'Final Notice: Pay Today',
+        body: 'Final notice: pay {{amount}} today. Otherwise the event is cancelled tomorrow and the 25% deposit is retained.',
+      },
+      cancelled_6: {
+        title: 'Event Cancelled',
+        body: 'The remaining balance of {{amount}} was not received in time. The event has been cancelled and the 25% deposit is retained.',
+      },
+      normal: {
+        title: 'Payment Due Soon',
+        body: 'Your remaining balance of {{amount}} is due within 7 days.',
+      },
+      moderate: {
+        title: 'Payment Reminder',
+        body: 'Reminder: your remaining balance of {{amount}} is due in 4 days.',
+      },
+      urgent: {
+        title: 'Urgent: Payment Due',
+        body: 'Urgent: your remaining balance of {{amount}} is due in 2 days.',
+      },
+      final: {
+        title: 'Final Notice: Pay Today',
+        body: 'Final notice: pay {{amount}} today. Otherwise the event is cancelled tomorrow and the 25% deposit is retained.',
+      },
+    },
     opsAlertTitle: 'Operations alert',
     opsAlertPgNetMissing: 'Scheduled calls are unavailable because the HTTP extension is not installed.',
     opsAlertVaultSecretMissing: 'The scheduled-call secret “{{name}}” is missing.',
