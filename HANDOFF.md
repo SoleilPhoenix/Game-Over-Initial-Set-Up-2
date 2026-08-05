@@ -590,36 +590,66 @@ Vektorarbeit, keine Textersetzung.
 **Der Screenshot „Downloading 86.10 %" ist nicht beeinflussbar.** Das ist der Ladebildschirm des
 Expo-Dev-Clients; den Text kontrolliert Expo, und im Store-Build existiert der Bildschirm nicht.
 
-### F2 - Betriebshinweis beim Organisator. Diagnose fertig, Entscheidung offen.
+### F2 - Betriebshinweis beim Organisator. Erledigt, ohne zweites Konto.
 
-Der Mechanismus arbeitet wie entworfen; die Kollision ist eine Personen-, keine Codefrage.
-Belege aus der Live-DB:
+Der Mechanismus arbeitete wie entworfen; die Kollision war eine Personen-, keine Codefrage.
+`ops_alert_recipients` enthielt genau eine Zeile - das Konto des Owners, das zugleich Organisator
+ist. Der Client blendete Betriebsmeldungen nur aus, **solange** `is_ops_alert_recipient()` false
+lieferte; fuer dieses Konto lieferte sie true.
 
-- `notifications` fuehrt zwei Zeilen vom Typ `ops_cron_health` (29.07. HTTP 500, 02.08. Timeout).
-- Empfaenger beider Zeilen ist `1e4b1cec-0202-4722-8fd0-d8781bc3737f` = `leonardino@web.de`.
-- `ops_alert_recipients` enthaelt **genau diese eine Zeile** und sonst nichts.
-- Der Client filtert ops-Meldungen bereits heraus (`src/repositories/notifications.ts:36,74`),
-  aber nur, solange `is_ops_alert_recipient()` false liefert. Fuer dieses Konto liefert es true.
+Zwischenzeitlich war ein eigenes Betreiber-Konto beschlossen. Beim Umsetzen zeigte sich ein
+Weg, der ohne auskommt und niemanden auf einen manuellen Schritt warten laesst:
+**der Filter greift jetzt immer**, unabhaengig vom angemeldeten Konto, und nach dem **Praefix**
+`ops_` statt nach der einzelnen Zeichenkette `ops_cron_health`. `includeOpsAlerts` und der
+RPC-Aufruf im Client sind entfallen.
 
-Das Owner-Konto traegt also beide Rollen: Betreiber und Organisator. Drei Wege, keiner ohne
-Nebenwirkung - **deshalb nicht eigenmaechtig entschieden**:
-1. Zeile aus `ops_alert_recipients` loeschen. Dann haben die Alarme nirgendwo hin; die Migration
-   `20260728120859` warnt genau davor. Die Ueberwachung waere still.
-2. Ops-Meldungen nie mehr in der App zeigen (den `includeOpsAlerts`-Zweig entfernen). Gleiche
-   Folge: der Watchdog haette keinen Kanal mehr.
-3. Ein eigenes Betreiber-Konto (oder eine Ops-Mailadresse) als Empfaenger eintragen. Loest es
-   sauber, braucht aber ein zweites Konto.
-Alle drei schreiben in die Live-DB und brauchen ohnehin Freigabe.
+Die Zeilen werden weiterhin geschrieben - die Ueberwachung bleibt intakt, sie ist nur nicht mehr
+in der Nutzeroberflaeche sichtbar. Wer nachsehen will, fragt sie ab:
+`select * from notifications where type like 'ops_%' order by created_at desc;`
+Wenn daraus spaeter eine sichtbare Betriebsansicht werden soll, ist das ein eigener Bildschirm
+unter Profil, kein Umbau des Filters.
 
-**Owner-Entscheidung 03.08.: Weg 3.** Naechste Schritte, in dieser Reihenfolge:
-1. **Der Owner legt das Betreiber-Konto selbst an** - Kontoanlage macht der Agent nicht.
-2. Dessen `profiles.id` heraussuchen.
-3. `insert into ops_alert_recipients (user_id) values ('<neue-id>');` - **freigabepflichtig**.
-4. Erst **danach** `delete from ops_alert_recipients where user_id =
-   '1e4b1cec-0202-4722-8fd0-d8781bc3737f';` Reihenfolge nicht tauschen: zwischen Loeschen und
-   Einfuegen haette die Ueberwachung keinen Empfaenger, und die zwei bestehenden Zeilen in
-   `notifications` bleiben davon unberuehrt (sie verschwinden aus der Liste, sobald
-   `is_ops_alert_recipient()` fuer das Owner-Konto false liefert).
+### Zweite Runde am 05.08. - Befunde aus dem Geraetetest
+
+**Eine Meldungssprache statt drei.** Es gab drei visuelle Sprachen fuer dieselbe Sache: den Toast
+(`ToastHost`), ein bildschirmbreites, unten angeklebtes `ConfirmSheet` mit 62%-Schleier, und eine
+eigene Komponente `ValidationToast` mit eigenen Hexwerten und fest verdrahtetem Englisch.
+Owner-Entscheidung: **der Toast ist die Vorlage.**
+
+- `ConfirmSheet` ist jetzt dieselbe schwebende Karte - `surfaceBright`, haarfeiner Rand,
+  `maxWidth: 420`, Icon links, Titel und Text rechts, darunter die beiden Aktionen (mindestens
+  44 Punkt hoch). Der Ziehgriff ist weg, der Schleier faellt auf 24 %: genug, um Fehlgriffe zu
+  verhindern und „daneben tippen = abbrechen" zu erhalten, ohne den Bildschirm zuzudecken.
+- `ValidationToast` ist **geloescht**. Der Hinweis laeuft ueber das vorhandene Toast-System und
+  erbt damit Aussehen und die 2/4/6-Sekunden-Staffel, statt sie zu kopieren.
+- Gemeinsame Geometrie in `src/components/ui/floatingFeedbackLayout.ts`. Beide sitzen auf
+  `Math.max(insets.bottom, 8)`. **Tiefer geht nicht** - darunter liegt der Home-Indicator, dort
+  waere die Karte angeschnitten. Wer die Karte optisch weiter unten haben will, aendert ihre
+  Hoehe, nicht ihre Position.
+
+**Wer eine neue Meldung baut, nimmt `feedback` aus `src/stores/uiStore`.** Eine eigene Komponente
+mit eigenen Farben ist genau der Zustand, aus dem dieser Abschnitt entstanden ist.
+
+**Deutsch, wo Deutsch hingehoert.**
+- Die Pflichtfeldnamen im Assistenten waren auf **allen drei** Schritten fest verdrahtetes
+  Englisch („Please fill in: Date (05)" mitten in deutscher Oberflaeche). Jetzt aus dem
+  i18n-System; die Nummerierung (01, H3, G6) bleibt, sie verweist auf die Formularabschnitte.
+- „Payment Successful!" kam englisch **aus der Datenbank**, geschrieben vom `stripe-webhook`.
+  Ohne Deploy geloest: jede `payment_success`-Zeile traegt eine `event_id`, das Event liefert den
+  Titel, der Client baut den Text zur Anzeigezeit selbst - rueckwirkend auch fuer bestehende
+  Zeilen. Muster ist `guest_data_changed`, kein zweites eingefuehrt.
+  Der doppelte Genitiv „Hans Zimmer's Hans's Bachelor" verschwand dabei mit: der Eventtitel
+  enthaelt den Namen bereits, der Ehrengast wurde zusaetzlich davorgesetzt.
+
+**Zurueckgenommen: der Knopf im Scrollfluss.** Am 03.08. wurde der Aktionsknopf auf allen drei
+Formularbildschirmen aus dem angehefteten Footer in den Scrollfluss gezogen, um bei kurzen
+Formularen die tote Flaeche zu vermeiden. **Der Geraetetest hat das widerlegt:** im Fluss steht
+der Knopf *unter* der Tastatur, der angeheftete Footer sass *darueber*. In „Profil bearbeiten"
+war der Speichern-Knopf mit offener Tastatur nicht mehr erreichbar.
+Es gilt wieder das Muster aus `685fa537a`: angehefteter Footer innerhalb der
+`KeyboardAvoidingView`. Die tote Flaeche ist ein Schoenheitsfehler, ein unerreichbarer Knopf ist
+keiner. Wer sie angehen will, tut das ueber die Feldabstaende, nicht ueber die Position des
+Knopfes - und prueft es **am Geraet**, nicht am gruenen Typecheck.
 
 ### Was sonst offen blieb
 
