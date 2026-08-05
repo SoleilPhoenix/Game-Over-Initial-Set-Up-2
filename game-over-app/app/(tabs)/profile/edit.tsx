@@ -252,7 +252,7 @@ export default function EditProfileScreen() {
           ref={scrollRef}
           style={{ flex: 1 }}
           contentContainerStyle={{
-            paddingBottom: keyboardOpen ? 160 : insets.bottom + 88,
+            paddingBottom: keyboardOpen ? 160 : 24,
             paddingTop: 24,
           }}
           showsVerticalScrollIndicator={false}
@@ -409,27 +409,36 @@ export default function EditProfileScreen() {
               </Text>
             </YStack>
 
-            <Pressable
-              style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
-              onPress={handleSave}
-              disabled={isSaving}
-              testID="edit-profile-save"
-            >
-              {isSaving ? (
-                <XStack gap="$2" alignItems="center">
-                  <Spinner size="small" color="#0D1B2A" />
-                  <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
-                    {t.editProfile.saving}
-                  </Text>
-                </XStack>
-              ) : (
-                <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
-                  {t.editProfile.saveChanges}
-                </Text>
-              )}
-            </Pressable>
           </YStack>
         </ScrollView>
+        <View
+          paddingHorizontal="$4"
+          paddingTop="$3"
+          paddingBottom={keyboardOpen ? 12 : insets.bottom + 88}
+          backgroundColor={'#0D1B2A'}
+          borderTopWidth={1}
+          borderTopColor={'rgba(230,220,200,0.15)'}
+        >
+          <Pressable
+            style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={isSaving}
+            testID="edit-profile-save"
+          >
+            {isSaving ? (
+              <XStack gap="$2" alignItems="center">
+                <Spinner size="small" color="#0D1B2A" />
+                <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
+                  {t.editProfile.saving}
+                </Text>
+              </XStack>
+            ) : (
+              <Text color="#0D1B2A" fontWeight="600" fontSize={16}>
+                {t.editProfile.saveChanges}
+              </Text>
+            )}
+          </Pressable>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );

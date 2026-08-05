@@ -51,9 +51,9 @@ export default function ChangeEmailScreen() {
     });
   }, []);
 
-  // Keeping the submit button directly after the password field avoids a blank
-  // footer area. Scrolling the password field to the top also keeps that button
-  // in the keyboard-visible portion of the scroll view.
+  // The submit button lives in a pinned footer rather than at the end of the
+  // scroll content: with the password keyboard up there was no reliable way to
+  // reach it, and the tab bar sits on top of the last stretch of the scroll view.
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
@@ -204,10 +204,7 @@ export default function ChangeEmailScreen() {
         <ScrollView
           ref={scrollRef}
           style={{ flex: 1 }}
-          contentContainerStyle={{
-            paddingTop: 24,
-            paddingBottom: keyboardOpen ? 160 : insets.bottom + 88,
-          }}
+          contentContainerStyle={{ paddingTop: 24, paddingBottom: keyboardOpen ? 160 : 24 }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}
@@ -312,27 +309,36 @@ export default function ChangeEmailScreen() {
               />
               <FieldError message={errors.currentPassword?.message} />
             </YStack>
-
-            <Pressable
-              style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
-              disabled={isSubmitting}
-              onPress={handleSubmit(onSubmit)}
-            >
-              {isSubmitting ? (
-                <XStack gap="$2" alignItems="center">
-                  <Spinner size="small" color={theme.textOnPrimary} />
-                  <Text color={theme.textOnPrimary} fontWeight="600">
-                    {t.changeEmail.submitting}
-                  </Text>
-                </XStack>
-              ) : (
-                <Text color={theme.textOnPrimary} fontWeight="600" fontSize={16}>
-                  {t.changeEmail.submit}
-                </Text>
-              )}
-            </Pressable>
           </YStack>
         </ScrollView>
+
+        <View
+          paddingHorizontal="$4"
+          paddingTop="$3"
+          paddingBottom={keyboardOpen ? 12 : insets.bottom + 88}
+          backgroundColor={theme.background}
+          borderTopWidth={1}
+          borderTopColor={theme.ghostBorder}
+        >
+          <Pressable
+            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]}
+            disabled={isSubmitting}
+            onPress={handleSubmit(onSubmit)}
+          >
+            {isSubmitting ? (
+              <XStack gap="$2" alignItems="center">
+                <Spinner size="small" color={theme.textOnPrimary} />
+                <Text color={theme.textOnPrimary} fontWeight="600">
+                  {t.changeEmail.submitting}
+                </Text>
+              </XStack>
+            ) : (
+              <Text color={theme.textOnPrimary} fontWeight="600" fontSize={16}>
+                {t.changeEmail.submit}
+              </Text>
+            )}
+          </Pressable>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
