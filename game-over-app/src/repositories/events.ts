@@ -12,11 +12,25 @@ type EventUpdate = Database['public']['Tables']['events']['Update'];
 type EventPreferences = Database['public']['Tables']['event_preferences']['Row'];
 type EventPreferencesInsert = Database['public']['Tables']['event_preferences']['Insert'];
 
+/** Nur die Geldfelder, die die Eventliste fuer ihren Zahlungsstand braucht. */
+export interface EventBookingSummary {
+  total_amount_cents: number | null;
+  deposit_amount_cents: number | null;
+  fully_paid_at: string | null;
+}
+
 export interface EventWithDetails extends Omit<Event, 'planning_checklist'> {
   city: { id: string; name: string; country: string } | null;
   preferences: EventPreferences | null;
   participant_count: number;
   planning_checklist?: Record<string, boolean>;
+  /**
+   * Zahlungsstand direkt aus der Buchung. Die Eventliste las ihn vorher aus dem
+   * AsyncStorage-Cache und fiel ohne Cache auf fest verdrahtete 25 % zurueck -
+   * daher die Widersprueche zum Budget-Bildschirm (Befund 05.08.).
+   * `null`, wenn keine Buchung existiert oder RLS sie fuer diesen Nutzer verbirgt.
+   */
+  booking?: EventBookingSummary | null;
 }
 
 function generateUUID(): string {
@@ -27,6 +41,16 @@ function generateUUID(): string {
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * PostgREST liefert eine eingebettete Beziehung als Array, auch wenn es je Event
+ * nur eine Buchung gibt. Ohne diese Normalisierung greift jeder Zugriff auf
+ * `event.booking.total_amount_cents` ins Leere.
+ */
+function firstBooking(value: unknown): EventBookingSummary | null {
+  if (Array.isArray(value)) return (value[0] as EventBookingSummary) ?? null;
+  return (value as EventBookingSummary) ?? null;
+}
 
 async function resolveCityId(cityId: string): Promise<string> {
   if (UUID_REGEX.test(cityId)) return cityId;
@@ -59,7 +83,8 @@ export const eventsRepository = {
       .from('events')
       .select(`
         *,
-        city:cities(id, name, country)
+        city:cities(id, name, country),
+        booking:bookings(total_amount_cents, deposit_amount_cents, fully_paid_at)
       `)
       .eq('created_by', userId)
       .is('deleted_at', null)
@@ -83,7 +108,7 @@ export const eventsRepository = {
       if (participantEventIds.length > 0) {
         const { data, error } = await supabase
           .from('events')
-          .select(`*, city:cities(id, name, country)`)
+          .select(`*, city:cities(id, name, country), booking:bookings(total_amount_cents, deposit_amount_cents, fully_paid_at)`)
           .in('id', participantEventIds)
           .is('deleted_at', null)
           .order('created_at', { ascending: false });
@@ -126,6 +151,7 @@ export const eventsRepository = {
       ...event,
       city: event.city as EventWithDetails['city'],
       preferences: null,
+      booking: firstBooking((event as any).booking),
       participant_count: countMap.get(event.id) || 0,
       planning_checklist: (event as any).planning_checklist as Record<string, boolean> | undefined,
     }));
@@ -139,7 +165,8 @@ export const eventsRepository = {
       .from('events')
       .select(`
         *,
-        city:cities(id, name, country)
+        city:cities(id, name, country),
+        booking:bookings(total_amount_cents, deposit_amount_cents, fully_paid_at)
       `)
       .eq('id', eventId)
       .is('deleted_at', null)
@@ -175,6 +202,7 @@ export const eventsRepository = {
       ...data,
       city: data.city as EventWithDetails['city'],
       preferences,
+      booking: firstBooking((data as any).booking),
       participant_count: participantCount,
       planning_checklist: (data as any).planning_checklist as Record<string, boolean> | undefined,
     };

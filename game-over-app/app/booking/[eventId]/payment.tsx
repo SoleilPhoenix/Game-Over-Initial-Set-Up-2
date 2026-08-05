@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBookingFlow } from '@/hooks/useBookingFlow';
 import { usePaymentSheet } from '@/hooks/usePaymentSheet';
-import { useCreateBooking } from '@/hooks/queries/useBookings';
+import { bookingKeys, useCreateBooking } from '@/hooks/queries/useBookings';
 import { eventKeys } from '@/hooks/queries/useEvents';
 import { useWizardStore } from '@/stores/wizardStore';
 import { supabase } from '@/lib/supabase/client';
@@ -20,6 +20,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useTranslation, getTranslation } from '@/i18n';
 import { setDesiredParticipants, setBudgetInfo } from '@/lib/participantCountCache';
+import { formatEuroFromEuros, splitPerPerson } from '@/utils/money';
 import { getCityTierName, getTierDisplayLabel, TIER_PRICE_PER_PERSON_CENTS } from '@/constants/packageTiers';
 import { feedback } from '@/stores/uiStore';
 
@@ -184,8 +185,16 @@ export default function PaymentScreen() {
   };
 
   // Decimal format for per-person display — must match summary screen
-  const formatPriceDecimal = (cents: number) =>
-    '\u20AC' + (cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Anteil pro Person, auf ganze Euro abgerundet (Owner-Regel 05.08.).
+  // Zeigte vorher zwei Nachkommastellen, waehrend direkt darueber Anzahlung und
+  // Gesamtbetrag glatt standen - derselbe Bildschirm in zwei Waehrungsformaten.
+  const perPersonLabel = () =>
+    formatEuroFromEuros(
+      splitPerPerson(
+        paramTotalCents || activePricing.totalCents,
+        activePricing.payingParticipantCount,
+      ).perPersonEuros,
+    );
 
   const getStepMessage = () => {
     switch (paymentStep) {
@@ -283,6 +292,12 @@ export default function PaymentScreen() {
           }).catch(() => {});
           // Invalidate events cache so bell dot clears immediately on navigation back
           queryClient.invalidateQueries({ queryKey: eventKeys.all });
+          // ...und die Buchung selbst. Ohne das behielt der Budget-Bildschirm den
+          // Wert von *vor* der Zahlung - bei einem frisch angelegten Event ist das
+          // `null`, weil die Abfrage lief, bevor die Buchung existierte. Der
+          // Bildschirm fiel dann in seinen Demo-Zweig und zeigte "Bezahlter Betrag
+          // 0 €", obwohl die Anzahlung in der DB stand (Befund vom 05.08.).
+          queryClient.invalidateQueries({ queryKey: bookingKeys.all });
         }
 
         setPaymentStep('confirming');
@@ -478,7 +493,7 @@ export default function PaymentScreen() {
                     <Text fontSize="$2" color="$textSecondary">
                       {paramAmountCents > 0
                         ? t.booking.depositAlreadyPaid.replace('{{amount}}', formatPrice(paramTotalCents - paramAmountCents))
-                        : t.booking.perPersonGuests.replace('{{price}}', formatPriceDecimal(activePricing.perPersonCents)).replace('{{count}}', String(activePricing.payingParticipantCount))}
+                        : t.booking.perPersonGuests.replace('{{price}}', perPersonLabel()).replace('{{count}}', String(activePricing.payingParticipantCount))}
                     </Text>
                   </YStack>
                 )}

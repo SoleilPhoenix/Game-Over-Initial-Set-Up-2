@@ -161,6 +161,84 @@ und deutsche Linklabel (Datenschutz / AGB / Impressum).
 (classic), `<Stadt> Legende` (grand) - **nicht** „Classic"/„M". Wer eine Vorschau baut, nimmt
 echte Werte; eine erfundene Beispielzeile hat am 03.08. eine falsche Fehlermeldung ausgeloest.
 
+### Rundung und Cache-Wahrheit (05.08.) - vier Fehler, eine Krankheit
+
+Beim Geraetetest am 05.08. fielen widerspruechliche Zahlen auf. Die DB war bei **allen** Events
+korrekt; alle vier Fehler lagen in der Anzeige, und drei davon hatten dieselbe Wurzel:
+**zwei Wahrheiten fuer dieselbe Zahl** - die Buchung und der AsyncStorage-Cache.
+
+1. **`bookingKeys` wurde nach der Zahlung nie invalidiert.** `payment.tsx` invalidierte nur
+   `eventKeys.all`. Die Buchungsabfrage behielt ihren Wert von *vor* der Zahlung - bei einem
+   frisch angelegten Event ist das `null`, weil sie lief, bevor die Buchung existierte. Der
+   Budget-Bildschirm fiel dann in seinen Demo-Zweig und zeigte „Bezahlter Betrag 0 €", obwohl
+   die Anzahlung in der DB stand. Das war der Fall „Hans".
+2. **Die Dringlichkeitspruefung las den Cache**, nicht die Buchung
+   (`event/[id]/index.tsx`). Deshalb kippte sie je Event in die andere Richtung: bei Natalia
+   sagte der Cache „voll bezahlt" (am 31.07. von Hand gesetzt), die Buchung 25 %; bei Sven
+   genau umgekehrt. Liest jetzt die Buchung, Cache nur noch als Rueckfall.
+3. **Der Anteil pro Person wurde durch `participants.length` geteilt** - also durch die
+   *beigetretenen* Gaeste statt durch `paying_participants`. Bei Natalia 4 statt 5, der Anteil
+   damit 286,25 € statt 229 €.
+4. **Zwei Waehrungsformate auf demselben Bildschirm.** In der Zahlungsuebersicht standen
+   Gesamtbetrag und Anzahlung glatt, der Anteil pro Person mit zwei Nachkommastellen.
+5. **Die Prozentangabe auf der Eventkachel** (`(tabs)/events/index.tsx`, `getPaymentStatus`)
+   las ebenfalls den Cache - **und hatte einen fest verdrahteten Rueckfall auf 25 %**, der
+   immer dann log, wenn der Cache fehlte. Genau der Fall Sven: Kachel „25 % bezahlt",
+   Buchung vollstaendig bezahlt. Der Ratewert ist raus; ohne belastbare Quelle wird lieber
+   nichts angezeigt.
+
+   Dafuer laedt die Eventliste jetzt die Buchung mit
+   (`booking:bookings(total_amount_cents, deposit_amount_cents, fully_paid_at)`).
+   **Zwei Fallen dabei:** PostgREST liefert eine eingebettete Beziehung als **Array**, auch
+   bei genau einer Buchung - `firstBooking()` in `events.ts` normalisiert das. Und die
+   Einbettung funktioniert nur, weil `bookings_event_id_fkey` existiert; ohne Fremdschluessel
+   scheitert die ganze Abfrage zur Laufzeit und die Liste bliebe leer. Am 05.08. geprueft.
+
+**Owner-Regel vom 05.08., jetzt in `src/utils/money.ts` an einer Stelle:**
+
+- Betraege erscheinen **ueberall** als ganze Euro - Buchungsstrecke wie Budget.
+- **Der Rest ist immer eine Differenz**, nie eine eigene Rundung. Getrennt gerundet liegen
+  Anzahlung und Rest sonst einen Euro neben der Summe.
+- **Pro Person wird abgerundet, die Differenz traegt der Organisator.** Alle Gaeste sehen
+  denselben glatten Betrag. Beispiel Dana: 895 € auf 4 Zahlende, jeder Gast 223 €, der
+  Organisator 226 €.
+- Abgerundet wird bewusst, nicht kaufmaennisch: eine zu niedrig ausgewiesene Anzahlung
+  ueberzeichnet den offenen Rest, und das ist die ungefaehrliche Richtung.
+
+12 Tests sichern die Regel, darunter einer, der ueber sechs Kombinationen prueft, dass die
+Summe der Anteile **exakt** den Gesamtbetrag trifft. Das ist die Eigenschaft, die beim Runden
+zuerst kaputtgeht.
+
+**Achtung fuer die naechste Aenderung:** `budget/index.tsx` hat weiterhin einen Demo-Zweig fuer
+Events ohne Buchungszeile, der aus dem Cache liest. Er ist jetzt schwerer zu treffen, aber nicht
+weg. Wer dort Zahlen aendert, muss beide Zweige anfassen.
+
+### Gruppenbeitraege: Aufteilung, Ehrengast, Erinnern-Knopf (05.08., zweite Runde)
+
+**Die Zeilenbetraege kamen aus `contribution_amount_cents`** - dem beim Beitritt eingefrorenen
+Wert. Der driftet danach von der Buchung weg: bei Natalia standen 229 € je Zeile, waehrend vier
+sichtbare Zeilen 916 € statt 1145 € ergaben. Sie kommen jetzt aus `splitPerPerson(total,
+paying_participants)`, der Organisator traegt die Differenz. Damit passt die Summe immer.
+
+**Neue Regel: der Ehrengast erscheint als Beitragszeile, wenn er mitzahlt** (`exclude_honoree =
+false`). Er hat keine `event_participants`-Zeile, solange er nicht selbst beitritt - deshalb
+eine synthetische Zeile in `sortedParticipants`.
+
+**Deren Grenze, bewusst so:** die Zeile steht auf „offen". Ob der Ehrengast gezahlt hat, weiss
+die App nicht, weil es keine Zeile gibt, an der ein Status haengen koennte. „Bezahlt" waere eine
+Behauptung ohne Grundlage. Sie zaehlt aus demselben Grund nicht in `pendingCount` mit, wirkt
+also nicht auf den Erinnern-Knopf. **Wer das aufloesen will, braucht eine echte
+Teilnehmerzeile fuer den Ehrengast** - das waere eine Datenaenderung, keine Anzeigefrage.
+
+**„Alle erinnern"** verschwindet nicht mehr, wenn niemand offen ist, sondern wird ausgegraut.
+Das **„DU"-Abzeichen** hinter dem eigenen Namen ist raus - der Nutzer weiss, wie er heisst.
+
+**Natalias Buchungszeile bleibt der Ausreisser.** Drei von vier Events haben
+`exclude_honoree = true` mit 4 Zahlenden; Natalia hat `false` mit 5. Das ist die von Hand
+gesetzte Testzeile vom 31.07. Mit der neuen Ehrengast-Regel ist sie **in sich stimmig**
+(5 Zeilen a 229 € = 1145 €), weicht aber vom Muster der anderen Events ab. Wer sie angleichen
+will, aendert Geldspalten - das schreibt nur der Server, und es braucht Owner-Freigabe.
+
 ### Markenclaim in jeder Mail, Partybezeichnung vereinheitlicht (03.08.)
 
 Der Claim „Einer heiratet. Alle feiern. Keiner stresst." stand dreimal als **kopiertes Markup**

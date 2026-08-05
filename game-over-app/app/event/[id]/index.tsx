@@ -22,6 +22,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { RADII, TYPE_SCALE, ambientShadow, type EditorialTheme } from '@/constants/designSystem';
 import { DisplayHeading, GoldButton } from '@/components/ui/editorial';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { splitPerPerson } from '@/utils/money';
 import { ShareModal } from '@/components/ui/ShareModal';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import {
@@ -99,12 +100,14 @@ export default function EventSummaryScreen() {
     ]).then(([seen, info]) => {
       if (seen) return;
 
-      let cents = 0;
-      if (info?.totalCents && info?.payingCount) {
-        cents = Math.ceil(info.totalCents / info.payingCount);
-      } else if (booking?.total_amount_cents && participants?.length) {
-        cents = Math.ceil(booking.total_amount_cents / participants.length);
-      }
+      // Reihenfolge bewusst: die Buchung ist die Wahrheit, der Cache nur der
+      // Rueckfall fuer Events ohne Buchungszeile. Vorher war es umgekehrt, und
+      // der zweite Zweig teilte durch `participants.length` - also durch die
+      // *beigetretenen* Gaeste statt durch die zahlenden. Bei Natalia waren das
+      // 4 statt 5, der Anteil damit 286,25 € statt 229 €.
+      const totalCents = booking?.total_amount_cents ?? info?.totalCents ?? 0;
+      const payingCount = booking?.paying_participants ?? info?.payingCount ?? 0;
+      const cents = splitPerPerson(totalCents, payingCount).perPersonEuros * 100;
 
       setContributionCents(cents);
       if (cents > 0) setShowContributionCard(true);
@@ -144,15 +147,27 @@ export default function EventSummaryScreen() {
   // Past events: no more invitations — hide the Share Invite CTA
   const isPastReadOnly = event ? isReadOnlyEvent(event) : false;
 
+  // Zahlungsstand kommt aus der Buchung, nicht aus dem AsyncStorage-Cache.
+  // Der Cache war der Grund fuer widerspruechliche Angaben: bei Natalia stand
+  // dort "voll bezahlt" (am 31.07. von Hand gesetzt), waehrend die Buchung 25 %
+  // fuehrte; bei Sven genau andersherum. Zwei Wahrheiten fuer dieselbe Zahl.
+  // Der Cache bleibt nur Rueckfall fuer Events ohne Buchungszeile.
   const isBudgetUrgent = useMemo(() => {
-    if (!event?.start_date || !cachedBudget) return false;
+    if (!event?.start_date) return false;
+    const totalCents = booking?.total_amount_cents ?? cachedBudget?.totalCents ?? 0;
+    if (!totalCents) return false;
+    const paidCents = booking
+      ? (booking.fully_paid_at ? totalCents : (booking.deposit_amount_cents ?? 0))
+      : (cachedBudget?.paidAmountCents ?? 0);
+    if (paidCents >= totalCents) return false;
+
     const start = new Date(event.start_date);
     const now = new Date();
     const startMidnight = new Date(start.getFullYear(), start.getMonth(), start.getDate());
     const nowMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const daysLeft = Math.round((startMidnight.getTime() - nowMidnight.getTime()) / (1000 * 60 * 60 * 24));
-    return daysLeft >= 0 && daysLeft <= 14 && (cachedBudget.paidAmountCents || 0) < cachedBudget.totalCents;
-  }, [event?.start_date, cachedBudget]);
+    return daysLeft >= 0 && daysLeft <= 14;
+  }, [event?.start_date, booking, cachedBudget]);
 
   const vibeText = useMemo(() => {
     if (!event) return '';

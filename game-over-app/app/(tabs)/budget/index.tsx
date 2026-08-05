@@ -28,6 +28,7 @@ import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { computeBookedBudgetStats } from '@/utils/budgetStats';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { depositAndDue, formatEuroFromEuros, splitPerPerson } from '@/utils/money';
 import { PastEventBanner } from '@/components/ui/PastEventBanner';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import { loadBudgetInfo, loadDesiredParticipants, loadGuestDetails, type BudgetInfo, type GuestDetail } from '@/lib/participantCountCache';
@@ -760,22 +761,27 @@ export default function BudgetDashboardScreen() {
     }).format(Math.round(cents / 100));
   };
 
-  // Betraege des Buchungs-Kassenbuchs: Cents nur zeigen, wenn es welche gibt.
-  // 114500 -> "1.145 €", 28625 -> "286,25 €". Frueher rundete diese Stelle auf
-  // ganze Euro und rechnete den Rest aus der Differenz aus; seit die Buchung
-  // `remaining_amount_cents` fuehrt, ist Runden weder noetig noch richtig -
-  // der Betrag, der spaeter abgebucht wird, steht exakt fest.
-  const formatCurrencySmart = (cents: number) => {
-    // Entweder keine oder zwei Nachkommastellen, nie eine: mit
-    // minimumFractionDigits 0 wuerde 57250 als "572,5 €" erscheinen.
-    const digits = cents % 100 === 0 ? 0 : 2;
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
-    }).format(cents / 100);
-  };
+  // Betraege des Buchungs-Kassenbuchs, gerundet auf ganze Euro.
+  // Owner-Regel vom 05.08.: keine Cent-Betraege, weder hier noch in der
+  // Buchungsstrecke. Anzahlung und Rest kommen als Paar aus `depositAndDue`,
+  // damit der Rest immer die Differenz zum Gesamtbetrag ist und die Summe
+  // aufgeht - getrennt gerundet lagen sie einen Euro daneben.
+  const ledger = useMemo(
+    () => depositAndDue(budgetStats.totalBudget, budgetStats.collected),
+    [budgetStats.totalBudget, budgetStats.collected],
+  );
+
+  // Aufteilung auf die Zahlenden, abgeleitet aus der Buchung - nicht aus
+  // `contribution_amount_cents` der einzelnen Zeile. Der gespeicherte Wert
+  // friert den Stand zum Zeitpunkt des Beitritts ein und driftet danach von der
+  // Buchung weg: bei Natalia standen 229 € je Zeile, waehrend die Buchung
+  // 1145 € auf 4 Zahlende fuehrte - vier sichtbare Betraege ergaben 916 €
+  // statt 1145 € (Befund 05.08.).
+  // Der Organisator traegt die Differenz, damit die Summe exakt aufgeht.
+  const share = useMemo(
+    () => splitPerPerson(budgetStats.totalBudget, budgetStats.payingCount),
+    [budgetStats.totalBudget, budgetStats.payingCount],
+  );
 
   const handleInvite = useCallback(() => {
     const effectiveEventId = selectedEventId || eventIdParam;
@@ -894,12 +900,41 @@ export default function BudgetDashboardScreen() {
   // Sort DB participants so organizer is always first in contribution list
   const sortedParticipants = useMemo(() => {
     if (!participants) return null;
-    return [...(participants as any[])].sort((a, b) => {
+    const rows = [...(participants as any[])].sort((a, b) => {
       if (a.role === 'organizer') return -1;
       if (b.role === 'organizer') return 1;
       return 0;
     });
-  }, [participants]);
+
+    // Zahlt der Ehrengast mit (`exclude_honoree = false`), gehoert er in die
+    // Liste - sonst fehlt genau ein Zahler und die sichtbaren Betraege ergeben
+    // weniger als den Gesamtpreis. Bei Natalia waren das vier Zeilen a 229 €
+    // = 916 € gegen 1145 € Gesamtpreis (Befund 05.08.).
+    //
+    // Er hat keine `event_participants`-Zeile, solange er nicht selbst
+    // beitritt. Deshalb eine synthetische Zeile - und deshalb steht sie
+    // bewusst auf "offen": ob er gezahlt hat, weiss die App nicht. Das als
+    // "bezahlt" auszugeben waere eine Behauptung ohne Grundlage.
+    const honoreeName = selectedEvent?.honoree_name;
+    const honoreePays = booking?.exclude_honoree === false;
+    if (!honoreePays || !honoreeName) return rows;
+
+    const alreadyListed = rows.some(
+      (r) => (r.profile?.full_name || '').trim().toLowerCase() === honoreeName.trim().toLowerCase(),
+    );
+    if (alreadyListed) return rows;
+
+    rows.push({
+      id: `honoree:${selectedEventId ?? 'current'}`,
+      role: 'honoree',
+      user_id: null,
+      payment_status: 'pending',
+      payment_claimed_at: null,
+      contribution_amount_cents: null,
+      profile: { full_name: honoreeName, email: null },
+    });
+    return rows;
+  }, [participants, booking?.exclude_honoree, selectedEvent?.honoree_name, selectedEventId]);
 
   // Normalised contributor list for expense modal (works with both demo + DB participants)
   // Includes userId + role for filtering (exclude self, exclude honoree)
@@ -967,11 +1002,13 @@ export default function BudgetDashboardScreen() {
           firstName: fullName.split(' ')[0] || undefined,
           email: p.profile?.email || undefined,
           phone: (p.profile as any)?.phone || undefined,
-          amountCents: p.contribution_amount_cents || budgetStats.perPerson || 0,
+          // Derselbe Wert wie in der Liste - sonst nennt die Erinnerung
+          // einen anderen Betrag als der Bildschirm daneben.
+          amountCents: share.perPersonEuros * 100,
         };
       })
       .filter(r => r.email || r.phone);
-  }, [sortedParticipants, budgetStats.perPerson]);
+  }, [sortedParticipants, share.perPersonEuros]);
   // Keep the ref in sync so the send handler always sees the latest recipients.
   reminderRecipientsRef.current = reminderRecipients;
 
@@ -1042,7 +1079,7 @@ export default function BudgetDashboardScreen() {
           body: (tr.budget as any).notif14DayBody
             .replace('{{eventName}}', eventName)
             .replace('{{count}}', String(daysUntilEvent))
-            .replace('{{amount}}', formatCurrencySmart(budgetStats.pending)),
+            .replace('{{amount}}', formatEuroFromEuros(ledger.dueEuros)),
           data: { screen: '/(tabs)/budget', eventId: selectedEventId },
           sound: true,
         },
@@ -1429,8 +1466,8 @@ export default function BudgetDashboardScreen() {
                 ) : (
                   /* Deposit paid, remainder still due */
                   (() => {
-                    const fmtDeposit = formatCurrencySmart(budgetStats.collected);
-                    const fmtDue = formatCurrencySmart(budgetStats.pending);
+                    const fmtDeposit = formatEuroFromEuros(ledger.paidEuros);
+                    const fmtDue = formatEuroFromEuros(ledger.dueEuros);
                     const isUrgent = daysUntilEvent !== null && daysUntilEvent <= 14;
                     return (
                       <>
@@ -1524,7 +1561,7 @@ export default function BudgetDashboardScreen() {
                   <View style={styles.guestRemainingInfo}>
                     <Ionicons name="information-circle-outline" size={18} color={theme.textSecondary} />
                     <Text style={styles.guestRemainingText}>
-                      {t.budget.guestRemainingText.replace('{{amount}}', formatCurrencySmart(budgetStats.pending))}
+                      {t.budget.guestRemainingText.replace('{{amount}}', formatEuroFromEuros(ledger.dueEuros))}
                     </Text>
                   </View>
                 )}
@@ -1536,9 +1573,20 @@ export default function BudgetDashboardScreen() {
                 <Text fontSize={12} fontWeight="700" color={theme.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
                   {t.budget.groupContributions}
                 </Text>
-                {isOrganizer && budgetStats.pendingCount > 0 && (
-                  <Pressable onPress={handleRemindAll}>
-                    <Text fontSize={12} fontWeight="500" color={theme.accentGold}>
+                {/* Sichtbar, aber ausgegraut, sobald niemand mehr offen ist.
+                    Vorher verschwand der Knopf ganz - das laesst offen, ob es ihn
+                    nie gab oder ob nichts mehr zu erinnern ist (Owner-Wunsch 05.08.). */}
+                {isOrganizer && (
+                  <Pressable
+                    onPress={handleRemindAll}
+                    disabled={budgetStats.pendingCount === 0}
+                    accessibilityState={{ disabled: budgetStats.pendingCount === 0 }}
+                  >
+                    <Text
+                      fontSize={12}
+                      fontWeight="500"
+                      color={budgetStats.pendingCount === 0 ? theme.textTertiary : theme.accentGold}
+                    >
                       {t.budget.remindAll}
                     </Text>
                   </Pressable>
@@ -1565,15 +1613,11 @@ export default function BudgetDashboardScreen() {
                   const isPending = !isPaid;
                   const participantRole = isDemo ? null : (participantRaw as any).role;
                   const participantUserId = isDemo ? null : (participantRaw as any).user_id as string;
-                  const recordedContribution = isDemo
-                    ? 0
-                    : ((participantRaw as any).contribution_amount_cents ?? 0);
-                  const perPersonAmount = recordedContribution > 0
-                    ? recordedContribution
-                    : budgetStats.perPerson || 0;
+                  // Betrag kommt aus der Buchungsaufteilung, nicht aus
+                  // `contribution_amount_cents` - siehe Kommentar bei `share`.
                   const amountForRow = isDemo
                     ? (participantRaw as DemoP).amount
-                    : perPersonAmount;
+                    : (isOrganizerRow ? share.organizerEuros : share.perPersonEuros) * 100;
                   const isCurrentUser = isDemo
                     ? (participantRaw as DemoP).id === 'organizer'
                       ? selectedEvent?.created_by === user?.id
@@ -1621,18 +1665,13 @@ export default function BudgetDashboardScreen() {
                             >
                               {name}
                             </Text>
-                            {isCurrentUser && (
-                              <View style={{ flexShrink: 0, backgroundColor: theme.surfaceHigh, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                                <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textTertiary, letterSpacing: 0.4 }}>{(t.budget as any).youBadge}</Text>
-                              </View>
-                            )}
                           </XStack>
                         </View>
 
                         {/* Amount + status stacked on the right */}
                         <YStack style={styles.contributionAmount} alignItems="flex-end" gap={2}>
                           <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
-                            {formatCurrency(amountForRow)}
+                            {formatEuroFromEuros(Math.round(amountForRow / 100))}
                           </Text>
                           {/* The screen deliberately carries only two status colours -
                               green for paid, one orange for everything still open - so

@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
 import { getTierDisplayLabel, getCityTierName, TIER_PRICE_PER_PERSON_CENTS } from '@/constants/packageTiers';
 import { useTranslation } from '@/i18n';
+import { formatEuroFromEuros, splitPerPerson } from '@/utils/money';
 
 const styles = StyleSheet.create({
   payOption: {
@@ -146,13 +147,6 @@ export default function BookingSummaryScreen() {
     );
   }
 
-  const formatPrice = (cents: number) => {
-    return '\u20AC' + (cents / 100).toLocaleString('de-DE', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-  };
-
   // Whole-euro format (no decimals) — same rounding logic as budget page:
   // deposit = Math.round (standard), remaining = total - deposit so they always sum correctly
   const formatPriceWhole = (euros: number) =>
@@ -198,6 +192,13 @@ export default function BookingSummaryScreen() {
   const totalEuros = Math.round(pricing.totalCents / 100);
   const depositEuros = Math.round((pricing.totalCents * 0.25) / 100);
   const remainingEuros = totalEuros - depositEuros;
+
+  // Anteil pro Person, ebenfalls auf ganze Euro abgerundet. Stand hier vorher
+  // als einziger Betrag mit zwei Nachkommastellen, waehrend Gesamtbetrag,
+  // Anzahlung und Rest daneben glatt waren (Owner-Regel 05.08.).
+  const perPersonLabel = formatEuroFromEuros(
+    splitPerPerson(pricing.totalCents, pricing.payingParticipantCount).perPersonEuros,
+  );
 
   return (
     <YStack flex={1} backgroundColor={'#0D1B2A'}>
@@ -374,7 +375,7 @@ export default function BookingSummaryScreen() {
                 {excludeHonoreeText}
               </Text>
               <Text fontSize={13} color={'rgba(255,255,255,0.72)'}>
-                {honoreePaysKey.replace('{{amount}}', formatPrice(honoreePaysCents))}
+                {honoreePaysKey.replace('{{amount}}', formatEuroFromEuros(Math.round(honoreePaysCents / 100)))}
               </Text>
             </YStack>
             <Switch
@@ -404,7 +405,7 @@ export default function BookingSummaryScreen() {
             </Text>
             <XStack alignItems="baseline" gap="$2" marginTop="$2">
               <Text fontSize={36} fontWeight="800" color={'#C6A75E'}>
-                {formatPrice(pricing.perPersonCents)}
+                {perPersonLabel}
               </Text>
               <Text fontSize={14} color={'rgba(255,255,255,0.72)'}>{t.booking.slashPerson}</Text>
             </XStack>
