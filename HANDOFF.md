@@ -161,6 +161,46 @@ und deutsche Linklabel (Datenschutz / AGB / Impressum).
 (classic), `<Stadt> Legende` (grand) - **nicht** „Classic"/„M". Wer eine Vorschau baut, nimmt
 echte Werte; eine erfundene Beispielzeile hat am 03.08. eine falsche Fehlermeldung ausgeloest.
 
+### Rundung und Cache-Wahrheit (05.08.) - vier Fehler, eine Krankheit
+
+Beim Geraetetest am 05.08. fielen widerspruechliche Zahlen auf. Die DB war bei **allen** Events
+korrekt; alle vier Fehler lagen in der Anzeige, und drei davon hatten dieselbe Wurzel:
+**zwei Wahrheiten fuer dieselbe Zahl** - die Buchung und der AsyncStorage-Cache.
+
+1. **`bookingKeys` wurde nach der Zahlung nie invalidiert.** `payment.tsx` invalidierte nur
+   `eventKeys.all`. Die Buchungsabfrage behielt ihren Wert von *vor* der Zahlung - bei einem
+   frisch angelegten Event ist das `null`, weil sie lief, bevor die Buchung existierte. Der
+   Budget-Bildschirm fiel dann in seinen Demo-Zweig und zeigte „Bezahlter Betrag 0 €", obwohl
+   die Anzahlung in der DB stand. Das war der Fall „Hans".
+2. **Die Dringlichkeitspruefung las den Cache**, nicht die Buchung
+   (`event/[id]/index.tsx`). Deshalb kippte sie je Event in die andere Richtung: bei Natalia
+   sagte der Cache „voll bezahlt" (am 31.07. von Hand gesetzt), die Buchung 25 %; bei Sven
+   genau umgekehrt. Liest jetzt die Buchung, Cache nur noch als Rueckfall.
+3. **Der Anteil pro Person wurde durch `participants.length` geteilt** - also durch die
+   *beigetretenen* Gaeste statt durch `paying_participants`. Bei Natalia 4 statt 5, der Anteil
+   damit 286,25 € statt 229 €.
+4. **Zwei Waehrungsformate auf demselben Bildschirm.** In der Zahlungsuebersicht standen
+   Gesamtbetrag und Anzahlung glatt, der Anteil pro Person mit zwei Nachkommastellen.
+
+**Owner-Regel vom 05.08., jetzt in `src/utils/money.ts` an einer Stelle:**
+
+- Betraege erscheinen **ueberall** als ganze Euro - Buchungsstrecke wie Budget.
+- **Der Rest ist immer eine Differenz**, nie eine eigene Rundung. Getrennt gerundet liegen
+  Anzahlung und Rest sonst einen Euro neben der Summe.
+- **Pro Person wird abgerundet, die Differenz traegt der Organisator.** Alle Gaeste sehen
+  denselben glatten Betrag. Beispiel Dana: 895 € auf 4 Zahlende, jeder Gast 223 €, der
+  Organisator 226 €.
+- Abgerundet wird bewusst, nicht kaufmaennisch: eine zu niedrig ausgewiesene Anzahlung
+  ueberzeichnet den offenen Rest, und das ist die ungefaehrliche Richtung.
+
+12 Tests sichern die Regel, darunter einer, der ueber sechs Kombinationen prueft, dass die
+Summe der Anteile **exakt** den Gesamtbetrag trifft. Das ist die Eigenschaft, die beim Runden
+zuerst kaputtgeht.
+
+**Achtung fuer die naechste Aenderung:** `budget/index.tsx` hat weiterhin einen Demo-Zweig fuer
+Events ohne Buchungszeile, der aus dem Cache liest. Er ist jetzt schwerer zu treffen, aber nicht
+weg. Wer dort Zahlen aendert, muss beide Zweige anfassen.
+
 ### Markenclaim in jeder Mail, Partybezeichnung vereinheitlicht (03.08.)
 
 Der Claim „Einer heiratet. Alle feiern. Keiner stresst." stand dreimal als **kopiertes Markup**

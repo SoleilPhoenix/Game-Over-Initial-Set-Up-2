@@ -28,6 +28,7 @@ import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { computeBookedBudgetStats } from '@/utils/budgetStats';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { depositAndDue, formatEuroFromEuros } from '@/utils/money';
 import { PastEventBanner } from '@/components/ui/PastEventBanner';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import { loadBudgetInfo, loadDesiredParticipants, loadGuestDetails, type BudgetInfo, type GuestDetail } from '@/lib/participantCountCache';
@@ -760,22 +761,15 @@ export default function BudgetDashboardScreen() {
     }).format(Math.round(cents / 100));
   };
 
-  // Betraege des Buchungs-Kassenbuchs: Cents nur zeigen, wenn es welche gibt.
-  // 114500 -> "1.145 €", 28625 -> "286,25 €". Frueher rundete diese Stelle auf
-  // ganze Euro und rechnete den Rest aus der Differenz aus; seit die Buchung
-  // `remaining_amount_cents` fuehrt, ist Runden weder noetig noch richtig -
-  // der Betrag, der spaeter abgebucht wird, steht exakt fest.
-  const formatCurrencySmart = (cents: number) => {
-    // Entweder keine oder zwei Nachkommastellen, nie eine: mit
-    // minimumFractionDigits 0 wuerde 57250 als "572,5 €" erscheinen.
-    const digits = cents % 100 === 0 ? 0 : 2;
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
-    }).format(cents / 100);
-  };
+  // Betraege des Buchungs-Kassenbuchs, gerundet auf ganze Euro.
+  // Owner-Regel vom 05.08.: keine Cent-Betraege, weder hier noch in der
+  // Buchungsstrecke. Anzahlung und Rest kommen als Paar aus `depositAndDue`,
+  // damit der Rest immer die Differenz zum Gesamtbetrag ist und die Summe
+  // aufgeht - getrennt gerundet lagen sie einen Euro daneben.
+  const ledger = useMemo(
+    () => depositAndDue(budgetStats.totalBudget, budgetStats.collected),
+    [budgetStats.totalBudget, budgetStats.collected],
+  );
 
   const handleInvite = useCallback(() => {
     const effectiveEventId = selectedEventId || eventIdParam;
@@ -1042,7 +1036,7 @@ export default function BudgetDashboardScreen() {
           body: (tr.budget as any).notif14DayBody
             .replace('{{eventName}}', eventName)
             .replace('{{count}}', String(daysUntilEvent))
-            .replace('{{amount}}', formatCurrencySmart(budgetStats.pending)),
+            .replace('{{amount}}', formatEuroFromEuros(ledger.dueEuros)),
           data: { screen: '/(tabs)/budget', eventId: selectedEventId },
           sound: true,
         },
@@ -1429,8 +1423,8 @@ export default function BudgetDashboardScreen() {
                 ) : (
                   /* Deposit paid, remainder still due */
                   (() => {
-                    const fmtDeposit = formatCurrencySmart(budgetStats.collected);
-                    const fmtDue = formatCurrencySmart(budgetStats.pending);
+                    const fmtDeposit = formatEuroFromEuros(ledger.paidEuros);
+                    const fmtDue = formatEuroFromEuros(ledger.dueEuros);
                     const isUrgent = daysUntilEvent !== null && daysUntilEvent <= 14;
                     return (
                       <>
@@ -1524,7 +1518,7 @@ export default function BudgetDashboardScreen() {
                   <View style={styles.guestRemainingInfo}>
                     <Ionicons name="information-circle-outline" size={18} color={theme.textSecondary} />
                     <Text style={styles.guestRemainingText}>
-                      {t.budget.guestRemainingText.replace('{{amount}}', formatCurrencySmart(budgetStats.pending))}
+                      {t.budget.guestRemainingText.replace('{{amount}}', formatEuroFromEuros(ledger.dueEuros))}
                     </Text>
                   </View>
                 )}
