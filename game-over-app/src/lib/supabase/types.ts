@@ -102,33 +102,66 @@ export type Database = {
           },
         ]
       }
+      channel_read_state: {
+        Row: {
+          channel_id: string
+          last_read_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          last_read_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          last_read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_read_state_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_read_state_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels_with_unread"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_channels: {
         Row: {
           category: Database["public"]["Enums"]["channel_category"]
           created_at: string | null
+          created_by: string | null
           event_id: string
           id: string
           last_message_at: string | null
           name: string
-          unread_count: number | null
         }
         Insert: {
           category: Database["public"]["Enums"]["channel_category"]
           created_at?: string | null
+          created_by?: string | null
           event_id: string
           id?: string
           last_message_at?: string | null
           name: string
-          unread_count?: number | null
         }
         Update: {
           category?: Database["public"]["Enums"]["channel_category"]
           created_at?: string | null
+          created_by?: string | null
           event_id?: string
           id?: string
           last_message_at?: string | null
           name?: string
-          unread_count?: number | null
         }
         Relationships: [
           {
@@ -617,6 +650,13 @@ export type Database = {
             referencedRelation: "chat_channels"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels_with_unread"
+            referencedColumns: ["id"]
+          },
         ]
       }
       notifications: {
@@ -941,6 +981,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "polls_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels_with_unread"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "polls_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
@@ -1056,7 +1103,47 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      chat_channels_with_unread: {
+        Row: {
+          category: Database["public"]["Enums"]["channel_category"] | null
+          created_at: string | null
+          created_by: string | null
+          event_id: string | null
+          id: string | null
+          last_message_at: string | null
+          name: string | null
+          unread_count: number | null
+        }
+        Insert: {
+          category?: Database["public"]["Enums"]["channel_category"] | null
+          created_at?: string | null
+          created_by?: string | null
+          event_id?: string | null
+          id?: string | null
+          last_message_at?: string | null
+          name?: string | null
+          unread_count?: never
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["channel_category"] | null
+          created_at?: string | null
+          created_by?: string | null
+          event_id?: string | null
+          id?: string | null
+          last_message_at?: string | null
+          name?: string | null
+          unread_count?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_channels_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       accept_invite: {

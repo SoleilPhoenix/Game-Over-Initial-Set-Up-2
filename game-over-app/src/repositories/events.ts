@@ -245,6 +245,7 @@ export const eventsRepository = {
         event_id: eventId,
         name: 'Main Lobby',
         category: 'general',
+        created_by: event.created_by,
       });
 
     if (channelError) {

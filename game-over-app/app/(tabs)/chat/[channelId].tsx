@@ -506,7 +506,7 @@ export default function ChatChannelScreen() {
               <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '700' }}>
                 {!isDbChannel
                   ? (user?.user_metadata?.full_name || user?.email?.split('@')[0] || (t.chat as any).pollYou)
-                  : '—'}
+                  : (channel?.creator_name ?? '—')}
               </Text>
             </View>
 

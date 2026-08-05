@@ -854,7 +854,7 @@ const en = {
     // ─── Channel detail (chat/[channelId]) ─────
     channelInfoTitle: 'Channel Info',
     channelDeleteTitle: 'Delete Channel',
-    channelDeleteMsg: 'Are you sure you want to delete "{{name}}"? This cannot be undone.',
+    channelDeleteMsg: 'Delete "{{name}}"? All messages in this channel will also be deleted. This cannot be undone.',
     channelDeleteFailed: 'Could not delete channel.',
     // ─── Share Modal ───────────────────────────
     shareEventTitle: 'Share Event',

@@ -76,6 +76,7 @@ vi.mock('react-native-mmkv', () => ({
 vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     auth: {
+      getUser: vi.fn(() => Promise.resolve({ data: { user: null }, error: null })),
       getSession: vi.fn(() => Promise.resolve({ data: { session: null }, error: null })),
       signInWithPassword: vi.fn(),
       signUp: vi.fn(),

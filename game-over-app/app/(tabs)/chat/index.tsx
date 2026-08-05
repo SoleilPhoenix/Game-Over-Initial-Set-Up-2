@@ -15,7 +15,7 @@ import { ShareModal } from '@/components/ui/ShareModal';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvents } from '@/hooks/queries/useEvents';
-import { useChannels, useCreateChannel } from '@/hooks/queries/useChat';
+import { useChannels, useCreateChannel, useMigrateLocalChannels } from '@/hooks/queries/useChat';
 import { usePolls, useCreatePoll, useVote, useDeletePoll, useAddPollOption, useDeletePollOption } from '@/hooks/queries/usePolls';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
@@ -501,6 +501,7 @@ export default function CommunicationScreen() {
 
   // Per-event local channel storage (keyed by eventId or 'none')
   const [localChannelsByEvent, setLocalChannelsByEvent] = useState<Record<string, LocalChannelSection[]>>({});
+  const shouldPersistLocalChannels = useRef(false);
 
   // Persist localChannelsByEvent to AsyncStorage so channels survive navigation
   useEffect(() => {
@@ -515,9 +516,9 @@ export default function CommunicationScreen() {
   }, []);
 
   useEffect(() => {
-    if (Object.keys(localChannelsByEvent).length > 0) {
-      AsyncStorage.setItem('localChannelsByEvent', JSON.stringify(localChannelsByEvent)).catch(() => {});
-    }
+    if (!shouldPersistLocalChannels.current) return;
+    shouldPersistLocalChannels.current = false;
+    AsyncStorage.setItem('localChannelsByEvent', JSON.stringify(localChannelsByEvent)).catch(() => {});
   }, [localChannelsByEvent]);
 
   // Re-sync local channels from AsyncStorage whenever this screen gains focus
@@ -618,6 +619,28 @@ export default function CommunicationScreen() {
 
   // Create channel mutation
   const createChannelMutation = useCreateChannel();
+  const { mutateAsync: migrateLocalChannels } = useMigrateLocalChannels();
+
+  // Migrate legacy local channels on focus. The repository serializes and persists
+  // progress, so repeated focus events and restarts cannot create duplicates.
+  useFocusEffect(
+    useCallback(() => {
+      if (!selectedEventId) return;
+
+      let active = true;
+      migrateLocalChannels(selectedEventId)
+        .then(result => {
+          if (active) setLocalChannelsByEvent(result.localChannelsByEvent);
+        })
+        .catch(error => {
+          console.warn('[CommunicationScreen] Local chat migration could not run:', error);
+        });
+
+      return () => {
+        active = false;
+      };
+    }, [migrateLocalChannels, selectedEventId])
+  );
 
   // Poll hooks
   const { data: polls = [] } = usePolls(selectedEventId ?? undefined);
@@ -652,6 +675,7 @@ export default function CommunicationScreen() {
 
   const setLocalSectionsForEvent = (updater: (prev: LocalChannelSection[]) => LocalChannelSection[]) => {
     const key = selectedEventId ?? 'none';
+    shouldPersistLocalChannels.current = true;
     setLocalChannelsByEvent(prev => ({
       ...prev,
       [key]: updater(prev[key] ?? DEFAULT_LOCAL_SECTIONS),
@@ -667,8 +691,9 @@ export default function CommunicationScreen() {
       budget: [],
     };
 
-    if (selectedEventId && dbChannels.length > 0) {
-      // Use database channels if event is selected — newest first
+    if (selectedEventId) {
+      // Database channels first — newest first. Any local channel whose migration
+      // failed remains visible and can be retried on the next focus.
       [...dbChannels]
         .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
         .forEach(channel => {
@@ -676,6 +701,9 @@ export default function CommunicationScreen() {
             groups[channel.category].push(channel);
           }
         });
+      localSections.forEach(section => {
+        groups[section.id].push(...section.channels);
+      });
     } else {
       // Use local channels otherwise
       localSections.forEach(section => {

@@ -8,7 +8,7 @@ nicht die Sitzungshistorie. Dauerhafte Lehren gehören ins Projektgedächtnis
 (`~/.claude/projects/-Users-soleilphoenix-Desktop-GameOver/memory/`), nicht hierher.
 Erledigtes wird gelöscht, nicht archiviert - `git log` ist das Archiv.
 
-Letzte Aktualisierung: 2026-08-03.
+Letzte Aktualisierung: 2026-08-05.
 
 ---
 
@@ -227,8 +227,10 @@ Erinnerung stimmt nicht. **Vor dem naechsten Test an Natalias Zahlen einmal klae
 jagt jemand wieder einen Rechenfehler, den es nicht gibt.
 
 **B bis G: umgesetzt am 03.08.**, Reihenfolge C-D-B-F-E-G wie geplant. Was dabei herauskam,
-steht weiter unten unter „Pakete B bis G - Ergebnis". Offen bleibt allein **F2**, und dort nur
-noch der Schritt, den der Owner selbst ausfuehrt (Betreiber-Konto anlegen).
+steht weiter unten unter „Pakete B bis G - Ergebnis". Am 05.08. wurden die dort offenen Punkte
+nachgezogen: Kanal-Persistenz scharf geschaltet, Lesestand pro Nutzer, lokale Kanaele werden
+uebernommen, Tastatur-Muster vereinheitlicht. Offen bleibt allein **F2**, und dort nur noch der
+Schritt, den der Owner selbst ausfuehrt (Betreiber-Konto anlegen).
 
 **H. Marke in allen Mails.** ~~Grossteil~~ **weitgehend erledigt am 03.08. - die Annahme des
 Auftrags war falsch.** Eine Bestandsaufnahme zeigte: die Mails setzen die neue Regel bereits
@@ -310,32 +312,77 @@ Umgesetzt in der Reihenfolge C-D-B-F-E-G. Umsetzung ueberwiegend via Codex (`ter
 `npm run typecheck`, `npm run lint`, `npx vitest run` - zuletzt 122 Tests, 0 Lint-Warnungen.
 **Am Geraet ist nichts davon gesehen**, `xcode-select` zeigt weiterhin nicht auf Xcode.
 
-### C - Kanal loeschen. Behoben.
+### C - Kanal loeschen. Behoben, und die Persistenz ist jetzt scharf.
 
-Die Vermutung „vielleicht fehlt eine DELETE-Policy" war **nicht** die Ursache, und die
-naheliegende Diagnose haette in die Irre gefuehrt. Zwei Befunde:
+Die Vermutung „vielleicht fehlt eine DELETE-Policy" war **nicht** die Ursache des toten Knopfes,
+aber sie hat eine groessere Baustelle aufgedeckt.
 
-1. **Die Ursache ist ein Fenster, kein Recht.** Der Loeschknopf sitzt in einem echten
-   React-Native-`<Modal>` (Kanal-Info). `feedback.confirm()` rendert das globale `ConfirmSheet`
-   dagegen als gewoehnliche View im Root-Layout. Ein RN-`Modal` ist auf iOS ein **eigenes
-   natives Fenster ueber dem gesamten React-Baum** - das ConfirmSheet erschien also unsichtbar
-   darunter, das `await` loeste sich nie auf, der Knopf wirkte tot. Jedes weitere Druecken
-   stapelte nur eine weitere haengende Zusage.
-   Fix: `setInfoModalVisible(false)` wandert **vor** das `await`
-   (`app/(tabs)/chat/[channelId].tsx:115`). Damit ist auch der zweite Teil der Meldung erledigt -
-   sichtbar wird jetzt genau das ConfirmSheet, das die App auch beim Poll- und Event-Loeschen
-   zeigt. Das Poll-Loeschen war nie betroffen, weil dessen Info-Sheet kein `Modal` ist.
-   **Merksatz:** `feedback.confirm()` / `feedback.error()` niemals aus einem offenen `<Modal>`
-   heraus aufrufen. Geprueft: es gibt im Projekt keine zweite solche Stelle
-   (der `feedback.confirm` in `budget/index.tsx:1673` liegt ausserhalb seines Modals).
+**C1 - der tote Knopf: ein Fenster, kein Recht.** Der Loeschknopf sitzt in einem echten
+React-Native-`<Modal>` (Kanal-Info). `feedback.confirm()` rendert das globale `ConfirmSheet`
+dagegen als gewoehnliche View im Root-Layout. Ein RN-`Modal` ist auf iOS ein **eigenes natives
+Fenster ueber dem gesamten React-Baum** - das ConfirmSheet erschien unsichtbar darunter, das
+`await` loeste sich nie auf, der Knopf wirkte tot. Jedes weitere Druecken stapelte nur eine
+weitere haengende Zusage. Fix: `setInfoModalVisible(false)` wandert **vor** das `await`.
+Das Poll-Loeschen war nie betroffen, weil dessen Info-Sheet kein `Modal` ist.
+**Merksatz:** `feedback.confirm()` niemals aus einem offenen `<Modal>` heraus aufrufen.
+Geprueft: es gibt im Projekt keine zweite solche Stelle.
 
-2. **`chat_channels` ist tot.** Die Live-Tabelle hat **null Zeilen** und ausser einer
-   SELECT-Policy **gar keine** Policy - also auch keine fuer INSERT. Kein Kanal ist je in der DB
-   gelandet; jeder sichtbare Kanal ist ein lokaler AsyncStorage-Kanal mit Zeitstempel-ID.
-   Die in `CLAUDE.md` beschriebene Zusage „mit Event werden Kanaele in `chat_channels`
-   persistiert" trifft nicht zu. Der DB-Zweig in `useDeleteChannel` ist korrekt verdrahtet, aber
-   unerreichbar. **Offen, owner-freigabepflichtig** (Migration): entweder INSERT/DELETE-Policies
-   nachziehen und die Persistenz wirklich in Betrieb nehmen, oder den DB-Zweig als tot markieren.
+**C2 - `chat_channels` war eine tote Tabelle.** Null Zeilen, ausser SELECT keine Policy. Jeder
+INSERT scheiterte mit `42501`, und `handleChannelCreate` fing genau das ab und legte den Kanal
+lokal in AsyncStorage an - **mit Erfolgsmeldung**. Kein Kanal ist je in der DB gelandet; die
+Zusage in `CLAUDE.md` traf nicht zu.
+
+Owner-Entscheidung 05.08.: Persistenz scharf schalten. Zwei Migrationen sind **angewendet und
+live**:
+
+- `20260805072931_chat_channels_enable_persistence` - Spalte `created_by`, Policies fuer
+  INSERT / UPDATE / DELETE, und die SELECT-Policy von einer direkten `event_participants`-Abfrage
+  auf `is_event_participant()` umgestellt. Letzteres ist kein Schoenheitsfehler: die alte Policy
+  war genau das Muster, das die 42P17-Rekursion ausloest, und es ist nur deshalb nie aufgefallen,
+  weil die Tabelle leer war und die Policy nie eine Zeile pruefen musste.
+- `20260805073349_channel_read_state_per_user` - neue Tabelle `channel_read_state`
+  (Lesestand je Kanal und Nutzer), Spalte `chat_channels.unread_count` **entfernt**, neue Sicht
+  `chat_channels_with_unread` mit `security_invoker = true`.
+
+**Unter echtem RLS geprueft** (`set local role authenticated` plus gesetzte JWT-Claims, alles in
+zurueckgerollten Transaktionen), nicht nur angenommen:
+
+| Fall | Ergebnis |
+|---|---|
+| Teilnehmer legt Kanal an | erlaubt |
+| Urheber loescht eigenen Kanal | erlaubt |
+| Nicht-Teilnehmer legt an | `42501` |
+| Teilnehmer loescht fremden Kanal | **0 Zeilen, kein Fehler** |
+| Zwei Leser, einer liest | A sieht 0, B sieht 2 |
+
+Die vierte Zeile ist dieselbe Falle wie C1: ein verbotenes DELETE wirft nichts, es betrifft still
+0 Zeilen. `channelsRepository.delete` prueft deshalb jetzt die zurueckgegebenen Zeilen und wirft,
+wenn nichts geloescht wurde.
+
+**Client nachgezogen:** Lesepfade auf die Sicht, `markAsRead` als Upsert in `channel_read_state`,
+`updateUnreadCount` ersatzlos entfernt (ein Zaehler laesst sich nicht mehr von aussen setzen),
+`created_by` beim Anlegen - auch im Standardkanal in `events.ts`, sonst haette dieselbe Policy
+dort zugeschlagen. Das Info-Sheet zeigt statt „—" den Namen des Urhebers.
+
+**Bestehende lokale Kanaele werden uebernommen.** `src/repositories/localChatMigration.ts` holt
+sie beim Fokus einmalig in die DB, samt Nachrichten und deren urspruenglichem `created_at`.
+Reihenfolge bewusst: erst in die DB schreiben, dann lokal loeschen - nie umgekehrt. Die
+Ziel-UUIDs werden **vor** dem ersten Schreibzugriff persistiert, ein Abbruch wiederholt also mit
+denselben IDs und `ignoreDuplicates`. Scheitert ein Kanal, bleibt genau dieser lokal erhalten und
+sichtbar und wird beim naechsten Fokus erneut versucht. Kanaele im Eimer `'none'` (ohne Event)
+bleiben lokal - es gibt kein Event, an das sie gehoeren. Fremde Nachrichten werden uebersprungen,
+weil die `messages`-Policy `user_id = auth.uid()` verlangt.
+
+Nebenbei entschaerft: der Persist-Effekt in `chat/index.tsx` schrieb bei **jeder**
+Zustandsaenderung die komplette Karte zurueck und haette gerade uebernommene Kanaele wieder
+auferstehen lassen. Er schreibt jetzt nur noch nach einer echten lokalen Aenderung.
+
+Der Loeschtext sagt jetzt, dass die Nachrichten mit geloescht werden - `messages` haengt per
+`ON DELETE CASCADE` daran, das war vorher verschwiegen.
+
+**Offen an C:** `unread_count` war eine geteilte Spalte und ist es nicht mehr, aber am Geraet ist
+nichts davon gesehen. Beim Test gezielt: Kanal anlegen (landet er in der DB?), alten lokalen Kanal
+oeffnen (wird er uebernommen?), Kanal loeschen (verschwindet er wirklich, DB pruefen).
 
 ### D - Login. Behoben.
 

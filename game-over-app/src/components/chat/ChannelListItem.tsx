@@ -9,7 +9,7 @@ import { XStack, YStack, Text } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { Database } from '@/lib/supabase/types';
 
-type ChatChannel = Database['public']['Tables']['chat_channels']['Row'];
+type ChatChannel = Database['public']['Views']['chat_channels_with_unread']['Row'];
 
 interface ChannelListItemProps {
   channel: ChatChannel;

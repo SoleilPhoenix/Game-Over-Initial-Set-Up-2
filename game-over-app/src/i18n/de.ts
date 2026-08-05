@@ -846,7 +846,7 @@ const de: TranslationKeys = {
     // ─── Channel detail (chat/[channelId]) ─────
     channelInfoTitle: 'Kanal-Info',
     channelDeleteTitle: 'Kanal löschen',
-    channelDeleteMsg: 'Möchtest du „{{name}}" wirklich löschen? Dies kann nicht rückgängig gemacht werden.',
+    channelDeleteMsg: 'Möchtest du „{{name}}“ löschen? Alle Nachrichten in diesem Kanal werden ebenfalls gelöscht. Das kann nicht rückgängig gemacht werden.',
     channelDeleteFailed: 'Kanal konnte nicht gelöscht werden.',
     // ─── Share Modal ───────────────────────────
     shareEventTitle: 'Event teilen',

@@ -5,7 +5,12 @@
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { channelsRepository, messagesRepository, MessageWithAuthor } from '@/repositories';
+import {
+  channelsRepository,
+  messagesRepository,
+  MessageWithAuthor,
+} from '@/repositories';
+import { localChatMigrationRepository } from '@/repositories/localChatMigration';
 import { useAuthStore } from '@/stores/authStore';
 import { useAppState } from '@/hooks/useAppState';
 import type { Database } from '@/lib/supabase/types';
@@ -93,6 +98,22 @@ export function useCreateChannel() {
 }
 
 /**
+ * Move legacy AsyncStorage channels for one event into the database.
+ */
+export function useMigrateLocalChannels() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (eventId: string) => localChatMigrationRepository.migrateEvent(eventId),
+    onSuccess: (result, eventId) => {
+      if (result.migratedChannels > 0) {
+        queryClient.invalidateQueries({ queryKey: chatKeys.channels(eventId) });
+      }
+    },
+  });
+}
+
+/**
  * Send a message
  */
 export function useSendMessage() {
@@ -121,6 +142,12 @@ export function useMarkChannelAsRead() {
     onSuccess: (_, channelId) => {
       queryClient.invalidateQueries({
         queryKey: chatKeys.channel(channelId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: [...chatKeys.all, 'channels'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: [...chatKeys.all, 'unread'],
       });
     },
   });
