@@ -14,8 +14,12 @@ import { useTranslation, getCurrentLanguage } from '@/i18n';
 import { isGuestDataChangedMeta, isGuestJoinedMeta, formatGuestChanges } from '@/utils/guestDataChange';
 import { isRefundDueMeta } from '@/utils/refundDue';
 import { useTheme } from '@/hooks/useTheme';
+import { resolvePaymentSuccessCopy } from './paymentSuccessCopy';
+import type { NotificationEventSummary } from '@/repositories/notifications';
 
-type Notification = Database['public']['Tables']['notifications']['Row'];
+type Notification = Database['public']['Tables']['notifications']['Row'] & {
+  event?: NotificationEventSummary | null;
+};
 
 interface BookingCancelledMeta {
   honoreeName: string;
@@ -283,8 +287,9 @@ export function NotificationItem({
   // Notifications with structured metadata are localized to the organizer's
   // language at render time. Falls back to stored title/body for legacy rows
   // whose metadata is absent or malformed.
-  let displayTitle = notification.title;
-  let displayBody = notification.body;
+  const paymentSuccessCopy = resolvePaymentSuccessCopy(notification, t.notifications);
+  let displayTitle = paymentSuccessCopy.title;
+  let displayBody = paymentSuccessCopy.body;
   if (notification.type === 'guest_joined' && isGuestJoinedMeta(notification.metadata)) {
     displayTitle = (t.notifications as any).guestJoinedTitle;
     displayBody = ((t.notifications as any).guestJoinedBody as string)

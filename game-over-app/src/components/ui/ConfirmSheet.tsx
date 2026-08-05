@@ -1,13 +1,17 @@
 import React from 'react';
 import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { FONTS, RADII, SPACING } from '@/constants/designSystem';
 import { useTheme } from '@/hooks/useTheme';
 import { useUIStore } from '@/stores/uiStore';
+import {
+  FLOATING_FEEDBACK_MAX_WIDTH,
+  useFloatingFeedbackBottomSpacing,
+} from '@/components/ui/floatingFeedbackLayout';
 
 export function ConfirmSheet() {
-  const insets = useSafeAreaInsets();
+  const bottomSpacing = useFloatingFeedbackBottomSpacing();
   const { theme } = useTheme();
   const request = useUIStore((state) => state.activeConfirm);
   const resolveConfirm = useUIStore((state) => state.resolveConfirm);
@@ -24,7 +28,7 @@ export function ConfirmSheet() {
   if (!request) return null;
 
   return (
-    <View style={styles.host}>
+    <View style={[styles.host, { paddingBottom: bottomSpacing }]}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={request.cancelLabel}
@@ -35,7 +39,7 @@ export function ConfirmSheet() {
           pointerEvents="none"
           style={[
             StyleSheet.absoluteFill,
-            { backgroundColor: theme.shadowColor, opacity: 0.62 },
+            { backgroundColor: theme.shadowColor, opacity: 0.24 },
           ]}
         />
       </Pressable>
@@ -43,20 +47,31 @@ export function ConfirmSheet() {
       <View
         accessibilityViewIsModal
         style={[
-          styles.sheet,
+          styles.card,
           {
-            backgroundColor: theme.surfaceCard,
+            backgroundColor: theme.surfaceBright,
             borderColor: theme.ghostBorder,
-            paddingBottom: Math.max(insets.bottom, SPACING.lg) + SPACING.lg,
             shadowColor: theme.shadowColor,
             shadowOpacity: theme.shadowOpacity,
             shadowRadius: theme.shadowRadius,
           },
         ]}
       >
-        <View style={[styles.dragHandle, { backgroundColor: theme.textTertiary }]} />
-        <Text style={[styles.title, { color: theme.textPrimary }]}>{request.title}</Text>
-        <Text style={[styles.message, { color: theme.textSecondary }]}>{request.message}</Text>
+        <View style={styles.content}>
+          <Ionicons
+            name={request.options.some((option) => option.destructive)
+              ? 'alert-circle-outline'
+              : 'help-circle-outline'}
+            size={24}
+            color={request.options.some((option) => option.destructive)
+              ? theme.error
+              : theme.primary}
+          />
+          <View style={styles.copy}>
+            <Text style={[styles.title, { color: theme.textPrimary }]}>{request.title}</Text>
+            <Text style={[styles.message, { color: theme.textSecondary }]}>{request.message}</Text>
+          </View>
+        </View>
 
         <View style={styles.actions}>
           {request.options.map((option) => (
@@ -99,41 +114,45 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000,
     elevation: 1000,
+    alignItems: 'center',
     justifyContent: 'flex-end',
+    paddingHorizontal: SPACING.lg,
   },
-  sheet: {
-    borderTopLeftRadius: RADII.xl,
-    borderTopRightRadius: RADII.xl,
-    borderTopWidth: StyleSheet.hairlineWidth,
+  card: {
+    width: '100%',
+    maxWidth: FLOATING_FEEDBACK_MAX_WIDTH,
+    borderRadius: RADII.lg,
+    borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: SPACING.xl,
-    paddingTop: SPACING.md,
-    shadowOffset: { width: 0, height: -12 },
-    elevation: 12,
+    paddingVertical: SPACING.lg,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
-  dragHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginBottom: SPACING.xl,
+  content: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: SPACING.md,
+  },
+  copy: {
+    flex: 1,
+    gap: SPACING.xs,
   },
   title: {
-    fontFamily: FONTS.heading,
-    fontSize: 20,
-    lineHeight: 28,
+    fontFamily: FONTS.labelBold,
+    fontSize: 16,
+    lineHeight: 22,
   },
   message: {
     fontFamily: FONTS.body,
     fontSize: 15,
-    lineHeight: 23,
-    marginTop: SPACING.sm,
+    lineHeight: 21,
   },
   actions: {
-    gap: SPACING.md,
-    marginTop: SPACING.xl,
+    gap: SPACING.sm,
+    marginTop: SPACING.lg,
   },
   primaryButton: {
-    minHeight: 54,
+    minHeight: 44,
     borderRadius: RADII.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -146,7 +165,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   cancelButton: {
-    minHeight: 52,
+    minHeight: 44,
     borderRadius: RADII.md,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',

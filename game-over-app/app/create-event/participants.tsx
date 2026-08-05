@@ -4,9 +4,8 @@
  * G4: Drinking Culture, G5: Group Dynamic, G6: Group Vibe (multi-select max 2)
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import { ScrollView } from 'react-native';
-import { ValidationToast } from '@/components/ui/ValidationToast';
 import { useRouter } from 'expo-router';
 import { YStack, Text } from 'tamagui';
 import { useWizardStore } from '@/stores/wizardStore';
@@ -14,6 +13,8 @@ import { OptionBlock, OptionBlockGroup } from '@/components/ui/OptionBlock';
 import { GlassPanel } from '@/components/ui/GlassPanel';
 import { WizardFooter } from '@/components/ui/WizardFooter';
 import { useTranslation } from '@/i18n';
+import { feedback } from '@/stores/uiStore';
+import { joinList } from '@/utils/guestDataChange';
 
 const AGE_RANGES = [
   { value: '21-25', label: '21-25' },
@@ -43,21 +44,25 @@ export default function WizardStep3() {
 
   const vibes = groupVibe || [];
 
-  const [validationErrors, setValidationErrors] = useState<string[] | null>(null);
-
   const handleNext = () => {
     router.push('/create-event/packages');
   };
 
   const handleNextDisabled = () => {
+    const requiredFields = t.wizard.requiredFields;
     const missing: string[] = [];
-    if (!averageAge) missing.push('Average age (G1)');
-    if (!groupCohesion) missing.push('Group cohesion (G2)');
-    if (!fitnessLevel) missing.push('Fitness level (G3)');
-    if (!drinkingCulture) missing.push('Drinking culture (G4)');
-    if (!groupDynamic) missing.push('Group dynamic (G5)');
-    if (!vibes.length) missing.push('Group vibe — pick 1 or 2 (G6)');
-    if (missing.length > 0) setValidationErrors(missing);
+    if (!averageAge) missing.push(requiredFields.averageAge);
+    if (!groupCohesion) missing.push(requiredFields.groupCohesion);
+    if (!fitnessLevel) missing.push(requiredFields.fitnessLevel);
+    if (!drinkingCulture) missing.push(requiredFields.drinkingCulture);
+    if (!groupDynamic) missing.push(requiredFields.groupDynamic);
+    if (!vibes.length) missing.push(requiredFields.groupVibe);
+    if (missing.length > 0) {
+      feedback.warning(
+        requiredFields.title,
+        `${requiredFields.introduction} ${joinList(missing, requiredFields.conjunction)}`,
+      );
+    }
   };
 
   const handleBack = () => {
@@ -134,9 +139,6 @@ export default function WizardStep3() {
       </ScrollView>
 
       {/* Footer */}
-      {validationErrors && (
-        <ValidationToast fields={validationErrors} onDismiss={() => setValidationErrors(null)} />
-      )}
       <WizardFooter
         onBack={handleBack}
         onNext={handleNext}

@@ -18,7 +18,6 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Image as ExpoImage } from 'expo-image';
-import { ValidationToast } from '@/components/ui/ValidationToast';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -28,6 +27,8 @@ import { useWizardStore } from '@/stores/wizardStore';
 import { WizardFooter } from '@/components/ui/WizardFooter';
 import { useTranslation } from '@/i18n';
 import { useTheme } from '@/hooks/useTheme';
+import { feedback } from '@/stores/uiStore';
+import { joinList } from '@/utils/guestDataChange';
 
 // ─── City data ─────────────────────────────────────────────────────────────
 // UUIDs must match supabase/migrations/20260211000000_add_german_cities.sql
@@ -84,7 +85,6 @@ export default function WizardStep1() {
   const [selectedDate, setSelectedDate]     = useState<Date>(new Date());
   const [nameFocused, setNameFocused]       = useState(false);
   const [lastFocused, setLastFocused]       = useState(false);
-  const [validationErrors, setValidationErrors] = useState<string[] | null>(null);
 
   const {
     partyType,
@@ -109,12 +109,18 @@ export default function WizardStep1() {
   };
 
   const handleNextDisabled = () => {
+    const requiredFields = t.wizard.requiredFields;
     const missing: string[] = [];
-    if (!partyType) missing.push('Party type (01)');
-    if (!honoreeName.trim()) missing.push("Honoree's name (02)");
-    if (!cityId) missing.push('City (03)');
-    if (!startDate) missing.push('Date (05)');
-    if (missing.length > 0) setValidationErrors(missing);
+    if (!partyType) missing.push(requiredFields.partyType);
+    if (!honoreeName.trim()) missing.push(requiredFields.honoreeName);
+    if (!cityId) missing.push(requiredFields.city);
+    if (!startDate) missing.push(requiredFields.date);
+    if (missing.length > 0) {
+      feedback.warning(
+        requiredFields.title,
+        `${requiredFields.introduction} ${joinList(missing, requiredFields.conjunction)}`,
+      );
+    }
   };
 
   const handleDateChange = (_event: any, date?: Date) => {
@@ -355,9 +361,6 @@ export default function WizardStep1() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {validationErrors && (
-        <ValidationToast fields={validationErrors} onDismiss={() => setValidationErrors(null)} />
-      )}
       {/* Footer */}
       <WizardFooter
         showBack={false}

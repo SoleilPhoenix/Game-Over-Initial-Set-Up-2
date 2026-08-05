@@ -4,9 +4,8 @@
  * H4: Enjoyment Type, H5: Indoor/Outdoor, H6: Evening Style
  */
 
-import React, { useState } from 'react';
+import React from 'react';
 import { ScrollView } from 'react-native';
-import { ValidationToast } from '@/components/ui/ValidationToast';
 import { useRouter } from 'expo-router';
 import { YStack } from 'tamagui';
 import { useWizardStore } from '@/stores/wizardStore';
@@ -14,6 +13,8 @@ import { OptionBlock, OptionBlockGroup } from '@/components/ui/OptionBlock';
 import { GlassPanel } from '@/components/ui/GlassPanel';
 import { WizardFooter } from '@/components/ui/WizardFooter';
 import { useTranslation } from '@/i18n';
+import { feedback } from '@/stores/uiStore';
+import { joinList } from '@/utils/guestDataChange';
 
 export default function WizardStep2() {
   const router = useRouter();
@@ -37,8 +38,6 @@ export default function WizardStep2() {
 
   const name = honoreeName || 'the honoree';
   const canProceed = isStepValid(2);
-  const [validationErrors, setValidationErrors] = useState<string[] | null>(null);
-
   const handleNext = () => {
     if (canProceed) {
       router.push('/create-event/participants');
@@ -46,14 +45,20 @@ export default function WizardStep2() {
   };
 
   const handleNextDisabled = () => {
+    const requiredFields = t.wizard.requiredFields;
     const missing: string[] = [];
-    if (!energyLevel) missing.push('Energy level (H1)');
-    if (!spotlightComfort) missing.push('Spotlight comfort (H2)');
-    if (!competitionStyle) missing.push('Competition style (H3)');
-    if (!enjoymentType) missing.push('Enjoyment type (H4)');
-    if (!indoorOutdoor) missing.push('Indoor/outdoor (H5)');
-    if (!eveningStyle) missing.push('Evening style (H6)');
-    if (missing.length > 0) setValidationErrors(missing);
+    if (!energyLevel) missing.push(requiredFields.energyLevel);
+    if (!spotlightComfort) missing.push(requiredFields.spotlightComfort);
+    if (!competitionStyle) missing.push(requiredFields.competitionStyle);
+    if (!enjoymentType) missing.push(requiredFields.enjoymentType);
+    if (!indoorOutdoor) missing.push(requiredFields.indoorOutdoor);
+    if (!eveningStyle) missing.push(requiredFields.eveningStyle);
+    if (missing.length > 0) {
+      feedback.warning(
+        requiredFields.title,
+        `${requiredFields.introduction} ${joinList(missing, requiredFields.conjunction)}`,
+      );
+    }
   };
 
   const handleBack = () => {
@@ -120,9 +125,6 @@ export default function WizardStep2() {
       </ScrollView>
 
       {/* Footer */}
-      {validationErrors && (
-        <ValidationToast fields={validationErrors} onDismiss={() => setValidationErrors(null)} />
-      )}
       <WizardFooter
         onBack={handleBack}
         onNext={handleNext}

@@ -8,8 +8,17 @@ import type { Database } from '@/lib/supabase/types';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 type NotificationInsert = Database['public']['Tables']['notifications']['Insert'];
+type Event = Database['public']['Tables']['events']['Row'];
+
+export type NotificationEventSummary = Pick<Event, 'status' | 'title' | 'honoree_name'>;
+export type NotificationWithEvent = Notification & { event: NotificationEventSummary | null };
 
 const PAGE_SIZE = 20;
+const OPS_TYPE_LIKE_PATTERN = 'ops\\_%';
+
+export function isOpsNotificationType(type: string): boolean {
+  return type.startsWith('ops_');
+}
 
 export const notificationsRepository = {
   /**
@@ -18,23 +27,18 @@ export const notificationsRepository = {
   async getByUserId(
     userId: string,
     page: number = 0,
-    includeOpsAlerts: boolean = false,
-  ): Promise<{ notifications: Notification[]; hasMore: boolean }> {
+  ): Promise<{ notifications: NotificationWithEvent[]; hasMore: boolean }> {
     const from = page * PAGE_SIZE;
     // Over-fetch to compensate for client-side filtering of cancelled events
     const to = from + PAGE_SIZE * 2 - 1;
 
-    type Joined = Notification & { event: { status: string } | null };
-    let query = supabase
+    const query = supabase
       .from('notifications')
-      .select('*, event:events(status)')
+      .select('*, event:events(status,title,honoree_name)')
       .eq('user_id', userId)
+      .not('type', 'like', OPS_TYPE_LIKE_PATTERN)
       .order('created_at', { ascending: false })
       .range(from, to);
-
-    if (!includeOpsAlerts) {
-      query = query.neq('type', 'ops_cron_health');
-    }
 
     const { data, error } = await query;
 
@@ -42,15 +46,12 @@ export const notificationsRepository = {
 
     // Hide notifications whose related event was cancelled (soft-deleted).
     // Notifications with no event_id (system-level) always pass through.
-    const filtered = ((data || []) as Joined[]).filter(
-      (n) => !n.event || n.event.status !== 'cancelled',
+    const filtered = ((data || []) as NotificationWithEvent[]).filter(
+      (notification) => !isOpsNotificationType(notification.type)
+        && (!notification.event || notification.event.status !== 'cancelled'),
     );
 
-    // Strip the joined `event` field so the returned shape matches Notification
-    const notifications: Notification[] = filtered.slice(0, PAGE_SIZE).map((n) => {
-      const { event: _event, ...rest } = n;
-      return rest as Notification;
-    });
+    const notifications = filtered.slice(0, PAGE_SIZE);
 
     return {
       notifications,
@@ -61,38 +62,23 @@ export const notificationsRepository = {
   /**
    * Get unread notifications count
    */
-  async getUnreadCount(userId: string, includeOpsAlerts: boolean = false): Promise<number> {
+  async getUnreadCount(userId: string): Promise<number> {
     // Fetch with event status to exclude cancelled-event notifications from badge count
-    type Joined = { event: { status: string } | null };
-    let query = supabase
+    type Joined = Pick<Notification, 'type'> & { event: Pick<Event, 'status'> | null };
+    const query = supabase
       .from('notifications')
-      .select('event:events(status)')
+      .select('type, event:events(status)')
       .eq('user_id', userId)
-      .eq('is_read', false);
-
-    if (!includeOpsAlerts) {
-      query = query.neq('type', 'ops_cron_health');
-    }
+      .eq('is_read', false)
+      .not('type', 'like', OPS_TYPE_LIKE_PATTERN);
 
     const { data, error } = await query;
 
     if (error) throw error;
     return ((data || []) as Joined[]).filter(
-      (n) => !n.event || n.event.status !== 'cancelled',
+      (notification) => !isOpsNotificationType(notification.type)
+        && (!notification.event || notification.event.status !== 'cancelled'),
     ).length;
-  },
-
-  /**
-   * Ask the narrow SECURITY DEFINER helper instead of exposing the protected
-   * ops_alert_recipients table. Fail closed while its migration is pending.
-   */
-  async isOpsAlertRecipient(): Promise<boolean> {
-    const { data, error } = await supabase.rpc('is_ops_alert_recipient');
-    if (error) {
-      console.warn('[notifications] Ops-recipient check unavailable:', error.message);
-      return false;
-    }
-    return data === true;
   },
 
   /**
@@ -185,7 +171,10 @@ export const notificationsRepository = {
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          onNotification(payload.new as Notification);
+          const notification = payload.new as Notification;
+          if (!isOpsNotificationType(notification.type)) {
+            onNotification(notification);
+          }
         }
       )
       .subscribe();

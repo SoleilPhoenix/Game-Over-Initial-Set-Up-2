@@ -1,11 +1,15 @@
 import React, { useEffect, useRef, type ComponentProps } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FONTS, RADII, SPACING } from '@/constants/designSystem';
 import { useTheme } from '@/hooks/useTheme';
 import { useUIStore } from '@/stores/uiStore';
+import {
+  FLOATING_FEEDBACK_MAX_WIDTH,
+  FLOATING_FEEDBACK_MIN_HEIGHT,
+  useFloatingFeedbackBottomSpacing,
+} from '@/components/ui/floatingFeedbackLayout';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 type Toast = ReturnType<typeof useUIStore.getState>['toasts'][number];
@@ -88,7 +92,7 @@ function ToastItem({ toast, onDismiss }: { toast: Toast; onDismiss: () => void }
 }
 
 export function ToastHost() {
-  const insets = useSafeAreaInsets();
+  const bottomSpacing = useFloatingFeedbackBottomSpacing();
   const toasts = useUIStore((state) => state.toasts);
   const hideToast = useUIStore((state) => state.hideToast);
 
@@ -97,7 +101,7 @@ export function ToastHost() {
   return (
     <View
       pointerEvents="box-none"
-      style={[styles.host, { paddingBottom: insets.bottom }]}
+      style={[styles.host, { paddingBottom: bottomSpacing }]}
     >
       {toasts.map((toast) => (
         <ToastItem
@@ -122,11 +126,11 @@ const styles = StyleSheet.create({
   },
   toastContainer: {
     width: '100%',
-    maxWidth: 420,
+    maxWidth: FLOATING_FEEDBACK_MAX_WIDTH,
   },
   toast: {
     width: '100%',
-    minHeight: 88,
+    minHeight: FLOATING_FEEDBACK_MIN_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.md,
