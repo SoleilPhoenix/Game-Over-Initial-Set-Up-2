@@ -659,6 +659,8 @@ const de: TranslationKeys = {
     pendingOwes: '{{amount}} · an Organisatoren zahlen',
     groupContributions: 'Gruppenbeiträge',
     remindAll: 'Alle erinnern',
+    openSlotTitle: 'Gast noch nicht eingetragen',
+    openSlotMessage: 'Dieser Anteil gehört zu deiner Buchung, aber es ist noch niemand dafür eingetragen. Trage den Gast unter Einladung mit E-Mail-Adresse und Telefonnummer ein, damit er eingeladen und erinnert werden kann.',
     you: '(Du)',
     youBadge: 'DU',
     contribution: '{{amount}} bezahlt',

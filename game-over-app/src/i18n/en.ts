@@ -667,6 +667,10 @@ const en = {
     pendingOwes: '{{amount}} · owed to organizer',
     groupContributions: 'Group Contributions',
     remindAll: 'Remind All',
+    // Placeholder rows in Group Contributions: a share that is part of the
+    // booking but has nobody entered for it yet.
+    openSlotTitle: 'Guest not entered yet',
+    openSlotMessage: 'This share is part of your booking, but nobody is entered for it. Add the guest under Invitation with email and phone number so they can be invited and reminded.',
     you: '(You)',
     youBadge: 'YOU',
     contribution: '{{amount}} paid',

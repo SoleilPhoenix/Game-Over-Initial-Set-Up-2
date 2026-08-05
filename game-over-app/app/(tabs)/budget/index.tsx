@@ -1041,6 +1041,33 @@ export default function BudgetDashboardScreen() {
     return result;
   }, [demoParticipants, inviteCodeGuests, registeredEmailSet, cachedGuests]);
 
+  /**
+   * Freie Plaetze: die Buchung ist fuer `paying_participants` Personen bezahlt,
+   * aber fuer manche ist noch niemand eingetragen. Ohne diese Zeilen zeigte das
+   * Budget direkt nach der Buchung nur den Organisator, und die sichtbaren
+   * Betraege ergaben einen Bruchteil des Gesamtpreises (Owner-Wunsch 05.08.).
+   *
+   * Sie sind bewusst **nicht** bearbeitbar. Gaeste werden unter „Einladung"
+   * gepflegt, weil dort E-Mail und Telefon mit erfasst werden - ohne die kann
+   * niemand eingeladen oder erinnert werden. Ein Tippen erklaert genau das.
+   */
+  const openSlots = useMemo(() => {
+    if (demoParticipants) return [];
+    const filled = (sortedParticipants?.length || 0) + nonRegisteredInviteGuests.length;
+    const missing = Math.max(0, (budgetStats.payingCount || 0) - filled);
+    // Nummerierung schliesst an die belegten Plaetze an, damit sie mit dem
+    // Einladungsbildschirm uebereinstimmt (Organisator = Platz 1).
+    return Array.from({ length: missing }, (_, i) => ({
+      id: `open-slot-${i}`,
+      number: filled + i + 1,
+    }));
+  }, [demoParticipants, sortedParticipants, nonRegisteredInviteGuests, budgetStats.payingCount]);
+
+  const handleOpenSlotPress = useCallback(() => {
+    feedback.info((t.budget as any).openSlotTitle, (t.budget as any).openSlotMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
+  }, []);
+
   // For "Someone else paid" — exclude current user AND honoree (can't pay yourself or honoree)
   const payerOptions = useMemo(
     () => allContributors.filter(c =>
@@ -1809,7 +1836,6 @@ export default function BudgetDashboardScreen() {
 
                 {/* Non-registered invited guests */}
                 {nonRegisteredInviteGuests.map((ic, idx) => {
-                  const perPerson = booking?.per_person_cents || budgetStats.perPerson || 0;
                   const avatarColor = AVATAR_COLORS[((demoParticipants || sortedParticipants)?.length || 0 + idx) % AVATAR_COLORS.length];
                   const initials = ic.name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2) || '?';
                   return (
@@ -1825,7 +1851,7 @@ export default function BudgetDashboardScreen() {
                         </View>
                         <YStack style={styles.contributionAmount} alignItems="flex-end" gap={2}>
                           <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
-                            {formatCurrency(perPerson)}
+                            {formatEuroFromEuros(share.perPersonEuros)}
                           </Text>
                           {isOrganizer ? (
                             <Text style={{ fontSize: 11, fontWeight: '700', color: '#F97316', letterSpacing: 0.5, textAlign: 'right', textTransform: 'uppercase' }}>
@@ -1839,6 +1865,41 @@ export default function BudgetDashboardScreen() {
                     </View>
                   );
                 })}
+
+                {/* Freie Plaetze: bezahlt, aber noch niemand eingetragen.
+                    Nicht bearbeitbar - Gaeste werden unter „Einladung" gepflegt,
+                    weil dort E-Mail und Telefon miterfasst werden. */}
+                {openSlots.map((slot) => (
+                  <Pressable
+                    key={slot.id}
+                    onPress={handleOpenSlotPress}
+                    style={[styles.contributionCard, { opacity: 0.6 }]}
+                  >
+                    <View style={styles.contributionMainRow}>
+                      <View
+                        style={[
+                          styles.participantAvatarInitials,
+                          { backgroundColor: theme.surfaceHigh, borderWidth: 1, borderColor: theme.textTertiary, borderStyle: 'dashed' },
+                        ]}
+                      >
+                        <Ionicons name="person-add-outline" size={16} color={theme.textTertiary} />
+                      </View>
+                      <View style={styles.contributionName}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textTertiary }} numberOfLines={1}>
+                          {t.manageInvitations.guestSlot.replace('{{number}}', String(slot.number))}
+                        </Text>
+                      </View>
+                      <YStack style={styles.contributionAmount} alignItems="flex-end" gap={2}>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textTertiary }}>
+                          {formatEuroFromEuros(share.perPersonEuros)}
+                        </Text>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textTertiary, letterSpacing: 0.5, textAlign: 'right', textTransform: 'uppercase' }}>
+                          {t.budget.pending}
+                        </Text>
+                      </YStack>
+                    </View>
+                  </Pressable>
+                ))}
               </YStack>
 
             </YStack>

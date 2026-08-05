@@ -233,6 +233,27 @@ Teilnehmerzeile fuer den Ehrengast** - das waere eine Datenaenderung, keine Anze
 **„Alle erinnern"** verschwindet nicht mehr, wenn niemand offen ist, sondern wird ausgegraut.
 Das **„DU"-Abzeichen** hinter dem eigenen Namen ist raus - der Nutzer weiss, wie er heisst.
 
+**Freie Plaetze werden jetzt angezeigt** (Owner-Wunsch 05.08., loest die Absage vom 03.08. ab).
+Die Buchung ist fuer `paying_participants` Personen bezahlt; fuer wen noch niemand eingetragen
+ist, erscheint eine Platzhalterzeile „Gast #N" mit dem Anteil und Status offen. Vorher zeigte
+das Budget direkt nach der Buchung nur den Organisator, und die sichtbaren Betraege ergaben
+einen Bruchteil des Gesamtpreises.
+
+Die Nummerierung nutzt `manageInvitations.guestSlot`, damit sie mit dem Einladungsbildschirm
+uebereinstimmt. Die Zeilen sind **bewusst nicht bearbeitbar**: ein Tippen erklaert, dass Gaeste
+unter „Einladung" gepflegt werden, weil dort E-Mail und Telefon miterfasst werden - ohne die
+kann niemand eingeladen oder erinnert werden. Neue Schluessel `budget.openSlotTitle` und
+`budget.openSlotMessage`, EN und DE.
+
+Kontrollrechnung ueber alle vier Live-Events, jeweils exakt aufgehend:
+
+| Event | Zahlende | Organisator | je Gast | Summe |
+|---|---|---|---|---|
+| Natalia | 5 | 229 € | 229 € | 1145 € |
+| Sven | 4 | 287 € | 286 € | 1145 € |
+| Hans | 4 | 287 € | 286 € | 1145 € |
+| Dana | 4 | 226 € | 223 € | 895 € |
+
 **Natalias Buchungszeile bleibt der Ausreisser.** Drei von vier Events haben
 `exclude_honoree = true` mit 4 Zahlenden; Natalia hat `false` mit 5. Das ist die von Hand
 gesetzte Testzeile vom 31.07. Mit der neuen Ehrengast-Regel ist sie **in sich stimmig**
