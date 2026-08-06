@@ -41,7 +41,9 @@ export type {
 export { expensesRepository } from './expenses';
 export type {
   CreateEventExpense,
+  CreateEventExpenseCategory,
   EventExpense,
+  EventExpenseCategory,
   EventExpenseReport,
   EventExpenseShare,
   ExpenseShareInput,

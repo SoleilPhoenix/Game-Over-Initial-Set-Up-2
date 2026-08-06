@@ -59,6 +59,79 @@ export function splitPerPerson(totalCents: number, payingCount: number): PerPers
   };
 }
 
+export type ExpenseSplitStatus = 'complete' | 'over' | 'short';
+
+export interface ExpenseSplitShare {
+  userId: string;
+  amountCents: number;
+  isManual: boolean;
+}
+
+export interface ExpenseSplitResult {
+  shares: ExpenseSplitShare[];
+  assignedCents: number;
+  /** Positive when short, negative when over, and zero when complete. */
+  remainingCents: number;
+  status: ExpenseSplitStatus;
+}
+
+export interface ExpenseSplitOptions {
+  paidBy?: string | null;
+  /** Amounts entered by the user. Only marked participants are considered. */
+  manualAmounts?: Readonly<Record<string, number>>;
+}
+
+/**
+ * Split one extra expense in integer cents without touching the package invoice rules above.
+ *
+ * The equal split is deterministic: one marked person receives all remainder cents. Manual
+ * values replace only that person's suggested value so an in-progress edit is never silently
+ * balanced by changing what the user entered.
+ */
+export function calculateExpenseSplit(
+  totalCents: number,
+  participantIds: readonly string[],
+  options: ExpenseSplitOptions = {}
+): ExpenseSplitResult {
+  if (!Number.isSafeInteger(totalCents) || totalCents < 0) {
+    throw new Error('Expense total must be a non-negative integer number of cents');
+  }
+
+  const markedParticipantIds = [...new Set(participantIds)];
+  const participantCount = markedParticipantIds.length;
+  const baseAmount = participantCount > 0 ? Math.floor(totalCents / participantCount) : 0;
+  const remainder = participantCount > 0 ? totalCents - baseAmount * participantCount : 0;
+  const remainderRecipient = options.paidBy && markedParticipantIds.includes(options.paidBy)
+    ? options.paidBy
+    : markedParticipantIds[0];
+  const manualAmounts = options.manualAmounts ?? {};
+
+  const shares = markedParticipantIds.map<ExpenseSplitShare>(userId => {
+    const isManual = Object.prototype.hasOwnProperty.call(manualAmounts, userId);
+    const manualAmount = manualAmounts[userId];
+    if (isManual && (!Number.isSafeInteger(manualAmount) || manualAmount < 0)) {
+      throw new Error('Manual expense shares must be non-negative integer cents');
+    }
+
+    return {
+      userId,
+      amountCents: isManual
+        ? manualAmount
+        : baseAmount + (userId === remainderRecipient ? remainder : 0),
+      isManual,
+    };
+  });
+  const assignedCents = shares.reduce((sum, share) => sum + share.amountCents, 0);
+  const remainingCents = totalCents - assignedCents;
+  const status: ExpenseSplitStatus = remainingCents === 0
+    ? 'complete'
+    : remainingCents > 0
+      ? 'short'
+      : 'over';
+
+  return { shares, assignedCents, remainingCents, status };
+}
+
 /** Ganze Euro, deutsches Format: 114500 -> "1.145 €". */
 export function formatEuro(cents: number): string {
   return new Intl.NumberFormat('de-DE', {

@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 
-import { depositAndDue, formatEuro, splitPerPerson } from '@/utils/money';
+import {
+  calculateExpenseSplit,
+  depositAndDue,
+  formatEuro,
+  splitPerPerson,
+} from '@/utils/money';
 
 /**
  * Owner-Regel vom 05.08.: Betraege erscheinen ueberall als **ganze Euro**.
@@ -87,6 +92,58 @@ describe('splitPerPerson', () => {
     const s = splitPerPerson(89500, 0);
     expect(s.perPersonEuros).toBe(0);
     expect(s.organizerEuros).toBe(0);
+  });
+});
+
+describe('calculateExpenseSplit', () => {
+  it('verteilt Rest-Cent exakt und deterministisch auf den Zahlenden', () => {
+    const result = calculateExpenseSplit(20000, ['user-1', 'user-2', 'user-3'], {
+      paidBy: 'user-2',
+    });
+
+    expect(result.shares.map(share => share.amountCents)).toEqual([6666, 6668, 6666]);
+    expect(result.assignedCents).toBe(20000);
+    expect(result.status).toBe('complete');
+  });
+
+  it('gibt den Rest der ersten markierten Person, wenn der Zahlende nicht markiert ist', () => {
+    const result = calculateExpenseSplit(10001, ['user-3', 'user-1'], {
+      paidBy: 'user-2',
+    });
+
+    expect(result.shares).toMatchObject([
+      { userId: 'user-3', amountCents: 5001 },
+      { userId: 'user-1', amountCents: 5000 },
+    ]);
+    expect(result.remainingCents).toBe(0);
+  });
+
+  it('bewahrt manuelle Werte und meldet kurze, ueberhoehte und vollstaendige Verteilungen', () => {
+    const short = calculateExpenseSplit(1000, ['user-1', 'user-2'], {
+      manualAmounts: { 'user-1': 400 },
+    });
+    const over = calculateExpenseSplit(1000, ['user-1', 'user-2'], {
+      manualAmounts: { 'user-1': 600 },
+    });
+    const complete = calculateExpenseSplit(1000, ['user-1', 'user-2'], {
+      manualAmounts: { 'user-1': 600, 'user-2': 400 },
+    });
+
+    expect(short).toMatchObject({ status: 'short', remainingCents: 100 });
+    expect(short.shares[0]).toEqual({ userId: 'user-1', amountCents: 400, isManual: true });
+    expect(over).toMatchObject({ status: 'over', remainingCents: -100 });
+    expect(over.shares[0].amountCents).toBe(600);
+    expect(complete).toMatchObject({ status: 'complete', remainingCents: 0 });
+    expect(complete.shares.map(share => share.amountCents)).toEqual([600, 400]);
+  });
+
+  it('erlaubt niemanden zu markieren und meldet dann den vollen Betrag als fehlend', () => {
+    expect(calculateExpenseSplit(2500, [])).toEqual({
+      shares: [],
+      assignedCents: 0,
+      remainingCents: 2500,
+      status: 'short',
+    });
   });
 });
 

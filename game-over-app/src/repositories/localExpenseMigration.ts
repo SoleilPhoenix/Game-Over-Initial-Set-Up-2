@@ -8,6 +8,8 @@ import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/types';
 
 type EventExpenseInsert = Database['public']['Tables']['event_expenses']['Insert'];
+type EventExpenseCategoryInsert =
+  Database['public']['Tables']['event_expense_categories']['Insert'];
 
 const CUSTOM_CATEGORIES_KEY_PREFIX = 'gameover:custom_cats:';
 const LEGACY_EXPENSES_KEY_PREFIX = 'gameover:expenses:';
@@ -24,6 +26,13 @@ interface LegacyExpenseCandidate {
   title?: unknown;
 }
 
+interface LegacyCategoryCandidate {
+  icon?: unknown;
+  key?: unknown;
+  label?: unknown;
+  labelKey?: unknown;
+}
+
 interface MigrationItemState {
   id: string;
   source: 'custom_cats' | 'expenses';
@@ -33,7 +42,10 @@ interface MigrationItemState {
 interface ExpenseMigrationState {
   version: 1;
   completed: boolean;
+  expensesCompleted?: boolean;
+  categoriesCompleted?: boolean;
   items: MigrationItemState[];
+  categoryItems?: Array<{ id: string; sourceIndex: number }>;
 }
 
 interface ParsedLegacyExpense {
@@ -46,13 +58,28 @@ interface ParsedLegacyExpense {
   occurredAt?: string;
 }
 
+interface ParsedLegacyCategory {
+  sourceIndex: number;
+  key: string;
+  label: string;
+  icon: string | null;
+}
+
 export interface LocalExpenseMigrationResult {
   migratedExpenses: number;
+  migratedCategories: number;
   alreadyCompleted: boolean;
 }
 
 function emptyState(): ExpenseMigrationState {
-  return { version: 1, completed: false, items: [] };
+  return {
+    version: 1,
+    completed: false,
+    expensesCompleted: false,
+    categoriesCompleted: false,
+    items: [],
+    categoryItems: [],
+  };
 }
 
 function parseArray(raw: string | null): unknown[] {
@@ -118,6 +145,24 @@ function parseCandidate(
   };
 }
 
+function parseCategory(value: unknown, sourceIndex: number): ParsedLegacyCategory | null {
+  if (!value || typeof value !== 'object') return null;
+  const candidate = value as LegacyCategoryCandidate;
+  const key = typeof candidate.key === 'string' ? candidate.key.trim() : '';
+  const rawLabel = typeof candidate.label === 'string' ? candidate.label : candidate.labelKey;
+  const label = typeof rawLabel === 'string' ? rawLabel.trim() : '';
+  if (!key || key.length > 60 || !label || label.length > 60) return null;
+
+  return {
+    sourceIndex,
+    key,
+    label,
+    icon: typeof candidate.icon === 'string' && candidate.icon.trim()
+      ? candidate.icon.trim()
+      : null,
+  };
+}
+
 function getStateItem(
   state: ExpenseMigrationState,
   source: MigrationItemState['source'],
@@ -133,6 +178,19 @@ function getStateItem(
   return item;
 }
 
+function getCategoryStateItem(
+  state: ExpenseMigrationState,
+  sourceIndex: number
+): { id: string; sourceIndex: number } {
+  state.categoryItems ??= [];
+  const existing = state.categoryItems.find(item => item.sourceIndex === sourceIndex);
+  if (existing) return existing;
+
+  const item = { id: Crypto.randomUUID(), sourceIndex };
+  state.categoryItems.push(item);
+  return item;
+}
+
 async function migrateEventInternal(eventId: string): Promise<LocalExpenseMigrationResult> {
   const stateKey = `${MIGRATION_STATE_KEY_PREFIX}${eventId}`;
   const rawState = await AsyncStorage.getItem(stateKey);
@@ -140,8 +198,8 @@ async function migrateEventInternal(eventId: string): Promise<LocalExpenseMigrat
     ? emptyState()
     : JSON.parse(rawState) as ExpenseMigrationState;
 
-  if (state.version === 1 && state.completed) {
-    return { migratedExpenses: 0, alreadyCompleted: true };
+  if (state.version === 1 && state.completed && state.categoriesCompleted) {
+    return { migratedExpenses: 0, migratedCategories: 0, alreadyCompleted: true };
   }
 
   const [customCategoryValues, expenseValues] = await Promise.all([
@@ -152,6 +210,9 @@ async function migrateEventInternal(eventId: string): Promise<LocalExpenseMigrat
     ...customCategoryValues.map((value, index) => parseCandidate(value, 'custom_cats', index)),
     ...expenseValues.map((value, index) => parseCandidate(value, 'expenses', index)),
   ].filter((value): value is ParsedLegacyExpense => value !== null);
+  const categories = customCategoryValues
+    .map((value, index) => parseCategory(value, index))
+    .filter((value): value is ParsedLegacyCategory => value !== null);
 
   const { data: authData, error: authError } = await supabase.auth.getUser();
   if (authError) throw authError;
@@ -171,22 +232,47 @@ async function migrateEventInternal(eventId: string): Promise<LocalExpenseMigrat
     if (candidate.occurredAt) row.occurred_at = candidate.occurredAt;
     return row;
   });
+  const categoryRows: EventExpenseCategoryInsert[] = categories.map(category => ({
+    id: getCategoryStateItem(state, category.sourceIndex).id,
+    event_id: eventId,
+    key: category.key,
+    label: category.label,
+    icon: category.icon,
+    created_by: authData.user!.id,
+  }));
 
   // Save deterministic IDs before the remote write. A crash or retry then uses
   // the same primary keys, so upsert cannot create duplicates.
   await AsyncStorage.setItem(stateKey, JSON.stringify(state));
 
-  if (rows.length > 0) {
+  const expensesAlreadyCompleted = state.expensesCompleted ?? state.completed;
+  const categoriesAlreadyCompleted = state.categoriesCompleted ?? false;
+  let migratedExpenses = 0;
+  let migratedCategories = 0;
+
+  if (!expensesAlreadyCompleted && rows.length > 0) {
     const { error } = await supabase
       .from('event_expenses')
       .upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
     if (error) throw error;
+    migratedExpenses = rows.length;
   }
+  state.expensesCompleted = true;
+  await AsyncStorage.setItem(stateKey, JSON.stringify(state));
+
+  if (!categoriesAlreadyCompleted && categoryRows.length > 0) {
+    const { error } = await supabase
+      .from('event_expense_categories')
+      .upsert(categoryRows, { onConflict: 'event_id,key', ignoreDuplicates: true });
+    if (error) throw error;
+    migratedCategories = categoryRows.length;
+  }
+  state.categoriesCompleted = true;
 
   state.completed = true;
   await AsyncStorage.setItem(stateKey, JSON.stringify(state));
 
-  return { migratedExpenses: rows.length, alreadyCompleted: false };
+  return { migratedExpenses, migratedCategories, alreadyCompleted: false };
 }
 
 const inFlightByEvent = new Map<string, Promise<LocalExpenseMigrationResult>>();

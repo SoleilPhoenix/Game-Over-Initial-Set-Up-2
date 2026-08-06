@@ -5,15 +5,16 @@
  */
 
 import { supabase } from '@/lib/supabase/client';
-import type { Database } from '@/lib/supabase/types';
+import type { Database, Json } from '@/lib/supabase/types';
 
 type EventExpenseRow = Database['public']['Tables']['event_expenses']['Row'];
 type EventExpenseInsert = Database['public']['Tables']['event_expenses']['Insert'];
 type EventExpenseUpdate = Database['public']['Tables']['event_expenses']['Update'];
 type EventExpenseShareRow = Database['public']['Tables']['event_expense_shares']['Row'];
-type EventExpenseShareInsert = Database['public']['Tables']['event_expense_shares']['Insert'];
 type EventExpenseReportRow = Database['public']['Tables']['event_expense_reports']['Row'];
 type EventExpenseReportInsert = Database['public']['Tables']['event_expense_reports']['Insert'];
+type EventExpenseCategoryRow = Database['public']['Tables']['event_expense_categories']['Row'];
+type EventExpenseCategoryInsert = Database['public']['Tables']['event_expense_categories']['Insert'];
 
 export interface EventExpenseShare {
   id: string;
@@ -49,6 +50,16 @@ export interface EventExpenseReport {
   resolvedBy: string | null;
 }
 
+export interface EventExpenseCategory {
+  id: string;
+  eventId: string;
+  key: string;
+  label: string;
+  icon: string | null;
+  createdBy: string | null;
+  createdAt: string;
+}
+
 export interface CreateEventExpense {
   id?: string;
   eventId: string;
@@ -64,7 +75,6 @@ export interface UpdateEventExpense {
   paidBy?: string | null;
   title?: string;
   categoryKey?: string | null;
-  amountCents?: number;
   occurredAt?: string;
 }
 
@@ -77,6 +87,14 @@ export interface ReportEventExpense {
   expenseId: string;
   reportedBy: string;
   reason?: string | null;
+}
+
+export interface CreateEventExpenseCategory {
+  eventId: string;
+  key: string;
+  label: string;
+  icon?: string | null;
+  createdBy: string;
 }
 
 interface ExpenseRowWithShares extends EventExpenseRow {
@@ -109,6 +127,18 @@ export function mapEventExpenseReportRow(row: EventExpenseReportRow): EventExpen
     createdAt: row.created_at,
     resolvedAt: row.resolved_at,
     resolvedBy: row.resolved_by,
+  };
+}
+
+export function mapEventExpenseCategoryRow(row: EventExpenseCategoryRow): EventExpenseCategory {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    key: row.key,
+    label: row.label,
+    icon: row.icon,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
   };
 }
 
@@ -153,10 +183,6 @@ function mapUpdateEventExpense(patch: UpdateEventExpense): EventExpenseUpdate {
   if ('paidBy' in patch) update.paid_by = patch.paidBy ?? null;
   if ('title' in patch) update.title = patch.title;
   if ('categoryKey' in patch) update.category_key = patch.categoryKey ?? null;
-  if ('amountCents' in patch && patch.amountCents !== undefined) {
-    assertPositiveCents(patch.amountCents);
-    update.amount_cents = patch.amountCents;
-  }
   if ('occurredAt' in patch) update.occurred_at = patch.occurredAt;
   return update;
 }
@@ -241,7 +267,12 @@ export const expensesRepository = {
     if (error) throw error;
   },
 
-  async setShares(expenseId: string, shares: ExpenseShareInput[]): Promise<EventExpenseShare[]> {
+  async setShares(
+    expenseId: string,
+    amountCents: number,
+    shares: ExpenseShareInput[]
+  ): Promise<EventExpenseShare[]> {
+    assertPositiveCents(amountCents);
     const desiredByUser = new Map<string, ExpenseShareInput>();
     for (const share of shares) {
       assertPositiveCents(share.amountCents);
@@ -249,36 +280,21 @@ export const expensesRepository = {
     }
     const desired = [...desiredByUser.values()];
 
-    const { data: current, error: currentError } = await supabase
-      .from('event_expense_shares')
-      .select('user_id')
-      .eq('expense_id', expenseId);
-    if (currentError) throw currentError;
-
-    if (desired.length > 0) {
-      const rows: EventExpenseShareInsert[] = desired.map(share => ({
-        expense_id: expenseId,
-        user_id: share.userId,
-        amount_cents: share.amountCents,
-      }));
-      const { error: upsertError } = await supabase
-        .from('event_expense_shares')
-        .upsert(rows, { onConflict: 'expense_id,user_id' });
-      if (upsertError) throw upsertError;
+    const assignedCents = desired.reduce((sum, share) => sum + share.amountCents, 0);
+    if (desired.length > 0 && assignedCents !== amountCents) {
+      throw new Error('Expense shares must add up to the full expense amount');
     }
 
-    const desiredUserIds = new Set(desired.map(share => share.userId));
-    const removedUserIds = (current ?? [])
-      .map(share => share.user_id)
-      .filter(userId => !desiredUserIds.has(userId));
-    if (removedUserIds.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('event_expense_shares')
-        .delete()
-        .eq('expense_id', expenseId)
-        .in('user_id', removedUserIds);
-      if (deleteError) throw deleteError;
-    }
+    const rpcShares: Json = desired.map(share => ({
+      user_id: share.userId,
+      amount_cents: share.amountCents,
+    }));
+    const { error } = await supabase.rpc('set_expense_shares', {
+      p_expense_id: expenseId,
+      p_amount_cents: amountCents,
+      p_shares: rpcShares,
+    });
+    if (error) throw error;
 
     return getSharesByExpenseId(expenseId);
   },
@@ -330,5 +346,51 @@ export const expensesRepository = {
 
     if (error) throw error;
     return mapEventExpenseReportRow(data);
+  },
+
+  async getCategoriesByEventId(eventId: string): Promise<EventExpenseCategory[]> {
+    const { data, error } = await supabase
+      .from('event_expense_categories')
+      .select('*')
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return (data ?? []).map(mapEventExpenseCategoryRow);
+  },
+
+  async createCategory(category: CreateEventExpenseCategory): Promise<EventExpenseCategory> {
+    const row: EventExpenseCategoryInsert = {
+      event_id: category.eventId,
+      key: category.key,
+      label: category.label,
+      icon: category.icon ?? null,
+      created_by: category.createdBy,
+    };
+    const { data, error } = await supabase
+      .from('event_expense_categories')
+      .insert(row)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return mapEventExpenseCategoryRow(data);
+  },
+
+  async renameCategory(id: string, label: string): Promise<EventExpenseCategory> {
+    const { data, error } = await supabase
+      .from('event_expense_categories')
+      .update({ label })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return mapEventExpenseCategoryRow(data);
+  },
+
+  async deleteCategory(id: string): Promise<void> {
+    const { error } = await supabase.from('event_expense_categories').delete().eq('id', id);
+    if (error) throw error;
   },
 };

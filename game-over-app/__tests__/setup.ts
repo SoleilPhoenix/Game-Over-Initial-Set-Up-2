@@ -93,6 +93,7 @@ vi.mock('@/lib/supabase/client', () => ({
       single: vi.fn(() => Promise.resolve({ data: null, error: null })),
       order: vi.fn().mockReturnThis(),
     })),
+    rpc: vi.fn(),
     storage: {
       from: vi.fn(() => ({
         upload: vi.fn(),

@@ -362,6 +362,20 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- Nur beim ERSTEN Mal. set_expense_shares ersetzt die Anteile eines Postens komplett
+  -- (loeschen, neu schreiben), also feuert dieser Trigger bei jeder Bearbeitung erneut fuer
+  -- alle Beteiligten. Ohne diese Sperre bekaeme jemand, der seit dem ersten Tag markiert ist,
+  -- bei jeder Korrektur am Betrag eine weitere Push-Nachricht.
+  -- Owner-Vorgabe vom 06.08.: bei nachtraeglicher Erweiterung nur die neu Hinzugekommenen.
+  IF EXISTS (
+    SELECT 1 FROM public.notifications n
+     WHERE n.user_id = NEW.user_id
+       AND n.type = 'expense_share_assigned'
+       AND n.metadata->>'expense_id' = v_expense.id::text
+  ) THEN
+    RETURN NEW;
+  END IF;
+
   INSERT INTO public.notifications (user_id, event_id, type, title, body, action_url, metadata)
   VALUES (
     NEW.user_id,

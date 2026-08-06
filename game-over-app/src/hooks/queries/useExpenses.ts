@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   expensesRepository,
   type CreateEventExpense,
+  type CreateEventExpenseCategory,
   type ExpenseShareInput,
   type ReportEventExpense,
   type UpdateEventExpense,
@@ -13,7 +14,9 @@ import { useAuthStore } from '@/stores/authStore';
 
 export type {
   CreateEventExpense,
+  CreateEventExpenseCategory,
   EventExpense,
+  EventExpenseCategory,
   EventExpenseReport,
   EventExpenseShare,
   ExpenseShareInput,
@@ -22,11 +25,20 @@ export type {
 } from '@/repositories/expenses';
 
 export type CreateExpenseInput = Omit<CreateEventExpense, 'eventId' | 'createdBy'>;
+export type CreateExpenseCategoryInput = Omit<
+  CreateEventExpenseCategory,
+  'eventId' | 'createdBy'
+>;
 export type ReportExpenseInput = Omit<ReportEventExpense, 'reportedBy'>;
 
 export const expenseKeys = {
   all: ['expenses'] as const,
   byEvent: (eventId: string) => [...expenseKeys.all, 'event', eventId] as const,
+  categoriesByEvent: (eventId: string) => [
+    ...expenseKeys.all,
+    'categories',
+    eventId,
+  ] as const,
 };
 
 function requireUserId(userId: string | undefined): string {
@@ -83,8 +95,15 @@ export function useDeleteExpense(eventId: string | undefined) {
 export function useSetExpenseShares(eventId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: ({ expenseId, shares }: { expenseId: string; shares: ExpenseShareInput[] }) =>
-      expensesRepository.setShares(expenseId, shares),
+    mutationFn: ({
+      expenseId,
+      amountCents,
+      shares,
+    }: {
+      expenseId: string;
+      amountCents: number;
+      shares: ExpenseShareInput[];
+    }) => expensesRepository.setShares(expenseId, amountCents, shares),
     onSettled: () => {
       if (eventId) queryClient.invalidateQueries({ queryKey: expenseKeys.byEvent(eventId) });
     },
@@ -139,6 +158,61 @@ export function useMigrateLocalExpenses() {
     onSuccess: (result, eventId) => {
       if (result.migratedExpenses > 0) {
         queryClient.invalidateQueries({ queryKey: expenseKeys.byEvent(eventId) });
+      }
+      if (result.migratedCategories > 0) {
+        queryClient.invalidateQueries({ queryKey: expenseKeys.categoriesByEvent(eventId) });
+      }
+    },
+  });
+}
+
+export function useEventExpenseCategories(eventId: string | undefined) {
+  return useQuery({
+    queryKey: expenseKeys.categoriesByEvent(eventId ?? ''),
+    queryFn: () => expensesRepository.getCategoriesByEventId(eventId!),
+    enabled: !!eventId,
+    staleTime: 2 * 60 * 1000,
+  });
+}
+
+export function useCreateExpenseCategory(eventId: string | undefined) {
+  const queryClient = useQueryClient();
+  const userId = useAuthStore(state => state.user?.id);
+
+  return useMutation({
+    mutationFn: (category: CreateExpenseCategoryInput) => expensesRepository.createCategory({
+      ...category,
+      eventId: eventId!,
+      createdBy: requireUserId(userId),
+    }),
+    onSettled: () => {
+      if (eventId) {
+        queryClient.invalidateQueries({ queryKey: expenseKeys.categoriesByEvent(eventId) });
+      }
+    },
+  });
+}
+
+export function useRenameExpenseCategory(eventId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, label }: { id: string; label: string }) =>
+      expensesRepository.renameCategory(id, label),
+    onSettled: () => {
+      if (eventId) {
+        queryClient.invalidateQueries({ queryKey: expenseKeys.categoriesByEvent(eventId) });
+      }
+    },
+  });
+}
+
+export function useDeleteExpenseCategory(eventId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => expensesRepository.deleteCategory(id),
+    onSettled: () => {
+      if (eventId) {
+        queryClient.invalidateQueries({ queryKey: expenseKeys.categoriesByEvent(eventId) });
       }
     },
   });

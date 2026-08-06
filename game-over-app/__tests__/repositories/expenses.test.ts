@@ -1,11 +1,18 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { supabase } from '@/lib/supabase/client';
 import {
+  expensesRepository,
   mapCreateEventExpense,
+  mapEventExpenseCategoryRow,
   mapEventExpenseReportRow,
   mapEventExpenseRow,
 } from '@/repositories/expenses';
 
 describe('event expenses repository mapping', () => {
+  beforeEach(() => {
+    vi.mocked(supabase.rpc).mockResolvedValue({ data: undefined, error: null } as any);
+  });
+
   it('maps an expense, its shares, and open report count without changing cents', () => {
     expect(mapEventExpenseRow({
       id: 'expense-1',
@@ -93,5 +100,74 @@ describe('event expenses repository mapping', () => {
       title: 'Invalid',
       amountCents: 12.5,
     })).toThrow('positive integer cents');
+  });
+
+  it('maps shared custom categories', () => {
+    expect(mapEventExpenseCategoryRow({
+      id: 'category-1',
+      event_id: 'event-1',
+      key: 'custom_party_hats',
+      label: 'Party hats',
+      icon: 'pricetag-outline',
+      created_by: 'user-1',
+      created_at: '2026-08-06T12:00:00Z',
+    })).toEqual({
+      id: 'category-1',
+      eventId: 'event-1',
+      key: 'custom_party_hats',
+      label: 'Party hats',
+      icon: 'pricetag-outline',
+      createdBy: 'user-1',
+      createdAt: '2026-08-06T12:00:00Z',
+    });
+  });
+
+  it('writes a complete share distribution through the RPC only', async () => {
+    const rows = [{
+      id: 'share-1',
+      expense_id: 'expense-1',
+      user_id: 'user-1',
+      amount_cents: 10001,
+      settled_at: null,
+      created_at: '2026-08-06T12:00:00Z',
+    }, {
+      id: 'share-2',
+      expense_id: 'expense-1',
+      user_id: 'user-2',
+      amount_cents: 9999,
+      settled_at: null,
+      created_at: '2026-08-06T12:00:00Z',
+    }];
+    const query = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      order: vi.fn().mockResolvedValue({ data: rows, error: null }),
+    };
+    vi.mocked(supabase.from).mockReturnValue(query as any);
+
+    const result = await expensesRepository.setShares('expense-1', 20000, [
+      { userId: 'user-1', amountCents: 10001 },
+      { userId: 'user-2', amountCents: 9999 },
+    ]);
+
+    expect(supabase.rpc).toHaveBeenCalledWith('set_expense_shares', {
+      p_expense_id: 'expense-1',
+      p_amount_cents: 20000,
+      p_shares: [
+        { user_id: 'user-1', amount_cents: 10001 },
+        { user_id: 'user-2', amount_cents: 9999 },
+      ],
+    });
+    expect(supabase.from).toHaveBeenCalledTimes(1);
+    expect(result.map(share => share.amountCents)).toEqual([10001, 9999]);
+  });
+
+  it('rejects an incomplete share distribution before calling the RPC', async () => {
+    await expect(expensesRepository.setShares('expense-1', 20000, [
+      { userId: 'user-1', amountCents: 6666 },
+      { userId: 'user-2', amountCents: 6666 },
+      { userId: 'user-3', amountCents: 6666 },
+    ])).rejects.toThrow('full expense amount');
+    expect(supabase.rpc).not.toHaveBeenCalled();
   });
 });
