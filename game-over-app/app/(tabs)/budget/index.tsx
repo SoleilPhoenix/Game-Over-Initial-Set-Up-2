@@ -49,13 +49,7 @@ import type {
   EventRefund,
   RefundStatus,
 } from '@/hooks/queries/useRefunds';
-
-/** Shows a profile image with graceful fallback to children when the URL fails to load. */
-function AvatarImage({ uri, style, fallback }: { uri: string; style: any; fallback: React.ReactNode }) {
-  const [errored, setErrored] = React.useState(false);
-  if (errored) return <>{fallback}</>;
-  return <Image source={{ uri }} style={style} onError={() => setErrored(true)} />;
-}
+import { CachedAvatarImage } from '@/components/ui/CachedAvatarImage';
 
 // Avatar colors for participant initials
 const AVATAR_COLORS = [
@@ -1287,7 +1281,15 @@ export default function BudgetDashboardScreen() {
                 accessibilityLabel="Go to profile"
               >
                 {userAvatar ? (
-                  <Image source={{ uri: userAvatar }} style={styles.avatar} />
+                  <CachedAvatarImage
+                    uri={userAvatar}
+                    style={styles.avatar}
+                    fallback={
+                      <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                        <Text style={styles.avatarInitial}>{userInitial}</Text>
+                      </View>
+                    }
+                  />
                 ) : (
                   <View style={[styles.avatar, styles.avatarPlaceholder]}>
                     <Text style={styles.avatarInitial}>{userInitial}</Text>
@@ -1400,7 +1402,15 @@ export default function BudgetDashboardScreen() {
                 accessibilityLabel="Go to profile"
               >
                 {userAvatar ? (
-                  <Image source={{ uri: userAvatar }} style={styles.avatar} />
+                  <CachedAvatarImage
+                    uri={userAvatar}
+                    style={styles.avatar}
+                    fallback={
+                      <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                        <Text style={styles.avatarInitial}>{userInitial}</Text>
+                      </View>
+                    }
+                  />
                 ) : (
                   <View style={[styles.avatar, styles.avatarPlaceholder]}>
                     <Text style={styles.avatarInitial}>{userInitial}</Text>
@@ -1679,7 +1689,7 @@ export default function BudgetDashboardScreen() {
                         {/* Avatar */}
                         {!isDemo && ((participantRaw as any).profile?.avatar_url || (isCurrentUser && userAvatar)) ? (
                           <View style={[styles.participantAvatarInitials, { overflow: 'hidden' }]}>
-                            <AvatarImage
+                            <CachedAvatarImage
                               uri={(participantRaw as any).profile?.avatar_url || userAvatar}
                               style={{ width: 40, height: 40, borderRadius: 20 }}
                               fallback={

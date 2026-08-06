@@ -5,7 +5,9 @@
 
 import React, { memo } from 'react';
 import { YStack, XStack, Text, Avatar } from 'tamagui';
+import { StyleSheet } from 'react-native';
 import type { MessageWithAuthor } from '@/repositories/messages';
+import { CachedAvatarImage } from '@/components/ui/CachedAvatarImage';
 
 interface MessageBubbleProps {
   message: MessageWithAuthor;
@@ -57,7 +59,15 @@ function MessageBubbleComponent({
         {showAvatar && !isOwnMessage && (
           <Avatar circular size="$3">
             {message.author?.avatar_url ? (
-              <Avatar.Image src={message.author.avatar_url} />
+              <CachedAvatarImage
+                uri={message.author.avatar_url}
+                style={styles.avatarImage}
+                fallback={
+                  <Text fontSize="$1" fontWeight="600" color="white">
+                    {getInitials(message.author.full_name)}
+                  </Text>
+                }
+              />
             ) : (
               <Avatar.Fallback
                 backgroundColor="$primary"
@@ -129,3 +139,10 @@ function MessageBubbleComponent({
 }
 
 export const MessageBubble = memo(MessageBubbleComponent);
+
+const styles = StyleSheet.create({
+  avatarImage: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+  },
+});

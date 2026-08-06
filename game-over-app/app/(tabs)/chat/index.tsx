@@ -9,7 +9,6 @@ import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadDesiredParticipants } from '@/lib/participantCountCache';
 import { YStack, XStack, Text, Image } from 'tamagui';
-import { Image as ExpoImage } from 'expo-image';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { ShareModal } from '@/components/ui/ShareModal';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -19,6 +18,7 @@ import { useChannels, useCreateChannel, useMigrateLocalChannels } from '@/hooks/
 import { usePolls, useCreatePoll, useVote, useDeletePoll, useAddPollOption, useDeletePollOption } from '@/hooks/queries/usePolls';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
+import { CachedAvatarImage } from '@/components/ui/CachedAvatarImage';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
 import { PastEventBanner } from '@/components/ui/PastEventBanner';
 import { useUser } from '@/stores/authStore';
@@ -1244,11 +1244,14 @@ export default function CommunicationScreen() {
                 accessibilityLabel="Go to profile"
               >
                 {userAvatar ? (
-                  <ExpoImage
-                    source={{ uri: userAvatar }}
+                  <CachedAvatarImage
+                    uri={userAvatar}
                     style={styles.avatar}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
+                    fallback={
+                      <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                        <Text style={styles.avatarInitial}>{userInitial}</Text>
+                      </View>
+                    }
                   />
                 ) : (
                   <View style={[styles.avatar, styles.avatarPlaceholder]}>

@@ -18,6 +18,7 @@ import { feedback, useUIStore } from '@/stores/uiStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { getPackageImage } from '@/constants/packageImages';
 import { supabase } from '@/lib/supabase/client';
+import { CachedAvatarImage } from '@/components/ui/CachedAvatarImage';
 
 import { getTierDisplayLabel } from '@/constants/packageTiers';
 
@@ -212,11 +213,14 @@ export default function ProfileScreen() {
               >
                 <View style={styles.avatarInner}>
                   {userAvatar ? (
-                    <ExpoImage
-                      source={{ uri: userAvatar }}
+                    <CachedAvatarImage
+                      uri={userAvatar}
                       style={styles.avatarImage}
-                      contentFit="cover"
-                      cachePolicy="memory-disk"
+                      fallback={
+                        <Text fontSize={24} fontWeight="700" color={'#FFFFFF'}>
+                          {userInitials}
+                        </Text>
+                      }
                     />
                   ) : (
                     <Text fontSize={24} fontWeight="700" color={'#FFFFFF'}>

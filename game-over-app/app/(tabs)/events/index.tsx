@@ -47,6 +47,7 @@ import type { EventWithDetails } from '@/repositories';
 import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 import { isPastEvent, isReadOnlyEvent } from '@/utils/eventLifecycle';
 import { feedback } from '@/stores/uiStore';
+import { CachedAvatarImage } from '@/components/ui/CachedAvatarImage';
 
 type FilterTab = 'organizing' | 'attending';
 
@@ -1007,7 +1008,15 @@ export default function EventsScreen() {
             accessibilityLabel="Go to profile"
           >
             {userAvatar ? (
-              <Image source={{ uri: userAvatar }} style={styles.avatar} />
+              <CachedAvatarImage
+                uri={userAvatar}
+                style={styles.avatar}
+                fallback={
+                  <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                    <Text style={styles.avatarInitial}>{userInitial}</Text>
+                  </View>
+                }
+              />
             ) : (
               <View style={[styles.avatar, styles.avatarPlaceholder]}>
                 <Text style={styles.avatarInitial}>{userInitial}</Text>

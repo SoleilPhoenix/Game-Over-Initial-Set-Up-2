@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { ScrollView, Share, ActivityIndicator, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Modal, Image } from 'react-native';
+import { ScrollView, Share, ActivityIndicator, Pressable, StyleSheet, View, TextInput, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -34,6 +34,7 @@ import { resolveGuestDisplay } from '@/utils/guestDisplay';
 import { formatPreviousGuestValues, joinList, type GuestDataChange } from '@/utils/guestDataChange';
 import { supabase } from '@/lib/supabase/client';
 import { feedback } from '@/stores/uiStore';
+import { CachedAvatarImage } from '@/components/ui/CachedAvatarImage';
 
 // ─── Phone Formatting ──────────────────────────
 /** Auto-formats German phone numbers with dash after prefix */
@@ -87,14 +88,6 @@ function getEmailSuggestions(email: string): string[] {
   if (!afterAt) return COMMON_DOMAINS.slice(0, 5);
   return COMMON_DOMAINS.filter(d => d.startsWith(afterAt));
 }
-/** Renders a profile photo with automatic fallback to `children` on load error.
- *  Required because React Native's <Image> silently shows blank on broken URLs. */
-function AvatarImage({ uri, style, fallback }: { uri: string; style: any; fallback: React.ReactNode }) {
-  const [errored, setErrored] = React.useState(false);
-  if (errored) return <>{fallback}</>;
-  return <Image source={{ uri }} style={style} onError={() => setErrored(true)} />;
-}
-
 type SlotRole = 'organizer' | 'guest' | 'honoree';
 type SlotStatus =
   | 'declined'
@@ -744,7 +737,7 @@ export default function ManageInvitationsScreen() {
               isEmpty && styles.avatarEmpty,
             ]}>
               {avatarUrl ? (
-                <AvatarImage
+                <CachedAvatarImage
                   uri={avatarUrl}
                   style={{ width: 44, height: 44, borderRadius: 22 }}
                   fallback={<Text style={styles.avatarText}>{initial}</Text>}

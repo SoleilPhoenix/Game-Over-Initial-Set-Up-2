@@ -36,6 +36,7 @@ import { assemblePackages } from '@/utils/packageAssembly';
 import { SkeletonEventCard } from '@/components/ui/Skeleton';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { loadDesiredParticipants, loadChecklist, setChecklistItem, loadInvitedCount, loadBudgetInfo, type BudgetInfo } from '@/lib/participantCountCache';
+import { prefetchAvatarUris } from '@/components/ui/CachedAvatarImage';
 import { feedback } from '@/stores/uiStore';
 
 // ─── Planning Tools ─────────────────────────────
@@ -60,6 +61,16 @@ export default function EventSummaryScreen() {
 
   const { data: event, isLoading: eventLoading, error: eventError, refetch: refetchEvent } = useEvent(id);
   const { data: participants } = useParticipants(id);
+
+  // Participant profiles are already part of the event query cache. Warm the
+  // image disk cache as soon as they are known, before the guest list opens.
+  useEffect(() => {
+    if (!participants) return;
+    void prefetchAvatarUris(participants.map((participant) => participant.profile?.avatar_url))
+      .catch(() => {
+        // Rendering still has the initials fallback; prefetch is best effort.
+      });
+  }, [participants]);
   const { data: booking } = useBooking(id);
   const currentUserId = useAuthStore(s => s.user?.id);
   const currentParticipant = participants?.find(p => p.user_id === currentUserId);
