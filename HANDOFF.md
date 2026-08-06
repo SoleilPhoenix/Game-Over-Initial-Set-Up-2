@@ -271,6 +271,33 @@ neu suchen muss:
 haette der Ehrengast in der Zwischenzeit vollen Blick auf die Zahlen - genau das, was der
 Wunsch verhindern soll.
 
+**Schritt 3 und die DB-Haelfte von 1 sind erledigt** (Migration
+`20260806073606_honoree_participant_role.sql`, von Codex sol geschrieben, 06.08.):
+`invite_codes.is_honoree`, `accept_invite` vergibt die Rolle daraus, die `bookings`-SELECT-Policy
+schliesst `role = 'honoree'` aus, und `get_my_event_share(event_id)` liefert `(pays, share_cents)`
+ohne den Gesamtpreis preiszugeben.
+
+**Die Rundung im RPC ist eine bewusste Doppelung von `splitPerPerson`** in
+`src/utils/money.ts` - noetig, weil der Client den Gesamtpreis nicht bekommt und deshalb nicht
+selbst teilen kann. **Beide muessen zusammen geaendert werden**, ein SQL-Kommentar sagt das auch.
+Codex hatte im ersten Wurf fuer den Organisator denselben Anteil wie fuer Gaeste zurueckgegeben;
+bei Dana waeren das 4 x 223 = 892 statt 895 EUR gewesen. Nach der Korrektur stimmen SQL und
+TypeScript ueber neun geprueften Faellen inklusive Randfaelle exakt ueberein.
+
+**Zwei Grenzen, die bleiben und die man kennen muss:**
+- `event_participants` bleibt fuer alle Teilnehmer lesbar, inklusive
+  `contribution_amount_cents`. RLS ist zeilen-, nicht spaltenbasiert; den Ehrengast ganz
+  auszusperren wuerde Gaesteliste und Chat brechen.
+- Wer seinen eigenen Anteil kennt und die Teilnehmer zaehlen kann, **kann den Gesamtpreis
+  ueberschlagen**. Das folgt zwangslaeufig daraus, dem zahlenden Ehrengast seinen Betrag zu
+  zeigen. Verhindern liesse es sich nur, indem man ihm den Anteil ganz vorenthaelt - der Owner
+  hat sich am 06.08. bewusst dagegen entschieden. Die Zusage lautet also „er sieht die Zahlen
+  nicht", nicht „er kann sie nicht erschliessen".
+
+**„Weitere Kosten" brauchen keine RLS:** es gibt keine `expenses`-Tabelle, die Eintraege liegen
+ausschliesslich im AsyncStorage des jeweiligen Geraets (`gameover:custom_cats:<eventId>`). Auf
+dem Telefon des Ehrengasts ist die Liste ohnehin leer. Ausblenden ist reine UI-Arbeit.
+
 **„Alle erinnern"** verschwindet nicht mehr, wenn niemand offen ist, sondern wird ausgegraut.
 Das **„DU"-Abzeichen** hinter dem eigenen Namen ist raus - der Nutzer weiss, wie er heisst.
 
