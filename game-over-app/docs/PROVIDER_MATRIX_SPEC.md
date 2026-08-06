@@ -59,8 +59,9 @@ Outdoor, Tasting, Wellness.
 1. Jedes Blatt endet mit einem Abschnitt **„Abgelehnte Anbieter (zur Referenz)"**.
    Diese Zeilen dürfen nicht in die App. `Verify_Status` unterscheidet sie (`passed`).
 2. `Original_Rating` und `Echtes_Rating` weichen voneinander ab
-   (z.B. 4.5 gegen 4.5999999999999996). Welches der beiden maßgeblich ist, muss der Owner
-   festlegen - `Echtes_Rating` sieht nach der geprüften Zahl aus.
+   (z.B. 4.5 gegen 4.5999999999999996). **Owner-Entscheidung 06.08.: `Echtes_Rating` gilt.**
+   `Original_Rating` bleibt als Herkunftsnachweis stehen, wird aber nicht angezeigt.
+   Die Fließkomma-Ungenauigkeit stammt aus Excel - beim Import auf eine Nachkommastelle runden.
 
 **Veraltet, aber noch vorhanden** (Stand 09.03.2026, von der Excel abgelöst):
 die drei CSVs unter `Activities_lists/<Stadt>/`. Uneinheitliche Trennzeichen -
@@ -105,19 +106,32 @@ Heutiger Stand: `rating` und `review_count` sind in `app/package/[id].tsx:38-48`
 gesetzt. Seit dem 06.08. wird eine Bewertung mit null Bewertungen gar nicht mehr angezeigt.
 Bewertungsgeber-**Namen** gibt es im Code bisher überhaupt nicht, nur Note und Anzahl.
 
-### 3. Eignungsregel nach Geschlecht
+### 3. Eignungsregel nach Art der Feier
 
-Manche Aktivitäten passen nicht zu jeder Runde. Owner-Beispiele: ein Gin-Tasting ist eher
-nichts für eine Frauenrunde, Kranzbinden eher nichts für eine Männerrunde.
+**Owner-Entscheidung 06.08.: Gewichtung, kein Ausschluss.**
 
-Die Information liegt bereits vor: `events.party_type` unterscheidet Bachelor und Bachelorette.
-Die Matrix in `packageMatching.ts` kennt diese Dimension noch nicht - sie hätte als weitere
-Punktespalte dieselbe Form wie H1-H6 und G1-G6.
+Manche Aktivitäten werden von Junggesellen- und Junggesellinnenabschieden unterschiedlich stark
+nachgefragt. Die Matrix bekommt dafür eine weitere Punktespalte in derselben Form wie H1-H6 und
+G1-G6, gespeist aus `events.party_type` (`bachelor` / `bachelorette`).
 
-**Vorsicht bei der Formulierung.** „Für Frauen nichts" als harte Sperre schließt Runden aus,
-die es anders wollen. Eine Gewichtung (-1 statt Ausschluss) trifft dasselbe, ohne jemandem
-etwas zu verbieten - und die Matrix arbeitet ohnehin mit Punkten, nicht mit Verboten.
-Das ist eine Owner-Entscheidung, keine technische.
+Die vom Owner vorgegebene Spanne:
+
+| Gewicht | Bedeutung | Owner-Beispiele |
+|---|---|---|
+| **-2** | wird von dieser Runde selten gewünscht | Gin-Tasting bei einer Bachelorette |
+| **-1** | eher untypisch | |
+| **0** | keine Präferenz - der Normalfall | |
+| **+1** | wird häufiger gewünscht | |
+| **+2** | wird deutlich häufiger gewünscht | Kränze binden bei einer Bachelorette |
+
+**Warum Gewichtung und nicht Sperre:** die Zahl drückt aus, wie oft eine solche Runde das
+erfahrungsgemäß bucht - nicht, was sie darf. Eine Gruppe, die das Gegenteil will, drückt das
+über die zwölf übrigen Antworten aus und bekommt die Aktivität dann trotzdem. Eine harte Sperre
+würde genau diese Fälle abschneiden, und zwar unsichtbar.
+
+**Der Normalfall ist 0.** Ein Gewicht wird nur vergeben, wo es einen echten Nachfrageunterschied
+gibt. Die überwiegende Mehrheit der 176 Anbieterzeilen sollte ungewichtet bleiben - wer
+flächendeckend Werte verteilt, baut ein Vorurteil in den Algorithmus statt einer Beobachtung.
 
 ### 4. Angezeigt wird zunächst nur die Aktivität
 
@@ -128,17 +142,26 @@ besten passen. Der Anbieter kommt erst nach Punkt 1 dazu.
 
 ## Offene Entscheidungen, bevor Code entsteht
 
+**Entschieden am 06.08.:** `Echtes_Rating` gilt (Punkt 3), und die Eignung nach Art der Feier
+wird gewichtet statt gesperrt, Spanne -2 bis +2 (Punkt 4). Die Zugriffsregel für Anbieternamen
+ist bestätigt und wird serverseitig gebaut.
+
+**Noch offen:**
+
 1. Wandern die Anbieter in die Datenbank (Tabelle plus Migration) oder bleiben sie als Datei
-   im Bundle? Für die Datenbank spricht die Zugriffsregel aus Punkt 1 - eine Datei im Bundle
-   ist nicht geheim zu halten.
+   im Bundle? Für die Datenbank spricht die Zugriffsregel aus Punkt 1 - **eine Datei im Bundle
+   ist nicht geheim zu halten**, sie wird mit der App ausgeliefert. Damit ist die Frage
+   eigentlich schon beantwortet; sie steht hier nur, damit die Migration bewusst geschnitten wird.
 2. Wie sieht die Zuordnung Aktivitäts**typ** (Matrix) zu Anbieter (Excel) aus? Die Spalte
    `Aktivität` der Excel und die 53 Namen in `packageMatching.ts` müssen aufeinander abgebildet
-   werden - das ist der eigentliche Klebstoff.
-3. `Original_Rating` oder `Echtes_Rating`?
-4. Geschlechtsregel als Gewichtung oder als Ausschluss?
-5. Was passiert mit `packages.features` in der Datenbank? Heute leer; seit dem 06.08. fängt der
+   werden - das ist der eigentliche Klebstoff und die Stelle, an der die meiste Sorgfalt liegt.
+   Erste Aufgabe: beide Listen gegeneinanderhalten und benennen, was auf keiner Seite eine
+   Entsprechung hat.
+3. Wer vergibt die Gewichte aus Punkt 3, und auf welcher Ebene - je Aktivität oder je Kategorie?
+   Je Kategorie wären es neun Entscheidungen statt 176.
+4. Was passiert mit `packages.features` in der Datenbank? Heute leer; seit dem 06.08. fängt der
    Client das mit einem Rückfall auf `assemblePackages` ab. Sobald echte Anbieter da sind,
-   sollte der Rückfall verschwinden.
+   sollte der Rückfall verschwinden - sonst bleibt eine zweite Wahrheit stehen.
 
 ---
 
