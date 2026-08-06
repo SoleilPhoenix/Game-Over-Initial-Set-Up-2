@@ -527,11 +527,27 @@ war also offen, aber nicht benutzt - und die Änderung kann keinen bestehenden A
 läuft also mit `verify_jwt = true` - das ist hier richtig, beide Aufrufwege bringen ein
 gültiges JWT mit. Nach dem Deploy trotzdem einmal aufrufen und `net._http_response` lesen.
 
-**Zu entscheiden:** Ehrengäste sind ausgeschlossen. Die nachgebildete Policy kennt nur
-`role = 'guest'`, und `honoree` ist seit `20260806073606_honoree_participant_role.sql` eine
-eigene Rolle. Ein Organisator kann den Ehrengast damit weder per DB-Notification noch per Push
-erreichen. Konsistent mit der bestehenden RLS, aber vermutlich ungewollt - falls ja, gehört
-die Policy geändert, nicht die Edge Function.
+**Ehrengast war ausgeschlossen - am 06.08. auf Owner-Entscheidung behoben.** Die nachgebildete
+Policy kannte nur `role = 'guest'`, `honoree` ist seit `20260806073606` eine eigene Rolle. Damit
+erreichte ihn weder eine Chatnachricht noch eine app-seitige Erinnerung. Begründung des Owners:
+er zahlt seinen Anteil am Paketpreis, also ist Erreichbarkeit Voraussetzung dafür, dass er seinen
+Pflichten überhaupt nachkommen kann - auch für Chats und für den Fall, dass er die App erst kurz
+vor dem Event installiert. Neue Policy `"Event members can notify the event honoree"`
+(`20260806184606_notify_event_honoree.sql`, live) plus der dritte Zweig in
+`resolveAuthorizedRecipients()`. Absenderseite nimmt Organisator **und** Gast an.
+Der Ehrengast sieht dadurch **keine Zahlen** - das hängt an den `bookings`-Policies und an
+`src/utils/permissions.ts` und ist unangetastet. Ein Positiv-Test an echten Daten war nicht
+möglich: es existiert live noch keine einzige `honoree`-Zeile. Geprüft ist stattdessen, dass das
+Prädikat fehlerfrei läuft und nach Rolle unterscheidet (ein Gast als Empfänger fällt durch, die
+Regel weitet also nicht auf Gast-an-Gast aus).
+
+**Migrationsversion muss dem entsprechen, was die DB verbucht hat.** `apply_migration` über MCP
+vergibt einen **eigenen** Zeitstempel, nicht den aus deinem Dateinamen. Wer die lokale Datei
+danach nicht umbenennt, hinterlässt eine Fernversion ohne lokale Entsprechung - und dann bricht
+`supabase db push` **jede** weitere Migration ab, nicht nur die eine. Nach jedem
+`apply_migration` also `select version from supabase_migrations.schema_migrations order by
+version desc limit 1` lesen und die Datei exakt so benennen. Hier: Datei hiess erst
+`20260806190000`, verbucht wurde `20260806184606`, umbenannt.
 
 ### Bekannt, bewusst so gelassen
 
