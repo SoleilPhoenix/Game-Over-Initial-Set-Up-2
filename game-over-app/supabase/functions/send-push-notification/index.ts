@@ -27,11 +27,13 @@ type ServiceClient = ReturnType<typeof createClient<any, 'public', any>>;
 /**
  * Returns the subset of `recipientIds` the caller is allowed to notify.
  *
- * Mirrors the two INSERT policies on public.notifications:
+ * Mirrors the three INSERT policies on public.notifications:
  *  - "Participants can notify event organizer": caller participates in an event,
  *    recipient created it.
  *  - "Organizers can notify event guests": caller created an event, recipient is
  *    a participant of it with role 'guest'.
+ *  - "Event members can notify the event honoree": caller belongs to an event
+ *    (as its creator or as a participant), recipient is its honoree.
  *
  * Runs on the service-role client, so it sees the real relationships rather than
  * the caller's RLS-filtered view.
@@ -43,7 +45,6 @@ async function resolveAuthorizedRecipients(
 ): Promise<Set<string>> {
   const allowed = new Set<string>();
 
-  // Participant -> organizer.
   const { data: participations, error: participationsError } = await supabase
     .from('event_participants')
     .select('event_id')
@@ -54,12 +55,28 @@ async function resolveAuthorizedRecipients(
     throw new Error('Failed to verify notification permissions');
   }
 
-  const callerEventIds = (participations ?? []).map((p) => p.event_id);
-  if (callerEventIds.length) {
+  const { data: ownedEvents, error: ownedError } = await supabase
+    .from('events')
+    .select('id')
+    .eq('created_by', callerId);
+
+  if (ownedError) {
+    console.error('Failed to load caller events:', ownedError);
+    throw new Error('Failed to verify notification permissions');
+  }
+
+  const participantEventIds = (participations ?? []).map((p) => p.event_id);
+  const ownedEventIds = (ownedEvents ?? []).map((e) => e.id);
+  // Organizers do not necessarily carry a participant row - `events.created_by`
+  // is the only source of truth for that role - so both lists are needed.
+  const memberEventIds = [...new Set([...participantEventIds, ...ownedEventIds])];
+
+  // Participant -> organizer.
+  if (participantEventIds.length) {
     const { data: organizedEvents, error: organizedError } = await supabase
       .from('events')
       .select('created_by')
-      .in('id', callerEventIds)
+      .in('id', participantEventIds)
       .in('created_by', recipientIds);
 
     if (organizedError) {
@@ -73,17 +90,6 @@ async function resolveAuthorizedRecipients(
   }
 
   // Organizer -> guest.
-  const { data: ownedEvents, error: ownedError } = await supabase
-    .from('events')
-    .select('id')
-    .eq('created_by', callerId);
-
-  if (ownedError) {
-    console.error('Failed to load caller events:', ownedError);
-    throw new Error('Failed to verify notification permissions');
-  }
-
-  const ownedEventIds = (ownedEvents ?? []).map((e) => e.id);
   if (ownedEventIds.length) {
     const { data: guests, error: guestsError } = await supabase
       .from('event_participants')
@@ -99,6 +105,27 @@ async function resolveAuthorizedRecipients(
 
     for (const guest of guests ?? []) {
       allowed.add(guest.user_id);
+    }
+  }
+
+  // Organizer or guest -> honoree. The honoree pays their own share of the
+  // package and joins the chat, so both directions of the event have to be able
+  // to reach them - otherwise they cannot act on what is asked of them.
+  if (memberEventIds.length) {
+    const { data: honorees, error: honoreesError } = await supabase
+      .from('event_participants')
+      .select('user_id')
+      .in('event_id', memberEventIds)
+      .eq('role', 'honoree')
+      .in('user_id', recipientIds);
+
+    if (honoreesError) {
+      console.error('Failed to load honorees of caller events:', honoreesError);
+      throw new Error('Failed to verify notification permissions');
+    }
+
+    for (const honoree of honorees ?? []) {
+      allowed.add(honoree.user_id);
     }
   }
 
