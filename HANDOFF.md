@@ -755,6 +755,29 @@ festgelegt wurde und in einer deutschen Oberflaeche landet. Wer eine Zeichenkett
 ein Nutzer lesen kann, legt sie in `src/i18n/` ab. Auch in Hilfsmodulen, auch in Fallback-Daten,
 auch wenn sie „nur" ein Platzhalter ist.
 
+### Anbieter-Matrix - eigener Auftrag, eigene Session (06.08.)
+
+Die Kern-DNA der App ist **zur Haelfte gebaut**. Das Matching laeuft: `packages.tsx:295`
+uebergibt alle zwoelf Fragebogen-Antworten an `assemblePackages()`, das `scoreActivities()` aus
+`src/utils/packageMatching.ts` aufruft; die Spezifikation liegt in
+`Activities_lists/ACTIVITY_MATCHING_MATRIX.md`.
+**Nicht angeschlossen** sind die echten Anbieter: `packageMatching.ts` ist auf 441 Zeilen
+vollstaendig stadt-unabhaengig und bewertet generische Aktivitaetstypen.
+
+Die aktualisierte Anbieterliste liegt seit dem 06.08. im Repo:
+`Activities_lists/JGA_Anbieter_Hannover_Hamburg_Berlin_v.3.xlsx` (176 Zeilen, geprueft 05.07.).
+Die drei CSVs daneben sind vom 09.03. und damit ueberholt.
+
+**Der vollstaendige Auftrag steht in `docs/PROVIDER_MATRIX_SPEC.md`** - Datenquelle, die vier
+Owner-Anforderungen, fuenf offene Entscheidungen und die Fallen beim Einlesen. Wer daran
+arbeitet, faengt dort an, nicht hier.
+
+Ein Punkt daraus gehoert aber auch hierher, weil er leicht falsch gebaut wird:
+**„Der Anbietername ist geheim bis zur vollstaendigen Zahlung" ist eine Zugriffsregel, keine
+Anzeigeregel.** Wird der Name mitgeliefert und nur ausgeblendet, liest ihn jeder aus dem
+Netzwerkverkehr. Das muss ueber RLS oder eine `SECURITY DEFINER`-Funktion laufen, gebunden an
+`bookings.fully_paid_at`.
+
 ### Was sonst offen blieb
 
 - **Geraetetest steht weiterhin aus.** `xcode-select` zeigt nicht auf Xcode; das braucht das
