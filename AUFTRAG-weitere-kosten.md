@@ -52,9 +52,22 @@ man **Personen markiert, die sich beteiligen sollen** - das ist die Gegenrichtun
 n:m-Beziehung. An dieser Tabelle haengen beide neuen Anforderungen: die Push-Nachricht braucht
 einen Adressaten, die Zahlungserinnerung einen offenen Betrag. Ohne sie gibt es beides nicht.
 
-Die Summe der Anteile muss nicht zwingend `amount_cents` des Postens ergeben (jemand legt aus
-und beteiligt nur einen Teil der Runde). Keine Datenbankpruefung darauf erzwingen, sondern in
-der Oberflaeche sichtbar machen, wenn etwas offen bleibt.
+**Korrigiert im Owner-Review vom 06.08.:** die Summe der Anteile **muss** den vollen Betrag des
+Postens ergeben. Wer 200 Euro auslegt, teilt 200 Euro auf - nicht 199, nicht 201. Wer markiert
+ist entscheidet der Auslegende, ob er selbst dazugehoert auch, und die Aufteilung muss nicht
+gleichmaessig sein (er kann je Person einen Betrag setzen). Erzwungen von
+`trg_expense_shares_cover_amount`, einem CONSTRAINT TRIGGER DEFERRABLE INITIALLY DEFERRED -
+aufgeschoben, weil die Anteile Zeile fuer Zeile geschrieben werden und die Summe zwischendurch
+zwangslaeufig nicht stimmt.
+
+Daraus folgt die RPC `set_expense_shares(expense_id, amount_cents, shares jsonb)`: PostgREST
+fuehrt jede Anfrage in einer eigenen Transaktion aus, also laesst sich der Betrag nicht ohne
+diese Funktion gemeinsam mit den Anteilen aendern. **Anteile werden ausschliesslich ueber die
+RPC geschrieben.**
+
+Dritte Tabelle `event_expense_categories` - ebenfalls aus dem Review: eigene Kategorien gehoeren
+in die Datenbank. Eine Kategorie, die nur auf einem Geraet existiert, legen drei Leute dreimal
+an; das ist derselbe Fehler wie bei den Betraegen, nur eine Ebene hoeher.
 
 RLS nach dem Muster der Chat-Kanaele vom 05.08.
 (`20260805072931_chat_channels_enable_persistence.sql` als Vorbild lesen):
@@ -108,6 +121,8 @@ haelt einen fremden Posten fuer falsch (Betrag daneben, doppelt erfasst, gehoert
 Event) und meldet ihn, statt ihn selbst zu aendern - aendern darf er ihn ja nicht. Die Meldung
 geht an den Organisator, der entscheidet. Der Eintrag bleibt bis dahin bestehen und wird als
 beanstandet gekennzeichnet; er verschwindet nicht und wird nicht automatisch korrigiert.
+Aus dem Review nachgetragen: **auch der Ersteller des beanstandeten Postens darf die Meldung
+erledigen**, nicht nur der Organisator - in aller Regel korrigiert er den Betrag selbst.
 
 **E2. Push-Nachricht an markierte Personen: ja, neu hinzugekommen.**
 Wer bei einem Posten als beteiligt markiert wird, bekommt eine Push-Nachricht in der Art
