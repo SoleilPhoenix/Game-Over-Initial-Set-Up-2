@@ -552,7 +552,94 @@ create policy "Creator or organizer can delete categories"
   );
 
 -- ---------------------------------------------------------------------------
--- 8. Rechte
+-- 8. Betrag und Aufteilung in einem Zug setzen
+-- ---------------------------------------------------------------------------
+-- Ohne diese Funktion waere die Summenregel aus 4b praktisch nicht bedienbar: PostgREST fuehrt
+-- jede Anfrage in einer eigenen Transaktion aus. Wer den Betrag von 200 auf 250 Euro aendert und
+-- danach die Anteile nachzieht, laeuft beim ersten Schritt in die Pruefung - die alten Anteile
+-- decken den neuen Betrag ja nicht. Hier passiert beides in derselben Transaktion, und der
+-- aufgeschobene Trigger prueft einmal am Ende.
+--
+-- p_shares ist ein Array aus {"user_id": "...", "amount_cents": 123}. Die Aufteilung selbst
+-- rechnet der Client (gleichmaessig oder je Person von Hand) - hier wird sie nur festgeschrieben
+-- und geprueft.
+create or replace function public.set_expense_shares(
+  p_expense_id   uuid,
+  p_amount_cents integer,
+  p_shares       jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+DECLARE
+  v_expense  public.event_expenses%ROWTYPE;
+  v_may_edit boolean;
+  v_settled  jsonb;
+BEGIN
+  SELECT * INTO v_expense FROM public.event_expenses WHERE id = p_expense_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'expense not found' USING ERRCODE = 'no_data_found';
+  END IF;
+
+  v_may_edit := (v_expense.created_by = auth.uid())
+                or public.is_event_creator(v_expense.event_id);
+  IF NOT v_may_edit THEN
+    RAISE EXCEPTION 'only the expense creator or the organizer may set shares'
+      USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  -- Der Ehrengast wird nie beteiligt, egal was der Client schickt.
+  IF EXISTS (
+    SELECT 1
+      FROM jsonb_array_elements(p_shares) s
+      JOIN public.event_participants ep
+        ON ep.event_id = v_expense.event_id
+       AND ep.user_id = (s->>'user_id')::uuid
+     WHERE ep.role = 'honoree'::participant_role
+  ) THEN
+    RAISE EXCEPTION 'the honoree cannot be assigned a share'
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  IF p_amount_cents IS NOT NULL AND p_amount_cents <> v_expense.amount_cents THEN
+    UPDATE public.event_expenses
+       SET amount_cents = p_amount_cents
+     WHERE id = p_expense_id;
+  END IF;
+
+  -- Bestehende Anteile ersetzen. settled_at der weiterhin Beteiligten bleibt erhalten, damit
+  -- eine Korrektur am Betrag nicht stillschweigend jede schon geleistete Zahlung zuruecksetzt.
+  -- Bewusst keine Temp-Tabelle: zwei Aufrufe in derselben Transaktion wuerden kollidieren.
+  SELECT COALESCE(jsonb_object_agg(user_id::text, settled_at), '{}'::jsonb)
+    INTO v_settled
+    FROM public.event_expense_shares
+   WHERE expense_id = p_expense_id AND settled_at IS NOT NULL;
+
+  DELETE FROM public.event_expense_shares WHERE expense_id = p_expense_id;
+
+  INSERT INTO public.event_expense_shares (expense_id, user_id, amount_cents, settled_at)
+  SELECT
+    p_expense_id,
+    (s->>'user_id')::uuid,
+    (s->>'amount_cents')::integer,
+    (v_settled->>(s->>'user_id'))::timestamptz
+  FROM jsonb_array_elements(p_shares) s;
+END;
+$function$;
+
+revoke all on function public.set_expense_shares(uuid, integer, jsonb) from public;
+revoke all on function public.set_expense_shares(uuid, integer, jsonb) from anon;
+grant execute on function public.set_expense_shares(uuid, integer, jsonb) to authenticated;
+
+comment on function public.set_expense_shares(uuid, integer, jsonb) is
+  'Setzt Betrag und Aufteilung eines Postens in EINER Transaktion. Einziger erlaubter Weg,
+   Anteile zu schreiben - direkte Schreibzugriffe aus dem Client scheitern sonst an der
+   aufgeschobenen Summenpruefung, sobald sich der Betrag mit aendert.';
+
+-- ---------------------------------------------------------------------------
+-- 9. Rechte
 -- ---------------------------------------------------------------------------
 grant select, insert, update, delete on public.event_expenses           to authenticated;
 grant select, insert, update, delete on public.event_expense_shares     to authenticated;
