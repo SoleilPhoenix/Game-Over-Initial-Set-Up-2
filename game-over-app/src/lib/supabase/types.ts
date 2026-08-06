@@ -200,6 +200,126 @@ export type Database = {
         }
         Relationships: []
       }
+      event_expense_reports: {
+        Row: {
+          created_at: string
+          expense_id: string
+          id: string
+          reason: string | null
+          reported_by: string
+          resolved_at: string | null
+          resolved_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          expense_id: string
+          id?: string
+          reason?: string | null
+          reported_by: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          expense_id?: string
+          id?: string
+          reason?: string | null
+          reported_by?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_expense_reports_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "event_expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_expense_shares: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          expense_id: string
+          id: string
+          settled_at: string | null
+          user_id: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          expense_id: string
+          id?: string
+          settled_at?: string | null
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          expense_id?: string
+          id?: string
+          settled_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_expense_shares_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "event_expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_expenses: {
+        Row: {
+          amount_cents: number
+          category_key: string | null
+          created_at: string
+          created_by: string | null
+          event_id: string
+          id: string
+          occurred_at: string
+          paid_by: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          category_key?: string | null
+          created_at?: string
+          created_by?: string | null
+          event_id: string
+          id?: string
+          occurred_at?: string
+          paid_by?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          category_key?: string | null
+          created_at?: string
+          created_by?: string | null
+          event_id?: string
+          id?: string
+          occurred_at?: string
+          paid_by?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_expenses_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_participants: {
         Row: {
           confirmed_at: string | null

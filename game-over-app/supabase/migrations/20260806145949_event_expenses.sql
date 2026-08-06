@@ -66,7 +66,9 @@ comment on column public.event_expenses.paid_by is
   'Wer ausgelegt hat. Die Gegenrichtung - wer sich beteiligen soll - steht in
    event_expense_shares und ist absichtlich eine eigene Tabelle, weil es mehrere sein koennen.';
 comment on column public.event_expenses.category_key is
-  'Freitext. Eigene Kategorien lagen bisher rein lokal; ein Enum wuerde die uebernommenen
+  'Schluessel der Kategorie. Zeigt entweder auf eine fest eingebaute Kategorie oder auf
+   event_expense_categories.key. Bewusst kein Fremdschluessel und kein Enum: die eingebauten
+   Kategorien stehen im Code, nicht in der Tabelle, und ein Enum wuerde die uebernommenen
    Altbestaende beim Hochschieben verwerfen.';
 
 create index if not exists event_expenses_event_id_idx
@@ -126,9 +128,11 @@ create table if not exists public.event_expense_shares (
 
 comment on table public.event_expense_shares is
   'Wer sich an einem Posten beteiligen soll. settled_at is null = offen.
-   Die Summe der Anteile muss den Posten NICHT treffen: wer auslegt und nur einen Teil der
-   Runde markiert, ist ein gewollter Fall. Bewusst keine Datenbankpruefung darauf - die
-   Oberflaeche zeigt den Rest an (Owner-Entscheidung 06.08.).';
+   Die Summe der Anteile MUSS den vollen Betrag des Postens ergeben - der ausgelegte Betrag
+   wird immer restlos auf die Markierten verteilt (Owner-Entscheidung aus dem Review 06.08.).
+   Wer markiert ist, entscheidet der Auslegende; ob er selbst dazugehoert, auch. Die Aufteilung
+   muss nicht gleichmaessig sein - er kann je Person einen eigenen Betrag setzen.
+   Erzwungen von trg_expense_shares_cover_amount, siehe unten.';
 
 create index if not exists event_expense_shares_user_open_idx
   on public.event_expense_shares (user_id) where settled_at is null;
@@ -249,6 +253,76 @@ create trigger trg_expense_share_integrity
   for each row execute function public.enforce_expense_share_integrity();
 
 -- ---------------------------------------------------------------------------
+-- 4b. Der ausgelegte Betrag wird restlos verteilt
+-- ---------------------------------------------------------------------------
+-- Owner-Entscheidung aus dem Review vom 06.08.: wer 200 Euro auslegt, teilt 200 Euro auf.
+-- Nicht 199, nicht 201. Wer markiert ist und wie die Aufteilung aussieht, entscheidet der
+-- Auslegende - die Summe steht fest.
+--
+-- Als CONSTRAINT TRIGGER ... DEFERRABLE INITIALLY DEFERRED, weil die Anteile Zeile fuer Zeile
+-- geschrieben werden: nach der ersten von drei Zeilen stimmt die Summe naturgemaess nicht.
+-- Geprueft wird deshalb erst beim Commit, wenn alle Zeilen der Transaktion stehen.
+--
+-- Kein Anteil ueberhaupt = niemand markiert. Das ist der Zustand direkt nach dem Anlegen und
+-- bleibt erlaubt; erst wer jemanden markiert, muss vollstaendig aufteilen.
+create or replace function public.check_expense_shares_cover_amount()
+returns trigger
+language plpgsql
+security definer
+set search_path to 'public', 'pg_temp'
+as $function$
+DECLARE
+  v_expense_id uuid;
+  v_amount     integer;
+  v_sum        bigint;
+  v_count      integer;
+BEGIN
+  IF TG_TABLE_NAME = 'event_expenses' THEN
+    v_expense_id := NEW.id;
+  ELSE
+    v_expense_id := COALESCE(NEW.expense_id, OLD.expense_id);
+  END IF;
+
+  SELECT e.amount_cents INTO v_amount
+    FROM public.event_expenses e WHERE e.id = v_expense_id;
+
+  -- Posten geloescht, die Anteile sind per Cascade mitgegangen. Nichts zu pruefen.
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT count(*), COALESCE(sum(s.amount_cents), 0)
+    INTO v_count, v_sum
+    FROM public.event_expense_shares s
+   WHERE s.expense_id = v_expense_id;
+
+  IF v_count = 0 THEN
+    RETURN NULL;
+  END IF;
+
+  IF v_sum <> v_amount THEN
+    RAISE EXCEPTION
+      'shares for expense % add up to % cents but the expense is % cents - the full amount must be distributed',
+      v_expense_id, v_sum, v_amount
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  RETURN NULL;
+END;
+$function$;
+
+create constraint trigger trg_expense_shares_cover_amount
+  after insert or update or delete on public.event_expense_shares
+  deferrable initially deferred
+  for each row execute function public.check_expense_shares_cover_amount();
+
+-- Auch der umgekehrte Weg: wer den Betrag des Postens aendert, muss die Anteile mitziehen.
+create constraint trigger trg_expense_amount_matches_shares
+  after update of amount_cents on public.event_expenses
+  deferrable initially deferred
+  for each row execute function public.check_expense_shares_cover_amount();
+
+-- ---------------------------------------------------------------------------
 -- 5. Push an die Markierten
 -- ---------------------------------------------------------------------------
 -- Owner-Antwort vom 06.08.: wer markiert wird, wird darauf hingewiesen.
@@ -355,11 +429,26 @@ create policy "Paying participants can report a foreign expense"
     )
   );
 
--- Erledigen darf nur der Organisator; zuruecknehmen darf der Melder seine eigene Meldung.
-create policy "Organizer can resolve reports"
+-- Erledigen darf der Organisator ODER der Ersteller des beanstandeten Postens
+-- (Owner-Entscheidung aus dem Review vom 06.08.): in aller Regel korrigiert der Ersteller den
+-- Betrag selbst und hakt die Meldung damit ab, ohne den Organisator zu bemuehen.
+-- Zuruecknehmen darf der Melder seine eigene Meldung.
+create policy "Organizer or expense creator can resolve reports"
   on public.event_expense_reports for update
-  using (public.is_event_creator(public.expense_event_id(expense_id)))
-  with check (public.is_event_creator(public.expense_event_id(expense_id)));
+  using (
+    public.is_event_creator(public.expense_event_id(expense_id))
+    or exists (
+      select 1 from public.event_expenses e
+      where e.id = expense_id and e.created_by = auth.uid()
+    )
+  )
+  with check (
+    public.is_event_creator(public.expense_event_id(expense_id))
+    or exists (
+      select 1 from public.event_expenses e
+      where e.id = expense_id and e.created_by = auth.uid()
+    )
+  );
 
 create policy "Reporter can withdraw their own report"
   on public.event_expense_reports for delete
@@ -408,8 +497,64 @@ create trigger trg_notify_expense_reported
   for each row execute function public.notify_expense_reported();
 
 -- ---------------------------------------------------------------------------
--- 7. Rechte
+-- 7. Eigene Kategorien - geteilt statt geraetelokal
 -- ---------------------------------------------------------------------------
-grant select, insert, update, delete on public.event_expenses         to authenticated;
-grant select, insert, update, delete on public.event_expense_shares   to authenticated;
-grant select, insert, update, delete on public.event_expense_reports  to authenticated;
+-- Owner-Entscheidung aus dem Review vom 06.08.: eigene Kategorien gehoeren in die Datenbank.
+-- Eine Kategorie, die nur auf einem Geraet existiert, kann niemand sonst benutzen - dann legen
+-- drei Leute dieselbe Kategorie dreimal an und die Zusammenstellung zerfaellt. Es ist derselbe
+-- Fehler wie bei den Betraegen selbst, nur eine Ebene hoeher.
+create table if not exists public.event_expense_categories (
+  id          uuid primary key default gen_random_uuid(),
+  event_id    uuid not null references public.events(id) on delete cascade,
+  key         text not null check (char_length(btrim(key)) between 1 and 60),
+  label       text not null check (char_length(btrim(label)) between 1 and 60),
+  icon        text,
+  created_by  uuid references auth.users(id) on delete set null,
+  created_at  timestamptz not null default now(),
+  unique (event_id, key)
+);
+
+comment on table public.event_expense_categories is
+  'Eigene Kostenkategorien eines Events, fuer alle zahlenden Teilnehmer sichtbar und nutzbar.
+   Die fest eingebauten Kategorien stehen weiterhin im Code und nicht hier drin.';
+
+create index if not exists event_expense_categories_event_idx
+  on public.event_expense_categories (event_id);
+
+alter table public.event_expense_categories enable row level security;
+
+create policy "Paying participants can view categories"
+  on public.event_expense_categories for select
+  using (public.can_see_event_money(event_id));
+
+create policy "Paying participants can create categories"
+  on public.event_expense_categories for insert
+  with check (public.can_see_event_money(event_id) and created_by = auth.uid());
+
+-- Umbenennen und Loeschen nur fuer Ersteller oder Organisator - eine Kategorie, die andere
+-- schon benutzen, soll nicht jeder unter ihnen wegziehen koennen.
+create policy "Creator or organizer can update categories"
+  on public.event_expense_categories for update
+  using (
+    public.can_see_event_money(event_id)
+    and (created_by = auth.uid() or public.is_event_creator(event_id))
+  )
+  with check (
+    public.can_see_event_money(event_id)
+    and (created_by = auth.uid() or public.is_event_creator(event_id))
+  );
+
+create policy "Creator or organizer can delete categories"
+  on public.event_expense_categories for delete
+  using (
+    public.can_see_event_money(event_id)
+    and (created_by = auth.uid() or public.is_event_creator(event_id))
+  );
+
+-- ---------------------------------------------------------------------------
+-- 8. Rechte
+-- ---------------------------------------------------------------------------
+grant select, insert, update, delete on public.event_expenses           to authenticated;
+grant select, insert, update, delete on public.event_expense_shares     to authenticated;
+grant select, insert, update, delete on public.event_expense_reports    to authenticated;
+grant select, insert, update, delete on public.event_expense_categories to authenticated;

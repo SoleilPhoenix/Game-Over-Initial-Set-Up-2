@@ -37,3 +37,17 @@ export type {
   RefundStatus,
   UpdateEventRefund,
 } from './refunds';
+
+export { expensesRepository } from './expenses';
+export type {
+  CreateEventExpense,
+  EventExpense,
+  EventExpenseReport,
+  EventExpenseShare,
+  ExpenseShareInput,
+  ReportEventExpense,
+  UpdateEventExpense,
+} from './expenses';
+
+export { localExpenseMigrationRepository } from './localExpenseMigration';
+export type { LocalExpenseMigrationResult } from './localExpenseMigration';
