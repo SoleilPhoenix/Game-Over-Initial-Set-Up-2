@@ -542,6 +542,39 @@ Supabase-Session einen Neustart ueberleben.
 **Triage-Falle:** `--log-failed | tail` zeigt bei diesem Fehler nur Warnungen zu
 Deployment-Targets. Immer `| grep -E "error:|The following build commands failed"`.
 
+### Push-Autorisierung (06.08.) - Code fertig, Deploy offen
+
+`send-push-notification` liess **jeden angemeldeten Nutzer** beliebigen Text an beliebige
+Nutzer-IDs schicken. Der Autorisierungsblock prüfte nur, ob das JWT gültig ist, nicht *wen*
+der Aufrufer benachrichtigen darf; Titel und Text waren ungeprüft. Die Funktion lief also
+mit Service-Role-Rechten auf eine Nutzlast, die vollständig vom Aufrufer kam.
+
+Jetzt trennt `callerId` die beiden Wege: `null` heisst Service Role (Cron, Webhooks) und darf
+weiterhin alles, eine Nutzer-ID zwingt jeden einzelnen Empfänger durch
+`resolveAuthorizedRecipients()`. Diese Funktion bildet die beiden INSERT-Policies auf
+`notifications` nach - Teilnehmer → Organisator und Organisator → Gast (`role = 'guest'`) -
+und läuft über den Service-Role-Client, damit sie die echten Beziehungen sieht und nicht die
+RLS-gefilterte Sicht des Aufrufers. Ein einziger nicht erlaubter Empfänger kippt die ganze
+Anfrage mit 403, statt still gefiltert zu werden. Dazu die Längengrenzen des Triggers
+`enforce_notification_safety` (120 / 500), ebenfalls nur auf dem Nutzerpfad.
+
+**Wichtig für die Bewertung:** der Nutzerpfad hat heute **keinen einzigen Aufrufer**.
+`sendPushNotification()` in `src/hooks/usePushNotifications.ts` wird nirgends verwendet, der
+einzige lebende Aufruf ist `process-payment-reminders/index.ts:244` mit Service-Role-Key.
+`app/event/[id]/day.tsx:118` trägt ein TODO für einen künftigen Organisator-Aufruf. Die Lücke
+war also offen, aber nicht benutzt - und die Änderung kann keinen bestehenden Aufruf brechen.
+
+**Offen:** Der Deploy braucht Owner-Freigabe (Merge nach main löst
+`deploy-edge-functions.yml` aus). `send-push-notification` steht **nicht** in `config.toml`,
+läuft also mit `verify_jwt = true` - das ist hier richtig, beide Aufrufwege bringen ein
+gültiges JWT mit. Nach dem Deploy trotzdem einmal aufrufen und `net._http_response` lesen.
+
+**Zu entscheiden:** Ehrengäste sind ausgeschlossen. Die nachgebildete Policy kennt nur
+`role = 'guest'`, und `honoree` ist seit `20260806073606_honoree_participant_role.sql` eine
+eigene Rolle. Ein Organisator kann den Ehrengast damit weder per DB-Notification noch per Push
+erreichen. Konsistent mit der bestehenden RLS, aber vermutlich ungewollt - falls ja, gehört
+die Policy geändert, nicht die Edge Function.
+
 ### Bekannt, bewusst so gelassen
 
 - `assets/brand/intro.mp4` existiert nicht, `INTRO_VIDEO_SOURCE` bleibt `null`. Der Intro-Aufbau
