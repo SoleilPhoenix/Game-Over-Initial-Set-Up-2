@@ -662,7 +662,7 @@ const de: TranslationKeys = {
     honoreeRoleBachelor: 'Bachelor',
     honoreeRoleBachelorette: 'Bachelorette',
     honoreeRoleGeneric: 'Ehrengast',
-    honoreeCollectedAfter: 'Wird nach dem Event eingezogen',
+    honoreeCollectedAfter: 'Wird nach dem Event angefragt',
     openSlotTitle: 'Gast noch nicht eingetragen',
     openSlotMessage: 'Dieser Anteil gehört zu deiner Buchung, aber es ist noch niemand dafür eingetragen. Trage den Gast unter Einladung mit E-Mail-Adresse und Telefonnummer ein, damit er eingeladen und erinnert werden kann.',
     you: '(Du)',

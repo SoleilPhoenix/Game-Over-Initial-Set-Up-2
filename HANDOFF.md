@@ -236,8 +236,40 @@ den echten `participants` rechnet, nicht aus `sortedParticipants` mit der synthe
 der Erinnern-Knopf bleibt also nicht seinetwegen aktiv. **Beides ist Absicht, nicht Zufall.**
 
 **Was die App nicht weiss:** ob der Ehrengast tatsaechlich gezahlt hat. Es gibt keine Zeile, an
-der ein Status haengen koennte. Wer das aufloesen will, braucht eine echte Teilnehmerzeile fuer
-den Ehrengast - das waere eine Datenaenderung, keine Anzeigefrage.
+der ein Status haengen koennte.
+
+### Offen: echte Teilnehmerzeile fuer den Ehrengast (Owner-Wunsch 05.08.)
+
+Der Ehrengast soll kurz vor der Party die App bekommen und sie waehrend des Events nutzen -
+**ohne Zahlen und Geldfakten zu sehen**. Dafuer braucht er eine echte `event_participants`-Zeile
+statt der synthetischen Anzeige. Bestandsaufnahme vom 05.08., damit die naechste Session nicht
+neu suchen muss:
+
+**Was schon da ist:**
+- Das Enum `participant_role` kennt **`honoree`** bereits. Keine Enum-Migration noetig.
+- `app/event/[id]/participants.tsx` rendert den Ehrengast bereits als vollwertigen Platz mit
+  eigener Darstellung, editierbarer E-Mail/Telefon und einer Suche nach
+  `dbParticipants.find(p => p.role === 'honoree')`. Der Platz erwartet die Zeile also schon.
+
+**Was fehlt - vier Teile, drei davon freigabepflichtig:**
+
+1. **`accept_invite` vergibt fest `'guest'`.** Der Einladungscode traegt keine Information
+   darueber, fuer wen er gedacht war. Loest der Ehrengast ihn ein, wird er zum Gast.
+   → `invite_codes` braucht ein Kennzeichen (z. B. `is_honoree`), und `accept_invite` muss es
+   auswerten. **Migration, Owner-Freigabe.**
+2. **Der Einladungsversand muss den Ehrengast-Platz mitschicken** und entsprechend kennzeichnen.
+   → Client plus `send-guest-invitations`. **Edge-Function-Deploy, Owner-Freigabe.**
+3. **RLS gibt Geldspalten heute an jeden Teilnehmer frei.** Die SELECT-Policy auf `bookings`
+   heisst „Event participants can view bookings" und prueft nur die Mitgliedschaft - ein
+   Ehrengast mit Zeile saehe damit Gesamtpreis, Anzahlung und Restbetrag. RLS ist
+   zeilen-, nicht spaltenbasiert; der Ehrengast muss also von `bookings` **ganz** ausgenommen
+   werden. **Migration, Owner-Freigabe.**
+4. **UI:** Budget-Tab und Beitragsliste fuer die Rolle `honoree` ausblenden bzw. auf
+   nicht-finanzielle Inhalte reduzieren. Reiner Client, keine Freigabe.
+
+**Reihenfolge:** 3 vor 1. Wuerde zuerst die Zeile entstehen und erst danach die Policy greifen,
+haette der Ehrengast in der Zwischenzeit vollen Blick auf die Zahlen - genau das, was der
+Wunsch verhindern soll.
 
 **„Alle erinnern"** verschwindet nicht mehr, wenn niemand offen ist, sondern wird ausgegraut.
 Das **„DU"-Abzeichen** hinter dem eigenen Namen ist raus - der Nutzer weiss, wie er heisst.

@@ -675,7 +675,7 @@ const en = {
     honoreeRoleBachelor: 'Bachelor',
     honoreeRoleBachelorette: 'Bachelorette',
     honoreeRoleGeneric: 'Guest of honour',
-    honoreeCollectedAfter: 'Collected after the event',
+    honoreeCollectedAfter: 'Requested after the event',
     openSlotTitle: 'Guest not entered yet',
     openSlotMessage: 'This share is part of your booking, but nobody is entered for it. Add the guest under Invitation with email and phone number so they can be invited and reminded.',
     you: '(You)',
