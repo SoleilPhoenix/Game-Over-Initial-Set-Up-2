@@ -108,7 +108,16 @@ export function useSetExpenseShares(eventId: string | undefined) {
       expenseId: string;
       amountCents: number;
       shares: ExpenseShareInput[];
-    }) => expensesRepository.setShares(expenseId, amountCents, shares),
+    }) => expensesRepository
+      .setShares(expenseId, amountCents, shares)
+      .then(async (savedShares) => {
+        try {
+          await expensesRepository.notifyShares(expenseId);
+        } catch (error) {
+          console.error('[expenses] share push failed:', error);
+        }
+        return savedShares;
+      }),
     onSettled: () => {
       if (eventId) queryClient.invalidateQueries({ queryKey: expenseKeys.byEvent(eventId) });
     },

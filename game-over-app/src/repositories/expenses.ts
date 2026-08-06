@@ -299,6 +299,14 @@ export const expensesRepository = {
     return getSharesByExpenseId(expenseId);
   },
 
+  async notifyShares(expenseId: string): Promise<void> {
+    const { error } = await supabase.functions.invoke('notify-expense-shares', {
+      body: { expenseId },
+    });
+
+    if (error) throw error;
+  },
+
   async markOwnShareSettled(
     shareId: string,
     userId: string,

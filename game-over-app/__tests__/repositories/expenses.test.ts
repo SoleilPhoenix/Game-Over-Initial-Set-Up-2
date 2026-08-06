@@ -170,4 +170,14 @@ describe('event expenses repository mapping', () => {
     ])).rejects.toThrow('full expense amount');
     expect(supabase.rpc).not.toHaveBeenCalled();
   });
+
+  it('requests expense-share push delivery without client-controlled recipients or copy', async () => {
+    vi.mocked(supabase.functions.invoke).mockResolvedValue({ data: { pushed: 2 }, error: null });
+
+    await expensesRepository.notifyShares('expense-1');
+
+    expect(supabase.functions.invoke).toHaveBeenCalledWith('notify-expense-shares', {
+      body: { expenseId: 'expense-1' },
+    });
+  });
 });
