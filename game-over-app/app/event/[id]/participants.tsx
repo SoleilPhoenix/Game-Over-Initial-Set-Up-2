@@ -25,6 +25,7 @@ import { useUser } from '@/stores/authStore';
 import { useTranslation } from '@/i18n';
 import { useTheme } from '@/hooks/useTheme';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { resolveEventCapabilities } from '@/utils/permissions';
 import { PastEventBanner } from '@/components/ui/PastEventBanner';
 import { ambientShadow, type EditorialTheme } from '@/constants/designSystem';
 import { GoldButton } from '@/components/ui/editorial';
@@ -133,7 +134,20 @@ export default function ManageInvitationsScreen() {
   const queryClient = useQueryClient();
   const { data: event, isLoading: eventLoading } = useEvent(id);
   const { data: participants } = useParticipants(id);
-  const { data: booking } = useBooking(id);
+  const capabilitiesWithoutBooking = resolveEventCapabilities({
+    event,
+    userId: user?.id,
+    participants,
+    previewRole: roleParam,
+  });
+  const { data: booking } = useBooking(capabilitiesWithoutBooking.canViewBudget ? id : undefined);
+  const capabilities = resolveEventCapabilities({
+    event,
+    userId: user?.id,
+    participants,
+    booking,
+    previewRole: roleParam,
+  });
 
   // Keyboard avoidance: iOS does not auto-scroll a focused TextInput above the
   // keyboard inside a ScrollView. We record each slot card's Y offset (via
@@ -151,9 +165,6 @@ export default function ManageInvitationsScreen() {
     }, 250);
   }, []);
 
-  const currentParticipant = participants?.find(p => p.user_id === user?.id);
-  // Use role param from navigation (known immediately) — fallback to participants query
-  const isGuest = roleParam === 'guest' || (!roleParam && currentParticipant?.role === 'guest');
   // Past events: no more invitations — view-only
   const isReadOnly = event ? isReadOnlyEvent(event) : false;
 
@@ -242,7 +253,7 @@ export default function ManageInvitationsScreen() {
 
   const deliveryCheckStartedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!id || !user?.id || event?.created_by !== user.id) return;
+    if (!id || !user?.id || !capabilities.canManageInvitations) return;
     if (deliveryCheckStartedRef.current.has(id)) return;
     deliveryCheckStartedRef.current.add(id);
 
@@ -257,7 +268,7 @@ export default function ManageInvitationsScreen() {
         await fetchGuestInvitations();
       }
     })();
-  }, [event?.created_by, fetchGuestInvitations, id, user?.id]);
+  }, [capabilities.canManageInvitations, fetchGuestInvitations, id, user?.id]);
 
   // Fetch own profile from DB so organizer name is shown even if user_metadata.full_name is unset.
   // Also ensures guests see their updated name after editing in profile settings.
@@ -363,10 +374,10 @@ export default function ManageInvitationsScreen() {
     // Organizer info — prefer profile data; when isGuest never fall back to current user's data
     const organizerEmail = organizerParticipant?.profile?.email
       || (organizerParticipant as any)?.email
-      || (isGuest ? '' : (user?.email || ''));
+      || (!capabilities.canManageInvitations ? '' : (user?.email || ''));
     const organizerName = organizerParticipant?.profile?.full_name
       || organizerParticipant?.profile?.email?.split('@')[0]
-      || (isGuest ? 'Organizer' : (
+      || (!capabilities.canManageInvitations ? 'Organizer' : (
         user?.user_metadata?.full_name || ownProfile?.full_name || user?.email?.split('@')[0] || 'You'
       ));
 
@@ -461,7 +472,7 @@ export default function ManageInvitationsScreen() {
     });
 
     return result;
-  }, [event, participants, user, guestDetails, expandedSlot, booking, cachedParticipants, cachedBudgetTotal, isGuest, invitesByClaimedUserId, unclaimedInvitesByEmail, ownProfile, guestInvitations]);
+  }, [event, participants, user, guestDetails, expandedSlot, booking, cachedParticipants, cachedBudgetTotal, capabilities.canManageInvitations, invitesByClaimedUserId, unclaimedInvitesByEmail, ownProfile, guestInvitations]);
 
   // Stats — "filled" = has email (contact info provided, not just a name)
   const filledCount = slots.filter(s => !!s.email).length;
@@ -544,9 +555,10 @@ export default function ManageInvitationsScreen() {
     setEmailSuggestions([]);
   };
 
-  // Guests only (excludes organizer AND honoree) — honoree is notified separately 1h before event
+  // Invite every entered guest and the honoree; the edge function marks the
+  // honoree code so accept_invite creates the correct participant role.
   const invitableGuests = useMemo(
-    () => slots.filter(s => s.role === 'guest' && (s.email || s.phone)),
+    () => slots.filter(s => s.role !== 'organizer' && (s.email || s.phone)),
     [slots]
   );
   const hasEmails = invitableGuests.some(s => s.email);
@@ -578,11 +590,12 @@ export default function ManageInvitationsScreen() {
       return;
     }
 
-    // Build guest payload — honoree excluded (notified separately 1h before event)
+    // Build one payload for guest and honoree slots. Channels remain email or WhatsApp.
     const guests = slots
-      .filter(s => s.role === 'guest')
+      .filter(s => s.role !== 'organizer')
       .map(s => ({
         slotIndex: s.index,
+        isHonoree: s.role === 'honoree',
         firstName: guestDetails[s.index]?.firstName || s.name.split(' ')[0] || undefined,
         lastName: guestDetails[s.index]?.lastName || undefined,
         email: guestDetails[s.index]?.email || s.email || undefined,
@@ -628,9 +641,12 @@ export default function ManageInvitationsScreen() {
     setInviteSendStatus('done');
     void fetchGuestInvitations();
     // Track invited count for planning step 1 auto-check
-    const sentCount = (data.results ?? []).filter((r: any) => r.status === 'sent').length;
-    if (sentCount > 0 && id) {
-      setInvitedCount(id, sentCount).catch(() => {});
+    const sentGuestCount = (data.results ?? []).filter((result: any) =>
+      result.status === 'sent'
+      && slots.some((slot) => slot.index === result.slotIndex && slot.role === 'guest')
+    ).length;
+    if (sentGuestCount > 0 && id) {
+      setInvitedCount(id, sentGuestCount).catch(() => {});
     }
   };
 
@@ -712,7 +728,7 @@ export default function ManageInvitationsScreen() {
     // list sees their own photo sitting on the organizer's row. The name above
     // already guards this the same way.
     const avatarUrl = slot.participant?.profile?.avatar_url
-      || (slot.role === 'organizer' && !isGuest
+      || (slot.role === 'organizer' && capabilities.canManageInvitations
         ? (ownProfile?.avatar_url || user?.user_metadata?.avatar_url || null)
         : null);
 
@@ -723,7 +739,7 @@ export default function ManageInvitationsScreen() {
         key={`${slot.role}-${slot.index}`}
         style={[styles.slotCard, isEmpty && !isReadOnly && styles.slotCardEmpty]}
         onLayout={(e) => { slotYRef.current[slot.index] = e.nativeEvent.layout.y; }}
-        onPress={!isGuest && slotCanEdit ? () => setExpandedSlot(slot.isExpanded ? null : slot.index) : undefined}
+        onPress={capabilities.canManageInvitations && slotCanEdit ? () => setExpandedSlot(slot.isExpanded ? null : slot.index) : undefined}
       >
         <XStack alignItems="center" gap={12}>
           {/* Avatar with gold ring (organizer + honoree always, others get muted ring) */}
@@ -1108,7 +1124,7 @@ export default function ManageInvitationsScreen() {
       </ScrollView>
 
       {/* Invite All Footer — organizers only, hidden once event has ended (no more invites possible) */}
-      {!isGuest && !isReadOnly && (
+      {capabilities.canManageInvitations && !isReadOnly && (
         <View style={[styles.footer, { paddingBottom: insets.bottom }]}>
           <GoldButton
             label={inviteLoading ? 'Sending…' : t.manageInvitations.inviteAll}
@@ -1120,7 +1136,7 @@ export default function ManageInvitationsScreen() {
           />
         </View>
       )}
-      {!isGuest && isReadOnly && (
+      {capabilities.canManageInvitations && isReadOnly && (
         <View style={[styles.footer, { paddingBottom: insets.bottom, paddingHorizontal: 16 }]}>
           <PastEventBanner
             testID="invitations-readonly-banner"
@@ -1163,7 +1179,7 @@ export default function ManageInvitationsScreen() {
     </KeyboardAvoidingView>
 
       {/* ─── Invite Channel Modal — organizers only ─── */}
-      {!isGuest && <Modal
+      {capabilities.canManageInvitations && <Modal
         visible={inviteModalVisible}
         transparent
         animationType="fade"

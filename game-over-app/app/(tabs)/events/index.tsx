@@ -48,6 +48,7 @@ import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 import { isPastEvent, isReadOnlyEvent } from '@/utils/eventLifecycle';
 import { feedback } from '@/stores/uiStore';
 import { CachedAvatarImage } from '@/components/ui/CachedAvatarImage';
+import { resolveEventCapabilities } from '@/utils/permissions';
 
 type FilterTab = 'organizing' | 'attending';
 
@@ -250,8 +251,14 @@ export default function EventsScreen() {
   useEffect(() => {
     if (didInitFilterRef.current || !events || events.length === 0) return;
     didInitFilterRef.current = true;
-    const hasOrganizing = events.some((e) => e.created_by === user?.id && e.status !== 'draft');
-    const hasAttending = events.some((e) => e.created_by !== user?.id && e.status !== 'draft');
+    const hasOrganizing = events.some((e) =>
+      resolveEventCapabilities({ event: e, userId: user?.id }).canEditEvent
+      && e.status !== 'draft'
+    );
+    const hasAttending = events.some((e) =>
+      !resolveEventCapabilities({ event: e, userId: user?.id }).canEditEvent
+      && e.status !== 'draft'
+    );
     if (!hasOrganizing && hasAttending) setActiveFilter('attending');
   }, [events, user?.id]);
 
@@ -328,10 +335,14 @@ export default function EventsScreen() {
     let filtered: EventWithDetails[];
     switch (activeFilter) {
       case 'organizing':
-        filtered = visible.filter((e) => e.created_by === user?.id);
+        filtered = visible.filter((e) =>
+          resolveEventCapabilities({ event: e, userId: user?.id }).canEditEvent
+        );
         break;
       case 'attending':
-        filtered = visible.filter((e) => e.created_by !== user?.id);
+        filtered = visible.filter((e) =>
+          !resolveEventCapabilities({ event: e, userId: user?.id }).canEditEvent
+        );
         break;
       default:
         filtered = visible;
@@ -373,7 +384,7 @@ export default function EventsScreen() {
     // Filter 2: If an event already exists in DB with same honoree name (any status), hide the draft
     const existingHonoreeNames = new Set(
       events
-        .filter(e => e.created_by === user?.id) // only organizer's own events
+        .filter(e => resolveEventCapabilities({ event: e, userId: user?.id }).canEditEvent)
         .map(e => e.honoree_name?.toLowerCase())
         .filter(Boolean)
     );
@@ -435,11 +446,13 @@ export default function EventsScreen() {
     router.push(targetPath as any);
   };
 
-  const handleEventPress = (eventId: string) => {
+  const handleEventPress = (event: EventWithDetails) => {
+    const eventId = event.id;
+    const capabilities = resolveEventCapabilities({ event, userId: user?.id });
     // Prefetch detail, participants, and booking in parallel for faster load
     queryClient.prefetchQuery({
       queryKey: eventKeys.detail(eventId),
-      queryFn: () => eventsRepository.getById(eventId),
+      queryFn: () => eventsRepository.getById(eventId, user?.id),
       staleTime: 60 * 1000,
     });
     queryClient.prefetchQuery({
@@ -447,11 +460,13 @@ export default function EventsScreen() {
       queryFn: () => participantsRepository.getByEventId(eventId),
       staleTime: 60 * 1000,
     });
-    queryClient.prefetchQuery({
-      queryKey: bookingKeys.byEvent(eventId),
-      queryFn: () => bookingsRepository.getByEventId(eventId),
-      staleTime: 60 * 1000,
-    });
+    if (capabilities.canViewBudget) {
+      queryClient.prefetchQuery({
+        queryKey: bookingKeys.byEvent(eventId),
+        queryFn: () => bookingsRepository.getByEventId(eventId),
+        staleTime: 60 * 1000,
+      });
+    }
     const role = activeFilter === 'attending' ? 'guest' : 'organizer';
     router.push(`/event/${eventId}?role=${role}`);
   };
@@ -543,22 +558,23 @@ export default function EventsScreen() {
   const keyExtractor = useCallback((item: EventWithDetails) => item.id, []);
 
   const renderEventCard = useCallback(({ item }: { item: EventWithDetails }) => {
+    const capabilities = resolveEventCapabilities({ event: item, userId: user?.id });
     const progress = getProgressConfig(
       item, t,
       invitedCounts[item.id] || 0,
       step2ConfirmedMap[item.id] || false,
     );
     const daysLeft = getDaysLeft(item.start_date);
-    const paymentStatus = getPaymentStatus(item);
+    const paymentStatus = capabilities.canViewBudget ? getPaymentStatus(item) : null;
     const dateRange = formatDateRange(item.start_date, item.end_date);
     const eventTitle = item.title || `${item.honoree_name}'s Event`;
-    const urgent = isEventUrgent(item);
+    const urgent = capabilities.canViewBudget && isEventUrgent(item);
     // Read-only state (Day 1+ after end): card is greyed; past state (Day 2+) also moves it below
     const isReadOnly = isReadOnlyEvent(item);
 
     return (
       <Pressable
-        onPress={() => handleEventPress(item.id)}
+        onPress={() => handleEventPress(item)}
         style={({ pressed }) => [
           styles.eventCard,
           urgent && !isReadOnly && styles.eventCardUrgent,
@@ -643,7 +659,7 @@ export default function EventsScreen() {
         </XStack>
 
         {/* Progress section */}
-        <View style={styles.progressSection}>
+        {capabilities.canViewBudget && <View style={styles.progressSection}>
           <XStack justifyContent="space-between" alignItems="center" marginBottom={6}>
             <XStack alignItems="center" gap={6} flex={1}>
               <Ionicons
@@ -684,11 +700,11 @@ export default function EventsScreen() {
               />
             </View>
           )}
-        </View>
+        </View>}
       </Pressable>
     );
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, invitedCounts, step2ConfirmedMap, budgetInfos, isEventUrgent, handleEventPress]);
+  }, [t, invitedCounts, step2ConfirmedMap, budgetInfos, isEventUrgent, handleEventPress, user?.id]);
 
   const renderStartNewPlanButton = () => (
     <Pressable
@@ -932,7 +948,9 @@ export default function EventsScreen() {
     if (activeFilter === 'attending') return null;
     // Don't show device-level wizard drafts if this user has no organizing events in DB.
     // Prevents a guest (who joins as attending) from seeing the organizer's drafts on a shared device.
-    const hasOrganizingEvents = (events || []).some(e => e.created_by === user?.id);
+    const hasOrganizingEvents = (events || []).some(e =>
+      resolveEventCapabilities({ event: e, userId: user?.id }).canEditEvent
+    );
     if (!hasOrganizingEvents) return null;
     const showDrafts = hasDrafts;
     return (
@@ -1087,7 +1105,9 @@ export default function EventsScreen() {
             windowSize={10}
             testID="events-list"
           />
-        ) : hasDrafts && activeFilter !== 'attending' && (events || []).some(e => e.created_by === user?.id) ? (
+        ) : hasDrafts && activeFilter !== 'attending' && (events || []).some(e =>
+          resolveEventCapabilities({ event: e, userId: user?.id }).canEditEvent
+        ) ? (
           <FlatList
             data={[]}
             renderItem={null}

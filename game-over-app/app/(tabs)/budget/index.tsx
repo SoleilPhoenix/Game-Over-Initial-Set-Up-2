@@ -27,6 +27,7 @@ import { feedback, useUIStore } from '@/stores/uiStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { computeBookedBudgetStats } from '@/utils/budgetStats';
+import { resolveEventCapabilities } from '@/utils/permissions';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
 import { depositAndDue, formatEuroFromEuros, splitPerPerson } from '@/utils/money';
 import { PastEventBanner } from '@/components/ui/PastEventBanner';
@@ -444,8 +445,24 @@ export default function BudgetDashboardScreen() {
 
   // Filter booked events
   const bookedEvents = useMemo(() => {
-    return (events || []).filter((e: EventWithDetails) => e.status === 'booked' || e.status === 'completed');
-  }, [events]);
+    return (events || []).filter((e: EventWithDetails) =>
+      (e.status === 'booked' || e.status === 'completed')
+      && resolveEventCapabilities({ event: e, userId: user?.id }).canViewBudget
+    );
+  }, [events, user?.id]);
+
+  const requestedEvent = (events || []).find((event) =>
+    event.id === (eventIdParam || selectedEventId)
+  );
+  const canOpenRequestedBudget = !requestedEvent || resolveEventCapabilities({
+    event: requestedEvent,
+    userId: user?.id,
+  }).canViewBudget;
+  useEffect(() => {
+    if (requestedEvent && !canOpenRequestedBudget) {
+      router.replace(`/event/${requestedEvent.id}` as any);
+    }
+  }, [canOpenRequestedBudget, requestedEvent, router]);
 
   // Events shown in the selector dropdown: exclude past events — those live in the Events tab.
   // Uses start-of-today so today's events are still visible.
@@ -510,9 +527,13 @@ export default function BudgetDashboardScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally ignores eventIdParam and selectedEventId; auto-select runs only when bookedEvents list changes
   }, [bookedEvents]);
 
-  // ONLY fetch booking if we have booked events (prevent unnecessary queries)
+  const selectedEvent = bookedEvents.find((e: EventWithDetails) => e.id === selectedEventId);
+  const capabilities = resolveEventCapabilities({ event: selectedEvent, userId: user?.id });
+
+  // Booking RLS excludes honorees. Capability gating ensures this hook never
+  // requests a booking for a role that cannot view the budget.
   const { data: booking } = useBooking(
-    hasBookedEvents ? (selectedEventId || undefined) : undefined
+    hasBookedEvents && capabilities.canViewBudget ? (selectedEventId || undefined) : undefined
   );
 
   // ONLY fetch participants if we have booked events
@@ -520,9 +541,7 @@ export default function BudgetDashboardScreen() {
     hasBookedEvents ? (selectedEventId || undefined) : undefined
   );
 
-  const selectedEvent = bookedEvents.find((e: EventWithDetails) => e.id === selectedEventId);
-  const isOrganizer = selectedEvent?.created_by === user?.id;
-  const refundEventId = isOrganizer ? selectedEventId ?? undefined : undefined;
+  const refundEventId = capabilities.canEditEvent ? selectedEventId ?? undefined : undefined;
   const {
     data: addedRefunds = [],
     isFetchedAfterMount: refundsFetchedFromDatabase,
@@ -1254,6 +1273,8 @@ export default function BudgetDashboardScreen() {
     </View>
   );
 
+  if (requestedEvent && !canOpenRequestedBudget) return null;
+
   // While events are loading with no cached data, show a minimal blank screen (no jarring "no budget" flash)
   if (eventsLoading && !hasBookedEvents) {
     return (
@@ -1447,7 +1468,7 @@ export default function BudgetDashboardScreen() {
           {/* Event Selector — scrolls with content */}
           {renderEventSelector()}
           {/* Share Invite — organizers only, hidden after event ends. Matches Chat's shareEventCard style. */}
-          {isOrganizer && !isPackageFrozen && (
+          {capabilities.canManageInvitations && !isPackageFrozen && (
             <Pressable style={styles.shareEventCard} onPress={handleInvite} testID="budget-invite-button">
               <Ionicons name="share-social-outline" size={18} color="#1F2A44" />
               <Text style={styles.shareEventTitle} numberOfLines={1}>
@@ -1529,7 +1550,7 @@ export default function BudgetDashboardScreen() {
                             "in X days" only render once and the chevron signals the action.
                             Guests get the same card without the tap target. */}
                         {(() => {
-                          const canPay = budgetStats.percentage < 100 && budgetStats.pending > 0 && !isPackageFrozen && isOrganizer;
+                          const canPay = budgetStats.percentage < 100 && budgetStats.pending > 0 && !isPackageFrozen && capabilities.canManagePackages;
                           const handlePayRemaining = () => {
                             if (!selectedEventId) return;
                             const packageIdForPayment = cachedBudget?.packageId || (booking as any)?.package_id;
@@ -1594,7 +1615,7 @@ export default function BudgetDashboardScreen() {
                 )}
 
                 {/* Guest info line — only for non-organizers when a balance is still owed */}
-                {budgetStats.percentage < 100 && budgetStats.pending > 0 && !isPackageFrozen && !isOrganizer && (
+                {budgetStats.percentage < 100 && budgetStats.pending > 0 && !isPackageFrozen && !capabilities.canManagePackages && (
                   <View style={styles.guestRemainingInfo}>
                     <Ionicons name="information-circle-outline" size={18} color={theme.textSecondary} />
                     <Text style={styles.guestRemainingText}>
@@ -1613,7 +1634,7 @@ export default function BudgetDashboardScreen() {
                 {/* Sichtbar, aber ausgegraut, sobald niemand mehr offen ist.
                     Vorher verschwand der Knopf ganz - das laesst offen, ob es ihn
                     nie gab oder ob nichts mehr zu erinnern ist (Owner-Wunsch 05.08.). */}
-                {isOrganizer && (
+                {capabilities.canRemindGuests && (
                   <Pressable
                     onPress={handleRemindAll}
                     disabled={budgetStats.pendingCount === 0}
@@ -1657,7 +1678,7 @@ export default function BudgetDashboardScreen() {
                     : (isOrganizerRow ? share.organizerEuros : share.perPersonEuros) * 100;
                   const isCurrentUser = isDemo
                     ? (participantRaw as DemoP).id === 'organizer'
-                      ? selectedEvent?.created_by === user?.id
+                      ? participantUserId === user?.id
                       : false
                     : (participantRaw as any).user_id === user?.id;
                   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
@@ -1667,7 +1688,8 @@ export default function BudgetDashboardScreen() {
                   const isOtherGuestRow = isDemo
                     ? !isOrganizerRow && (participantRaw as DemoP).id !== 'honoree'
                     : participantRole === 'guest' && !isCurrentUser;
-                  const showPaymentStatus = isOrganizer || !isOtherGuestRow;
+                  const showPaymentStatus = capabilities.canViewGroupContributions
+                    && (capabilities.canRemindGuests || !isOtherGuestRow);
 
                   const isHighlighted = !!highlightUserId && participantUserId === highlightUserId;
 
@@ -1773,7 +1795,7 @@ export default function BudgetDashboardScreen() {
                       </View>
 
                       {/* Payment actions wrap beneath the row to avoid collisions on narrow screens. */}
-                      {isCurrentUser && isPending && !isClaimed && !isOrganizer && !isDemo && (
+                              {isCurrentUser && isPending && !isClaimed && !capabilities.canRemindGuests && !isDemo && (
                         <Pressable
                           style={[styles.markPaidButton, markingPaidUserId === user?.id && { opacity: 0.6 }]}
                           disabled={markingPaidUserId === user?.id}
@@ -1845,7 +1867,7 @@ export default function BudgetDashboardScreen() {
                           <Text style={styles.markPaidButtonText}>{t.budget.ivePaid}</Text>
                         </Pressable>
                       )}
-                      {isOrganizer && participantRole === 'guest' && isClaimed && participantUserId && (
+                      {capabilities.canRemindGuests && participantRole === 'guest' && isClaimed && participantUserId && (
                         <Pressable
                           style={[styles.confirmClaimButton, markingPaidUserId === participantUserId && { opacity: 0.6 }]}
                           disabled={markingPaidUserId === participantUserId}
@@ -1895,7 +1917,7 @@ export default function BudgetDashboardScreen() {
                           <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
                             {formatEuroFromEuros(share.perPersonEuros)}
                           </Text>
-                          {isOrganizer ? (
+                          {capabilities.canRemindGuests ? (
                             <Text style={{ fontSize: 11, fontWeight: '700', color: '#F97316', letterSpacing: 0.5, textAlign: 'right', textTransform: 'uppercase' }}>
                               {t.budget.pending}
                             </Text>
@@ -2052,7 +2074,7 @@ export default function BudgetDashboardScreen() {
             </YStack>
 
             {/* Refund Tracking — the database ledger is organizer-only via RLS. */}
-            {isOrganizer && <YStack marginBottom="$6">
+            {capabilities.canViewExtraCosts && capabilities.canEditEvent && <YStack marginBottom="$6">
               <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
                 <Text fontSize={12} fontWeight="700" color={theme.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
                   {t.budget.refundTracking}

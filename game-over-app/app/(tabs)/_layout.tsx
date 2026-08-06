@@ -18,6 +18,8 @@ import { useTranslation, getTranslation } from '@/i18n';
 import { useUser } from '@/stores/authStore';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { feedback } from '@/stores/uiStore';
+import { useActiveEventStore } from '@/stores/activeEventStore';
+import { resolveEventCapabilities } from '@/utils/permissions';
 
 type IconName = 'calendar' | 'calendar-outline' | 'chatbubbles' | 'chatbubbles-outline' |
   'card' | 'card-outline' | 'person-circle' | 'person-circle-outline' | 'add';
@@ -73,7 +75,10 @@ function FABButton() {
     if (!d.createdBy || d.createdBy !== user?.id) return false;
     if (!events) return true;
     const existingNames = new Set(
-      events.filter(e => e.created_by === user?.id).map(e => e.honoree_name?.toLowerCase()).filter(Boolean)
+      events
+        .filter(e => resolveEventCapabilities({ event: e, userId: user?.id }).canEditEvent)
+        .map(e => e.honoree_name?.toLowerCase())
+        .filter(Boolean)
     );
     const existingIds = new Set(events.map(e => e.id));
     if (d.createdEventId && existingIds.has(d.createdEventId)) return false;
@@ -135,6 +140,15 @@ function FABButton() {
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
   const tabBarHidden = useTabBarStore((s) => s.hidden);
+  const user = useUser();
+  const { data: events } = useEvents();
+  const activeEventId = useActiveEventStore((s) => s.activeEventId);
+  const activeEvent = events?.find((event) => event.id === activeEventId);
+  const canShowBudget = activeEvent
+    ? resolveEventCapabilities({ event: activeEvent, userId: user?.id }).canViewBudget
+    : (events ?? []).some((event) =>
+        resolveEventCapabilities({ event, userId: user?.id }).canViewBudget
+      );
 
   // Hide tab bar on chat detail screens (chat/[channelId])
   const currentRoute = state.routes[state.index];
@@ -154,7 +168,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   const sortedRoutes = state.routes
     .filter((route: any) => {
       const routeName = route.name.split('/')[0]; // Extract base name
-      return tabOrder.includes(routeName);
+      return tabOrder.includes(routeName) && (routeName !== 'budget' || canShowBudget);
     })
     .sort((a: any, b: any) => {
       const aName = a.name.split('/')[0];

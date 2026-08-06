@@ -17,6 +17,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { resolvePaymentReminderCopy } from './paymentReminderCopy';
 import { resolvePaymentSuccessCopy } from './paymentSuccessCopy';
 import type { NotificationEventSummary } from '@/repositories/notifications';
+import type { EventCapabilities } from '@/utils/permissions';
 
 type Notification = Database['public']['Tables']['notifications']['Row'] & {
   event?: NotificationEventSummary | null;
@@ -61,6 +62,15 @@ const ACTION_COLOR = '#F97316';
 const ACTION_BG_COLOR = 'rgba(249, 115, 22, 0.2)';
 const INFO_COLOR = '#22C55E';
 const INFO_BG_COLOR = 'rgba(34, 197, 94, 0.2)';
+const FINANCIAL_NOTIFICATION_TYPES = new Set([
+  'budget_update',
+  'payment_received',
+  'payment_failed',
+  'payment_reminder',
+  'payment_claimed',
+  'refund_due',
+  'booking_reminder',
+]);
 
 // Orange means action/error; green means informational.
 const NOTIFICATION_CONFIG: Record<
@@ -263,12 +273,14 @@ const NOTIFICATION_CONFIG: Record<
 
 interface NotificationItemProps {
   notification: Notification;
+  capabilities: EventCapabilities;
   onPress?: () => void;
   testID?: string;
 }
 
 export function NotificationItem({
   notification,
+  capabilities,
   onPress,
   testID,
 }: NotificationItemProps) {
@@ -386,18 +398,25 @@ export function NotificationItem({
     return date.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
   };
 
+  const actionTargetsBudget = notification.action_url?.includes('/budget') ?? false;
+  const hideFinancialNotification = !!notification.event_id
+    && !capabilities.canViewBudget
+    && (FINANCIAL_NOTIFICATION_TYPES.has(notification.type) || actionTargetsBudget);
+
+  if (hideFinancialNotification) return null;
+
   const handlePress = () => {
     if (onPress) {
       onPress();
     }
     // Navigate to action URL if available
-    if (notification.action_url) {
+    if (notification.action_url && (!actionTargetsBudget || capabilities.canViewBudget)) {
       router.push(notification.action_url as any);
     }
   };
 
   const handleActionPress = () => {
-    if (notification.action_url) {
+    if (notification.action_url && (!actionTargetsBudget || capabilities.canViewBudget)) {
       router.push(notification.action_url as any);
     }
   };
@@ -459,7 +478,7 @@ export function NotificationItem({
           )}
 
           {/* Action button or link */}
-          {config.hasAction && (
+          {config.hasAction && (!actionTargetsBudget || capabilities.canViewBudget) && (
             <Pressable
               onPress={handleActionPress}
               style={({ pressed }) => [

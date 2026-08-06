@@ -12,6 +12,7 @@ import { getAllBudgetInfos } from '@/lib/participantCountCache';
 import type { EventWithDetails } from '@/repositories/events';
 import { useAuthStore } from '@/stores/authStore';
 import { participantsRepository } from '@/repositories/participants';
+import { resolveEventCapabilities } from '@/utils/permissions';
 
 interface BudgetInfo {
   paidAmountCents: number;
@@ -53,6 +54,7 @@ function daysUntil(startDate?: string): number | null {
 
 export function useUrgentPayment() {
   const { data: events } = useEvents();
+  const currentUserId = useAuthStore(s => s.user?.id);
   const [budgetInfos, setBudgetInfos] = useState<Record<string, BudgetInfo>>({});
   const [seenEventIds, setSeenEventIds] = useState<Set<string>>(new Set());
 
@@ -97,6 +99,7 @@ export function useUrgentPayment() {
     return (events ?? [])
       .filter(e => {
         if (e.status !== 'booked') return false;
+        if (!resolveEventCapabilities({ event: e, userId: currentUserId }).canManagePackages) return false;
         const days = daysUntil(e.start_date);
         return days !== null && days <= 14;
       })
@@ -110,7 +113,7 @@ export function useUrgentPayment() {
         return { event: e, daysLeft: days, isPaid, isSeen };
       })
       .sort((a, b) => a.daysLeft - b.daysLeft);
-  }, [events, budgetInfos, seenEventIds]);
+  }, [events, budgetInfos, seenEventIds, currentUserId]);
 
   // Most urgent UNPAID event — kept for backward compat with tab bell Alerts
   const urgentEvent: EventWithDetails | null = useMemo(
@@ -127,8 +130,6 @@ export function useUrgentPayment() {
     setSeenEventIds(newIds);
   }, [seenEventIds, urgentEvents]);
 
-  const currentUserId = useAuthStore(s => s.user?.id);
-
   // Fetch current user's guest participations separately (event_participants is never
   // joined by getByUser() to avoid RLS 42P17 recursion — see repositories/events.ts).
   // Using useQuery so data is refreshed on app focus via the existing cache lifecycle.
@@ -144,7 +145,13 @@ export function useUrgentPayment() {
     if (!currentUserId || userParticipations.length === 0) return null;
     return (events ?? []).find(event => {
       const participation = userParticipations.find(p => p.event_id === event.id);
-      if (!participation || participation.role !== 'guest') return false;
+      if (!participation) return false;
+      const capabilities = resolveEventCapabilities({
+        event,
+        userId: currentUserId,
+        participants: [{ user_id: currentUserId, role: participation.role }],
+      });
+      if (!capabilities.canViewBudget || capabilities.canManagePackages) return false;
       if (participation.payment_status === 'paid') return false;
       if (participation.payment_claimed_at) return false;
       const days = daysUntil(event.start_date);
@@ -157,7 +164,13 @@ export function useUrgentPayment() {
     if (!currentUserId || userParticipations.length === 0) return null;
     return (events ?? []).find(event => {
       const participation = userParticipations.find(p => p.event_id === event.id);
-      if (!participation || participation.role !== 'guest') return false;
+      if (!participation) return false;
+      const capabilities = resolveEventCapabilities({
+        event,
+        userId: currentUserId,
+        participants: [{ user_id: currentUserId, role: participation.role }],
+      });
+      if (!capabilities.canViewBudget || capabilities.canManagePackages) return false;
       if (participation.payment_status === 'paid' || !participation.payment_claimed_at) return false;
       const days = daysUntil(event.start_date);
       return days !== null && days <= 14;
@@ -169,7 +182,13 @@ export function useUrgentPayment() {
     if (!currentUserId || userParticipations.length === 0) return null;
     return (events ?? []).find(event => {
       const participation = userParticipations.find(p => p.event_id === event.id);
-      if (!participation || participation.role !== 'guest') return false;
+      if (!participation) return false;
+      const capabilities = resolveEventCapabilities({
+        event,
+        userId: currentUserId,
+        participants: [{ user_id: currentUserId, role: participation.role }],
+      });
+      if (!capabilities.canViewBudget || capabilities.canManagePackages) return false;
       if (participation.payment_status !== 'paid') return false;
       const days = daysUntil(event.start_date);
       return days !== null && days <= 14;

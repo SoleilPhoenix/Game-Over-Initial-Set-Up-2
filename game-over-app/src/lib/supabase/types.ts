@@ -563,6 +563,7 @@ export type Database = {
           guest_phone: string | null
           id: string
           is_active: boolean | null
+          is_honoree: boolean
           max_uses: number | null
           updated_at: string | null
           use_count: number | null
@@ -581,6 +582,7 @@ export type Database = {
           guest_phone?: string | null
           id?: string
           is_active?: boolean | null
+          is_honoree?: boolean
           max_uses?: number | null
           updated_at?: string | null
           use_count?: number | null
@@ -599,6 +601,7 @@ export type Database = {
           guest_phone?: string | null
           id?: string
           is_active?: boolean | null
+          is_honoree?: boolean
           max_uses?: number | null
           updated_at?: string | null
           use_count?: number | null
@@ -1174,6 +1177,13 @@ export type Database = {
       }
       decline_invite: { Args: { p_code: string }; Returns: boolean }
       generate_booking_reference: { Args: never; Returns: string }
+      get_my_event_share: {
+        Args: { p_event_id: string }
+        Returns: {
+          pays: boolean
+          share_cents: number
+        }[]
+      }
       get_invite_preview: {
         Args: { p_code: string }
         Returns: {

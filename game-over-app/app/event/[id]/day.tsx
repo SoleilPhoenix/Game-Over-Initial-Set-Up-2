@@ -21,6 +21,7 @@ import { formatScheduleTime, generateDefaultSchedule, tierFromPackageSlug } from
 import { scheduleRepository } from '@/repositories';
 import { loadBudgetInfo } from '@/lib/participantCountCache';
 import type { ScheduleItem } from '@/repositories';
+import { resolveEventCapabilities } from '@/utils/permissions';
 
 function isEventToday(startDate: string | null | undefined): boolean {
   if (!startDate) return false;
@@ -48,11 +49,10 @@ export default function EventDayScreen() {
   const user = useAuthStore((s) => s.user);
 
   const { data: event, isLoading: eventLoading } = useEvent(eventId);
-  const { data: booking } = useBooking(eventId);
+  const capabilities = resolveEventCapabilities({ event, userId: user?.id });
+  const { data: booking } = useBooking(capabilities.canViewBudget ? eventId : undefined);
   const { data: schedule, isLoading: scheduleLoading } = useEventSchedule(eventId);
   const queryClient = useQueryClient();
-
-  const isOrganizer = !!event && event.created_by === user?.id;
 
   // Demo events have no booking row — pull packageId from the budget cache instead.
   const [cachedPackageId, setCachedPackageId] = useState<string | null>(null);
@@ -67,7 +67,7 @@ export default function EventDayScreen() {
   useEffect(() => {
     if (!eventId || scheduleLoading) return;
     if (schedule && schedule.length > 0) return;
-    if (!isOrganizer) return;
+    if (!capabilities.canManagePackages) return;
     if (generationAttempted.current) return;
     // Try slug-based tier first (booking.package_id), then cached budget packageId.
     const tier = tierFromPackageSlug(booking?.package_id) ?? tierFromPackageSlug(cachedPackageId);
@@ -81,7 +81,7 @@ export default function EventDayScreen() {
         generationAttempted.current = false;
         console.warn('Retroactive schedule generation failed:', err?.message);
       });
-  }, [eventId, schedule, scheduleLoading, isOrganizer, booking?.package_id, cachedPackageId, queryClient]);
+  }, [eventId, schedule, scheduleLoading, capabilities.canManagePackages, booking?.package_id, cachedPackageId, queryClient]);
   const today = isEventToday(event?.start_date);
   const tomorrow = isEventTomorrow(event?.start_date);
   const heading = today ? 'HEUTE' : tomorrow ? 'MORGEN' : 'TAGESPLAN';
@@ -198,7 +198,7 @@ export default function EventDayScreen() {
 
         {/* Action buttons */}
         <YStack marginTop={24} gap={12}>
-          {isOrganizer && (
+          {capabilities.canRemindGuests && (
             <Pressable onPress={handleInformAll} style={styles.primaryBtn}>
               <Ionicons name="megaphone-outline" size={18} color="#FFFFFF" />
               <Text style={styles.primaryBtnText}>Alle informieren</Text>
