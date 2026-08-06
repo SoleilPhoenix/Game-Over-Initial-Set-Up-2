@@ -24,7 +24,8 @@ import { DisplayHeading, GoldButton } from '@/components/ui/editorial';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
 import { splitPerPerson } from '@/utils/money';
 import { ShareModal } from '@/components/ui/ShareModal';
-import { getEventImage, resolveImageSource } from '@/constants/packageImages';
+import { resolvePackageImage } from '@/constants/packageImages';
+import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 import {
   calculatePlanningSteps,
   getCompletedCount,
@@ -264,8 +265,7 @@ export default function EventSummaryScreen() {
     ? new Date(event.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : 'TBD';
 
-  const citySlug = event.city?.name?.toLowerCase() || 'berlin';
-  const cityImage = getEventImage(citySlug, booking?.package_id || event.hero_image_url);
+  const citySlug = CITY_UUID_TO_SLUG[event.city_id] || 'berlin';
 
   return (
     <View style={styles.container}>
@@ -436,7 +436,12 @@ export default function EventSummaryScreen() {
             testID="destination-guide-card"
           >
             <KenBurnsImage
-              source={resolveImageSource(event.hero_image_url || cityImage)}
+              source={resolvePackageImage({
+                heroImageUrl: event.hero_image_url,
+                cityId: event.city_id,
+                citySlug,
+                packageId: booking?.package_id,
+              })}
               style={styles.destinationImage}
               resizeMode="cover"
             />

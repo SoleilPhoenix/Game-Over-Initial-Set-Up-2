@@ -3,7 +3,7 @@
  * Form to edit event details
  */
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
@@ -18,14 +18,13 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { feedback } from '@/stores/uiStore';
+import { useTranslation } from '@/i18n';
 
-const editEventSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
-  honoree_name: z.string().min(1, 'Honoree name is required'),
-  vibe: z.string().optional(),
-});
-
-type EditEventForm = z.infer<typeof editEventSchema>;
+type EditEventForm = {
+  title: string;
+  honoree_name: string;
+  vibe?: string;
+};
 
 export default function EditEventScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -33,6 +32,12 @@ export default function EditEventScreen() {
   const insets = useSafeAreaInsets();
   const user = useAuthStore((state) => state.user);
   const [isDeleting, setIsDeleting] = useState(false);
+  const { t, language } = useTranslation();
+  const editEventSchema = useMemo(() => z.object({
+    title: z.string().min(1, t.editEvent.titleRequired),
+    honoree_name: z.string().min(1, t.editEvent.honoreeNameRequired),
+    vibe: z.string().optional(),
+  }), [t.editEvent.honoreeNameRequired, t.editEvent.titleRequired]);
 
   const { data: event, isLoading } = useEvent(id);
   const updateEvent = useUpdateEvent();
@@ -43,10 +48,10 @@ export default function EditEventScreen() {
 
   const handleDeleteEvent = async () => {
     const confirmed = await feedback.confirm({
-      title: 'Delete Event',
-      message: `Are you sure you want to delete "${event?.title || 'this event'}"? This action cannot be undone.`,
-      confirmLabel: 'Delete',
-      cancelLabel: 'Cancel',
+      title: t.editEvent.deleteEvent,
+      message: t.editEvent.deleteConfirmMessage.replace('{{title}}', event?.title || t.editEvent.notSet),
+      confirmLabel: t.common.delete,
+      cancelLabel: t.common.cancel,
       destructive: true,
     });
     if (!confirmed || !id) return;
@@ -56,7 +61,7 @@ export default function EditEventScreen() {
       router.replace('/(tabs)/events');
     } catch (error) {
       console.error('Failed to delete event:', error);
-      feedback.error('Error', 'Failed to delete event. Please try again.');
+      feedback.error(t.common.error, t.editEvent.deleteFailed);
     } finally {
       setIsDeleting(false);
     }
@@ -85,6 +90,7 @@ export default function EditEventScreen() {
       router.back();
     } catch (error) {
       console.error('Failed to update event:', error);
+      feedback.error(t.common.error, t.editEvent.updateFailed);
     }
   };
 
@@ -126,7 +132,7 @@ export default function EditEventScreen() {
             <Ionicons name="close" size={28} color="#1A202C" />
           </XStack>
           <Text fontSize="$5" fontWeight="700" color="$textPrimary">
-            Edit Event
+            {t.editEvent.title}
           </Text>
           <XStack width={40} />
         </XStack>
@@ -140,7 +146,7 @@ export default function EditEventScreen() {
           <Card marginBottom="$4">
             <YStack gap="$4">
               <Text fontSize="$4" fontWeight="700" color="$textPrimary">
-                Event Details
+                {t.editEvent.details}
               </Text>
 
               <Controller
@@ -148,8 +154,8 @@ export default function EditEventScreen() {
                 name="title"
                 render={({ field: { onChange, value } }) => (
                   <Input
-                    label="Event Title"
-                    placeholder="e.g., John's Bachelor Weekend"
+                    label={t.editEvent.eventTitle}
+                    placeholder={t.editEvent.eventTitlePlaceholder}
                     value={value}
                     onChangeText={onChange}
                     error={errors.title?.message}
@@ -163,8 +169,8 @@ export default function EditEventScreen() {
                 name="honoree_name"
                 render={({ field: { onChange, value } }) => (
                   <Input
-                    label="Honoree Name"
-                    placeholder="Who are you celebrating?"
+                    label={t.editEvent.honoreeName}
+                    placeholder={t.editEvent.honoreeNamePlaceholder}
                     value={value}
                     onChangeText={onChange}
                     error={errors.honoree_name?.message}
@@ -178,8 +184,8 @@ export default function EditEventScreen() {
                 name="vibe"
                 render={({ field: { onChange, value } }) => (
                   <Input
-                    label="Event Vibe (Optional)"
-                    placeholder="e.g., Classy but fun, wild adventure..."
+                    label={t.editEvent.vibeOptional}
+                    placeholder={t.editEvent.vibePlaceholder}
                     value={value}
                     onChangeText={onChange}
                     testID="vibe-input"
@@ -194,34 +200,38 @@ export default function EditEventScreen() {
           <Card variant="filled">
             <YStack gap="$3">
               <Text fontSize="$3" fontWeight="600" color="$textSecondary">
-                Event Info (Read-only)
+                {t.editEvent.infoReadOnly}
               </Text>
 
               <XStack justifyContent="space-between">
-                <Text color="$textSecondary">Destination</Text>
+                <Text color="$textSecondary">{t.editEvent.destination}</Text>
                 <Text color="$textPrimary" fontWeight="500">
-                  {event.city?.name || 'Not set'}
+                  {event.city?.name || t.editEvent.notSet}
                 </Text>
               </XStack>
 
               <XStack justifyContent="space-between">
-                <Text color="$textSecondary">Party Type</Text>
+                <Text color="$textSecondary">{t.editEvent.partyType}</Text>
                 <Text color="$textPrimary" fontWeight="500" textTransform="capitalize">
-                  {event.party_type?.replace('_', ' ') || 'Not set'}
+                  {event.party_type === 'bachelor'
+                    ? t.wizard.bachelor
+                    : event.party_type === 'bachelorette'
+                      ? t.wizard.bachelorette
+                      : t.editEvent.notSet}
                 </Text>
               </XStack>
 
               <XStack justifyContent="space-between">
-                <Text color="$textSecondary">Start Date</Text>
+                <Text color="$textSecondary">{t.editEvent.startDate}</Text>
                 <Text color="$textPrimary" fontWeight="500">
                   {event.start_date
-                    ? new Date(event.start_date).toLocaleDateString()
-                    : 'Not set'}
+                    ? new Date(event.start_date).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US')
+                    : t.editEvent.notSet}
                 </Text>
               </XStack>
 
               <Text fontSize="$1" color="$textMuted" marginTop="$2">
-                To change destination or dates, please contact support.
+                {t.editEvent.changeInfoHint}
               </Text>
             </YStack>
           </Card>
@@ -231,10 +241,10 @@ export default function EditEventScreen() {
             <Card variant="filled" marginTop="$6">
               <YStack gap="$3">
                 <Text fontSize="$3" fontWeight="600" color="$error">
-                  Danger Zone
+                  {t.editEvent.dangerZone}
                 </Text>
                 <Text fontSize="$2" color="$textSecondary">
-                  Deleting this event will permanently remove all associated data including participants, bookings, and chat history.
+                  {t.editEvent.deleteWarning}
                 </Text>
                 <Button
                   variant="secondary"
@@ -246,7 +256,7 @@ export default function EditEventScreen() {
                   <XStack gap="$2" alignItems="center">
                     <Ionicons name="trash-outline" size={18} color="#E12D39" />
                     <Text color="$error" fontWeight="600">
-                      Delete Event
+                      {t.editEvent.deleteEvent}
                     </Text>
                   </XStack>
                 </Button>
@@ -274,7 +284,7 @@ export default function EditEventScreen() {
             disabled={!isDirty}
             testID="save-button"
           >
-            Save Changes
+            {t.editEvent.saveChanges}
           </Button>
         </XStack>
       </YStack>

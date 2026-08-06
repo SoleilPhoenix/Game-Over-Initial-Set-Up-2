@@ -1,4 +1,6 @@
 import { assemblePackages } from '../packageAssembly';
+import { getTranslation } from '@/i18n';
+import { useLanguageStore } from '@/stores/languageStore';
 
 const FULL_ANSWERS = {
   h1: 'active' as const,
@@ -16,6 +18,10 @@ const FULL_ANSWERS = {
 };
 
 describe('assemblePackages', () => {
+  beforeEach(() => {
+    useLanguageStore.getState().setLanguage('de');
+  });
+
   it('returns exactly 3 packages', () => {
     expect(assemblePackages(FULL_ANSWERS, 'hannover')).toHaveLength(3);
   });
@@ -66,6 +72,24 @@ describe('assemblePackages', () => {
     const relaxedPkgs = assemblePackages(relaxed, 'hannover');
     const actionPkgs  = assemblePackages(action, 'hannover');
     expect(relaxedPkgs[0].features[0]).not.toBe(actionPkgs[0].features[0]);
+  });
+
+  it('returns package content in the configured language', () => {
+    const profile = { ...FULL_ANSWERS, h1: 'relaxed' as const, h4: 'food' as const, g5: 'relaxed' as const };
+
+    useLanguageStore.getState().setLanguage('en');
+    const englishContent = getTranslation().packageContent;
+    const englishPackage = assemblePackages(profile, 'hannover')[0];
+
+    useLanguageStore.getState().setLanguage('de');
+    const germanContent = getTranslation().packageContent;
+    const germanPackage = assemblePackages(profile, 'hannover')[0];
+
+    expect(englishPackage.features[0]).toBe(englishContent.activityNames.cocktailWorkshop);
+    expect(germanPackage.features[0]).toBe(germanContent.activityNames.cocktailWorkshop);
+    expect(englishPackage.description).toBe(englishContent.tierDescriptions.essential);
+    expect(germanPackage.description).toBe(germanContent.tierDescriptions.essential);
+    expect(germanPackage.features[0]).not.toBe(englishPackage.features[0]);
   });
 
   it('prices match tier definitions', () => {

@@ -29,6 +29,7 @@ import { useTranslation } from '@/i18n';
 import { useTheme } from '@/hooks/useTheme';
 import { feedback } from '@/stores/uiStore';
 import { joinList } from '@/utils/guestDataChange';
+import { MAX_PARTICIPANT_COUNT, MIN_PARTICIPANT_COUNT } from '@/constants/participantLimits';
 
 // ─── City data ─────────────────────────────────────────────────────────────
 // UUIDs must match supabase/migrations/20260211000000_add_german_cities.sql
@@ -303,8 +304,8 @@ export default function WizardStep1() {
             </View>
             <Slider
               style={{ width: '100%', height: 40 }}
-              minimumValue={1}
-              maximumValue={30}
+              minimumValue={MIN_PARTICIPANT_COUNT}
+              maximumValue={MAX_PARTICIPANT_COUNT}
               step={1}
               value={participantCount}
               onValueChange={v => setParticipantCount(Math.round(v))}
@@ -314,8 +315,8 @@ export default function WizardStep1() {
               testID="participant-slider"
             />
             <View style={styles.sliderRange}>
-              <Text style={styles.sliderRangeText}>1</Text>
-              <Text style={styles.sliderRangeText}>30</Text>
+              <Text style={styles.sliderRangeText}>{MIN_PARTICIPANT_COUNT}</Text>
+              <Text style={styles.sliderRangeText}>{MAX_PARTICIPANT_COUNT}</Text>
             </View>
           </View>
 

@@ -10,6 +10,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { useEffect, useRef } from 'react';
 import { createSyncStorage } from '@/lib/storage';
+import { clampParticipantCount, DEFAULT_PARTICIPANT_COUNT } from '@/constants/participantLimits';
 
 // Storage instance for wizard (works in both Expo Go and dev builds)
 const wizardStorage = createSyncStorage('wizard-storage');
@@ -194,7 +195,7 @@ const initialWizardFields = {
   honoreeName: '',
   honoreeLastName: '',
   cityId: null as string | null,
-  participantCount: 10,
+  participantCount: DEFAULT_PARTICIPANT_COUNT,
   startDate: null as string | null,
   endDate: null as string | null,
   energyLevel: null as HonoreeEnergyLevel | null,
@@ -278,7 +279,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       setHonoreeName: (name: string) => set({ honoreeName: name, isDirty: true }),
       setHonoreeLastName: (name: string) => set({ honoreeLastName: name, isDirty: true }),
       setCityId: (cityId: string) => set({ cityId, isDirty: true }),
-      setParticipantCount: (count: number) => set({ participantCount: Math.max(1, Math.min(30, count)), isDirty: true }),
+      setParticipantCount: (count: number) => set({ participantCount: clampParticipantCount(count), isDirty: true }),
       setDates: (startDate: string, endDate: string) =>
         set({ startDate, endDate, isDirty: true }),
 
@@ -440,12 +441,13 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       loadDraft: (id: string) => {
         const draft = get().savedDrafts[id];
         if (!draft) return;
+        const participantCount = clampParticipantCount(draft.participantCount);
         set({
           partyType: draft.partyType,
           honoreeName: draft.honoreeName,
           honoreeLastName: draft.honoreeLastName ?? '',
           cityId: draft.cityId,
-          participantCount: draft.participantCount,
+          participantCount,
           startDate: draft.startDate,
           endDate: draft.endDate,
           energyLevel: draft.energyLevel,
@@ -463,6 +465,10 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           selectedPackageId: draft.selectedPackageId,
           currentStep: draft.currentStep,
           activeDraftId: id,
+          savedDrafts: {
+            ...get().savedDrafts,
+            [id]: { ...draft, participantCount },
+          },
           isDirty: false,
           lastSavedAt: draft.updatedAt,
         });
@@ -581,9 +587,11 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           if (!Array.isArray(draft.groupVibe)) {
             draft.groupVibe = Array.isArray(draft.vibePreferences) ? draft.vibePreferences : [];
           }
+          draft.participantCount = clampParticipantCount(draft.participantCount);
           cleanDrafts[id] = draft;
         }
         merged.savedDrafts = cleanDrafts;
+        merged.participantCount = clampParticipantCount(merged.participantCount);
         // If active draft was removed, reset to null
         if (merged.activeDraftId && !cleanDrafts[merged.activeDraftId]) {
           merged.activeDraftId = null;

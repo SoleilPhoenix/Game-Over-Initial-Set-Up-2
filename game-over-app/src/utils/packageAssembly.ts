@@ -8,6 +8,7 @@
 import { scoreActivities } from './packageMatching';
 import type { ImageSourcePropType } from 'react-native';
 import { getPackageImage } from '@/constants/packageImages';
+import { getTranslation, type TranslationKeys } from '@/i18n';
 import type {
   HonoreeEnergyLevel, SpotlightComfort, CompetitionStyle,
   EnjoymentType, IndoorOutdoor, EveningStyle,
@@ -42,6 +43,20 @@ export interface AssembledPackage {
   features: string[];
   description: string;
   bestMatch?: boolean;
+}
+
+/** Keep DB-authored features when present; otherwise use the matching assembled tier. */
+export function resolvePackageFeatures(
+  features: unknown,
+  tier: string,
+  assembledPackages: Pick<AssembledPackage, 'tier' | 'features'>[],
+): string[] {
+  const providedFeatures = Array.isArray(features)
+    ? features.filter((feature): feature is string => typeof feature === 'string')
+    : [];
+
+  if (providedFeatures.length > 0) return providedFeatures;
+  return assembledPackages.find((pkg) => pkg.tier === tier)?.features ?? [];
 }
 
 // --- Defaults (used when wizard answers are incomplete) ---
@@ -80,77 +95,82 @@ function fillDefaults(a: WizardAnswers) {
 
 // --- Display name maps ---
 
-const ACTIVITY_NAMES: Record<string, string> = {
-  'Laser Tag Session':             'Laser Tag',
-  'Bowling + Drinks':              'Bowling',
-  'Bouldering / Indoor Climbing':  'Indoor Climbing',
-  'Blacklight Mini Golf':          'Mini Golf',
-  'Bubble Football':               'Bubble Football',
-  'Paintball / Airsoft':           'Paintball',
-  'Table Football Tournament':     'Table Football',
-  'Billiards + Table Service':     'Billiards',
-  'Harbor / River Cruise':         'Harbor Cruise',
-  'Boat Rental / Pedal Boat':      'Boat Rental',
-  'Outdoor Scavenger Hunt':        'Scavenger Hunt',
-  'Photo Challenge Walk + Print':  'Photo Challenge',
-  'Walking Tour':                  'City Walking Tour',
-  'Street Art / Underground Tour': 'Street Art Tour',
-  'Beach Day + Games':             'Beach Day',
-  'Musical / Theater Show':        'Theater Show',
-  'Comedy Show + Pre-Drinks':      'Comedy Show',
-  'Private Poker Night':           'Poker Night',
-  'Spa / Sauna Day Pass':          'Spa Day',
-  'Massage Add-On':                'Massage Session',
-  'Beer Tasting Flight':           'Beer Tasting',
-  'Whisky / Rum Tasting':          'Whisky Tasting',
-  'Gin Tasting + Botanicals':      'Gin Tasting',
-  'Cocktail Making Course':        'Cocktail Workshop',
-  'BBQ Grill & Chill':             'BBQ & Grill',
+type PackageContent = TranslationKeys['packageContent'];
+
+const ACTIVITY_NAMES: Record<string, keyof PackageContent['activityNames']> = {
+  'Laser Tag Session':             'laserTag',
+  'Bowling + Drinks':              'bowling',
+  'Bouldering / Indoor Climbing':  'indoorClimbing',
+  'Blacklight Mini Golf':          'miniGolf',
+  'Bubble Football':               'bubbleFootball',
+  'Paintball / Airsoft':           'paintball',
+  'Table Football Tournament':     'tableFootball',
+  'Billiards + Table Service':     'billiards',
+  'Harbor / River Cruise':         'harborCruise',
+  'Boat Rental / Pedal Boat':      'boatRental',
+  'Outdoor Scavenger Hunt':        'scavengerHunt',
+  'Photo Challenge Walk + Print':  'photoChallenge',
+  'Walking Tour':                  'cityWalkingTour',
+  'Street Art / Underground Tour': 'streetArtTour',
+  'Beach Day + Games':             'beachDay',
+  'Musical / Theater Show':        'theaterShow',
+  'Comedy Show + Pre-Drinks':      'comedyShow',
+  'Private Poker Night':           'pokerNight',
+  'Spa / Sauna Day Pass':          'spaDay',
+  'Massage Add-On':                'massageSession',
+  'Beer Tasting Flight':           'beerTasting',
+  'Whisky / Rum Tasting':          'whiskyTasting',
+  'Gin Tasting + Botanicals':      'ginTasting',
+  'Cocktail Making Course':        'cocktailWorkshop',
+  'BBQ Grill & Chill':             'bbqAndGrill',
   // Additional activities from scoring matrix
-  'Go-Karting':                    'Go-Karting',
-  'VR Arcade':                     'VR Arcade',
-  'Axe Throwing':                  'Axe Throwing',
-  'Escape Room':                   'Escape Room',
-  'Trampoline Park':               'Trampoline Park',
-  'Cooking Class':                 'Cooking Class',
-  'Guided Bike Tour':              'Guided Bike Tour',
-  'Kayak / SUP':                   'Kayak & SUP',
-  'Creative Workshop':             'Creative Workshop',
-  'Dance Class':                   'Dance Class',
-  'Darts Tournament':              'Darts Tournament',
-  'Sports Viewing':                'Sports Viewing',
-  'Food Tour':                     'Food Tour',
-  'Wine Tasting':                  'Wine Tasting',
+  'Go-Karting':                    'goKarting',
+  'VR Arcade':                     'vrArcade',
+  'Axe Throwing':                  'axeThrowing',
+  'Escape Room':                   'escapeRoom',
+  'Trampoline Park':               'trampolinePark',
+  'Cooking Class':                 'cookingClass',
+  'Guided Bike Tour':              'guidedBikeTour',
+  'Kayak / SUP':                   'kayakAndSup',
+  'Creative Workshop':             'creativeWorkshop',
+  'Dance Class':                   'danceClass',
+  'Darts Tournament':              'dartsTournament',
+  'Sports Viewing':                'sportsViewing',
+  'Food Tour':                     'foodTour',
+  'Wine Tasting':                  'wineTasting',
 };
 
-const DINING_NAMES: Record<string, string> = {
-  'Burger + Beer Combo':               'Casual Dinner & Drinks',
-  'Tapas / Shared Plates':             'Tapas Dinner',
-  'BBQ Ribs + Beer Tower':             'BBQ Dinner',
-  'Pizza Party + Craft Beer':          'Pizza & Craft Beer Dinner',
-  "Private Dining Room + Chef's Menu": 'Private Chef Dinner',
-  'Beer Hall / Platter Night':         'Beer Hall Dinner',
-  'Brunch Buffet':                     'Brunch Buffet',
-  'Steakhouse Dinner':                 'Steakhouse Dinner',
-  'Sushi Dinner':                      'Sushi Dinner',
+const DINING_NAMES: Record<string, keyof PackageContent['diningNames']> = {
+  'Burger + Beer Combo':               'casualDinnerAndDrinks',
+  'Tapas / Shared Plates':             'tapasDinner',
+  'BBQ Ribs + Beer Tower':             'bbqDinner',
+  'Pizza Party + Craft Beer':          'pizzaAndCraftBeerDinner',
+  "Private Dining Room + Chef's Menu": 'privateChefDinner',
+  'Beer Hall / Platter Night':         'beerHallDinner',
+  'Brunch Buffet':                     'brunchBuffet',
+  'Steakhouse Dinner':                 'steakhouseDinner',
+  'Sushi Dinner':                      'sushiDinner',
 };
 
-const BAR_NAMES: Record<string, string> = {
-  'Bar Crawl':                       'Bar Crawl',
-  'Club Entry + Reserved Area':      'Club Night',
-  'Live Music Bar + Reserved Table': 'Live Music Bar',
-  'Karaoke Night':                   'Karaoke Night',
-  'Pub Quiz Night':                  'Pub Quiz Night',
+const BAR_NAMES: Record<string, keyof PackageContent['barNames']> = {
+  'Bar Crawl':                       'barCrawl',
+  'Club Entry + Reserved Area':      'clubNight',
+  'Live Music Bar + Reserved Table': 'liveMusicBar',
+  'Karaoke Night':                   'karaokeNight',
+  'Pub Quiz Night':                  'pubQuizNight',
 };
 
-function activityName(name: string): string {
-  return ACTIVITY_NAMES[name] ?? name;
+function activityName(name: string, content: PackageContent): string {
+  const key = ACTIVITY_NAMES[name];
+  return key ? content.activityNames[key] : name;
 }
-function diningName(name: string): string {
-  return DINING_NAMES[name] ?? name;
+function diningName(name: string, content: PackageContent): string {
+  const key = DINING_NAMES[name];
+  return key ? content.diningNames[key] : name;
 }
-function barName(name: string): string {
-  return BAR_NAMES[name] ?? 'Bar Night with Drinks';
+function barName(name: string, content: PackageContent): string {
+  const key = BAR_NAMES[name];
+  return key ? content.barNames[key] : content.defaults.barNightWithDrinks;
 }
 
 // --- Tier config ---
@@ -164,37 +184,42 @@ const TIER_PRICE: Record<string, number> = {
 const TIER_META = {
   essential: {
     rating: 4.5, review_count: 89,
-    description: 'The perfect starter package — one highlight activity, great dinner, and drinks included.',
+    descriptionKey: 'essential',
   },
   classic: {
     rating: 4.8, review_count: 127,
-    description: 'The ideal balance of activities, dining, and nightlife for an unforgettable celebration.',
+    descriptionKey: 'classic',
   },
   grand: {
     rating: 4.9, review_count: 42,
-    description: 'The ultimate premium experience with three activities, fine dining, and exclusive nightlife.',
+    descriptionKey: 'grand',
   },
-};
+} as const;
 
 // --- Main export ---
 
 export function assemblePackages(answers: WizardAnswers, citySlug: string): AssembledPackage[] {
+  const content = getTranslation().packageContent;
   const full = fillDefaults(answers);
   const scored = scoreActivities(full);
 
   // Split by category
   const activities = scored
     .filter(a => !['dining', 'nightlife'].includes(a.category))
-    .map(a => activityName(a.name));
+    .map(a => activityName(a.name, content));
 
   const diningSlot = scored.find(a => a.category === 'dining');
   const barSlot    = scored.find(a => a.category === 'nightlife');
 
-  const topDining = diningSlot ? diningName(diningSlot.name) : 'Restaurant Dinner';
-  const topBar    = barSlot    ? barName(barSlot.name)       : 'Bar Night with Drinks';
+  const topDining = diningSlot ? diningName(diningSlot.name, content) : content.defaults.restaurantDinner;
+  const topBar    = barSlot    ? barName(barSlot.name, content)       : content.defaults.barNightWithDrinks;
 
   // Deduplicate activities; pad with generic fallbacks if pool has fewer than 3
-  const GENERIC_ACTIVITIES = ['City Experience', 'Group Activity', 'Team Challenge'];
+  const GENERIC_ACTIVITIES = [
+    content.genericActivities.cityExperience,
+    content.genericActivities.groupActivity,
+    content.genericActivities.teamChallenge,
+  ];
   const uniqueActivities = [...new Set(activities)];
   const pool = uniqueActivities.length > 0 ? uniqueActivities : GENERIC_ACTIVITIES;
   const act = (i: number) => pool[i] ?? pool[pool.length - 1];
@@ -207,14 +232,19 @@ export function assemblePackages(answers: WizardAnswers, citySlug: string): Asse
     { tier: 'grand',     features: [act(0), act(1), act(2), topDining, topBar] },
   ];
 
-  return tiers.map(({ tier, features, bestMatch }) => ({
-    id:   `${citySlug}-${tier}`,
-    name: `${city} ${tier.charAt(0).toUpperCase() + tier.slice(1)}`,
-    tier,
-    price_per_person_cents: TIER_PRICE[tier],
-    hero_image_url: getPackageImage(citySlug, tier),
-    ...TIER_META[tier],
-    features,
-    ...(bestMatch ? { bestMatch: true } : {}),
-  }));
+  return tiers.map(({ tier, features, bestMatch }) => {
+    const meta = TIER_META[tier];
+    return {
+      id:   `${citySlug}-${tier}`,
+      name: `${city} ${tier.charAt(0).toUpperCase() + tier.slice(1)}`,
+      tier,
+      price_per_person_cents: TIER_PRICE[tier],
+      hero_image_url: getPackageImage(citySlug, tier),
+      rating: meta.rating,
+      review_count: meta.review_count,
+      description: content.tierDescriptions[meta.descriptionKey],
+      features,
+      ...(bestMatch ? { bestMatch: true } : {}),
+    };
+  });
 }

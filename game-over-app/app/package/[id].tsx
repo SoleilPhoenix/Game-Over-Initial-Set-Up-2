@@ -20,14 +20,14 @@ import { useWizardStore } from '@/stores/wizardStore';
 import { useAuthStore } from '@/stores/authStore';
 import { useFavoritesStore } from '@/stores/favoritesStore';
 import { Button } from '@/components/ui/Button';
-import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
-import { useTranslation, getCurrentLanguage } from '@/i18n';
-import { translateFeature, translateFeatureSub, translatePackageDescription } from '@/i18n/packageContent';
-import { assemblePackages } from '@/utils/packageAssembly';
+import { getPackageImage, isImageUrl, resolvePackageImage } from '@/constants/packageImages';
+import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
+import { useTranslation, getCurrentLanguage, getTranslation } from '@/i18n';
+import { getCanonicalFeatureName, translateFeature, translatePackageDescription } from '@/i18n/packageContent';
+import { assemblePackages, resolvePackageFeatures } from '@/utils/packageAssembly';
 import { loadBudgetInfo, type BudgetInfo } from '@/lib/participantCountCache';
 import { scheduleRepository } from '@/repositories';
 import { formatScheduleTime, generateDefaultSchedule, tierFromPackageSlug } from '@/utils/scheduleGenerator';
-import type { Json } from '@/lib/supabase/types';
 
 const TIER_PRICE_PER_PERSON: Record<string, number> = {
   essential: 129_00,
@@ -36,17 +36,20 @@ const TIER_PRICE_PER_PERSON: Record<string, number> = {
 };
 
 // Fallback package data for local IDs that don't exist in DB (S=3, M=4, L=5 features)
-const FALLBACK_PACKAGE_MAP: Record<string, any> = {
-  'berlin-classic': { id: 'berlin-classic', name: 'Berlin Rausch', tier: 'classic', base_price_cents: 179_00, price_per_person_cents: 179_00, rating: 4.8, review_count: 127, features: ['VIP nightlife access', 'Private party bus', 'Professional photographer', 'Welcome drinks package'], description: 'The ideal balance of nightlife, culture, and unforgettable moments in Berlin.', hero_image_url: getPackageImage('berlin', 'classic') },
-  'berlin-essential': { id: 'berlin-essential', name: 'Berlin Feier', tier: 'essential', base_price_cents: 129_00, price_per_person_cents: 129_00, rating: 4.5, review_count: 89, features: ['Bar hopping tour', 'Welcome drinks', 'Group coordination'], description: 'A solid party plan with all the essentials covered.', hero_image_url: getPackageImage('berlin', 'essential') },
-  'berlin-grand': { id: 'berlin-grand', name: 'Berlin Legende', tier: 'grand', base_price_cents: 229_00, price_per_person_cents: 229_00, rating: 4.9, review_count: 42, features: ['Luxury suite', 'Private chef dinner', 'Spa & wellness package', 'VIP club access', 'Private chauffeur'], description: 'The ultimate premium experience with luxury at every turn.', hero_image_url: getPackageImage('berlin', 'grand') },
-  'hamburg-classic': { id: 'hamburg-classic', name: 'Hamburg Rausch', tier: 'classic', base_price_cents: 179_00, price_per_person_cents: 179_00, rating: 4.7, review_count: 98, features: ['Reeperbahn nightlife tour', 'Harbor cruise', 'Professional photographer', 'Reserved bar area'], description: "Experience Hamburg's legendary nightlife and harbor in style.", hero_image_url: getPackageImage('hamburg', 'classic') },
-  'hamburg-essential': { id: 'hamburg-essential', name: 'Hamburg Feier', tier: 'essential', base_price_cents: 129_00, price_per_person_cents: 129_00, rating: 4.4, review_count: 64, features: ['Guided bar tour', 'Welcome cocktails', 'Group planning'], description: 'A fun, well-organized Hamburg party experience.', hero_image_url: getPackageImage('hamburg', 'essential') },
-  'hamburg-grand': { id: 'hamburg-grand', name: 'Hamburg Legende', tier: 'grand', base_price_cents: 229_00, price_per_person_cents: 229_00, rating: 4.9, review_count: 31, features: ['Elbphilharmonie VIP event', 'Private yacht dinner', 'Luxury hotel suite', 'Spa & wellness day', 'Premium bottle service'], description: 'Premium Hamburg experience with exclusive venues and luxury service.', hero_image_url: getPackageImage('hamburg', 'grand') },
-  'hannover-classic': { id: 'hannover-classic', name: 'Hannover Rausch', tier: 'classic', base_price_cents: 179_00, price_per_person_cents: 179_00, rating: 4.6, review_count: 73, features: ['Craft beer experience', 'Go-kart racing', 'Professional photographer', 'Welcome dinner'], description: 'An action-packed celebration in the heart of Hannover.', hero_image_url: getPackageImage('hannover', 'classic') },
-  'hannover-essential': { id: 'hannover-essential', name: 'Hannover Feier', tier: 'essential', base_price_cents: 129_00, price_per_person_cents: 129_00, rating: 4.3, review_count: 51, features: ['City adventure tour', 'Welcome drinks', 'Group coordination'], description: 'A great time in Hannover without breaking the bank.', hero_image_url: getPackageImage('hannover', 'essential') },
-  'hannover-grand': { id: 'hannover-grand', name: 'Hannover Legende', tier: 'grand', base_price_cents: 229_00, price_per_person_cents: 229_00, rating: 4.8, review_count: 28, features: ['Herrenhausen Gardens gala', 'Private chef dinner', 'Spa & wellness day', 'VIP nightlife access', 'Luxury hotel suite'], description: 'Exclusive Hannover experience with private gala and luxury wellness.', hero_image_url: getPackageImage('hannover', 'grand') },
-};
+function getFallbackPackageMap(): Record<string, any> {
+  const { fallbackFeatures: f, fallbackDescriptions: d } = getTranslation().packageContent;
+  return {
+    'berlin-classic': { id: 'berlin-classic', name: 'Berlin Rausch', tier: 'classic', base_price_cents: 179_00, price_per_person_cents: 179_00, rating: 4.8, review_count: 127, features: [f.vipNightlifeAccess, f.privatePartyBus, f.professionalPhotographer, f.welcomeDrinksPackage], description: d.berlinClassic, hero_image_url: getPackageImage('berlin', 'classic') },
+    'berlin-essential': { id: 'berlin-essential', name: 'Berlin Feier', tier: 'essential', base_price_cents: 129_00, price_per_person_cents: 129_00, rating: 4.5, review_count: 89, features: [f.barHoppingTour, f.welcomeDrinks, f.groupCoordination], description: d.berlinEssential, hero_image_url: getPackageImage('berlin', 'essential') },
+    'berlin-grand': { id: 'berlin-grand', name: 'Berlin Legende', tier: 'grand', base_price_cents: 229_00, price_per_person_cents: 229_00, rating: 4.9, review_count: 42, features: [f.luxurySuite, f.privateChefDinner, f.spaAndWellnessPackage, f.vipClubAccess, f.privateChauffeur], description: d.berlinGrand, hero_image_url: getPackageImage('berlin', 'grand') },
+    'hamburg-classic': { id: 'hamburg-classic', name: 'Hamburg Rausch', tier: 'classic', base_price_cents: 179_00, price_per_person_cents: 179_00, rating: 4.7, review_count: 98, features: [f.reeperbahnNightlifeTour, f.harborCruise, f.professionalPhotographer, f.reservedBarArea], description: d.hamburgClassic, hero_image_url: getPackageImage('hamburg', 'classic') },
+    'hamburg-essential': { id: 'hamburg-essential', name: 'Hamburg Feier', tier: 'essential', base_price_cents: 129_00, price_per_person_cents: 129_00, rating: 4.4, review_count: 64, features: [f.guidedBarTour, f.welcomeCocktails, f.groupPlanning], description: d.hamburgEssential, hero_image_url: getPackageImage('hamburg', 'essential') },
+    'hamburg-grand': { id: 'hamburg-grand', name: 'Hamburg Legende', tier: 'grand', base_price_cents: 229_00, price_per_person_cents: 229_00, rating: 4.9, review_count: 31, features: [f.elbphilharmonieVipEvent, f.privateYachtDinner, f.luxuryHotelSuite, f.spaAndWellnessDay, f.premiumBottleService], description: d.hamburgGrand, hero_image_url: getPackageImage('hamburg', 'grand') },
+    'hannover-classic': { id: 'hannover-classic', name: 'Hannover Rausch', tier: 'classic', base_price_cents: 179_00, price_per_person_cents: 179_00, rating: 4.6, review_count: 73, features: [f.craftBeerExperience, f.goKartRacing, f.professionalPhotographer, f.welcomeDinner], description: d.hannoverClassic, hero_image_url: getPackageImage('hannover', 'classic') },
+    'hannover-essential': { id: 'hannover-essential', name: 'Hannover Feier', tier: 'essential', base_price_cents: 129_00, price_per_person_cents: 129_00, rating: 4.3, review_count: 51, features: [f.cityAdventureTour, f.welcomeDrinks, f.groupCoordination], description: d.hannoverEssential, hero_image_url: getPackageImage('hannover', 'essential') },
+    'hannover-grand': { id: 'hannover-grand', name: 'Hannover Legende', tier: 'grand', base_price_cents: 229_00, price_per_person_cents: 229_00, rating: 4.8, review_count: 28, features: [f.herrenhausenGardensGala, f.privateChefDinner, f.spaAndWellnessDay, f.vipNightlifeAccess, f.luxuryHotelSuite], description: d.hannoverGrand, hero_image_url: getPackageImage('hannover', 'grand') },
+  };
+}
 
 const CITY_SLUGS = ['berlin', 'hamburg', 'hannover'];
 const TIER_SLUGS = ['essential', 'classic', 'grand'];
@@ -57,13 +60,6 @@ function isAssembledPackageId(id: string): boolean {
   const tier = parts[parts.length - 1];
   return CITY_SLUGS.includes(city) && TIER_SLUGS.includes(tier);
 }
-
-const toStringArray = (value: Json | null | undefined): string[] => {
-  if (Array.isArray(value)) {
-    return value.filter((item): item is string => typeof item === 'string');
-  }
-  return [];
-};
 
 const formatPrice = (cents: number) => {
   return '\u20AC' + (cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -107,15 +103,15 @@ const BAR_FEATURES = new Set([
 ]);
 
 function featureIcon(name: string): string {
-  return FEATURE_ICON[name] ?? 'checkmark-circle';
+  return FEATURE_ICON[getCanonicalFeatureName(name)] ?? 'checkmark-circle';
 }
 
 function featureSub(name: string): string {
-  // Icon/category logic keys off the canonical English name; only the visible
-  // label is translated.
-  if (DINING_FEATURES.has(name)) return translateFeatureSub('Group dinner included');
-  if (BAR_FEATURES.has(name)) return translateFeatureSub('Evening entertainment included');
-  return translateFeatureSub('Group activity included');
+  const canonicalName = getCanonicalFeatureName(name);
+  const subtitles = getTranslation().packageContent.featureSubtitles;
+  if (DINING_FEATURES.has(canonicalName)) return subtitles.dining;
+  if (BAR_FEATURES.has(canonicalName)) return subtitles.nightlife;
+  return subtitles.activity;
 }
 
 function buildHighlights(features: string[]): { icon: string; label: string; sub: string }[] {
@@ -376,7 +372,7 @@ export default function PackageDetailsScreen() {
   }
 
   // Use DB package if available, then dynamically assembled package, then static fallback
-  const pkg = dbPkg || assembledPkg || FALLBACK_PACKAGE_MAP[id];
+  const pkg = dbPkg || assembledPkg || getFallbackPackageMap()[id];
 
   if (isLoading && !pkg) {
     return (
@@ -404,14 +400,38 @@ export default function PackageDetailsScreen() {
   // In viewOnly mode (opened from Event Summary), never show the recommendation badge or select button
   const isRecommended = !isViewOnly && tier === 'classic';
 
-  // In viewOnly mode, use cached event features if available; otherwise use pkg features
-  const rawFeatures = (isViewOnly && eventBudget?.packageFeatures)
+  const packageCitySlug = (pkg.city_id ? CITY_UUID_TO_SLUG[pkg.city_id] : undefined)
+    || (isAssembledPackageId(pkg.id) ? pkg.id.split('-')[0] : undefined);
+  let featureFallbackPackages: ReturnType<typeof assemblePackages> = [];
+  if (packageCitySlug) {
+    const cachedAnswers = isViewOnly ? eventBudget?.wizardAnswers : undefined;
+    featureFallbackPackages = assemblePackages({
+      h1: isViewOnly ? (cachedAnswers?.h1 as any) || null : energyLevel,
+      h2: isViewOnly ? (cachedAnswers?.h2 as any) || null : spotlightComfort,
+      h3: isViewOnly ? (cachedAnswers?.h3 as any) || null : competitionStyle,
+      h4: isViewOnly ? (cachedAnswers?.h4 as any) || null : enjoymentType,
+      h5: isViewOnly ? (cachedAnswers?.h5 as any) || null : indoorOutdoor,
+      h6: isViewOnly ? (cachedAnswers?.h6 as any) || null : eveningStyle,
+      g1: isViewOnly ? (cachedAnswers?.g1 as any) || null : averageAge,
+      g2: isViewOnly ? (cachedAnswers?.g2 as any) || null : groupCohesion,
+      g3: isViewOnly ? (cachedAnswers?.g3 as any) || null : fitnessLevel,
+      g4: isViewOnly ? (cachedAnswers?.g4 as any) || null : drinkingCulture,
+      g5: isViewOnly ? (cachedAnswers?.g5 as any) || null : groupDynamic,
+      g6: isViewOnly
+        ? (Array.isArray(cachedAnswers?.g6) ? cachedAnswers.g6 as string[] : [])
+        : groupVibe,
+    }, packageCitySlug);
+  }
+
+  // Prefer event-cached contents, then DB contents, then the matching assembled city/tier.
+  const features = (isViewOnly && eventBudget?.packageFeatures?.length)
     ? eventBudget.packageFeatures
-    : toStringArray(pkg.features);
-  const features = rawFeatures;
+    : resolvePackageFeatures(pkg.features, tier, featureFallbackPackages);
   const highlights = buildHighlights(features);
   const includes = buildIncludes(features);
   const reviews = MOCK_REVIEWS[tier] || [];
+  const reviewCount = pkg.review_count ?? 0;
+  const hasRating = reviewCount > 0 && typeof pkg.rating === 'number';
 
   // Participant count: viewOnly uses cached event total, creation flow uses wizard store
   const participantCount = (isViewOnly && eventBudget?.totalParticipants)
@@ -432,7 +452,13 @@ export default function PackageDetailsScreen() {
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 160 }}>
         {/* Hero Image */}
         <ImageBackground
-          source={resolveImageSource(pkg.hero_image_url || getPackageImage('berlin', 'essential'))}
+          source={resolvePackageImage({
+            heroImageUrl: pkg.hero_image_url,
+            cityId: pkg.city_id,
+            citySlug: packageCitySlug,
+            tier,
+            packageId: pkg.id,
+          })}
           style={{ height: 350 }}
         >
           <LinearGradient
@@ -500,7 +526,9 @@ export default function PackageDetailsScreen() {
                     cityName: CITY_LABELS[cityId] || cityId,
                     pricePerPersonCents: perPersonCents,
                     // Only store heroImageUrl if it's a real URL string (not a require() number)
-                    heroImageUrl: typeof pkg.hero_image_url === 'string' ? pkg.hero_image_url : undefined,
+                    heroImageUrl: typeof pkg.hero_image_url === 'string' && isImageUrl(pkg.hero_image_url)
+                      ? pkg.hero_image_url
+                      : undefined,
                     savedAt: new Date().toISOString(),
                   });
                 }}
@@ -551,15 +579,17 @@ export default function PackageDetailsScreen() {
               <Text fontSize={24} fontWeight="800" color="$textPrimary">
                 {displayName}
               </Text>
-              <XStack alignItems="center" gap="$1" marginTop="$1">
-                <Ionicons name="star" size={14} color="#FFB800" />
-                <Text fontSize={14} fontWeight="600" color="$textPrimary">
-                  {(pkg.rating || 4.5).toFixed(1)}
-                </Text>
-                <Text fontSize={14} color="$textTertiary">
-                  {(t.packageDetail as any).reviewsCount.replace('{{count}}', String(pkg.review_count || 0))}
-                </Text>
-              </XStack>
+              {hasRating && (
+                <XStack alignItems="center" gap="$1" marginTop="$1">
+                  <Ionicons name="star" size={14} color="#FFB800" />
+                  <Text fontSize={14} fontWeight="600" color="$textPrimary">
+                    {pkg.rating.toFixed(1)}
+                  </Text>
+                  <Text fontSize={14} color="$textTertiary">
+                    {(t.packageDetail as any).reviewsCount.replace('{{count}}', String(reviewCount))}
+                  </Text>
+                </XStack>
+              )}
             </YStack>
             <YStack alignItems="flex-end">
               <Text fontSize={22} fontWeight="800" color={'#C6A75E'}>

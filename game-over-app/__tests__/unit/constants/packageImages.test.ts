@@ -45,6 +45,30 @@ describe('resolvePackageImage', () => {
     })).toBe(getPackageImage('hamburg', 'grand'));
   });
 
+  it('ignores a UUID hero value and derives the image from city and tier', () => {
+    expect(resolvePackageImage({
+      heroImageUrl: '550e8400-e29b-41d4-a716-446655440205',
+      cityId: '550e8400-e29b-41d4-a716-446655440102',
+      tier: 'classic',
+    })).toBe(getPackageImage('hamburg', 'classic'));
+  });
+
+  it('ignores a slug hero value and derives the image from city and tier', () => {
+    expect(resolvePackageImage({
+      heroImageUrl: 'berlin-grand',
+      cityId: '550e8400-e29b-41d4-a716-446655440102',
+      tier: 'classic',
+    })).toBe(getPackageImage('hamburg', 'classic'));
+  });
+
+  it('ignores an empty hero value and derives the image from city and tier', () => {
+    expect(resolvePackageImage({
+      heroImageUrl: '',
+      cityId: '550e8400-e29b-41d4-a716-446655440102',
+      tier: 'classic',
+    })).toBe(getPackageImage('hamburg', 'classic'));
+  });
+
   it('resolves a fallback package slug ID', () => {
     expect(resolvePackageImage({ packageId: 'hannover-classic' }))
       .toBe(getPackageImage('hannover', 'classic'));

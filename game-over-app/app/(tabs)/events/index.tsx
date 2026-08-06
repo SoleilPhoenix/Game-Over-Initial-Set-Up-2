@@ -41,7 +41,7 @@ import { useTranslation, getTranslation, getCurrentLanguage } from '@/i18n';
 import { getCurrentPhaseLabel } from '@/utils/planningProgress';
 import type { BudgetInfo } from '@/lib/participantCountCache';
 import { useUrgentPayment } from '@/hooks/useUrgentPayment';
-import { getEventImage, resolveImageSource, getPackageImage, getTierFromSlug } from '@/constants/packageImages';
+import { getPackageImage, getTierFromSlug, resolvePackageImage } from '@/constants/packageImages';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import type { EventWithDetails } from '@/repositories';
 import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
@@ -570,14 +570,11 @@ export default function EventsScreen() {
           {/* Thumbnail */}
           <View style={styles.thumbnailContainer}>
             <Image
-              source={resolveImageSource(
-                item.hero_image_url ||
-                getEventImage(
-                  (item.city?.name?.toLowerCase()) ||
-                  CITY_UUID_TO_SLUG[item.city_id || ''] ||
-                  'berlin'
-                )
-              )}
+              source={resolvePackageImage({
+                heroImageUrl: item.hero_image_url,
+                cityId: item.city_id,
+                citySlug: CITY_UUID_TO_SLUG[item.city_id || ''],
+              })}
               style={styles.thumbnail}
               resizeMode="cover"
             />

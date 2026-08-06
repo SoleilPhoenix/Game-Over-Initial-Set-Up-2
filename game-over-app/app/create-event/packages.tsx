@@ -14,11 +14,11 @@ import { useWizardStore } from '@/stores/wizardStore';
 import { useMatchedPackages } from '@/hooks/queries/usePackages';
 import { useCreateEvent } from '@/hooks/queries/useEvents';
 import { WizardFooter } from '@/components/ui/WizardFooter';
-import { resolvePackageImage } from '@/constants/packageImages';
+import { isImageUrl, resolvePackageImage } from '@/constants/packageImages';
 import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 import { LinearGradient } from 'expo-linear-gradient';
 import { setDesiredParticipants, setBudgetInfo } from '@/lib/participantCountCache';
-import { assemblePackages } from '@/utils/packageAssembly';
+import { assemblePackages, resolvePackageFeatures } from '@/utils/packageAssembly';
 import { translateFeature } from '@/i18n/packageContent';
 import { TIER_SIZE_LABEL, getTierName } from '@/constants/packageTiers';
 import { useTranslation } from '@/i18n';
@@ -26,6 +26,8 @@ import { feedback } from '@/stores/uiStore';
 
 // Feature counts by tier: S=3, M=4, L=5
 // Fallback packages when DB returns empty (for Berlin, Hamburg, Hannover)
+const TIER_ORDER: Record<string, number> = { essential: 0, classic: 1, grand: 2 };
+
 function formatPrice(cents: number): string {
   return '\u20AC' + (cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
@@ -135,15 +137,17 @@ function PackageSelectionCard({
             <Text fontSize={22} fontWeight="800" color="white">
               {displayName}
             </Text>
-            <XStack alignItems="center" gap="$1" marginTop="$1">
-              <Ionicons name="star" size={14} color="#FFB800" />
-              <Text fontSize={13} fontWeight="600" color="white">
-                {(pkg.rating || 4.5).toFixed(1)}
-              </Text>
-              <Text fontSize={13} color="rgba(255,255,255,0.7)">
-                {(t.packageDetail as any).reviewsCount.replace('{{count}}', String(pkg.review_count || 0))}
-              </Text>
-            </XStack>
+            {(pkg.review_count ?? 0) > 0 && typeof pkg.rating === 'number' && (
+              <XStack alignItems="center" gap="$1" marginTop="$1">
+                <Ionicons name="star" size={14} color="#FFB800" />
+                <Text fontSize={13} fontWeight="600" color="white">
+                  {pkg.rating.toFixed(1)}
+                </Text>
+                <Text fontSize={13} color="rgba(255,255,255,0.7)">
+                  {(t.packageDetail as any).reviewsCount.replace('{{count}}', String(pkg.review_count))}
+                </Text>
+              </XStack>
+            )}
           </YStack>
           <YStack alignItems="flex-end">
             <Text fontSize={24} fontWeight="800" color="white">
@@ -249,7 +253,7 @@ function PackageSelectionCard({
 
 export default function WizardStep4() {
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const [pricingMode, setPricingMode] = useState<'per_person' | 'total_group'>('per_person');
   const [isCreating, setIsCreating] = useState(false);
 
@@ -287,26 +291,33 @@ export default function WizardStep4() {
   // Use fallback packages when DB returns empty (for German cities)
   // Resolve UUID to slug for fallback lookup
   // Sort order: S (essential) → M (classic/recommended) → L (grand)
-  const TIER_ORDER: Record<string, number> = { essential: 0, classic: 1, grand: 2 };
   const citySlug = cityId ? (CITY_UUID_TO_SLUG[cityId] || 'berlin') : 'berlin';
   const assembledPackages = useMemo(() => assemblePackages({
     h1: energyLevel, h2: spotlightComfort, h3: competitionStyle,
     h4: enjoymentType, h5: indoorOutdoor, h6: eveningStyle,
     g1: averageAge, g2: groupCohesion, g3: fitnessLevel,
     g4: drinkingCulture, g5: groupDynamic, g6: groupVibe,
+  // assemblePackages reads the current language synchronously from the i18n store.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, citySlug), [
     citySlug,
     energyLevel, spotlightComfort, competitionStyle,
     enjoymentType, indoorOutdoor, eveningStyle,
     averageAge, groupCohesion, fitnessLevel,
-    drinkingCulture, groupDynamic, groupVibe,
+    drinkingCulture, groupDynamic, groupVibe, language,
   ]);
-  const rawPackages = (dbPackages && dbPackages.length > 0)
-    ? dbPackages
-    : assembledPackages;
-  const packages = [...rawPackages].sort(
-    (a, b) => (TIER_ORDER[a.tier] ?? 1) - (TIER_ORDER[b.tier] ?? 1)
-  );
+  const packages = useMemo(() => {
+    const rawPackages = (dbPackages && dbPackages.length > 0)
+      ? dbPackages
+      : assembledPackages;
+
+    return rawPackages
+      .map((pkg) => ({
+        ...pkg,
+        features: resolvePackageFeatures(pkg.features, pkg.tier, assembledPackages),
+      }))
+      .sort((a, b) => (TIER_ORDER[a.tier] ?? 1) - (TIER_ORDER[b.tier] ?? 1));
+  }, [assembledPackages, dbPackages]);
 
   // Auto-select best match (classic/M tier) when packages load and nothing is selected
   const didAutoSelect = useRef(false);
@@ -342,11 +353,12 @@ export default function WizardStep4() {
         feedback.warning('Error', 'Please complete all required fields.');
         return;
       }
-      // Store hero image reference: remote URL string or local package slug (e.g. "hamburg-classic")
+      // Persist only real image URLs. Local assets are derived from city + package tier.
       const selectedPkg = packages.find((p) => p.id === wizardState.selectedPackageId);
-      const heroUrl = typeof selectedPkg?.hero_image_url === 'string'
-        ? selectedPkg.hero_image_url
-        : (typeof selectedPkg?.id === 'string' ? selectedPkg.id : null);
+      const selectedHeroImage = selectedPkg?.hero_image_url;
+      const heroUrl = typeof selectedHeroImage === 'string' && isImageUrl(selectedHeroImage)
+        ? selectedHeroImage
+        : null;
 
       const apiData = {
         ...eventData,
@@ -503,7 +515,7 @@ export default function WizardStep4() {
               key={pkg.id}
               pkg={pkg as DisplayPackage}
               index={index}
-              isBestMatch={(pkg as DisplayPackage).bestMatch === true || (!rawPackages.some((p) => (p as DisplayPackage).bestMatch) && pkg.tier === 'classic')}
+              isBestMatch={(pkg as DisplayPackage).bestMatch === true || (!packages.some((p) => (p as DisplayPackage).bestMatch) && pkg.tier === 'classic')}
               isSelected={selectedPackageId === pkg.id}
               pricingMode={pricingMode}
               participantCount={participantCount}

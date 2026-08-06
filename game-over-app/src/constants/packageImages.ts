@@ -72,6 +72,11 @@ export interface PackageImageHints {
   fallback?: PackageImageFallback;
 }
 
+/** Only values with an explicit image URL scheme may override derived images. */
+export function isImageUrl(value: unknown): boolean {
+  return typeof value === 'string' && /^(?:https?:\/\/|data:)/i.test(value);
+}
+
 /**
  * Resolve the image for a package from the strongest available package data.
  * Only package IDs shaped like "<city>-<tier>" are treated as fallback slugs.
@@ -84,7 +89,7 @@ export function resolvePackageImage({
   packageId,
   fallback = PACKAGE_IMAGE_FALLBACK,
 }: PackageImageHints): ImageSourcePropType {
-  if (heroImageUrl !== null && heroImageUrl !== undefined && heroImageUrl !== '') {
+  if (typeof heroImageUrl === 'string' && isImageUrl(heroImageUrl)) {
     return resolveImageSource(heroImageUrl) as ImageSourcePropType;
   }
 
@@ -141,7 +146,7 @@ export function getEventImage(
 export function resolveImageSource(source: string | number | ImageSourcePropType): { uri: string } | number {
   if (typeof source === 'string') {
     // Remote URL — use as-is
-    if (source.startsWith('http')) {
+    if (isImageUrl(source)) {
       return { uri: source };
     }
     // Package slug (e.g. "hamburg-classic") — resolve to local asset
