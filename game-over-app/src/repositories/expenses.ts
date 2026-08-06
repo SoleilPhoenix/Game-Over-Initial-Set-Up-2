@@ -332,6 +332,27 @@ export const expensesRepository = {
     return mapEventExpenseReportRow(data);
   },
 
+  async getOpenReportsByEventId(eventId: string): Promise<EventExpenseReport[]> {
+    const { data: expenses, error: expensesError } = await supabase
+      .from('event_expenses')
+      .select('id')
+      .eq('event_id', eventId);
+
+    if (expensesError) throw expensesError;
+    const expenseIds = (expenses ?? []).map(expense => expense.id);
+    if (expenseIds.length === 0) return [];
+
+    const { data, error } = await supabase
+      .from('event_expense_reports')
+      .select('*')
+      .in('expense_id', expenseIds)
+      .is('resolved_at', null)
+      .order('created_at', { ascending: true });
+
+    if (error) throw error;
+    return (data ?? []).map(mapEventExpenseReportRow);
+  },
+
   async resolveReport(
     reportId: string,
     resolvedBy: string,

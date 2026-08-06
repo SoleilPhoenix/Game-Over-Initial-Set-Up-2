@@ -151,3 +151,18 @@ export function formatEuroFromEuros(euros: number): string {
     maximumFractionDigits: 0,
   }).format(euros || 0);
 }
+
+/** Exact euro amount including cents, for the separate extra-cost ledger. */
+export function formatEuroCents(cents: number): string {
+  return new Intl.NumberFormat('de-DE', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format((cents || 0) / 100);
+}
+
+/** Decimal value for editable euro inputs, without a currency symbol. */
+export function formatCentsForInput(cents: number): string {
+  return ((cents || 0) / 100).toFixed(2).replace('.', ',');
+}

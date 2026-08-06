@@ -103,6 +103,7 @@ export {
 // Extra costs
 export {
   useEventExpenses,
+  useEventExpenseReports,
   useCreateExpense,
   useUpdateExpense,
   useDeleteExpense,

@@ -4,6 +4,8 @@ import {
   calculateExpenseSplit,
   depositAndDue,
   formatEuro,
+  formatEuroCents,
+  formatCentsForInput,
   splitPerPerson,
 } from '@/utils/money';
 
@@ -161,5 +163,15 @@ describe('formatEuro', () => {
   it('rundet Cent-Betraege auf ganze Euro', () => {
     expect(norm(formatEuro(28625))).toBe('286 €');
     expect(norm(formatEuro(22375))).toBe('224 €');
+  });
+});
+
+describe('formatEuroCents', () => {
+  it('preserves cents for the separate extra-cost ledger', () => {
+    expect(formatEuroCents(12345).replace(/ /g, ' ')).toBe('123,45 €');
+  });
+
+  it('formats editable euro inputs without a currency symbol', () => {
+    expect(formatCentsForInput(12345)).toBe('123,45');
   });
 });

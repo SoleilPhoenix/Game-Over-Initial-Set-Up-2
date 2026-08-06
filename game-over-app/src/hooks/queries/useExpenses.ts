@@ -39,6 +39,11 @@ export const expenseKeys = {
     'categories',
     eventId,
   ] as const,
+  reportsByEvent: (eventId: string) => [
+    ...expenseKeys.all,
+    'reports',
+    eventId,
+  ] as const,
 };
 
 function requireUserId(userId: string | undefined): string {
@@ -133,8 +138,20 @@ export function useReportExpense(eventId: string | undefined) {
       reportedBy: requireUserId(userId),
     }),
     onSettled: () => {
-      if (eventId) queryClient.invalidateQueries({ queryKey: expenseKeys.byEvent(eventId) });
+      if (eventId) {
+        queryClient.invalidateQueries({ queryKey: expenseKeys.byEvent(eventId) });
+        queryClient.invalidateQueries({ queryKey: expenseKeys.reportsByEvent(eventId) });
+      }
     },
+  });
+}
+
+export function useEventExpenseReports(eventId: string | undefined) {
+  return useQuery({
+    queryKey: expenseKeys.reportsByEvent(eventId ?? ''),
+    queryFn: () => expensesRepository.getOpenReportsByEventId(eventId!),
+    enabled: !!eventId,
+    staleTime: 2 * 60 * 1000,
   });
 }
 
@@ -146,7 +163,10 @@ export function useResolveExpenseReport(eventId: string | undefined) {
     mutationFn: (reportId: string) =>
       expensesRepository.resolveReport(reportId, requireUserId(userId)),
     onSettled: () => {
-      if (eventId) queryClient.invalidateQueries({ queryKey: expenseKeys.byEvent(eventId) });
+      if (eventId) {
+        queryClient.invalidateQueries({ queryKey: expenseKeys.byEvent(eventId) });
+        queryClient.invalidateQueries({ queryKey: expenseKeys.reportsByEvent(eventId) });
+      }
     },
   });
 }
