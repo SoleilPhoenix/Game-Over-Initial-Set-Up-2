@@ -224,14 +224,76 @@ paying_participants)`, der Organisator traegt die Differenz. Damit passt die Sum
 false`). Er hat keine `event_participants`-Zeile, solange er nicht selbst beitritt - deshalb
 eine synthetische Zeile in `sortedParticipants`.
 
-**Deren Grenze, bewusst so:** die Zeile steht auf „offen". Ob der Ehrengast gezahlt hat, weiss
-die App nicht, weil es keine Zeile gibt, an der ein Status haengen koennte. „Bezahlt" waere eine
-Behauptung ohne Grundlage. Sie zaehlt aus demselben Grund nicht in `pendingCount` mit, wirkt
-also nicht auf den Erinnern-Knopf. **Wer das aufloesen will, braucht eine echte
-Teilnehmerzeile fuer den Ehrengast** - das waere eine Datenaenderung, keine Anzeigefrage.
+**Die Zeile zeigt keinen Mahnstatus** (Owner-Wunsch 05.08.). Statt „Ausstehend" nennt sie unter
+dem Namen die Rolle - „Bachelorette" bzw. „Bachelor" aus `events.party_type` - und unter dem
+Betrag „Wird nach dem Event eingezogen". Der Grund ist fachlich: der Ehrengast soll von der
+Party nichts wissen, also darf er vorher nicht zur Zahlung gedraengt werden. Ein Mahnstatus an
+dieser Stelle waere nicht nur haesslich, sondern sachlich falsch.
+
+Passend dazu ist der Ehrengast von „Alle erinnern" ausgenommen: `reminderRecipients` filtert auf
+`role === 'guest' && !!user_id`. Und er zaehlt nicht in `pendingCount`, weil `budgetStats` aus
+den echten `participants` rechnet, nicht aus `sortedParticipants` mit der synthetischen Zeile -
+der Erinnern-Knopf bleibt also nicht seinetwegen aktiv. **Beides ist Absicht, nicht Zufall.**
+
+**Was die App nicht weiss:** ob der Ehrengast tatsaechlich gezahlt hat. Es gibt keine Zeile, an
+der ein Status haengen koennte.
+
+### Offen: echte Teilnehmerzeile fuer den Ehrengast (Owner-Wunsch 05.08.)
+
+Der Ehrengast soll kurz vor der Party die App bekommen und sie waehrend des Events nutzen -
+**ohne Zahlen und Geldfakten zu sehen**. Dafuer braucht er eine echte `event_participants`-Zeile
+statt der synthetischen Anzeige. Bestandsaufnahme vom 05.08., damit die naechste Session nicht
+neu suchen muss:
+
+**Was schon da ist:**
+- Das Enum `participant_role` kennt **`honoree`** bereits. Keine Enum-Migration noetig.
+- `app/event/[id]/participants.tsx` rendert den Ehrengast bereits als vollwertigen Platz mit
+  eigener Darstellung, editierbarer E-Mail/Telefon und einer Suche nach
+  `dbParticipants.find(p => p.role === 'honoree')`. Der Platz erwartet die Zeile also schon.
+
+**Was fehlt - vier Teile, drei davon freigabepflichtig:**
+
+1. **`accept_invite` vergibt fest `'guest'`.** Der Einladungscode traegt keine Information
+   darueber, fuer wen er gedacht war. Loest der Ehrengast ihn ein, wird er zum Gast.
+   → `invite_codes` braucht ein Kennzeichen (z. B. `is_honoree`), und `accept_invite` muss es
+   auswerten. **Migration, Owner-Freigabe.**
+2. **Der Einladungsversand muss den Ehrengast-Platz mitschicken** und entsprechend kennzeichnen.
+   → Client plus `send-guest-invitations`. **Edge-Function-Deploy, Owner-Freigabe.**
+3. **RLS gibt Geldspalten heute an jeden Teilnehmer frei.** Die SELECT-Policy auf `bookings`
+   heisst „Event participants can view bookings" und prueft nur die Mitgliedschaft - ein
+   Ehrengast mit Zeile saehe damit Gesamtpreis, Anzahlung und Restbetrag. RLS ist
+   zeilen-, nicht spaltenbasiert; der Ehrengast muss also von `bookings` **ganz** ausgenommen
+   werden. **Migration, Owner-Freigabe.**
+4. **UI:** Budget-Tab und Beitragsliste fuer die Rolle `honoree` ausblenden bzw. auf
+   nicht-finanzielle Inhalte reduzieren. Reiner Client, keine Freigabe.
+
+**Reihenfolge:** 3 vor 1. Wuerde zuerst die Zeile entstehen und erst danach die Policy greifen,
+haette der Ehrengast in der Zwischenzeit vollen Blick auf die Zahlen - genau das, was der
+Wunsch verhindern soll.
 
 **„Alle erinnern"** verschwindet nicht mehr, wenn niemand offen ist, sondern wird ausgegraut.
 Das **„DU"-Abzeichen** hinter dem eigenen Namen ist raus - der Nutzer weiss, wie er heisst.
+
+**Freie Plaetze werden jetzt angezeigt** (Owner-Wunsch 05.08., loest die Absage vom 03.08. ab).
+Die Buchung ist fuer `paying_participants` Personen bezahlt; fuer wen noch niemand eingetragen
+ist, erscheint eine Platzhalterzeile „Gast #N" mit dem Anteil und Status offen. Vorher zeigte
+das Budget direkt nach der Buchung nur den Organisator, und die sichtbaren Betraege ergaben
+einen Bruchteil des Gesamtpreises.
+
+Die Nummerierung nutzt `manageInvitations.guestSlot`, damit sie mit dem Einladungsbildschirm
+uebereinstimmt. Die Zeilen sind **bewusst nicht bearbeitbar**: ein Tippen erklaert, dass Gaeste
+unter „Einladung" gepflegt werden, weil dort E-Mail und Telefon miterfasst werden - ohne die
+kann niemand eingeladen oder erinnert werden. Neue Schluessel `budget.openSlotTitle` und
+`budget.openSlotMessage`, EN und DE.
+
+Kontrollrechnung ueber alle vier Live-Events, jeweils exakt aufgehend:
+
+| Event | Zahlende | Organisator | je Gast | Summe |
+|---|---|---|---|---|
+| Natalia | 5 | 229 € | 229 € | 1145 € |
+| Sven | 4 | 287 € | 286 € | 1145 € |
+| Hans | 4 | 287 € | 286 € | 1145 € |
+| Dana | 4 | 226 € | 223 € | 895 € |
 
 **Natalias Buchungszeile bleibt der Ausreisser.** Drei von vier Events haben
 `exclude_honoree = true` mit 4 Zahlenden; Natalia hat `false` mit 5. Das ist die von Hand
