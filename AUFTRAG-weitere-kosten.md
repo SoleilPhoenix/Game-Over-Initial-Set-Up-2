@@ -42,6 +42,20 @@ Neue Tabelle, Arbeitstitel `event_expenses`:
 - `title`, `category_key`, `amount_cents`, `paid_by` (wer ausgelegt hat), `occurred_at`
 - `created_at`, `updated_at` mit dem ueblichen Trigger
 
+Zweite Tabelle `event_expense_shares` - **erst durch die Owner-Antwort vom 06.08. noetig**:
+- `expense_id` (FK, `on delete cascade`), `participant_id` (FK auf `event_participants`)
+- `amount_cents` (Anteil dieser Person), `settled_at` (null = offen)
+- Eindeutigkeit auf `(expense_id, participant_id)`
+
+Warum sie sein muss: `paid_by` sagt nur, wer ausgelegt hat. Die Owner-Antwort verlangt, dass
+man **Personen markiert, die sich beteiligen sollen** - das ist die Gegenrichtung und eine
+n:m-Beziehung. An dieser Tabelle haengen beide neuen Anforderungen: die Push-Nachricht braucht
+einen Adressaten, die Zahlungserinnerung einen offenen Betrag. Ohne sie gibt es beides nicht.
+
+Die Summe der Anteile muss nicht zwingend `amount_cents` des Postens ergeben (jemand legt aus
+und beteiligt nur einen Teil der Runde). Keine Datenbankpruefung darauf erzwingen, sondern in
+der Oberflaeche sichtbar machen, wenn etwas offen bleibt.
+
 RLS nach dem Muster der Chat-Kanaele vom 05.08.
 (`20260805072931_chat_channels_enable_persistence.sql` als Vorbild lesen):
 - **SELECT:** alle Teilnehmer des Events
@@ -79,14 +93,45 @@ Datenverlust fuehren - im Zweifel lokalen Bestand behalten und erneut versuchen.
 - Bearbeiten und Loeschen nur fuer Ersteller und Organisator; alle anderen sehen den Eintrag
 - Fuer den Ehrengast ist der Reiter gesperrt (`canViewExtraCosts` aus dem Rechtemodell, das
   in der Session vom 06.08. entsteht - `src/utils/permissions.ts`)
+- Beim Anlegen und Bearbeiten eines Postens **Personen markieren**, die sich beteiligen sollen
+  (Mehrfachauswahl aus den Teilnehmern, Ehrengast nicht in der Liste). Daraus entstehen die
+  Zeilen in `event_expense_shares` - siehe E2
+- Eigener offener Anteil sichtbar, und wer schon beglichen hat
+- Melden eines fremden Postens (E1) - der eigene Posten laesst sich nicht melden. Rueckmeldung
+  ueber `feedback.*` aus dem `uiStore`, keine eigene Popup-Komponente
 
-### E. Offen, vom Owner noch zu entscheiden
+### E. Owner-Entscheidungen vom 06.08. (die drei offenen Punkte sind beantwortet)
 
-- Soll es eine **Melde-Funktion** geben, mit der ein Teilnehmer einen fremden Eintrag
-  beanstandet? Der Owner hat sie am 06.08. fuer Chat-Kanaele angeregt; ob sie auch fuer
-  Kosten gilt, ist offen.
-- Sollen weitere Kosten in die Zahlungserinnerungen einfliessen? Bisher betreffen die nur
-  die Buchung.
+**E1. Melde-Funktion: ja, nach dem Muster der Paketkosten.**
+Gemeint ist der **Einspruch gegen eine Zahl**, nicht eine Missbrauchsmeldung: ein Teilnehmer
+haelt einen fremden Posten fuer falsch (Betrag daneben, doppelt erfasst, gehoert nicht zum
+Event) und meldet ihn, statt ihn selbst zu aendern - aendern darf er ihn ja nicht. Die Meldung
+geht an den Organisator, der entscheidet. Der Eintrag bleibt bis dahin bestehen und wird als
+beanstandet gekennzeichnet; er verschwindet nicht und wird nicht automatisch korrigiert.
+
+**E2. Push-Nachricht an markierte Personen: ja, neu hinzugekommen.**
+Wer bei einem Posten als beteiligt markiert wird, bekommt eine Push-Nachricht in der Art
+„Bei <Event> sind weitere Kosten angefallen, an denen du dich beteiligen sollst."
+Sie geht an die Personen aus `event_expense_shares`, nicht an alle Teilnehmer, und nicht an
+den Ersteller selbst. Der Ehrengast bekommt sie nie - er sieht die weiteren Kosten gar nicht.
+Wird ein Posten nachtraeglich um Personen erweitert, geht sie nur an die neu Hinzugekommenen.
+
+**E3. Weitere Kosten fliessen in die Zahlungserinnerungen ein: ja.**
+Wichtig und leicht zu verwechseln: das aendert **nichts** an Owner-Entscheidung 2 weiter oben.
+Die Erinnerung **listet** beide Kassenbuecher, sie **summiert** sie nicht. Zwei getrennte
+Abschnitte, zwei getrennte Betraege - die Buchung aus `bookings`, die weiteren Kosten aus den
+offenen Zeilen in `event_expense_shares` (`settled_at is null`). Es entsteht keine gemeinsame
+Gesamtsumme und kein gemeinsamer Restbetrag. Wer hier eine Summe bildet, baut den Fehler vom
+05.08. nach.
+
+Wer eine Erinnerung schickt: `supabase/functions/send-payment-reminders` (Plural) und
+`process-payment-reminders` bestehen lassen und um den zweiten Abschnitt erweitern, keine
+zweite Funktion daneben stellen. Push laeuft ueber `send-push-notification`.
+
+Vorwarnung fuer die Verifikation: die beiden HTTP-Cronjobs liefern laut Stand vom 28.07. noch
+nicht aus (fehlende Vault-Secrets, siehe HANDOFF). Ein ausbleibender Versand beweist also
+nicht, dass diese Aenderung kaputt ist - die Funktion direkt aufrufen und `net._http_response`
+lesen, nicht auf den Cron warten.
 
 ## Reihenfolge
 
