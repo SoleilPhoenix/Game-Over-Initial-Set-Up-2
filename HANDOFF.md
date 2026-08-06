@@ -271,6 +271,30 @@ neu suchen muss:
 haette der Ehrengast in der Zwischenzeit vollen Blick auf die Zahlen - genau das, was der
 Wunsch verhindern soll.
 
+**ALLE VIER PUNKTE SIND ERLEDIGT** (06.08.). Die DB-Haelfte kam zuerst, der Client danach in
+einem Codex-sol-Lauf ueber 22 Dateien. Details unten; das Wichtigste zuerst:
+
+**`src/utils/permissions.ts` ist ab jetzt die einzige Stelle fuer Rollenrechte.** Vorher lagen
+`isOrganizer`/`isGuest` an rund 86 Stellen in 12 Dateien verstreut, viermal unterschiedlich
+hergeleitet. Wer eine neue rollenabhaengige Anzeige baut, fragt **Faehigkeiten** ab
+(`canViewBudget`, `canViewExtraCosts`, …), nicht Rollen. Drei Eigenschaften tragen das Modell:
+
+- **Default-Deny.** Unbekannte oder fehlende Rolle ergibt ein eingefrorenes Nullobjekt. Wer eine
+  Stelle vergisst, faellt auf „darf nicht" - nicht auf „darf".
+- **Ein URL-Parameter kann Rechte nur senken, nie heben.** `?role=guest` war vorher an mehreren
+  Stellen die Quelle fuer `isGuest`. Fuer die Vorschau ist das gewollt, fuer Rechte waere es
+  faelschbar gewesen. Ein Rangvergleich erzwingt die Richtung.
+- **Organisator ist ausschliesslich `events.created_by`.** Eine Teilnehmerzeile mit Rolle
+  `organizer` gewaehrt bewusst nichts - sonst waere eine veraltete Zeile ein Rechteweg.
+
+Je ein Test haelt die letzten beiden Punkte fest.
+
+**Der Ehrengast fragt die Buchung gar nicht erst ab.** Zweistufige Aufloesung: erst Faehigkeiten
+ohne Buchung, daraus die Entscheidung, was geladen wird, dann die endgueltigen Faehigkeiten.
+`useBooking` laeuft nur bei `canViewBudget`, das RPC `get_my_event_share` nur im Gegenfall. Der
+RLS-Fehlerpfad wird nie beruehrt - **so muss das bleiben**, sonst kommt der Fehler als Absturz
+durch.
+
 **Schritt 3 und die DB-Haelfte von 1 sind erledigt** (Migration
 `20260806073606_honoree_participant_role.sql`, von Codex sol geschrieben, 06.08.):
 `invite_codes.is_honoree`, `accept_invite` vergibt die Rolle daraus, die `bookings`-SELECT-Policy

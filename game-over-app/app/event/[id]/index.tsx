@@ -10,6 +10,7 @@ import { ScrollView, Pressable, StyleSheet, View, Modal } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
+import { useQuery } from '@tanstack/react-query';
 import { YStack, XStack, Text } from 'tamagui';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +23,7 @@ import { useTheme } from '@/hooks/useTheme';
 import { RADII, TYPE_SCALE, ambientShadow, type EditorialTheme } from '@/constants/designSystem';
 import { DisplayHeading, GoldButton } from '@/components/ui/editorial';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
-import { splitPerPerson } from '@/utils/money';
+import { formatEuro, splitPerPerson } from '@/utils/money';
 import { ShareModal } from '@/components/ui/ShareModal';
 import { resolvePackageImage } from '@/constants/packageImages';
 import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
@@ -38,6 +39,8 @@ import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { loadDesiredParticipants, loadChecklist, setChecklistItem, loadInvitedCount, loadBudgetInfo, type BudgetInfo } from '@/lib/participantCountCache';
 import { prefetchAvatarUris } from '@/components/ui/CachedAvatarImage';
 import { feedback } from '@/stores/uiStore';
+import { supabase } from '@/lib/supabase/client';
+import { resolveEventCapabilities } from '@/utils/permissions';
 
 // ─── Planning Tools ─────────────────────────────
 // Icon tints kept as semantic colours — they encode tool identity
@@ -61,6 +64,13 @@ export default function EventSummaryScreen() {
 
   const { data: event, isLoading: eventLoading, error: eventError, refetch: refetchEvent } = useEvent(id);
   const { data: participants } = useParticipants(id);
+  const currentUserId = useAuthStore(s => s.user?.id);
+  const capabilitiesWithoutBooking = resolveEventCapabilities({
+    event,
+    userId: currentUserId,
+    participants,
+    previewRole: roleParam,
+  });
 
   // Participant profiles are already part of the event query cache. Warm the
   // image disk cache as soon as they are known, before the guest list opens.
@@ -71,10 +81,25 @@ export default function EventSummaryScreen() {
         // Rendering still has the initials fallback; prefetch is best effort.
       });
   }, [participants]);
-  const { data: booking } = useBooking(id);
-  const currentUserId = useAuthStore(s => s.user?.id);
-  const currentParticipant = participants?.find(p => p.user_id === currentUserId);
-  const isGuest = roleParam === 'guest' || (!roleParam && currentParticipant?.role === 'guest');
+  const { data: booking } = useBooking(capabilitiesWithoutBooking.canViewBudget ? id : undefined);
+  const { data: ownShare } = useQuery({
+    queryKey: ['my-event-share', id, currentUserId],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_my_event_share', { p_event_id: id! });
+      if (error) throw error;
+      return data?.[0] ?? { pays: false, share_cents: 0 };
+    },
+    enabled: !!id && !!currentUserId && !!event && !capabilitiesWithoutBooking.canViewBudget,
+    staleTime: 60 * 1000,
+  });
+  const capabilities = resolveEventCapabilities({
+    event,
+    userId: currentUserId,
+    participants,
+    booking,
+    ownSharePays: ownShare?.pays,
+    previewRole: roleParam,
+  });
   const updateEvent = useUpdateEvent();
 
   const [cachedParticipants, setCachedParticipants] = useState<number | undefined>(undefined);
@@ -85,8 +110,12 @@ export default function EventSummaryScreen() {
     if (!id) return;
     loadDesiredParticipants(id).then(setCachedParticipants);
     loadChecklist(id).then(setLocalChecklist);
-    loadBudgetInfo(id).then(info => setCachedBudget(info ?? null));
-  }, [id]);
+    if (capabilitiesWithoutBooking.canViewBudget) {
+      loadBudgetInfo(id).then(info => setCachedBudget(info ?? null));
+    } else {
+      setCachedBudget(null);
+    }
+  }, [id, capabilitiesWithoutBooking.canViewBudget]);
 
   useFocusEffect(
     useCallback(() => {
@@ -103,12 +132,14 @@ export default function EventSummaryScreen() {
   const [shareModalVisible, setShareModalVisible] = useState(false);
 
   useEffect(() => {
-    if (!isGuest || !firstVisit || !currentUserId || !id) return;
+    const canShowPersonalContribution = capabilities.canViewOwnShareOnly
+      && !capabilities.canManageInvitations;
+    if (!canShowPersonalContribution || !firstVisit || !currentUserId || !id) return;
     const key = `gameover:contribution_seen:${id}:${currentUserId}`;
 
     Promise.all([
       AsyncStorage.getItem(key),
-      loadBudgetInfo(id),
+      capabilities.canViewBudget ? loadBudgetInfo(id) : Promise.resolve(undefined),
     ]).then(([seen, info]) => {
       if (seen) return;
 
@@ -117,14 +148,17 @@ export default function EventSummaryScreen() {
       // der zweite Zweig teilte durch `participants.length` - also durch die
       // *beigetretenen* Gaeste statt durch die zahlenden. Bei Natalia waren das
       // 4 statt 5, der Anteil damit 286,25 € statt 229 €.
-      const totalCents = booking?.total_amount_cents ?? info?.totalCents ?? 0;
-      const payingCount = booking?.paying_participants ?? info?.payingCount ?? 0;
-      const cents = splitPerPerson(totalCents, payingCount).perPersonEuros * 100;
+      const cents = capabilities.canViewBudget
+        ? splitPerPerson(
+            booking?.total_amount_cents ?? info?.totalCents ?? 0,
+            booking?.paying_participants ?? info?.payingCount ?? 0,
+          ).perPersonEuros * 100
+        : (ownShare?.share_cents ?? 0);
 
       setContributionCents(cents);
       if (cents > 0) setShowContributionCard(true);
     });
-  }, [isGuest, firstVisit, currentUserId, id, booking, participants]);
+  }, [capabilities.canManageInvitations, capabilities.canViewBudget, capabilities.canViewOwnShareOnly, firstVisit, currentUserId, id, booking, ownShare?.share_cents]);
 
   const handleDismissContributionCard = async () => {
     const key = `gameover:contribution_seen:${id}:${currentUserId}`;
@@ -151,8 +185,9 @@ export default function EventSummaryScreen() {
       effectiveChecklist,
       cachedInvitedCount,
       nonHonoreeDesiredEarly,
+      capabilities,
     );
-  }, [event, participants, effectiveChecklist, cachedInvitedCount, nonHonoreeDesiredEarly]);
+  }, [event, participants, effectiveChecklist, cachedInvitedCount, nonHonoreeDesiredEarly, capabilities]);
 
   const completedCount = getCompletedCount(planningSteps);
   const isBooked = event?.status === 'booked' || event?.status === 'completed';
@@ -217,7 +252,7 @@ export default function EventSummaryScreen() {
 
   const handleToggleChecklist = (key: string, currentValue: boolean) => {
     if (!event || !id) return;
-    if (isGuest) {
+    if (!capabilities.canEditEvent) {
       feedback.info(
         t.eventDetail.organizerOnly,
         t.eventDetail.organizerOnlyMsg,
@@ -287,7 +322,7 @@ export default function EventSummaryScreen() {
             <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>{t.eventDetail.title}</Text>
-          {!isGuest ? (
+          {capabilities.canEditEvent ? (
             <Pressable onPress={() => router.push(`/event/${id}/edit`)} hitSlop={8} testID="edit-button">
               <Ionicons name="create-outline" size={22} color={theme.textPrimary} />
             </Pressable>
@@ -331,8 +366,22 @@ export default function EventSummaryScreen() {
           </View>
         </View>
 
+        {!capabilities.canViewBudget
+          && capabilities.canViewOwnShareOnly
+          && ownShare?.pays
+          && ownShare.share_cents > 0 && (
+            <View style={[styles.infoCard, { marginBottom: 28 }]} testID="honoree-own-share-card">
+              <YStack flex={1} alignItems="center" gap={6}>
+                <Text style={styles.infoLabel}>{t.notifications.contributionDue}</Text>
+                <DisplayHeading variant="headlineMd">
+                  {formatEuro(ownShare.share_cents)}
+                </DisplayHeading>
+              </YStack>
+            </View>
+          )}
+
         {/* ─── Share Invite (gold CTA per mockup) — hidden once event has ended ── */}
-        {!isGuest && !isPastReadOnly && (
+        {capabilities.canManageInvitations && !isPastReadOnly && (
           <View style={{ marginBottom: 28 }}>
             <GoldButton
               label="Share Invite — Invite Friends to Join"
@@ -350,7 +399,11 @@ export default function EventSummaryScreen() {
           {t.eventDetail.planningTools}
         </DisplayHeading>
         <View style={styles.toolsGrid}>
-          {TOOL_CONFIGS.map((tool) => {
+          {TOOL_CONFIGS.filter((tool) => {
+            if (tool.key === 'budget') return capabilities.canViewBudget;
+            if (tool.key === 'packages') return capabilities.canViewPackages;
+            return true;
+          }).map((tool) => {
             const toolLabel = t.eventDetail[
               tool.key === 'invitations' ? 'manageInvitations'
                 : tool.key === 'communication' ? 'communication'
@@ -374,7 +427,7 @@ export default function EventSummaryScreen() {
                     }
                     return;
                   }
-                  const roleQuery = roleParam ? `?role=${roleParam}` : '';
+                  const roleQuery = roleParam === 'guest' ? '?role=guest' : '';
                   const route = tool.isTab
                     ? ((tool as any).passEventId ? `${tool.route}?eventId=${id}` : tool.route)
                     : `/event/${id}/${tool.route}${roleQuery}`;
@@ -502,7 +555,7 @@ export default function EventSummaryScreen() {
             </DisplayHeading>
             {contributionCents > 0 && (
               <Text style={{ fontSize: 32, fontWeight: '900', color: theme.accentGold, marginTop: 4 }}>
-                €{Math.round(contributionCents / 100)}
+                {formatEuro(contributionCents)}
               </Text>
             )}
             <Text style={{ fontSize: 13, color: theme.textTertiary, marginTop: 8, lineHeight: 20 }}>

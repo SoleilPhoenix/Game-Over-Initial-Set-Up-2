@@ -47,7 +47,7 @@ export function useEvent(eventId: string | undefined) {
 
   return useQuery({
     queryKey: eventKeys.detail(eventId || ''),
-    queryFn: () => eventsRepository.getById(eventId!),
+    queryFn: () => eventsRepository.getById(eventId!, user?.id),
     enabled: !!eventId,
     staleTime: 60 * 1000,
     placeholderData: () => {

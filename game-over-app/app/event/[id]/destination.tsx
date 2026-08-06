@@ -12,6 +12,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
+import { useUser } from '@/stores/authStore';
+import { resolveEventCapabilities } from '@/utils/permissions';
 import { useTranslation } from '@/i18n';
 
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
@@ -459,8 +461,10 @@ export default function DestinationScreen() {
   ).current;
 
   const { language } = useTranslation();
+  const user = useUser();
   const { data: event, isLoading } = useEvent(id);
-  const { data: booking } = useBooking(id);
+  const capabilities = resolveEventCapabilities({ event, userId: user?.id });
+  const { data: booking } = useBooking(capabilities.canViewBudget ? id : undefined);
 
   if (isLoading || !event) {
     return (

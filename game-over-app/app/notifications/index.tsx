@@ -28,6 +28,8 @@ import { useUser } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/types';
 import { feedback } from '@/stores/uiStore';
+import { useEvents } from '@/hooks/queries/useEvents';
+import { resolveEventCapabilities } from '@/utils/permissions';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 
@@ -49,12 +51,13 @@ export default function NotificationsScreen() {
     guestPaidRecentEvent,
     isGuestContribution,
   } = useUrgentPayment();
+  const { data: events } = useEvents();
 
-  // isOrganizer: true only if user created the guest-relevant event.
-  // Check guestUrgentEvent first; fall back to guestPaidRecentEvent (shown after payment).
-  // Never default to true — that would hide the "Contribution Confirmed" card.
   const relevantGuestEvent = guestUrgentEvent ?? guestClaimedRecentEvent ?? guestPaidRecentEvent;
-  const isOrganizer = relevantGuestEvent ? relevantGuestEvent.created_by === user?.id : false;
+  const canManageRelevantEvent = resolveEventCapabilities({
+    event: relevantGuestEvent,
+    userId: user?.id,
+  }).canManagePackages;
 
   // Load participants for the relevant guest event (to show organizer name)
   const { data: guestEventParticipants } = useParticipants(relevantGuestEvent?.id);
@@ -186,12 +189,14 @@ export default function NotificationsScreen() {
     }
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  const organizerUrgentEvents = urgentEvents.filter(info => info.event.created_by === user?.id);
+  const organizerUrgentEvents = urgentEvents.filter(info =>
+    resolveEventCapabilities({ event: info.event, userId: user?.id }).canManagePackages
+  );
   // Mirrors the condition guarding ListHeaderComponent below: whenever that block
   // renders, it prints its own "today" label above the urgency rows.
   const headerPrintsToday = organizerUrgentEvents.length > 0
-    || (isGuestContribution && !isOrganizer)
-    || ((!!guestClaimedRecentEvent || !!guestPaidRecentEvent) && !isOrganizer);
+    || (isGuestContribution && !canManageRelevantEvent)
+    || ((!!guestClaimedRecentEvent || !!guestPaidRecentEvent) && !canManageRelevantEvent);
 
   const renderSectionHeader = ({ section }: { section: { title: string } }) => {
     // The urgency rows in ListHeaderComponent already print a "today" label, and
@@ -213,13 +218,17 @@ export default function NotificationsScreen() {
     );
   };
 
-  const renderItem = ({ item }: { item: Notification }) => (
-    <NotificationItem
-      notification={item}
-      onPress={() => handleNotificationPress(item)}
-      testID={`notification-${item.id}`}
-    />
-  );
+  const renderItem = ({ item }: { item: Notification }) => {
+    const notificationEvent = events?.find((event) => event.id === item.event_id);
+    return (
+      <NotificationItem
+        notification={item}
+        capabilities={resolveEventCapabilities({ event: notificationEvent, userId: user?.id })}
+        onPress={() => handleNotificationPress(item)}
+        testID={`notification-${item.id}`}
+      />
+    );
+  };
 
   if (isLoading) {
     return (
@@ -300,7 +309,7 @@ export default function NotificationsScreen() {
                 </YStack>
 
                 {/* Guest: organizer-confirmed payment */}
-                {!isGuestContribution && !guestClaimedRecentEvent && !isOrganizer && guestPaidRecentEvent && (
+                {!isGuestContribution && !guestClaimedRecentEvent && !canManageRelevantEvent && guestPaidRecentEvent && (
                   <View style={[styles.guestPayCard, { borderColor: 'rgba(52, 211, 153, 0.25)', backgroundColor: 'rgba(52, 211, 153, 0.07)' }]}>
                     <XStack alignItems="center" gap={12}>
                       <View style={[styles.urgencyIconCircle, { backgroundColor: 'rgba(52, 211, 153, 0.18)' }]}>
@@ -323,7 +332,7 @@ export default function NotificationsScreen() {
                 )}
 
                 {/* Guest: payment claimed, awaiting organizer confirmation */}
-                {guestClaimedRecentEvent && !isOrganizer && (
+                {guestClaimedRecentEvent && !canManageRelevantEvent && (
                   <View style={[styles.guestPayCard, { borderColor: 'rgba(217, 119, 6, 0.35)', backgroundColor: 'rgba(217, 119, 6, 0.09)' }]}>
                     <XStack alignItems="center" gap={12}>
                       <View style={[styles.urgencyIconCircle, { backgroundColor: 'rgba(217, 119, 6, 0.18)' }]}>
@@ -349,7 +358,7 @@ export default function NotificationsScreen() {
                 )}
 
                 {/* Guest: contribution due + "I've Paid" button */}
-                {isGuestContribution && !isOrganizer && guestUrgentEvent && (
+                {isGuestContribution && !canManageRelevantEvent && guestUrgentEvent && (
                   <View style={styles.guestPayCard}>
                     <XStack alignItems="center" gap={12} marginBottom={10}>
                       <View style={[styles.urgencyIconCircle, { backgroundColor: 'rgba(249, 115, 22, 0.18)' }]}>

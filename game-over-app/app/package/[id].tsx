@@ -15,6 +15,7 @@ import { usePackage } from '@/hooks/queries/usePackages';
 import { useEventSchedule, scheduleKeys } from '@/hooks/queries/useSchedule';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import { resolveEventCapabilities } from '@/utils/permissions';
 import { getTierName } from '@/constants/packageTiers';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useAuthStore } from '@/stores/authStore';
@@ -269,21 +270,26 @@ export default function PackageDetailsScreen() {
   const { toggleFavorite, isFavorite } = useFavoritesStore();
   const { t, language } = useTranslation();
   const { data: dbPkg, isLoading } = usePackage(id);
-
-  // Load event budget cache when opened from Event Summary (viewOnly mode)
-  const [eventBudget, setEventBudget] = useState<BudgetInfo | null>(null);
-  useEffect(() => {
-    if (eventId) {
-      loadBudgetInfo(eventId).then(info => setEventBudget(info ?? null));
-    }
-  }, [eventId]);
-
-  // Schedule data — only relevant in viewOnly mode (event context)
   const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   const { data: scheduleData } = useEventSchedule(isViewOnly ? eventId : undefined);
   const { data: eventData } = useEvent(isViewOnly ? eventId : undefined);
-  const isOrganizer = !!eventData && eventData.created_by === user?.id;
+  const capabilities = resolveEventCapabilities({ event: eventData, userId: user?.id });
+
+  // Load event budget cache when opened from Event Summary (viewOnly mode)
+  const [eventBudget, setEventBudget] = useState<BudgetInfo | null>(null);
+  useEffect(() => {
+    if (eventId && capabilities.canViewPackages) {
+      loadBudgetInfo(eventId).then(info => setEventBudget(info ?? null));
+    } else {
+      setEventBudget(null);
+    }
+  }, [eventId, capabilities.canViewPackages]);
+  useEffect(() => {
+    if (isViewOnly && eventData && !capabilities.canViewPackages) router.back();
+  }, [capabilities.canViewPackages, eventData, isViewOnly, router]);
+
+  // Schedule data — only relevant in viewOnly mode (event context)
   // Show archived badge when viewing a past event's package
   const isArchivedView = isViewOnly && eventData ? isReadOnlyEvent(eventData) : false;
 
@@ -292,7 +298,7 @@ export default function PackageDetailsScreen() {
   useEffect(() => {
     if (!isViewOnly || !eventId) return;
     if (!scheduleData || scheduleData.length > 0) return;
-    if (!isOrganizer) return;
+    if (!capabilities.canManagePackages) return;
     if (genAttempted.current) return;
     const tier = tierFromPackageSlug(id) ?? tierFromPackageSlug(eventBudget?.packageId ?? null);
     if (!tier) return;
@@ -302,7 +308,7 @@ export default function PackageDetailsScreen() {
     scheduleRepository.createMany(items)
       .then(() => queryClient.invalidateQueries({ queryKey: scheduleKeys.byEvent(eventId) }))
       .catch(() => { genAttempted.current = false; });
-  }, [isViewOnly, eventId, scheduleData, isOrganizer, id, eventBudget?.packageId, queryClient]);
+  }, [isViewOnly, eventId, scheduleData, capabilities.canManagePackages, id, eventBudget?.packageId, queryClient]);
 
   // Read wizard answers to assemble dynamic package when needed (creation flow only)
   const wizardState = useWizardStore();
@@ -373,6 +379,14 @@ export default function PackageDetailsScreen() {
 
   // Use DB package if available, then dynamically assembled package, then static fallback
   const pkg = dbPkg || assembledPkg || getFallbackPackageMap()[id];
+
+  if (isViewOnly && eventData && !capabilities.canViewPackages) {
+    return (
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
+        <Spinner size="large" color="$primary" />
+      </YStack>
+    );
+  }
 
   if (isLoading && !pkg) {
     return (

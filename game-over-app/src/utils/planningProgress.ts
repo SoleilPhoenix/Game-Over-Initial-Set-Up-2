@@ -5,6 +5,7 @@
 
 import type { EventWithDetails } from '@/repositories/events';
 import type { ParticipantWithProfile } from '@/repositories/participants';
+import type { EventCapabilities } from '@/utils/permissions';
 
 export interface PlanningStep {
   key: string;
@@ -44,7 +45,11 @@ export function calculatePlanningSteps(
   checklist: PlanningChecklist | undefined,
   cachedInvitedCount?: number,
   desiredParticipantCount?: number,
+  capabilities?: EventCapabilities,
 ): PlanningStep[] {
+  // Honorees must not see budget collection/payment planning steps. Hiding the
+  // complete organizer workflow also avoids misleading 6-of-8 progress maths.
+  if (capabilities && !capabilities.canViewBudget) return [];
   if (event.status !== 'booked' && event.status !== 'completed') return [];
 
   const participantList = participants || [];
@@ -52,11 +57,13 @@ export function calculatePlanningSteps(
   const nonHonoree = participantList.filter(p => p.role !== 'honoree');
   // Priority: desired count from wizard cache (most accurate) → actual DB count → non-honoree length
   // desiredParticipantCount excludes honoree (organizer + guests only), so use directly.
-  const totalExpected = desiredParticipantCount || event.participant_count || Math.max(nonHonoree.length, 1);
+  const totalExpected = desiredParticipantCount
+    || (participantList.length > 0 ? Math.max(nonHonoree.length, 1) : event.participant_count)
+    || 1;
   const threshold = Math.ceil(totalExpected * 0.5);
 
   // For step 1: use whichever is higher — DB participants or cached invited count
-  const invitedCount = Math.max(participantList.length, cachedInvitedCount || 0);
+  const invitedCount = Math.max(nonHonoree.length, cachedInvitedCount || 0);
   // Confirmed = organizer (implicit) + participants with confirmed_at set OR with a linked user_id
   // (user_id set means the guest has registered and is part of the event)
   const confirmedCount = nonHonoree.filter(p =>

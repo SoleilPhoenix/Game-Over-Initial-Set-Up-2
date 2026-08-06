@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { feedback } from '@/stores/uiStore';
 import { useTranslation } from '@/i18n';
+import { resolveEventCapabilities } from '@/utils/permissions';
 
 type EditEventForm = {
   title: string;
@@ -43,8 +44,7 @@ export default function EditEventScreen() {
   const updateEvent = useUpdateEvent();
   const deleteEvent = useDeleteEvent();
 
-  // Check if user is the organizer
-  const isOrganizer = event?.created_by === user?.id;
+  const capabilities = resolveEventCapabilities({ event, userId: user?.id });
 
   const handleDeleteEvent = async () => {
     const confirmed = await feedback.confirm({
@@ -81,7 +81,7 @@ export default function EditEventScreen() {
   });
 
   const onSubmit = async (data: EditEventForm) => {
-    if (!id) return;
+    if (!id || !capabilities.canEditEvent) return;
     try {
       await updateEvent.mutateAsync({
         eventId: id,
@@ -237,7 +237,7 @@ export default function EditEventScreen() {
           </Card>
 
           {/* Delete Event Section - Only show for organizers */}
-          {isOrganizer && (
+          {capabilities.canEditEvent && (
             <Card variant="filled" marginTop="$6">
               <YStack gap="$3">
                 <Text fontSize="$3" fontWeight="600" color="$error">
@@ -281,7 +281,7 @@ export default function EditEventScreen() {
             flex={1}
             onPress={handleSubmit(onSubmit)}
             loading={updateEvent.isPending}
-            disabled={!isDirty}
+            disabled={!isDirty || !capabilities.canEditEvent}
             testID="save-button"
           >
             {t.editEvent.saveChanges}

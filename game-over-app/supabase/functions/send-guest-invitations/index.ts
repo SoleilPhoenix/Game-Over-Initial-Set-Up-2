@@ -36,6 +36,7 @@ type SendStatus = 'sent' | 'failed' | 'invalid';
 
 interface GuestSlot {
   slotIndex: number;
+  isHonoree?: boolean;
   firstName?: string;
   lastName?: string;
   email?: string;
@@ -345,7 +346,7 @@ serve(async (req: Request) => {
 
       const { data: eventCodes } = await supabase
         .from('invite_codes')
-        .select('id, code, guest_email, guest_phone')
+        .select('id, code, guest_email, guest_phone, is_honoree')
         .eq('event_id', eventId)
         .eq('is_active', true);
 
@@ -364,6 +365,7 @@ serve(async (req: Request) => {
           guest_last_name: guest.lastName ?? null,
           guest_email: channel === 'email' ? contact : (guest.email ?? null),
           guest_phone: channel !== 'email' ? contact : (guest.phone ?? null),
+          is_honoree: guest.isHonoree === true,
         }).eq('id', existing.id);
         if (codeUpdateError) {
           console.error('[invite_codes] reuse update failed:', codeUpdateError.message, 'code=', code);
@@ -380,6 +382,7 @@ serve(async (req: Request) => {
           guest_last_name: guest.lastName ?? null,
           guest_email: channel === 'email' ? contact : (guest.email ?? null),
           guest_phone: channel !== 'email' ? contact : (guest.phone ?? null),
+          is_honoree: guest.isHonoree === true,
         });
         if (codeInsertError) {
           console.error('[invite_codes] insert failed:', codeInsertError.message, 'code=', code);
