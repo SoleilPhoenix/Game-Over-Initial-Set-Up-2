@@ -8,7 +8,7 @@ nicht die Sitzungshistorie. Dauerhafte Lehren gehören ins Projektgedächtnis
 (`~/.claude/projects/-Users-soleilphoenix-Desktop-GameOver/memory/`), nicht hierher.
 Erledigtes wird gelöscht, nicht archiviert - `git log` ist das Archiv.
 
-Letzte Aktualisierung: 2026-08-05.
+Letzte Aktualisierung: 2026-08-06.
 
 ---
 
@@ -712,6 +712,48 @@ Es gilt wieder das Muster aus `685fa537a`: angehefteter Footer innerhalb der
 `KeyboardAvoidingView`. Die tote Flaeche ist ein Schoenheitsfehler, ein unerreichbarer Knopf ist
 keiner. Wer sie angehen will, tut das ueber die Feldabstaende, nicht ueber die Position des
 Knopfes - und prueft es **am Geraet**, nicht am gruenen Typecheck.
+
+### Dritte Runde am 06.08. - Bilder, Paketinhalte, Sprache
+
+**Jedes Event zeigte das Berlin-Bild.** Ursache war Datenmuell in einer Spalte: beim Anlegen
+schrieb `packages.tsx` die **Paket-ID** in `events.hero_image_url`. Bei DB-Paketen ist das eine
+UUID; der Bildaufloeser hielt sie fuer einen Stadtwert und fiel auf Berlin zurueck. An der
+Live-DB nachgezaehlt: **alle neun Events** tragen einen Nicht-URL-Wert, sieben UUIDs und zwei
+Paket-Slugs wie `hamburg-classic`. Die Spalte hat nie eine URL enthalten.
+
+Neu: `isImageUrl()` in `packageImages.ts` laesst nur `http://`, `https://` und `data:` als
+Bildquelle gelten. Alles andere wird ignoriert, das Bild kommt aus `city_id` plus Stufe. Damit
+sind die neun bestehenden Zeilen **ohne Datenbankaenderung** repariert, und die Paket-ID wandert
+nicht mehr in die Spalte. Eine Aufraeumung der Altwerte per SQL ist moeglich, aber nicht noetig.
+
+**Die Paketinhalte in Schritt 4 waren leer** - drei bis vier Aktivitaeten je Paket fehlten.
+Die DB-Pakete tragen **keine** `features`; die Seed-Migration `20260729102334` befuellt das Feld
+nicht, und DB-Pakete haben Vorrang vor den Fallback-Paketen, die welche haetten. Fehlt `features`,
+kommen die Inhalte jetzt aus `assemblePackages`.
+**Offen und Sache des Owners:** `packages.features` in der Datenbank ist inhaltlich leer. Was dort
+stehen soll, ist eine Produktentscheidung, keine Programmieraufgabe - bis dahin traegt der
+Rueckfall die Anzeige.
+
+Dabei fiel auf, dass die zusammengestellten Namen **durchweg englisch** waren („Harbor Cruise",
+„Bar Night with Drinks", „City Experience"). Der erste Anlauf haette damit eine leere Liste gegen
+eine englische getauscht. Sie laufen jetzt ueber das i18n-System, ebenso die statischen Pakete in
+`app/package/[id].tsx`.
+
+**„4.5 (0 Bewertungen)" ist weg.** Eine Bewertung ohne Bewertungen ist eine Falschaussage; die
+Zeile erscheint erst ab einer echten.
+
+**Teilnehmerregler 3 bis 50** statt 1 bis 30 (Owner-Vorgabe 05.08.). Unter drei Koepfen gibt es
+keine Feier - Organisator, Ehrengast und mindestens ein Gast; ein oder zwei war immer eine
+Fehleingabe. Die Grenzen liegen in `src/constants/participantLimits.ts`, alte Entwuerfe unter 3
+werden beim Laden angehoben.
+
+**„Event bearbeiten" war komplett englisch**, samt Loeschbestaetigung. Jetzt durchgaengig i18n.
+
+**Wiederkehrendes Muster, das Zeit kostet:** in dieser und den beiden vorigen Runden war
+*jeder* zweite Befund derselbe - ein Text, der beim Schreiben oder im Code auf Englisch
+festgelegt wurde und in einer deutschen Oberflaeche landet. Wer eine Zeichenkette anfasst, die
+ein Nutzer lesen kann, legt sie in `src/i18n/` ab. Auch in Hilfsmodulen, auch in Fallback-Daten,
+auch wenn sie „nur" ein Platzhalter ist.
 
 ### Was sonst offen blieb
 
