@@ -91,29 +91,36 @@ koennen, und gehoert deshalb nicht in die Wortmarke.
 
 ## Offen
 
-### Weitere Kosten in die Datenbank (Branch `claude/weitere-kosten-datenbank`, Stand 06.08.)
+### Weitere Kosten in die Datenbank - fertig, wartet auf den Geraetetest (Stand 06.08.)
 
-**Die Migration `20260806145949_event_expenses.sql` ist am 06.08. nach Owner-Freigabe auf die
-Produktivdatenbank angewendet** - über MCP `apply_migration`, nicht über `migrate.yml`. Live sind
-4 Tabellen (`event_expenses`, `event_expense_shares`, `event_expense_reports`,
-`event_expense_categories`), alle mit RLS, 16 Policies, 6 Trigger, 7 Funktionen. Der Branch ist
-**noch nicht nach `main` gemerged**, weil er unfertigen Anwendungscode trägt; die Datei muss
-mitkommen, wenn er gemerged wird.
+**Vollstaendig in `main` und live deployt.** Migration `20260806133222_event_expenses.sql`
+angewendet: 4 Tabellen (`event_expenses`, `event_expense_shares`, `event_expense_reports`,
+`event_expense_categories`), alle mit RLS, 16 Policies, 6 Trigger, 7 Funktionen.
 
-Fertig und verifiziert: Schema, Repository, Query-Hooks, Aufteilungsrechnung
-(`calculateExpenseSplit` in `money.ts`, neben `splitPerPerson`, das unangetastet bleibt),
-einmalige Übernahme aus dem Gerätespeicher, geteilte Kategorien.
+Fertig und verifiziert (typecheck gruen, 211 Tests in 31 Dateien gruen):
+Schema, Repository, Query-Hooks, Aufteilungsrechnung (`calculateExpenseSplit` in `money.ts`,
+neben `splitPerPerson`, das unangetastet bleibt), einmalige Uebernahme aus dem Geraetespeicher,
+geteilte Kategorien, Budget-Reiter, Push an die Markierten, zweiter Abschnitt in den
+Zahlungserinnerungen.
 
-Offen: Oberfläche im Budget-Reiter, Push an die Markierten verdrahten, zweiter getrennter
-Abschnitt in der Zahlungserinnerung.
+**Offen ist nur noch der Geraetetest.** Nichts davon ist je auf einem Geraet gelaufen.
 
-Zwei Fallen, die beim Bauen aufgefallen sind und Zeit gekostet haben:
-- Der Benachrichtigungstrigger feuerte bei **jeder** Bearbeitung erneut für alle Beteiligten,
+Vier Dinge, die beim Bauen Zeit gekostet haben:
+- Der Benachrichtigungstrigger feuerte bei **jeder** Bearbeitung erneut fuer alle Beteiligten,
   weil `set_expense_shares` die Anteile komplett ersetzt. Er schickt jetzt nur beim ersten Mal
   je Person und Posten.
-- `send-push-notification` prüft nur, *dass* jemand angemeldet ist, nicht ob er die Empfänger
-  kennen darf. Jeder angemeldete Nutzer kann beliebigen Text an beliebige Nutzer schicken.
-  Eigenes Thema, hier bewusst nicht darauf aufgebaut.
+- Push fuer Gast -> Gast geht **nicht** ueber `send-push-notification`: deren Autorisierung
+  kennt nur Teilnehmer -> Organisator und Organisator -> Gast. Dafuer gibt es
+  `notify-expense-shares`, die nur eine expenseId annimmt und ueber den Service-Role-Pfad
+  zustellt. Keine allgemeine Gast-zu-Gast-Erlaubnis aufmachen.
+- Zwei Testsuiten (`usePublicInvitePreview`, `useBookingFlow`) scheiterten **nur in Worktrees**
+  und liefen im Hauptbaum gruen - Vitest loest `expo-modules-core` ausserhalb des Vite-Roots auf
+  und uebersetzt dessen Quellen. Behoben ueber einen Alias auf `__tests__/stubs/`.
+- Der Ehrengast-Einladungsweg **existiert vollstaendig** (Slot im Teilnehmer-Bildschirm ->
+  `isHonoree` -> `send-guest-invitations` schreibt `is_honoree` -> `accept_invite` setzt die
+  Rolle). Er wurde nur nie benutzt, deshalb gibt es null Ehrengaeste in der Datenbank und die
+  Sperre hatte noch nie einen realen Betroffenen. Wer das prueft, sucht nicht nach fehlendem
+  Code - der Slot braucht nur eine E-Mail.
 
 ### Muss noch gemacht werden
 
