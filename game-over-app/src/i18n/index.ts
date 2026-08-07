@@ -20,12 +20,21 @@ export function useTranslation() {
 }
 
 /**
- * Non-hook version for use outside React components (e.g., Alert.alert).
+ * Non-hook version for use outside React components (e.g., global feedback).
  * Reads current language synchronously from the store.
  */
 export function getTranslation() {
   const language = useLanguageStore.getState().language;
   return translations[language];
+}
+
+/**
+ * Returns the current language code (e.g. 'de', 'en') without loading
+ * the translations bundle. Handy for locale-dependent helpers like
+ * `toLocaleDateString`.
+ */
+export function getCurrentLanguage(): Language {
+  return useLanguageStore.getState().language;
 }
 
 export { type Language } from '@/stores/languageStore';

@@ -55,7 +55,7 @@ export const OptimizedImage = memo(function OptimizedImage({
 
 const styles = StyleSheet.create({
   image: {
-    backgroundColor: '#1E2329',
+    backgroundColor: '#12253A',
   },
 });
 

@@ -72,7 +72,12 @@ function daysUntil(startDate?: string): number | null {
 function findGuestUrgentEvent(
   events: any[],
   currentUserId: string | undefined,
-  userParticipations: Array<{ event_id: string; role: string; payment_status: string | null }>
+  userParticipations: {
+    event_id: string;
+    role: string;
+    payment_status: string | null;
+    payment_claimed_at: string | null;
+  }[]
 ): any | null {
   if (!currentUserId || userParticipations.length === 0) return null;
   return (
@@ -80,6 +85,7 @@ function findGuestUrgentEvent(
       const participation = userParticipations.find(p => p.event_id === event.id);
       if (!participation || participation.role !== 'guest') return false;
       if (participation.payment_status === 'paid') return false;
+      if (participation.payment_claimed_at) return false;
       const days = daysUntil(event.start_date);
       return days !== null && days <= 14;
     }) ?? null
@@ -117,11 +123,18 @@ function makeParticipation(overrides: {
   event_id?: string;
   role?: string;
   payment_status?: string | null;
-}): { event_id: string; role: string; payment_status: string | null } {
+  payment_claimed_at?: string | null;
+}): {
+  event_id: string;
+  role: string;
+  payment_status: string | null;
+  payment_claimed_at: string | null;
+} {
   return {
     event_id: overrides.event_id ?? 'evt-1',
     role: overrides.role ?? 'guest',
     payment_status: overrides.payment_status ?? 'pending',
+    payment_claimed_at: overrides.payment_claimed_at ?? null,
   };
 }
 
@@ -149,12 +162,12 @@ describe('useUrgentPayment — guest contribution path (separate participants qu
   it('queries event_participants with user_id and role=guest filters', () => {
     // Verify the Supabase mock chain works as expected when called with correct args
     mockFrom('event_participants')
-      .select('event_id, role, payment_status')
+      .select('event_id, role, payment_status, payment_claimed_at')
       .eq('user_id', 'current-user')
       .eq('role', 'guest');
 
     expect(mockFrom).toHaveBeenCalledWith('event_participants');
-    expect(mockSelect).toHaveBeenCalledWith('event_id, role, payment_status');
+    expect(mockSelect).toHaveBeenCalledWith('event_id, role, payment_status, payment_claimed_at');
     expect(mockEq).toHaveBeenNthCalledWith(1, 'user_id', 'current-user');
     expect(mockEq).toHaveBeenNthCalledWith(2, 'role', 'guest');
   });
@@ -189,6 +202,17 @@ describe('useUrgentPayment — guest contribution path (separate participants qu
 
     const isGuestContribution = guestUrgentEvent !== null;
     expect(isGuestContribution).toBe(false);
+  });
+
+  it('guestUrgentEvent=null when a pending guest has already claimed payment', () => {
+    const event = makeEvent({ id: 'evt-claimed', start_date: dateInDays(5) });
+    const participations = [makeParticipation({
+      event_id: 'evt-claimed',
+      payment_status: 'pending',
+      payment_claimed_at: new Date().toISOString(),
+    })];
+
+    expect(findGuestUrgentEvent([event], 'current-user', participations)).toBeNull();
   });
 
   // ── Merge logic — event too far away ────────────────────────────────────

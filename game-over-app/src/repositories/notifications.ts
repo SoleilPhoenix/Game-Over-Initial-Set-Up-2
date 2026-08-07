@@ -8,8 +8,17 @@ import type { Database } from '@/lib/supabase/types';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
 type NotificationInsert = Database['public']['Tables']['notifications']['Insert'];
+type Event = Database['public']['Tables']['events']['Row'];
+
+export type NotificationEventSummary = Pick<Event, 'status' | 'title' | 'honoree_name'>;
+export type NotificationWithEvent = Notification & { event: NotificationEventSummary | null };
 
 const PAGE_SIZE = 20;
+const OPS_TYPE_LIKE_PATTERN = 'ops\\_%';
+
+export function isOpsNotificationType(type: string): boolean {
+  return type.startsWith('ops_');
+}
 
 export const notificationsRepository = {
   /**
@@ -17,23 +26,36 @@ export const notificationsRepository = {
    */
   async getByUserId(
     userId: string,
-    page: number = 0
-  ): Promise<{ notifications: Notification[]; hasMore: boolean }> {
+    page: number = 0,
+  ): Promise<{ notifications: NotificationWithEvent[]; hasMore: boolean }> {
     const from = page * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
+    // Over-fetch to compensate for client-side filtering of cancelled events
+    const to = from + PAGE_SIZE * 2 - 1;
 
-    const { data, error, count } = await supabase
+    const query = supabase
       .from('notifications')
-      .select('*', { count: 'exact' })
+      .select('*, event:events(status,title,honoree_name)')
       .eq('user_id', userId)
+      .not('type', 'like', OPS_TYPE_LIKE_PATTERN)
       .order('created_at', { ascending: false })
       .range(from, to);
 
+    const { data, error } = await query;
+
     if (error) throw error;
 
+    // Hide notifications whose related event was cancelled (soft-deleted).
+    // Notifications with no event_id (system-level) always pass through.
+    const filtered = ((data || []) as NotificationWithEvent[]).filter(
+      (notification) => !isOpsNotificationType(notification.type)
+        && (!notification.event || notification.event.status !== 'cancelled'),
+    );
+
+    const notifications = filtered.slice(0, PAGE_SIZE);
+
     return {
-      notifications: data || [],
-      hasMore: (count || 0) > to + 1,
+      notifications,
+      hasMore: filtered.length > PAGE_SIZE,
     };
   },
 
@@ -41,14 +63,22 @@ export const notificationsRepository = {
    * Get unread notifications count
    */
   async getUnreadCount(userId: string): Promise<number> {
-    const { count, error } = await supabase
+    // Fetch with event status to exclude cancelled-event notifications from badge count
+    type Joined = Pick<Notification, 'type'> & { event: Pick<Event, 'status'> | null };
+    const query = supabase
       .from('notifications')
-      .select('*', { count: 'exact', head: true })
+      .select('type, event:events(status)')
       .eq('user_id', userId)
-      .eq('is_read', false);
+      .eq('is_read', false)
+      .not('type', 'like', OPS_TYPE_LIKE_PATTERN);
+
+    const { data, error } = await query;
 
     if (error) throw error;
-    return count || 0;
+    return ((data || []) as Joined[]).filter(
+      (notification) => !isOpsNotificationType(notification.type)
+        && (!notification.event || notification.event.status !== 'cancelled'),
+    ).length;
   },
 
   /**
@@ -141,7 +171,10 @@ export const notificationsRepository = {
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          onNotification(payload.new as Notification);
+          const notification = payload.new as Notification;
+          if (!isOpsNotificationType(notification.type)) {
+            onNotification(notification);
+          }
         }
       )
       .subscribe();

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars, @typescript-eslint/array-type -- auto-generated Supabase types */
 export type Json =
   | string
   | number
@@ -56,7 +57,7 @@ export type Database = {
           per_person_cents: number
           reference_number?: string | null
           remaining_amount_cents?: number | null
-          service_fee_cents: number
+          service_fee_cents?: number
           stripe_payment_intent_id?: string | null
           total_amount_cents: number
           updated_at?: string | null
@@ -101,33 +102,66 @@ export type Database = {
           },
         ]
       }
+      channel_read_state: {
+        Row: {
+          channel_id: string
+          last_read_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          last_read_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          last_read_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "channel_read_state_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "channel_read_state_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels_with_unread"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chat_channels: {
         Row: {
           category: Database["public"]["Enums"]["channel_category"]
           created_at: string | null
+          created_by: string | null
           event_id: string
           id: string
           last_message_at: string | null
           name: string
-          unread_count: number | null
         }
         Insert: {
           category: Database["public"]["Enums"]["channel_category"]
           created_at?: string | null
+          created_by?: string | null
           event_id: string
           id?: string
           last_message_at?: string | null
           name: string
-          unread_count?: number | null
         }
         Update: {
           category?: Database["public"]["Enums"]["channel_category"]
           created_at?: string | null
+          created_by?: string | null
           event_id?: string
           id?: string
           last_message_at?: string | null
           name?: string
-          unread_count?: number | null
         }
         Relationships: [
           {
@@ -166,6 +200,164 @@ export type Database = {
         }
         Relationships: []
       }
+      event_expense_categories: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          event_id: string
+          icon: string | null
+          id: string
+          key: string
+          label: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          event_id: string
+          icon?: string | null
+          id?: string
+          key: string
+          label: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          event_id?: string
+          icon?: string | null
+          id?: string
+          key?: string
+          label?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_expense_categories_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_expense_reports: {
+        Row: {
+          created_at: string
+          expense_id: string
+          id: string
+          reason: string | null
+          reported_by: string
+          resolved_at: string | null
+          resolved_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          expense_id: string
+          id?: string
+          reason?: string | null
+          reported_by: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          expense_id?: string
+          id?: string
+          reason?: string | null
+          reported_by?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_expense_reports_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "event_expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_expense_shares: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          expense_id: string
+          id: string
+          settled_at: string | null
+          user_id: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          expense_id: string
+          id?: string
+          settled_at?: string | null
+          user_id: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          expense_id?: string
+          id?: string
+          settled_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_expense_shares_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "event_expenses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_expenses: {
+        Row: {
+          amount_cents: number
+          category_key: string | null
+          created_at: string
+          created_by: string | null
+          event_id: string
+          id: string
+          occurred_at: string
+          paid_by: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          category_key?: string | null
+          created_at?: string
+          created_by?: string | null
+          event_id: string
+          id?: string
+          occurred_at?: string
+          paid_by?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          category_key?: string | null
+          created_at?: string
+          created_by?: string | null
+          event_id?: string
+          id?: string
+          occurred_at?: string
+          paid_by?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_expenses_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_participants: {
         Row: {
           confirmed_at: string | null
@@ -174,6 +366,7 @@ export type Database = {
           id: string
           invited_at: string | null
           invited_via: string | null
+          payment_claimed_at: string | null
           payment_status: Database["public"]["Enums"]["payment_status"] | null
           role: Database["public"]["Enums"]["participant_role"]
           user_id: string
@@ -185,6 +378,7 @@ export type Database = {
           id?: string
           invited_at?: string | null
           invited_via?: string | null
+          payment_claimed_at?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
           role: Database["public"]["Enums"]["participant_role"]
           user_id: string
@@ -196,6 +390,7 @@ export type Database = {
           id?: string
           invited_at?: string | null
           invited_via?: string | null
+          payment_claimed_at?: string | null
           payment_status?: Database["public"]["Enums"]["payment_status"] | null
           role?: Database["public"]["Enums"]["participant_role"]
           user_id?: string
@@ -299,6 +494,106 @@ export type Database = {
           },
         ]
       }
+      event_refunds: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          created_by: string
+          description: string
+          event_id: string
+          expected_by: string | null
+          id: string
+          last_reminder_at: string | null
+          received_at: string | null
+          status: string
+          template_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          created_by: string
+          description: string
+          event_id: string
+          expected_by?: string | null
+          id?: string
+          last_reminder_at?: string | null
+          received_at?: string | null
+          status?: string
+          template_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          created_by?: string
+          description?: string
+          event_id?: string
+          expected_by?: string | null
+          id?: string
+          last_reminder_at?: string | null
+          received_at?: string | null
+          status?: string
+          template_key?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_refunds_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_schedule_items: {
+        Row: {
+          created_at: string | null
+          duration_minutes: number
+          event_id: string
+          id: string
+          location: string | null
+          notes: string | null
+          sort_order: number
+          start_time: string
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          duration_minutes?: number
+          event_id: string
+          id?: string
+          location?: string | null
+          notes?: string | null
+          sort_order?: number
+          start_time: string
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          duration_minutes?: number
+          event_id?: string
+          id?: string
+          location?: string | null
+          notes?: string | null
+          sort_order?: number
+          start_time?: string
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_schedule_items_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           city_id: string
@@ -369,6 +664,7 @@ export type Database = {
           event_id: string
           id: string
           invite_code: string | null
+          provider_message_id: string | null
           recipient: string
           sent_at: string | null
           slot_index: number
@@ -381,6 +677,7 @@ export type Database = {
           event_id: string
           id?: string
           invite_code?: string | null
+          provider_message_id?: string | null
           recipient: string
           sent_at?: string | null
           slot_index: number
@@ -393,6 +690,7 @@ export type Database = {
           event_id?: string
           id?: string
           invite_code?: string | null
+          provider_message_id?: string | null
           recipient?: string
           sent_at?: string | null
           slot_index?: number
@@ -410,42 +708,70 @@ export type Database = {
       }
       invite_codes: {
         Row: {
+          claimed_by: string | null
           code: string
           created_at: string | null
           created_by: string
+          declined_at: string | null
           event_id: string
           expires_at: string
+          guest_email: string | null
+          guest_first_name: string | null
+          guest_last_name: string | null
+          guest_phone: string | null
           id: string
           is_active: boolean | null
+          is_honoree: boolean
           max_uses: number | null
           updated_at: string | null
           use_count: number | null
         }
         Insert: {
+          claimed_by?: string | null
           code: string
           created_at?: string | null
           created_by: string
+          declined_at?: string | null
           event_id: string
           expires_at?: string
+          guest_email?: string | null
+          guest_first_name?: string | null
+          guest_last_name?: string | null
+          guest_phone?: string | null
           id?: string
           is_active?: boolean | null
+          is_honoree?: boolean
           max_uses?: number | null
           updated_at?: string | null
           use_count?: number | null
         }
         Update: {
+          claimed_by?: string | null
           code?: string
           created_at?: string | null
           created_by?: string
+          declined_at?: string | null
           event_id?: string
           expires_at?: string
+          guest_email?: string | null
+          guest_first_name?: string | null
+          guest_last_name?: string | null
+          guest_phone?: string | null
           id?: string
           is_active?: boolean | null
+          is_honoree?: boolean
           max_uses?: number | null
           updated_at?: string | null
           use_count?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "invite_codes_claimed_by_fkey"
+            columns: ["claimed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "invite_codes_event_id_fkey"
             columns: ["event_id"]
@@ -485,6 +811,13 @@ export type Database = {
             referencedRelation: "chat_channels"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "messages_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels_with_unread"
+            referencedColumns: ["id"]
+          },
         ]
       }
       notifications: {
@@ -495,6 +828,7 @@ export type Database = {
           event_id: string | null
           id: string
           is_read: boolean | null
+          metadata: Json | null
           title: string
           type: string
           user_id: string
@@ -506,6 +840,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           is_read?: boolean | null
+          metadata?: Json | null
           title: string
           type: string
           user_id: string
@@ -517,6 +852,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           is_read?: boolean | null
+          metadata?: Json | null
           title?: string
           type?: string
           user_id?: string
@@ -527,6 +863,29 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ops_alert_recipients: {
+        Row: {
+          created_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ops_alert_recipients_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -783,6 +1142,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "polls_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "chat_channels_with_unread"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "polls_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
@@ -790,6 +1156,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      processed_stripe_events: {
+        Row: {
+          event_id: string
+          event_type: string | null
+          processed_at: string
+        }
+        Insert: {
+          event_id: string
+          event_type?: string | null
+          processed_at?: string
+        }
+        Update: {
+          event_id?: string
+          event_type?: string | null
+          processed_at?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -800,6 +1184,7 @@ export type Database = {
           full_name: string | null
           id: string
           language: string | null
+          phone: string | null
           push_notifications_enabled: boolean | null
           updated_at: string | null
         }
@@ -811,6 +1196,7 @@ export type Database = {
           full_name?: string | null
           id: string
           language?: string | null
+          phone?: string | null
           push_notifications_enabled?: boolean | null
           updated_at?: string | null
         }
@@ -822,8 +1208,30 @@ export type Database = {
           full_name?: string | null
           id?: string
           language?: string | null
+          phone?: string | null
           push_notifications_enabled?: boolean | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      rate_limit_hits: {
+        Row: {
+          bucket: string
+          count: number
+          identifier: string
+          window_start: string
+        }
+        Insert: {
+          bucket: string
+          count?: number
+          identifier: string
+          window_start: string
+        }
+        Update: {
+          bucket?: string
+          count?: number
+          identifier?: string
+          window_start?: string
         }
         Relationships: []
       }
@@ -856,16 +1264,140 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      chat_channels_with_unread: {
+        Row: {
+          category: Database["public"]["Enums"]["channel_category"] | null
+          created_at: string | null
+          created_by: string | null
+          event_id: string | null
+          id: string | null
+          last_message_at: string | null
+          name: string | null
+          unread_count: number | null
+        }
+        Insert: {
+          category?: Database["public"]["Enums"]["channel_category"] | null
+          created_at?: string | null
+          created_by?: string | null
+          event_id?: string | null
+          id?: string | null
+          last_message_at?: string | null
+          name?: string | null
+          unread_count?: never
+        }
+        Update: {
+          category?: Database["public"]["Enums"]["channel_category"] | null
+          created_at?: string | null
+          created_by?: string | null
+          event_id?: string | null
+          id?: string | null
+          last_message_at?: string | null
+          name?: string | null
+          unread_count?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_channels_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      accept_invite: {
+        Args: { p_code: string }
+        Returns: {
+          event_id: string
+          reason: string
+          success: boolean
+        }[]
+      }
+      append_booking_audit_log: {
+        Args: { booking_id: string; entry: Json }
+        Returns: undefined
+      }
+      can_see_event_money: {
+        Args: { p_event_id: string }
+        Returns: boolean
+      }
+      check_cron_health: { Args: never; Returns: number }
+      check_rate_limit: {
+        Args: {
+          p_bucket: string
+          p_identifier: string
+          p_max: number
+          p_window_seconds: number
+        }
+        Returns: boolean
+      }
+      claim_stripe_event: {
+        Args: { p_event_id: string; p_event_type: string }
+        Returns: boolean
+      }
+      decline_invite: { Args: { p_code: string }; Returns: boolean }
+      expense_event_id: { Args: { p_expense_id: string }; Returns: string }
       generate_booking_reference: { Args: never; Returns: string }
+      get_my_event_share: {
+        Args: { p_event_id: string }
+        Returns: {
+          pays: boolean
+          share_cents: number
+        }[]
+      }
+      get_invite_preview: {
+        Args: { p_code: string }
+        Returns: {
+          accepted_count: number
+          city_id: string
+          city_name: string
+          event_id: string
+          event_title: string
+          expires_at: string
+          guest_email: string
+          guest_first_name: string
+          guest_last_name: string
+          guest_phone: string
+          honoree_name: string
+          max_uses: number
+          organizer_name: string
+          party_type: string
+          start_date: string
+          use_count: number
+        }[]
+      }
+      get_invite_status: {
+        Args: { p_code: string }
+        Returns: {
+          event_id: string
+          invite_id: string
+          is_valid: boolean
+          reason: string
+        }[]
+      }
       increment_invite_use_count: {
         Args: { invite_id: string }
-        Returns: void
+        Returns: undefined
       }
       is_event_creator: { Args: { p_event_id: string }; Returns: boolean }
       is_event_participant: { Args: { p_event_id: string }; Returns: boolean }
+      is_ops_alert_recipient: { Args: never; Returns: boolean }
+      mark_payment_claimed: { Args: { p_event_id: string }; Returns: boolean }
+      notify_due_refunds: { Args: never; Returns: number }
+      set_expense_shares: {
+        Args: {
+          p_amount_cents: number
+          p_expense_id: string
+          p_shares: Json
+        }
+        Returns: undefined
+      }
+      prune_rate_limit_hits: {
+        Args: { p_older_than_seconds?: number }
+        Returns: undefined
+      }
     }
     Enums: {
       age_range: "21-25" | "26-30" | "31-35" | "35+"

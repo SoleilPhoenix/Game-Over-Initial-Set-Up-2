@@ -3,16 +3,18 @@
  * Dark glassmorphic design matching UI specifications
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   StatusBar,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
   Pressable,
+  Linking,
 } from 'react-native';
 import { Link, router } from 'expo-router';
 import { useForm, Controller } from 'react-hook-form';
@@ -20,17 +22,17 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Input } from '@/components/ui/Input';
-import { DARK_THEME } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
 
 const signupSchema = z
   .object({
-    fullName: z.string().min(2, 'Name must be at least 2 characters'),
+    firstName: z.string().min(1, 'First name is required'),
+    lastName: z.string().min(1, 'Last name is required'),
+    phone: z.string().min(6, 'Please enter a valid phone number'),
     email: z.string().email('Please enter a valid email'),
     password: z
       .string()
@@ -49,6 +51,10 @@ type SignupFormData = z.infer<typeof signupSchema>;
 
 export default function SignupScreen() {
   const [isLoading, setIsLoading] = React.useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [emailSent, setEmailSent] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState('');
   const insets = useSafeAreaInsets();
   const { setError, error, clearError } = useAuthStore();
   const { t } = useTranslation();
@@ -60,7 +66,9 @@ export default function SignupScreen() {
   } = useForm<SignupFormData>({
     resolver: zodResolver(signupSchema),
     defaultValues: {
-      fullName: '',
+      firstName: '',
+      lastName: '',
+      phone: '',
       email: '',
       password: '',
       confirmPassword: '',
@@ -72,17 +80,32 @@ export default function SignupScreen() {
       setIsLoading(true);
       clearError();
 
-      const { error } = await supabase.auth.signUp({
+      const fullName = `${data.firstName.trim()} ${data.lastName.trim()}`.trim();
+      const { error, data: signUpData } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {
           data: {
-            full_name: data.fullName,
+            full_name: fullName,
           },
         },
       });
 
       if (error) throw error;
+
+      // Check if email confirmation is pending (Supabase returns identities: [] when unconfirmed)
+      if (signUpData.user?.identities?.length === 0) {
+        setSubmittedEmail(data.email);
+        setEmailSent(true);
+        return;
+      }
+
+      // Save phone to profiles table (not stored in auth user_metadata)
+      if (signUpData.user) {
+        void supabase.from('profiles')
+          .update({ full_name: fullName, phone: data.phone.trim() })
+          .eq('id', signUpData.user.id); // non-blocking, fire-and-forget
+      }
     } catch (error: any) {
       // Provide user-friendly error messages for common Supabase errors
       let errorMessage = error.message || 'Failed to create account';
@@ -99,13 +122,41 @@ export default function SignupScreen() {
     }
   };
 
+  if (emailSent) {
+    return (
+      <View style={styles.container} testID="email-confirmation-screen">
+        <LinearGradient
+          colors={['#1A2F47', '#0D1B2A']}
+          style={StyleSheet.absoluteFill}
+        />
+        <View style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 24 }}>
+          <Ionicons name="mail-open-outline" size={64} color={'#E8DCC8'} style={{ alignSelf: 'center', marginBottom: 24 }} />
+          <Text style={[styles.title, { textAlign: 'center' }]} accessibilityRole="header">
+            Check your email
+          </Text>
+          <Text style={[styles.subtitle, { textAlign: 'center', marginBottom: 32 }]}>
+            We sent a confirmation link to {submittedEmail}. Tap it to activate your account.
+          </Text>
+          <Pressable
+            style={styles.primaryButton}
+            onPress={() => router.replace('/(auth)/login')}
+            accessibilityRole="button"
+            accessibilityLabel="Go to login"
+          >
+            <Text style={styles.primaryButtonText}>Back to Login</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container} testID="signup-screen">
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Background gradient */}
       <LinearGradient
-        colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
+        colors={['#1A2F47', '#0D1B2A']}
         style={StyleSheet.absoluteFill}
       />
 
@@ -132,8 +183,10 @@ export default function SignupScreen() {
               style={styles.backButton}
               hitSlop={10}
               testID="back-button"
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
             >
-              <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+              <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
             </Pressable>
           </View>
 
@@ -150,41 +203,101 @@ export default function SignupScreen() {
             <View style={styles.glassCardInner}>
               {/* Error Message */}
               {error && (
-                <View style={styles.errorContainer} testID="error-message">
-                  <Ionicons name="alert-circle" size={18} color={DARK_THEME.error} />
+                <View style={styles.errorContainer} testID="error-message" accessibilityLiveRegion="polite" accessibilityRole="alert">
+                  <Ionicons name="alert-circle" size={18} color={'#E8836B'} />
                   <Text style={styles.errorText}>{error}</Text>
                 </View>
               )}
 
               {/* Form */}
               <View style={styles.form}>
-                <View style={styles.inputWrapper}>
-                  <Text style={styles.inputLabel}>{t.auth.fullName}</Text>
-                  <Controller
-                    control={control}
-                    name="fullName"
-                    render={({ field: { onChange, onBlur, value } }) => (
-                      <View style={[styles.inputContainer, errors.fullName && styles.inputError]}>
-                        <Ionicons name="person-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
+                {/* First Name + Last Name side by side */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={[styles.inputWrapper, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>First Name</Text>
+                    <Controller
+                      control={control}
+                      name="firstName"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <View style={[styles.inputContainer, errors.firstName && styles.inputError]}>
+                          <TextInput
+                            style={[styles.darkInput, { flex: 1 }]}
                             value={value}
                             onChangeText={onChange}
                             onBlur={onBlur}
-                            placeholder={t.auth.enterFullName}
-                            placeholderTextColor={DARK_THEME.textTertiary}
+                            placeholder="First name"
+                            placeholderTextColor={'rgba(255,255,255,0.48)'}
                             autoCapitalize="words"
-                            autoComplete="name"
-                            textContentType="name"
-                            testID="input-full-name"
-                            style={styles.darkInput}
+                            autoComplete="given-name"
+                            textContentType="givenName"
+                            testID="input-first-name"
+                            accessibilityLabel="First name"
+                            accessibilityHint="Enter your first name"
                           />
                         </View>
+                      )}
+                    />
+                    {errors.firstName && (
+                      <Text style={styles.fieldError}>{errors.firstName.message}</Text>
+                    )}
+                  </View>
+                  <View style={[styles.inputWrapper, { flex: 1 }]}>
+                    <Text style={styles.inputLabel}>Last Name</Text>
+                    <Controller
+                      control={control}
+                      name="lastName"
+                      render={({ field: { onChange, onBlur, value } }) => (
+                        <View style={[styles.inputContainer, errors.lastName && styles.inputError]}>
+                          <TextInput
+                            style={[styles.darkInput, { flex: 1 }]}
+                            value={value}
+                            onChangeText={onChange}
+                            onBlur={onBlur}
+                            placeholder="Last name"
+                            placeholderTextColor={'rgba(255,255,255,0.48)'}
+                            autoCapitalize="words"
+                            autoComplete="family-name"
+                            textContentType="familyName"
+                            testID="input-last-name"
+                            accessibilityLabel="Last name"
+                            accessibilityHint="Enter your last name"
+                          />
+                        </View>
+                      )}
+                    />
+                    {errors.lastName && (
+                      <Text style={styles.fieldError}>{errors.lastName.message}</Text>
+                    )}
+                  </View>
+                </View>
+
+                <View style={styles.inputWrapper}>
+                  <Text style={styles.inputLabel}>Phone / WhatsApp</Text>
+                  <Controller
+                    control={control}
+                    name="phone"
+                    render={({ field: { onChange, onBlur, value } }) => (
+                      <View style={[styles.inputContainer, errors.phone && styles.inputError]}>
+                        <Ionicons name="call-outline" size={20} color={'rgba(255,255,255,0.48)'} />
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder="+49 152 12345678"
+                          placeholderTextColor={'rgba(255,255,255,0.48)'}
+                          keyboardType="phone-pad"
+                          autoComplete="tel"
+                          textContentType="telephoneNumber"
+                          testID="input-phone"
+                          accessibilityLabel="Phone number"
+                          accessibilityHint="Enter your phone or WhatsApp number"
+                        />
                       </View>
                     )}
                   />
-                  {errors.fullName && (
-                    <Text style={styles.fieldError}>{errors.fullName.message}</Text>
+                  {errors.phone && (
+                    <Text style={styles.fieldError}>{errors.phone.message}</Text>
                   )}
                 </View>
 
@@ -195,22 +308,22 @@ export default function SignupScreen() {
                     name="email"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.email && styles.inputError]}>
-                        <Ionicons name="mail-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.enterEmail}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoComplete="email"
-                            textContentType="emailAddress"
-                            testID="input-email"
-                            style={styles.darkInput}
-                          />
-                        </View>
+                        <Ionicons name="mail-outline" size={20} color={'rgba(255,255,255,0.48)'} />
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder={t.auth.enterEmail}
+                          placeholderTextColor={'rgba(255,255,255,0.48)'}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          autoComplete="email"
+                          textContentType="emailAddress"
+                          testID="input-email"
+                          accessibilityLabel="Email address"
+                          accessibilityHint="Enter your email address"
+                        />
                       </View>
                     )}
                   />
@@ -226,21 +339,28 @@ export default function SignupScreen() {
                     name="password"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.password && styles.inputError]}>
-                        <Ionicons name="lock-closed-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.createPassword}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            secureTextEntry
-                            autoComplete="password-new"
-                            textContentType="newPassword"
-                            testID="input-password"
-                            style={styles.darkInput}
-                          />
-                        </View>
+                        <Ionicons name="lock-closed-outline" size={20} color={'rgba(255,255,255,0.48)'} />
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder={t.auth.createPassword}
+                          placeholderTextColor={'rgba(255,255,255,0.48)'}
+                          secureTextEntry={!showPassword}
+                          autoComplete="password-new"
+                          textContentType="newPassword"
+                          testID="input-password"
+                          accessibilityLabel="Password"
+                          accessibilityHint="At least 8 characters with uppercase, lowercase, and number"
+                        />
+                        <Pressable
+                          onPress={() => setShowPassword(!showPassword)}
+                          accessibilityRole="button"
+                          accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+                        >
+                          <Text style={styles.showHideText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                        </Pressable>
                       </View>
                     )}
                   />
@@ -260,21 +380,28 @@ export default function SignupScreen() {
                     name="confirmPassword"
                     render={({ field: { onChange, onBlur, value } }) => (
                       <View style={[styles.inputContainer, errors.confirmPassword && styles.inputError]}>
-                        <Ionicons name="shield-checkmark-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.confirmYourPassword}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            secureTextEntry
-                            autoComplete="password-new"
-                            textContentType="newPassword"
-                            testID="input-confirm-password"
-                            style={styles.darkInput}
-                          />
-                        </View>
+                        <Ionicons name="shield-checkmark-outline" size={20} color={'rgba(255,255,255,0.48)'} />
+                        <TextInput
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          placeholder={t.auth.confirmYourPassword}
+                          placeholderTextColor={'rgba(255,255,255,0.48)'}
+                          secureTextEntry={!showConfirmPassword}
+                          autoComplete="password-new"
+                          textContentType="newPassword"
+                          testID="input-confirm-password"
+                          accessibilityLabel="Confirm password"
+                          accessibilityHint="Re-enter your password"
+                        />
+                        <Pressable
+                          onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                          accessibilityRole="button"
+                          accessibilityLabel={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                        >
+                          <Text style={styles.showHideText}>{showConfirmPassword ? 'Hide' : 'Show'}</Text>
+                        </Pressable>
                       </View>
                     )}
                   />
@@ -294,6 +421,9 @@ export default function SignupScreen() {
                 onPress={handleSubmit(onSubmit)}
                 disabled={isLoading}
                 testID="signup-submit-button"
+                accessibilityRole="button"
+                accessibilityLabel={isLoading ? 'Creating account, please wait' : 'Create account'}
+                accessibilityState={{ disabled: isLoading }}
               >
                 {isLoading ? (
                   <Text style={styles.primaryButtonText}>{t.auth.creatingAccount}</Text>
@@ -306,11 +436,26 @@ export default function SignupScreen() {
               </Pressable>
 
               {/* Terms */}
-              <Text style={styles.terms}>
-                {t.auth.termsPrefixCreate}{' '}
-                <Text style={styles.termsLink}>{t.auth.termsOfService}</Text> {t.auth.and}{' '}
-                <Text style={styles.termsLink}>{t.auth.privacyPolicy}</Text>
-              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center' }}>
+                <Text style={styles.terms}>{t.auth.termsPrefixCreate}{' '}</Text>
+                <Pressable
+                  onPress={() => void Linking.openURL('https://game-over.app/terms')}
+                  accessibilityRole="link"
+                  accessibilityLabel={t.auth.termsOfService}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Text style={styles.termsLink}>{t.auth.termsOfService}</Text>
+                </Pressable>
+                <Text style={styles.terms}>{' '}{t.auth.and}{' '}</Text>
+                <Pressable
+                  onPress={() => void Linking.openURL('https://game-over.app/privacy')}
+                  accessibilityRole="link"
+                  accessibilityLabel={t.auth.privacyPolicy}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                >
+                  <Text style={styles.termsLink}>{t.auth.privacyPolicy}</Text>
+                </Pressable>
+              </View>
             </View>
           </BlurView>
 
@@ -332,7 +477,7 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
   },
   decorCircle1: {
     position: 'absolute',
@@ -341,7 +486,7 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: `${DARK_THEME.primary}20`,
+    backgroundColor: 'rgba(198,167,94,0.12)',
   },
   decorCircle2: {
     position: 'absolute',
@@ -350,7 +495,7 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: `${DARK_THEME.primary}10`,
+    backgroundColor: 'rgba(198,167,94,0.06)',
   },
   keyboardView: {
     flex: 1,
@@ -378,23 +523,23 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '800',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     marginBottom: 8,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
     lineHeight: 24,
   },
   glassCard: {
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   glassCardInner: {
-    backgroundColor: DARK_THEME.glass,
+    backgroundColor: 'rgba(26,47,71,0.8)',
     padding: 24,
     gap: 20,
   },
@@ -402,16 +547,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: `${DARK_THEME.error}15`,
+    backgroundColor: 'rgba(232,131,107,0.08)',
     borderRadius: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: `${DARK_THEME.error}30`,
+    borderColor: 'rgba(232,131,107,0.19)',
   },
   errorText: {
     flex: 1,
     fontSize: 14,
-    color: DARK_THEME.error,
+    color: '#E8836B',
   },
   form: {
     gap: 16,
@@ -422,7 +567,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -438,7 +583,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   inputError: {
-    borderColor: DARK_THEME.error,
+    borderColor: '#E8836B',
   },
   inputInner: {
     flex: 1,
@@ -446,7 +591,7 @@ const styles = StyleSheet.create({
   darkInput: {
     backgroundColor: 'transparent',
     borderWidth: 0,
-    color: '#1A202C', // Dark text for visibility on light input backgrounds
+    color: '#FFFFFF',
     fontSize: 16,
     paddingVertical: 0,
     paddingHorizontal: 0,
@@ -454,12 +599,18 @@ const styles = StyleSheet.create({
   },
   fieldError: {
     fontSize: 12,
-    color: DARK_THEME.error,
+    color: '#E8836B',
     marginTop: 4,
+  },
+  showHideText: {
+    color: '#E8DCC8',
+    fontSize: 14,
+    fontWeight: '600' as const,
+    paddingLeft: 8,
   },
   fieldHint: {
     fontSize: 12,
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
     marginTop: 4,
   },
   primaryButton: {
@@ -467,10 +618,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: DARK_THEME.primary,
+    backgroundColor: '#C6A75E',
     paddingVertical: 16,
     borderRadius: 12,
-    shadowColor: DARK_THEME.primary,
+    shadowColor: '#C6A75E',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -484,18 +635,18 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   primaryButtonText: {
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },
   terms: {
     fontSize: 12,
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
     textAlign: 'center',
     lineHeight: 18,
   },
   termsLink: {
-    color: DARK_THEME.primary,
+    color: '#E8DCC8',
   },
   loginLink: {
     flexDirection: 'row',
@@ -504,11 +655,11 @@ const styles = StyleSheet.create({
   },
   loginText: {
     fontSize: 14,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   loginLinkText: {
     fontSize: 14,
-    color: DARK_THEME.primary,
+    color: '#E8DCC8',
     fontWeight: '700',
   },
 });

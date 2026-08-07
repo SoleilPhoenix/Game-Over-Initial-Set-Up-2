@@ -4,7 +4,7 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { invitesRepository, InviteCodeWithEvent, type InvitePreview } from '@/repositories/invites';
+import { invitesRepository, type InvitePreview } from '@/repositories/invites';
 import { useAuthStore } from '@/stores/authStore';
 import { participantKeys } from './useParticipants';
 import { eventKeys } from './useEvents';
@@ -16,6 +16,7 @@ export const inviteKeys = {
   byEvent: (eventId: string) => [...inviteKeys.all, 'event', eventId] as const,
   validation: (code: string) => [...inviteKeys.all, 'validation', code] as const,
   preview: (code: string) => [...inviteKeys.all, 'preview', code] as const,
+  guests: (eventId: string) => [...inviteKeys.all, 'guests', eventId] as const,
 };
 
 /**
@@ -47,7 +48,7 @@ export type { InvitePreview };
 
 /**
  * Fetch public invite preview — works WITHOUT authentication.
- * Uses anonymous SELECT policy on invite_codes.
+ * Uses a SECURITY DEFINER RPC and retries transient RPC failures.
  */
 export function usePublicInvitePreview(code: string | undefined) {
   return useQuery({
@@ -55,7 +56,7 @@ export function usePublicInvitePreview(code: string | undefined) {
     queryFn: () => invitesRepository.getPreview(code!),
     enabled: !!code,
     staleTime: 30 * 1000,
-    retry: false,
+    retry: 2,
   });
 }
 
@@ -68,6 +69,18 @@ export function useInvitesByEvent(eventId: string | undefined) {
     queryFn: () => invitesRepository.getByEventId(eventId!),
     enabled: !!eventId,
     staleTime: 2 * 60 * 1000,
+  });
+}
+
+/**
+ * Fetch guest details from invite codes for an event
+ */
+export function useInviteGuests(eventId: string | null) {
+  return useQuery({
+    queryKey: inviteKeys.guests(eventId ?? ''),
+    queryFn: () => invitesRepository.getGuestsByEventId(eventId!),
+    enabled: !!eventId,
+    staleTime: 60 * 1000,
   });
 }
 
@@ -104,8 +117,7 @@ export function useAcceptInvite() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ code, userId }: { code: string; userId: string }) =>
-      invitesRepository.accept(code, userId),
+    mutationFn: ({ code }: { code: string }) => invitesRepository.accept(code),
     onSuccess: (result) => {
       if (result.success && result.eventId) {
         // Invalidate relevant queries

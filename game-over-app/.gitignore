@@ -22,13 +22,22 @@ expo-env.d.ts
 .env.*.local
 .env.backup
 
+# Google Play credentials - NEVER commit these!
+google-service-account.json
+
 # Build outputs and logs
 *.log
 *.tsbuildinfo
-ios/build/
-android/build/
-android/app/build/
-android/.gradle/
+
+# Native Projekte: vollstaendig aus app.config.ts generiert.
+# Alle Build-Workflows (ci.yml, e2e.yml) rufen `npx expo prebuild` auf, die
+# iOS-Pipeline loescht die Podfile.lock sogar aktiv und macht `pod install
+# --repo-update`. Diese Ordner zu versionieren hiess also, einen Stand zu
+# pflegen, den niemand liest - und der entsprechend abgedriftet war
+# (Splash-Farbe, App-Icon, Info.plist, project.pbxproj).
+# Lokal neu erzeugen mit: npx expo prebuild
+/ios/
+/android/
 
 # Native builds
 *.jks
@@ -39,7 +48,6 @@ android/.gradle/
 *.orig.*
 
 # iOS
-ios/Pods/
 *.xcuserstate
 *.xcworkspacedata
 project.xcworkspace/
@@ -74,3 +82,34 @@ yarn-error.log*
 *.tmp
 *.temp
 .cache/
+.worktrees/
+
+# Lokaler Werkzeug-Zustand (aus skills-lock.json wiederherstellbar bzw. Sitzungsartefakte)
+.agents/
+.superpowers/
+.playwright-mcp/
+.claude/settings.local.json
+
+# deno.lock entsteht nur, wenn jemand `deno check` auf eine Edge Function laufen
+# laesst. Es gibt keine deno.json im Projekt, CI benutzt Deno nicht, und
+# `supabase functions deploy` bundelt eigenstaendig - die Datei wuerde also von
+# nichts erzwungen. Committet waere sie ein Lockfile ohne Schloss: sie driftet
+# mit jeder Deno-Fassung, erzeugt Diff-Rauschen und taeuscht eine Absicherung
+# vor, die es nicht gibt. Sollte Deno je Teil der Werkzeugkette werden (deno.json
+# plus ein CI-Schritt), gehoert sie umgekehrt zwingend ins Repo.
+deno.lock
+
+# Geheimnisse gehoeren in den Passwortmanager, nie ins Repo
+*recovery_code*
+*.secret
+
+# Skills: nur die eigenen Projekt-Skills tracken.
+# Der Rest sind Symlinks nach .agents/skills (aus skills-lock.json installierbar).
+.claude/skills/*
+!.claude/skills/gameover-*/
+
+# Lokale Claude-Konfiguration - Werkzeug, kein Projektinhalt
+.claude/settings.json
+.claude/launch.json
+.claude/claude-security-guidance.md
+.claude/security-patterns.yaml

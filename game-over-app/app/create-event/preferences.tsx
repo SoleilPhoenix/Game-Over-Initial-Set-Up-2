@@ -13,6 +13,8 @@ import { OptionBlock, OptionBlockGroup } from '@/components/ui/OptionBlock';
 import { GlassPanel } from '@/components/ui/GlassPanel';
 import { WizardFooter } from '@/components/ui/WizardFooter';
 import { useTranslation } from '@/i18n';
+import { feedback } from '@/stores/uiStore';
+import { joinList } from '@/utils/guestDataChange';
 
 export default function WizardStep2() {
   const router = useRouter();
@@ -36,10 +38,26 @@ export default function WizardStep2() {
 
   const name = honoreeName || 'the honoree';
   const canProceed = isStepValid(2);
-
   const handleNext = () => {
     if (canProceed) {
       router.push('/create-event/participants');
+    }
+  };
+
+  const handleNextDisabled = () => {
+    const requiredFields = t.wizard.requiredFields;
+    const missing: string[] = [];
+    if (!energyLevel) missing.push(requiredFields.energyLevel);
+    if (!spotlightComfort) missing.push(requiredFields.spotlightComfort);
+    if (!competitionStyle) missing.push(requiredFields.competitionStyle);
+    if (!enjoymentType) missing.push(requiredFields.enjoymentType);
+    if (!indoorOutdoor) missing.push(requiredFields.indoorOutdoor);
+    if (!eveningStyle) missing.push(requiredFields.eveningStyle);
+    if (missing.length > 0) {
+      feedback.warning(
+        requiredFields.title,
+        `${requiredFields.introduction} ${joinList(missing, requiredFields.conjunction)}`,
+      );
     }
   };
 
@@ -48,8 +66,8 @@ export default function WizardStep2() {
   };
 
   return (
-    <YStack flex={1} backgroundColor="$background">
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+    <YStack flex={1} backgroundColor="#0D1B2A">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 120 }}>
         {/* H1: Energy Level */}
         <GlassPanel icon="flash" title={t.wizard.h1Title.replace('{{name}}', name)} testID="panel-h1">
           <OptionBlockGroup testID="h1-options">
@@ -110,6 +128,7 @@ export default function WizardStep2() {
       <WizardFooter
         onBack={handleBack}
         onNext={handleNext}
+        onNextDisabledPress={handleNextDisabled}
         nextLabel={`${t.wizard.nextStep} \u2192`}
         nextDisabled={!canProceed}
       />

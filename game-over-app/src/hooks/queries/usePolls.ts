@@ -61,7 +61,8 @@ export function useActivePolls(eventId: string | undefined) {
 }
 
 /**
- * Create a new poll
+ * Create a new poll — optimistically prepends the poll to cached lists
+ * so it appears instantly, then reconciles when the server INSERT returns.
  */
 export function useCreatePoll() {
   const queryClient = useQueryClient();
@@ -80,10 +81,50 @@ export function useCreatePoll() {
         options
       );
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({
-        queryKey: pollKeys.byEvent(data.event_id),
-      });
+    onMutate: async ({ poll, options }) => {
+      await queryClient.cancelQueries({ queryKey: pollKeys.all });
+      const snapshot = queryClient.getQueriesData<PollWithOptions[]>({ queryKey: pollKeys.all, exact: false });
+      // Synthetic temp poll so the UI reflects it immediately
+      const tempId = `temp-${Date.now()}`;
+      const now = new Date().toISOString();
+      const optimisticPoll = {
+        id: tempId,
+        event_id: poll.event_id,
+        title: poll.title,
+        category: poll.category,
+        status: poll.status ?? 'active',
+        created_by: user?.id ?? '',
+        created_at: now,
+        updated_at: now,
+        closes_at: null,
+        description: null,
+        options: options.map((label, i) => ({
+          id: `temp-opt-${tempId}-${i}`,
+          poll_id: tempId,
+          label,
+          vote_count: 0,
+          created_at: now,
+        })),
+        total_votes: 0,
+        user_vote: undefined,
+      } as unknown as PollWithOptions;
+      queryClient.setQueriesData<PollWithOptions[]>(
+        { queryKey: pollKeys.byEvent(poll.event_id), exact: false },
+        (old) => Array.isArray(old) ? [optimisticPoll, ...old] : [optimisticPoll]
+      );
+      return { snapshot };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.snapshot) {
+        context.snapshot.forEach(([key, data]) => queryClient.setQueryData(key, data));
+      }
+    },
+    onSettled: (data) => {
+      if (data) {
+        queryClient.invalidateQueries({ queryKey: pollKeys.byEvent(data.event_id) });
+      } else {
+        queryClient.invalidateQueries({ queryKey: pollKeys.all });
+      }
     },
   });
 }

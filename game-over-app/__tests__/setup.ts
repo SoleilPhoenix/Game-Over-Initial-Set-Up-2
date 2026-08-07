@@ -76,6 +76,7 @@ vi.mock('react-native-mmkv', () => ({
 vi.mock('@/lib/supabase/client', () => ({
   supabase: {
     auth: {
+      getUser: vi.fn(() => Promise.resolve({ data: { user: null }, error: null })),
       getSession: vi.fn(() => Promise.resolve({ data: { session: null }, error: null })),
       signInWithPassword: vi.fn(),
       signUp: vi.fn(),
@@ -92,6 +93,7 @@ vi.mock('@/lib/supabase/client', () => ({
       single: vi.fn(() => Promise.resolve({ data: null, error: null })),
       order: vi.fn().mockReturnThis(),
     })),
+    rpc: vi.fn(),
     storage: {
       from: vi.fn(() => ({
         upload: vi.fn(),

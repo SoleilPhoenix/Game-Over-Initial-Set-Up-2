@@ -28,7 +28,7 @@ module.exports = {
       type: 'android.apk',
       binaryPath: 'android/app/build/outputs/apk/debug/app-debug.apk',
       build:
-        'cd android && ./gradlew assembleDebug assembleAndroidTest -DtestBuildType=debug',
+        'cd android && ./gradlew --stacktrace assembleDebug assembleAndroidTest -DtestBuildType=debug',
       reversePorts: [8081],
     },
     'android.release': {
@@ -96,7 +96,7 @@ module.exports = {
     },
     'android.emu.ci': {
       device: 'emulator',
-      app: 'android.release',
+      app: 'android.debug',
     },
   },
 };

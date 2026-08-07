@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Kleinvariante des Favicons. Wird von app.config.ts als web.favicon geladen.
+
+  Bewusst KEINE verkleinerte favicon.svg: deren nachgezeichnete Pfade tragen
+  stroke-width 0.5 auf einer 1024er viewBox, eine Linie ist bei 16px also
+  0,008 Pixel breit. Der Rasterizer kann sie weder zeichnen noch weglassen und
+  mischt sie anteilig ins Navy - aus Gold wird Oliv. Hier ist die viewBox
+  16 Einheiten breit, eine Einheit entspricht also genau einem Pixel.
+
+  Der Diamant ist eine *massive* Raute, keine facettierte Strichzeichnung:
+  Flaeche ueberlebt das Runterrechnen, Haarlinien nicht. Er ist mit 4,8
+  Einheiten deutlich breiter als der Steg mit 1,8, rund 2,7:1. Bei einem
+  aehnlicheren Verhaeltnis verschmelzen beide bei 16px zu einem Nagel - das
+  war der Grund, zwei Zwischenstaende zu verwerfen.
+
+  Was hier bewusst FEHLT: die Wortmarke. "game-over.app" sind 13 Zeichen, bei
+  16 Pixeln Breite blieben 1,2 Pixel pro Zeichen. Sie gehoert auf den
+  Boot-Screen und in den Mail-Kopf, nicht in eine Tableiste.
+
+  Nachpruefen nach jeder Aenderung:
+    qlmanage -t -s 16 -o /tmp/fav assets/web/favicon-small.svg
+  Jedes Goldpixel heller als #C6A75E ist ein Artefakt - Antialiasing kann nur
+  in Richtung Navy abdunkeln.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"
+     role="img" aria-labelledby="t">
+  <title id="t">Game Over</title>
+
+  <rect width="16" height="16" rx="3" fill="#0D1B2A"/>
+
+  <!-- Diamant: breite, massive Raute -->
+  <path d="M 8 1.5 L 10.4 3.4 L 8 5.3 L 5.6 3.4 Z" fill="#C6A75E"/>
+
+  <!-- schmaler Steg -->
+  <path d="M 8 5.0 L 8 8.2" fill="none" stroke="#C6A75E" stroke-width="1.8"/>
+
+  <!-- Ring mit Luecke oben -->
+  <path d="M 10.06 6.53 A 4.4 4.4 0 1 1 5.94 6.53"
+        fill="none" stroke="#C6A75E" stroke-width="2.2"/>
+</svg>

@@ -12,6 +12,7 @@ import { ProgressBar } from '../ui/ProgressBar';
 import { Card } from '../ui/Card';
 import { OptimizedImage } from '../ui/OptimizedImage';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
+import type { EventCapabilities } from '@/utils/permissions';
 
 const RoleBadge = styled(XStack, {
   position: 'absolute',
@@ -35,6 +36,7 @@ export interface EventCardProps {
   role: 'organizer' | 'guest' | 'honoree';
   progress: number;
   paymentStatus?: 'pending' | 'paid' | 'refunded';
+  capabilities: EventCapabilities;
   onPress?: () => void;
   testID?: string;
 }
@@ -63,6 +65,7 @@ export const EventCard = memo(function EventCard({
   role,
   progress,
   paymentStatus,
+  capabilities,
   onPress,
   testID,
 }: EventCardProps) {
@@ -103,7 +106,7 @@ export const EventCard = memo(function EventCard({
 
         <ProgressBar value={progress} showPercentage size="sm" />
 
-        {role === 'guest' && paymentStatus && (
+        {capabilities.canViewOwnShareOnly && !capabilities.canManageInvitations && paymentStatus && (
           <Badge
             label={paymentConfig[paymentStatus].label}
             variant={paymentConfig[paymentStatus].variant}

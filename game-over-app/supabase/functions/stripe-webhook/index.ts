@@ -6,6 +6,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import Stripe from 'https://esm.sh/stripe@14.1.0?target=deno';
+import { sendBookingConfirmationEmail } from '../_shared/booking-confirmation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -161,6 +162,18 @@ async function handlePaymentSuccess(
   }
 
   const auditLog = Array.isArray(booking?.audit_log) ? booking.audit_log : [];
+
+  // --- IDEMPOTENCY GUARD ---
+  // Stripe retries webhooks on network errors. Skip if already processed.
+  const alreadyProcessed = auditLog.some(
+    (entry: { action: string; payment_intent_id?: string }) =>
+      entry.action === 'payment_succeeded' && entry.payment_intent_id === paymentIntent.id
+  );
+  if (alreadyProcessed) {
+    console.log(`[stripe-webhook] Duplicate event for PI ${paymentIntent.id} — skipping.`);
+    return;
+  }
+
   auditLog.push({
     action: 'payment_succeeded',
     payment_intent_id: paymentIntent.id,
@@ -231,6 +244,13 @@ async function handlePaymentSuccess(
     });
   }
 
+  // Buchungsbestaetigung. Laeuft nach allen Statusupdates, damit die Mail den
+  // bereits verbuchten Stand beschreibt, und kann nicht werfen - eine
+  // erfolgreiche Zahlung darf an einem Mailfehler nicht scheitern.
+  // Der Idempotenzschutz oben (audit_log) verhindert, dass ein wiederholt
+  // zugestellter Webhook die Mail ein zweites Mal ausloest.
+  await sendBookingConfirmationEmail(supabase, bookingId, isDeposit ? 'deposit' : 'full');
+
   console.log(`Successfully processed payment for booking: ${bookingId}`);
 }
 
@@ -265,6 +285,17 @@ async function handlePaymentFailure(
   }
 
   const auditLog = Array.isArray(booking?.audit_log) ? booking.audit_log : [];
+
+  // --- IDEMPOTENCY GUARD ---
+  const alreadyProcessed = auditLog.some(
+    (entry: { action: string; payment_intent_id?: string }) =>
+      entry.action === 'payment_failed' && entry.payment_intent_id === paymentIntent.id
+  );
+  if (alreadyProcessed) {
+    console.log(`[stripe-webhook] Duplicate failure event for PI ${paymentIntent.id} — skipping.`);
+    return;
+  }
+
   const lastError = paymentIntent.last_payment_error;
 
   auditLog.push({
@@ -333,6 +364,17 @@ async function handlePaymentCanceled(
   }
 
   const auditLog = Array.isArray(booking?.audit_log) ? booking.audit_log : [];
+
+  // --- IDEMPOTENCY GUARD ---
+  const alreadyProcessed = auditLog.some(
+    (entry: { action: string; payment_intent_id?: string }) =>
+      entry.action === 'payment_canceled' && entry.payment_intent_id === paymentIntent.id
+  );
+  if (alreadyProcessed) {
+    console.log(`[stripe-webhook] Duplicate canceled event for PI ${paymentIntent.id} — skipping.`);
+    return;
+  }
+
   auditLog.push({
     action: 'payment_canceled',
     payment_intent_id: paymentIntent.id,
@@ -383,6 +425,17 @@ async function handleRefund(
   }
 
   const auditLog = Array.isArray(booking.audit_log) ? booking.audit_log : [];
+
+  // --- IDEMPOTENCY GUARD ---
+  const alreadyProcessed = auditLog.some(
+    (entry: { action: string; charge_id?: string }) =>
+      entry.action === 'refund_processed' && entry.charge_id === charge.id
+  );
+  if (alreadyProcessed) {
+    console.log(`[stripe-webhook] Duplicate refund event for charge ${charge.id} — skipping.`);
+    return;
+  }
+
   auditLog.push({
     action: 'refund_processed',
     charge_id: charge.id,

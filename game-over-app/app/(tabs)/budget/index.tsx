@@ -5,32 +5,75 @@
  */
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Alert, Share, Modal, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { ActivityIndicator, Animated, ScrollView, RefreshControl, Pressable, StyleSheet, Modal, View, Image, FlatList, StatusBar, PanResponder, TextInput, KeyboardAvoidingView, Platform, Keyboard } from 'react-native';
 import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEvents } from '@/hooks/queries/useEvents';
 import { useBooking } from '@/hooks/queries/useBookings';
-import { useParticipants } from '@/hooks/queries/useParticipants';
+import { useParticipants, participantKeys, useUpdateParticipantPayment } from '@/hooks/queries/useParticipants';
+import { useInviteGuests } from '@/hooks/queries/useInvites';
 import { useUser } from '@/stores/authStore';
-import { DARK_THEME } from '@/constants/theme';
+import { useWizardStore } from '@/stores/wizardStore';
+import { useTheme } from '@/hooks/useTheme';
+import { type EditorialTheme } from '@/constants/designSystem';
+import { ShareModal } from '@/components/ui/ShareModal';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { useTabBarStore } from '@/stores/tabBarStore';
+import { useActiveEventStore } from '@/stores/activeEventStore';
+import { feedback, useUIStore } from '@/stores/uiStore';
 import { useTranslation, getTranslation } from '@/i18n';
 import { useSwipeTabs } from '@/hooks/useSwipeTabs';
+import { computeBookedBudgetStats } from '@/utils/budgetStats';
+import { resolveEventCapabilities } from '@/utils/permissions';
+import { isReadOnlyEvent } from '@/utils/eventLifecycle';
+import {
+  calculateExpenseSplit,
+  depositAndDue,
+  formatCentsForInput,
+  formatEuro,
+  formatEuroCents,
+  formatEuroFromEuros,
+  splitPerPerson,
+} from '@/utils/money';
+import { PastEventBanner } from '@/components/ui/PastEventBanner';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import { loadBudgetInfo, loadDesiredParticipants, loadGuestDetails, type BudgetInfo, type GuestDetail } from '@/lib/participantCountCache';
 import { supabase } from '@/lib/supabase/client';
-import { useUrgentPayment } from '@/hooks/useUrgentPayment';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
-import type { Database } from '@/lib/supabase/types';
 import type { EventWithDetails } from '@/repositories/events';
-
-type Event = Database['public']['Tables']['events']['Row'] & {
-  city?: { name: string } | null;
-};
+import DateTimePicker from '@react-native-community/datetimepicker';
+import {
+  useCreateRefund,
+  useDeleteRefund,
+  useEventRefunds,
+  useImportRefunds,
+  useUpdateRefund,
+} from '@/hooks/queries/useRefunds';
+import type {
+  CreateEventRefund,
+  EventRefund,
+  RefundStatus,
+} from '@/hooks/queries/useRefunds';
+import { CachedAvatarImage } from '@/components/ui/CachedAvatarImage';
+import {
+  useCreateExpense,
+  useCreateExpenseCategory,
+  useDeleteExpense,
+  useEventExpenseCategories,
+  useEventExpenseReports,
+  useEventExpenses,
+  useMarkOwnExpenseShareSettled,
+  useMigrateLocalExpenses,
+  useReportExpense,
+  useResolveExpenseReport,
+  useSetExpenseShares,
+  useUpdateExpense,
+  type EventExpense,
+} from '@/hooks/queries/useExpenses';
 
 // Avatar colors for participant initials
 const AVATAR_COLORS = [
@@ -53,11 +96,11 @@ const EXPENSE_CATEGORIES: ExpenseCategory[] = [
 ];
 
 const REFUND_TEMPLATES = [
-  { key: 'hotel_deposit',    label: 'Hotel Security Deposit',  icon: 'home-outline',            color: '#3B82F6', bg: 'rgba(59,130,246,0.15)'  },
-  { key: 'venue_deposit',    label: 'Event Venue Deposit',     icon: 'storefront-outline',      color: '#8B5CF6', bg: 'rgba(139,92,246,0.15)'  },
-  { key: 'activity_payment', label: 'Activity Pre-payment',    icon: 'game-controller-outline', color: '#F97316', bg: 'rgba(249,115,22,0.15)'  },
-  { key: 'transport_prepay', label: 'Transport Pre-payment',   icon: 'car-outline',             color: '#10B981', bg: 'rgba(16,185,129,0.15)'  },
-  { key: 'restaurant_deposit', label: 'Restaurant Deposit',   icon: 'restaurant-outline',      color: '#EC4899', bg: 'rgba(236,72,153,0.15)'  },
+  { key: 'hotel_deposit',      labelKey: 'refundHotelDeposit',      icon: 'home-outline',            color: '#3B82F6', bg: 'rgba(59,130,246,0.15)'  },
+  { key: 'venue_deposit',      labelKey: 'refundVenueDeposit',      icon: 'storefront-outline',      color: '#8B5CF6', bg: 'rgba(139,92,246,0.15)'  },
+  { key: 'activity_payment',   labelKey: 'refundActivityPayment',   icon: 'game-controller-outline', color: '#F97316', bg: 'rgba(249,115,22,0.15)'  },
+  { key: 'transport_prepay',   labelKey: 'refundTransportPrepay',   icon: 'car-outline',             color: '#10B981', bg: 'rgba(16,185,129,0.15)'  },
+  { key: 'restaurant_deposit', labelKey: 'refundRestaurantDeposit', icon: 'restaurant-outline',      color: '#EC4899', bg: 'rgba(236,72,153,0.15)'  },
 ];
 
 // Unique colors for custom categories / custom refunds (never overlap with EXPENSE_CATEGORIES or REFUND_TEMPLATES)
@@ -70,11 +113,21 @@ const CUSTOM_COLORS = [
 ];
 
 function SwipeableRefundRow({
-  description, amount, processingLabel, processingText, showBorder, onDelete, icon, color, bg,
+  description, amount, detailText, statusText, status, overdue, showBorder, onDelete, onPress, icon, color, bg,
 }: {
-  description: string; amount: string; processingLabel: string; processingText: string; showBorder: boolean; onDelete: () => void;
+  description: string;
+  amount: string;
+  detailText: string;
+  statusText: string;
+  status: RefundStatus;
+  overdue: boolean;
+  showBorder: boolean;
+  onDelete: () => void;
+  onPress: () => void;
   icon?: string; color?: string; bg?: string;
 }) {
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
   const translateX = useRef(new Animated.Value(0)).current;
   const panResponder = useRef(
     PanResponder.create({
@@ -101,83 +154,196 @@ function SwipeableRefundRow({
       style={[{ transform: [{ translateX }] }, showBorder && styles.contributionRowBorder]}
       {...panResponder.panHandlers}
     >
-      <View style={styles.refundRow}>
+      <Pressable
+        onPress={onPress}
+        style={[
+          styles.refundRow,
+          status === 'received' && styles.refundRowReceived,
+          overdue && styles.refundRowOverdue,
+        ]}
+      >
         <XStack alignItems="center" gap="$3" flex={1}>
           <View style={[styles.refundIcon, { backgroundColor: bg ?? 'rgba(255,255,255,0.08)' }]}>
-            <Ionicons name={(icon ?? 'receipt-outline') as any} size={18} color={color ?? DARK_THEME.textSecondary} />
+            <Ionicons
+              name={(status === 'received' ? 'checkmark-circle-outline' : icon ?? 'receipt-outline') as any}
+              size={18}
+              color={status === 'received' ? '#22C55E' : overdue ? '#F97316' : color ?? theme.textSecondary}
+            />
           </View>
-          <YStack>
-            <Text style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}>{description}</Text>
-            <Text style={{ fontSize: 12, color: DARK_THEME.textTertiary }}>{processingLabel}</Text>
+          <YStack flex={1}>
+            <Text style={{ fontSize: 14, fontWeight: '500', color: theme.textPrimary }}>{description}</Text>
+            <Text style={{ fontSize: 12, color: overdue ? '#F97316' : theme.textTertiary }}>{detailText}</Text>
           </YStack>
         </XStack>
         <YStack alignItems="flex-end">
-          <Text style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}>+€{amount}</Text>
-          <View style={styles.processingBadge}>
-            <Text style={styles.processingText}>{processingText}</Text>
+          <Text style={{ fontSize: 14, fontWeight: '500', color: status === 'received' ? '#22C55E' : theme.textPrimary }}>+{amount}</Text>
+          <View style={status === 'received' ? styles.receivedBadge : styles.processingBadge}>
+            <Text style={status === 'received' ? styles.receivedText : styles.processingText}>{statusText}</Text>
           </View>
         </YStack>
-      </View>
+      </Pressable>
     </Animated.View>
   );
 }
 
+function parseRefundAmountToCents(amount: string): number {
+  const normalized = amount.trim().replace(/\s/g, '').replace(',', '.');
+  const value = Number(normalized);
+  return Number.isFinite(value) ? Math.round(value * 100) : 0;
+}
+
+function dateFromISO(value: string): Date {
+  return new Date(`${value}T00:00:00`);
+}
+
+function dateToISO(value: Date): string {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+
 export default function BudgetDashboardScreen() {
   const router = useRouter();
-  const { hasUnseenUrgency, markUrgencySeen, isGuestContribution, guestUrgentEvent, guestDaysLeft } = useUrgentPayment();
+  const queryClient = useQueryClient();
+  const { theme } = useTheme();
+  const styles = useMemo(() => makeStyles(theme), [theme]);
+  const remindStyles = useMemo(() => makeRemindStyles(theme), [theme]);
   // eventId = opened via /(tabs)/budget?eventId=xxx (old approach, kept for safety)
   // id     = opened via /event/[id]/budget (event-stack, router.back() works correctly)
-  const { eventId: rawEventIdParam, id: pathId } = useLocalSearchParams<{ eventId?: string; id?: string }>();
+  const { eventId: rawEventIdParam, id: pathId, claimedBy } = useLocalSearchParams<{ eventId?: string; id?: string; claimedBy?: string }>();
   const eventIdParam = rawEventIdParam || pathId;
+
+  // Set when the organizer arrives from a "payment claimed" notification, so the
+  // list points at the person the notification was about instead of making the
+  // organizer hunt for them. Fades out on its own — a permanent marker would
+  // pile up once several guests report in the same evening.
+  const [highlightUserId, setHighlightUserId] = useState<string | null>(claimedBy ?? null);
+  useEffect(() => {
+    if (!claimedBy) return;
+    setHighlightUserId(claimedBy);
+    const timer = setTimeout(() => setHighlightUserId(null), 4000);
+    return () => clearTimeout(timer);
+  }, [claimedBy]);
   const insets = useSafeAreaInsets();
   const user = useUser();
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(eventIdParam || null);
+  // Selected event is shared with the Chat tab via useActiveEventStore so that
+  // picking an event in either tab updates the other. A deep-link eventIdParam
+  // still wins on mount (handled below in a focus effect).
+  const selectedEventId = useActiveEventStore((s) => s.activeEventId);
+  const setSelectedEventId = useActiveEventStore((s) => s.setActiveEventId);
+  const [markingPaidUserId, setMarkingPaidUserId] = useState<string | null>(null);
+  const updateParticipantPayment = useUpdateParticipantPayment();
+  const [manualRefreshing, setManualRefreshing] = useState(false);
+  // Derived: is the current user the organizer of the selected event?
+  // Used to hide organizer-only actions (Pay Remaining Balance, Invite Guests, Remind All).
   const [eventSelectorOpen, setEventSelectorOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<BudgetCategory>('package');
   const [cachedBudget, setCachedBudget] = useState<BudgetInfo | null>(null);
   const [cachedParticipantCount, setCachedParticipantCount] = useState<number | null>(null);
   const [cachedGuests, setCachedGuests] = useState<Record<number, GuestDetail>>({});
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
   const setTabBarHidden = useTabBarStore((s) => s.setHidden);
 
+  const [shareModalVisible, setShareModalVisible] = useState(false);
+
+  // Track keyboard visibility so we can shrink the modal's bottom padding when it opens
+  // (otherwise the 120px "clear the tab bar" padding shows as an empty blue strip above the keyboard).
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow', () => setKeyboardOpen(true));
+    const hide = Keyboard.addListener(Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide', () => setKeyboardOpen(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+  // Deep-linked budget screens hide the tab bar, while the normal Budget tab
+  // still needs to clear it. All three sheets share this bottom inset.
+  const modalPaddingBottom = keyboardOpen
+    ? 16
+    : insets.bottom + (eventIdParam ? 16 : 96);
+
   // Remind-all channel picker modal
-  const [remindModalVisible, setRemindModalVisible] = useState(false);
-  const [remindSendStatus, setRemindSendStatus] = useState<'idle' | 'sending' | 'done'>('idle');
-  const [remindActiveChannel, setRemindActiveChannel] = useState<'email' | 'sms' | 'whatsapp' | null>(null);
-  const [remindResults, setRemindResults] = useState<Array<{ status: string; recipient: string; error?: string }>>([]);
+  const [remindModal, setRemindModal] = useState<{
+    visible: boolean;
+    sendStatus: 'idle' | 'sending' | 'done';
+    activeChannel: 'email' | 'whatsapp' | null;
+    results: { status: string; recipient: string; error?: string }[];
+  }>({ visible: false, sendStatus: 'idle', activeChannel: null, results: [] });
+  // Payment-reminder copy tone: A = playful, B = friendly (A/B while we compare)
+  const [reminderVariant, setReminderVariant] = useState<'A' | 'B'>('A');
+  // Latest reminder recipients, kept in a ref so the send handler (declared before
+  // the recipients memo) always reads the current list.
+  const reminderRecipientsRef = useRef<{ userId: string; firstName?: string; email?: string; phone?: string; amountCents: number }[]>([]);
 
-  // Expense modal
-  const [expenseModalVisible, setExpenseModalVisible] = useState(false);
-  const [expenseCategoryKey, setExpenseCategoryKey] = useState<string | null>(null);
-  const [expenseViewMode, setExpenseViewMode] = useState<'list' | 'form'>('form');
-  const [expenseDescription, setExpenseDescription] = useState('');
-  const [expenseAmount, setExpenseAmount] = useState('');
-  const [expensePaidBy, setExpensePaidBy] = useState<'you' | 'other'>('you');
-  const [expensePaidByPerson, setExpensePaidByPerson] = useState<string | null>(null);
-  const [expenseContributors, setExpenseContributors] = useState<string[]>([]);
-  const [addedExpenses, setAddedExpenses] = useState<Array<{
-    categoryKey: string; description: string; amount: string;
-    paidBy: 'you' | 'other'; paidByPerson?: string | null; contributors: string[];
-  }>>([]);
+  // Extra-cost editor. Database IDs are used throughout; invite-only guests cannot
+  // receive a share until they have joined and have an auth user ID.
+  const [expenseModal, setExpenseModal] = useState<{
+    visible: boolean;
+    categoryKey: string | null;
+    viewMode: 'form' | 'detail';
+    description: string;
+    amount: string;
+    paidByUserId: string | null;
+    participantIds: string[];
+    manualAmounts: Record<string, string>;
+    editingId: string | null;
+    detailId: string | null;
+    payerDropdownOpen: boolean;
+    reportReason: string;
+  }>({
+    visible: false,
+    categoryKey: null,
+    viewMode: 'form',
+    description: '',
+    amount: '',
+    paidByUserId: null,
+    participantIds: [],
+    manualAmounts: {},
+    editingId: null,
+    detailId: null,
+    payerDropdownOpen: false,
+    reportReason: '',
+  });
 
-  // Custom categories (user-created)
-  const [customCategories, setCustomCategories] = useState<ExpenseCategory[]>([]);
-  const [customCategoryModalVisible, setCustomCategoryModalVisible] = useState(false);
-  const [customCategoryLabel, setCustomCategoryLabel] = useState('');
+  const [customCatModal, setCustomCatModal] = useState<{
+    visible: boolean;
+    label: string;
+  }>({ visible: false, label: '' });
 
   // Refund modal
-  const [refundModalVisible, setRefundModalVisible] = useState(false);
-  const [refundTemplateKey, setRefundTemplateKey] = useState<string | null>(null);
-  const [refundDescription, setRefundDescription] = useState('');
-  const [refundAmount, setRefundAmount] = useState('');
-  const [addedRefunds, setAddedRefunds] = useState<Array<{ description: string; amount: string; status: 'processing' | 'received'; icon?: string; color?: string; bg?: string; }>>([]);
+  const [refundModal, setRefundModal] = useState<{
+    visible: boolean;
+    editingId: string | null;
+    templateKey: string | null;
+    description: string;
+    amount: string;
+    expectedBy: string | null;
+    status: RefundStatus;
+    receivedAt: string | null;
+  }>({
+    visible: false,
+    editingId: null,
+    templateKey: null,
+    description: '',
+    amount: '',
+    expectedBy: null,
+    status: 'pending',
+    receivedAt: null,
+  });
+  const [showRefundDatePicker, setShowRefundDatePicker] = useState(false);
+  const refundScrollRef = useRef<ScrollView>(null);
+
+  // The inline calendar is tall enough to push the submit button past the bottom
+  // of the sheet on smaller phones. Opening it scrolls the button back into view
+  // instead of leaving the user with a form they cannot submit.
+  useEffect(() => {
+    if (!showRefundDatePicker) return;
+    const timer = setTimeout(() => refundScrollRef.current?.scrollToEnd({ animated: true }), 120);
+    return () => clearTimeout(timer);
+  }, [showRefundDatePicker]);
 
   // Ref always holds latest contributors — avoids declaration-order TDZ issue with useCallback
-  const allContributorsRef = useRef<Array<{ id: string; name: string }>>([]);
-
-  // Track which expense index is being edited (null = creating new)
-  const [editingExpenseIndex, setEditingExpenseIndex] = useState<number | null>(null);
-  const [payerDropdownOpen, setPayerDropdownOpen] = useState(false);
+  const allContributorsRef = useRef<{ id: string; name: string; userId?: string | null; role?: string }[]>([]);
 
   // Drag-to-dismiss for budget modals (matches destination.tsx pattern)
   const expenseSheetY = useRef(new Animated.Value(0)).current;
@@ -199,94 +365,49 @@ export default function BudgetDashboardScreen() {
       },
     });
 
-  const expenseSheetPan = useRef(makeModalPan(expenseSheetY, () => setExpenseModalVisible(false))).current;
-  const refundSheetPan = useRef(makeModalPan(refundSheetY, () => setRefundModalVisible(false))).current;
-  const customCatSheetPan = useRef(makeModalPan(customCatSheetY, () => setCustomCategoryModalVisible(false))).current;
-
-  const openExpenseModal = useCallback((categoryKey: string) => {
-    setEditingExpenseIndex(null);
-    setExpenseCategoryKey(categoryKey);
-    const existing = addedExpenses.filter(e => e.categoryKey === categoryKey);
-    setExpenseViewMode(existing.length > 0 ? 'list' : 'form');
-    setExpenseDescription('');
-    setExpenseAmount('');
-    setExpensePaidBy('you');
-    setExpensePaidByPerson(null);
-    setExpenseContributors([]);
-    setExpenseModalVisible(true);
-  }, [addedExpenses]);
-
-  const openEditExpense = useCallback((globalIdx: number) => {
-    const exp = addedExpenses[globalIdx];
-    if (!exp) return;
-    setEditingExpenseIndex(globalIdx);
-    setExpenseCategoryKey(exp.categoryKey);
-    setExpenseDescription(exp.description);
-    setExpenseAmount(exp.amount);
-    setExpensePaidBy(exp.paidBy);
-    setExpensePaidByPerson(exp.paidByPerson || null);
-    setExpenseContributors(exp.contributors);
-    setExpenseViewMode('form');
-    setExpenseModalVisible(true);
-  }, [addedExpenses]);
-
-  const submitExpense = useCallback(() => {
-    if (!expenseDescription.trim() || !expenseAmount.trim() || !expenseCategoryKey) return;
-    const newExpense = {
-      categoryKey: expenseCategoryKey,
-      description: expenseDescription.trim(),
-      amount: expenseAmount.trim(),
-      paidBy: expensePaidBy,
-      paidByPerson: expensePaidBy === 'other' ? expensePaidByPerson : null,
-      contributors: expenseContributors,
-    };
-    setAddedExpenses(prev => {
-      const updated = editingExpenseIndex !== null
-        ? prev.map((e, i) => i === editingExpenseIndex ? newExpense : e)
-        : [...prev, newExpense];
-      if (selectedEventId) {
-        AsyncStorage.setItem(`gameover:expenses:${selectedEventId}`, JSON.stringify(updated));
-      }
-      return updated;
-    });
-    setEditingExpenseIndex(null);
-    setExpenseModalVisible(false);
-  }, [expenseDescription, expenseAmount, expenseCategoryKey, expensePaidBy, expensePaidByPerson, expenseContributors, selectedEventId, editingExpenseIndex]);
+  const expenseSheetPan = useRef(makeModalPan(expenseSheetY, () => setExpenseModal(prev => ({ ...prev, visible: false })))).current;
+  const refundSheetPan = useRef(makeModalPan(refundSheetY, () => setRefundModal(prev => ({ ...prev, visible: false })))).current;
+  const customCatSheetPan = useRef(makeModalPan(customCatSheetY, () => setCustomCatModal(prev => ({ ...prev, visible: false })))).current;
 
   const openRefundModal = useCallback(() => {
-    setRefundTemplateKey(null);
-    setRefundDescription('');
-    setRefundAmount('');
-    setRefundModalVisible(true);
+    setShowRefundDatePicker(false);
+    setRefundModal({
+      visible: true,
+      editingId: null,
+      templateKey: null,
+      description: '',
+      amount: '',
+      expectedBy: null,
+      status: 'pending',
+      receivedAt: null,
+    });
   }, []);
 
-  const submitRefund = useCallback(() => {
-    if (!refundDescription.trim() || !refundAmount.trim()) return;
-    const tmpl = REFUND_TEMPLATES.find(t => t.key === refundTemplateKey);
-    setAddedRefunds(prev => {
-      const customColor = CUSTOM_COLORS[prev.length % CUSTOM_COLORS.length];
-      const updated = [{
-        description: refundDescription.trim(),
-        amount: refundAmount.trim(),
-        status: 'processing' as const,
-        icon: tmpl?.icon ?? 'receipt-outline',
-        color: tmpl?.color ?? customColor.color,
-        bg: tmpl?.bg ?? customColor.bg,
-      }, ...prev];
-      if (selectedEventId) {
-        AsyncStorage.setItem(`gameover:refunds:${selectedEventId}`, JSON.stringify(updated));
-      }
-      return updated;
+  const openEditRefund = useCallback((refund: EventRefund) => {
+    setShowRefundDatePicker(false);
+    setRefundModal({
+      visible: true,
+      editingId: refund.id,
+      templateKey: refund.templateKey,
+      description: refund.description,
+      amount: formatCentsForInput(refund.amountCents),
+      expectedBy: refund.expectedBy,
+      status: refund.status,
+      receivedAt: refund.receivedAt,
     });
-    setRefundModalVisible(false);
-  }, [refundDescription, refundAmount, refundTemplateKey, selectedEventId]);
+  }, []);
 
-  // Hide tab bar when opened from Event Summary (eventIdParam present)
+  // Hide tab bar when opened from Event Summary (eventIdParam present).
+  // Also refetch participants on focus so payment status reflects "I've Paid" from Notifications screen.
   useFocusEffect(
     useCallback(() => {
       if (eventIdParam) setTabBarHidden(true);
+      if (selectedEventId) {
+        queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(selectedEventId) });
+      }
       return () => setTabBarHidden(false);
-    }, [eventIdParam])
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- setTabBarHidden is a stable Zustand setter
+    }, [eventIdParam, selectedEventId, queryClient])
   );
 
   const BUDGET_TABS = ['package', 'otherExpenses'] as const;
@@ -297,13 +418,40 @@ export default function BudgetDashboardScreen() {
     data: events,
     isLoading: eventsLoading,
     refetch: refetchEvents,
-    isRefetching,
   } = useEvents();
 
   // Filter booked events
   const bookedEvents = useMemo(() => {
-    return (events || []).filter((e: EventWithDetails) => e.status === 'booked' || e.status === 'completed');
-  }, [events]);
+    return (events || []).filter((e: EventWithDetails) =>
+      (e.status === 'booked' || e.status === 'completed')
+      && resolveEventCapabilities({ event: e, userId: user?.id }).canViewBudget
+    );
+  }, [events, user?.id]);
+
+  const requestedEvent = (events || []).find((event) =>
+    event.id === (eventIdParam || selectedEventId)
+  );
+  const canOpenRequestedBudget = !requestedEvent || resolveEventCapabilities({
+    event: requestedEvent,
+    userId: user?.id,
+  }).canViewBudget;
+  useEffect(() => {
+    if (requestedEvent && !canOpenRequestedBudget) {
+      router.replace(`/event/${requestedEvent.id}` as any);
+    }
+  }, [canOpenRequestedBudget, requestedEvent, router]);
+
+  // Events shown in the selector dropdown: exclude past events — those live in the Events tab.
+  // Uses start-of-today so today's events are still visible.
+  const selectableEvents = useMemo(() => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const cutoff = startOfToday.getTime();
+    return bookedEvents.filter((e: EventWithDetails) => {
+      if (!e.start_date) return true;
+      return new Date(e.start_date).getTime() >= cutoff;
+    });
+  }, [bookedEvents]);
 
   // Check if we have booked events FIRST (before any other queries)
   const hasBookedEvents = bookedEvents.length > 0;
@@ -314,27 +462,34 @@ export default function BudgetDashboardScreen() {
   const userInitial = userName.charAt(0).toUpperCase();
 
   // Define handlers before early return
-  const handleRefresh = useCallback(() => {
-    refetchEvents();
+  const handleRefresh = useCallback(async () => {
+    setManualRefreshing(true);
+    try {
+      await refetchEvents();
+    } finally {
+      setManualRefreshing(false);
+    }
   }, [refetchEvents]);
 
-  const handleNotifications = () => {
-    markUrgencySeen();
-    if (isGuestContribution && guestUrgentEvent) {
-      Alert.alert(
-        'Contribution Due',
-        `Your share for ${guestUrgentEvent.title} is due in ${guestDaysLeft} days.\nPlease transfer your contribution to the organizer.`,
-        [{ text: 'OK' }]
-      );
-    } else {
-      router.push('/notifications');
-    }
-  };
+  const handleCreateEvent = useCallback(() => {
+    useWizardStore.getState().startNewDraft(user?.id);
+    router.push('/create-event');
+  }, [router, user?.id]);
 
-  // Auto-select nearest booked event (skip if opened from Event Summary)
+  // Deep-link: if the screen was opened with an eventIdParam, that wins and
+  // seeds the shared store so the Chat tab lands on the same event too.
+  useEffect(() => {
+    if (eventIdParam && eventIdParam !== selectedEventId) {
+      setSelectedEventId(eventIdParam);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run on eventIdParam change
+  }, [eventIdParam]);
+
+  // Auto-select nearest booked event only when there's no active selection yet
+  // (skip if opened via eventIdParam, or if Chat/Budget already picked one).
   const hasAutoSelected = React.useRef(false);
   useEffect(() => {
-    if (hasAutoSelected.current || bookedEvents.length === 0 || eventIdParam) return;
+    if (hasAutoSelected.current || bookedEvents.length === 0 || eventIdParam || selectedEventId) return;
     hasAutoSelected.current = true;
     const now = Date.now();
     const sorted = [...bookedEvents].sort((a, b) => {
@@ -346,41 +501,207 @@ export default function BudgetDashboardScreen() {
       return aDate - bDate;
     });
     setSelectedEventId(sorted[0].id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally ignores eventIdParam and selectedEventId; auto-select runs only when bookedEvents list changes
   }, [bookedEvents]);
 
-  // ONLY fetch booking if we have booked events (prevent unnecessary queries)
-  const { data: booking, isLoading: bookingLoading } = useBooking(
-    hasBookedEvents ? (selectedEventId || undefined) : undefined
+  const selectedEvent = bookedEvents.find((e: EventWithDetails) => e.id === selectedEventId);
+  const capabilities = resolveEventCapabilities({ event: selectedEvent, userId: user?.id });
+
+  // Booking RLS excludes honorees. Capability gating ensures this hook never
+  // requests a booking for a role that cannot view the budget.
+  const { data: booking } = useBooking(
+    hasBookedEvents && capabilities.canViewBudget ? (selectedEventId || undefined) : undefined
   );
 
   // ONLY fetch participants if we have booked events
-  const { data: participants, isLoading: participantsLoading } = useParticipants(
+  const { data: participants } = useParticipants(
     hasBookedEvents ? (selectedEventId || undefined) : undefined
   );
 
-  const selectedEvent = bookedEvents.find((e: EventWithDetails) => e.id === selectedEventId);
+  const expenseEventId = capabilities.canViewExtraCosts
+    ? selectedEventId ?? undefined
+    : undefined;
+  const { data: addedExpenses = [], isLoading: expensesLoading } = useEventExpenses(expenseEventId);
+  const { data: expenseReports = [] } = useEventExpenseReports(expenseEventId);
+  const { data: databaseExpenseCategories = [] } = useEventExpenseCategories(expenseEventId);
+  const createExpense = useCreateExpense(expenseEventId);
+  const updateExpense = useUpdateExpense(expenseEventId);
+  const deleteExpense = useDeleteExpense(expenseEventId);
+  const setExpenseShares = useSetExpenseShares(expenseEventId);
+  const settleOwnExpenseShare = useMarkOwnExpenseShareSettled(expenseEventId);
+  const reportExpense = useReportExpense(expenseEventId);
+  const resolveExpenseReport = useResolveExpenseReport(expenseEventId);
+  const createExpenseCategory = useCreateExpenseCategory(expenseEventId);
+  const migrateLocalExpenses = useMigrateLocalExpenses();
+  const expenseMigrationAttempted = useRef(new Set<string>());
 
-  // Load all persisted data when event changes
+  useEffect(() => {
+    if (!expenseEventId || expenseMigrationAttempted.current.has(expenseEventId)) return;
+    expenseMigrationAttempted.current.add(expenseEventId);
+    void migrateLocalExpenses.mutateAsync(expenseEventId).catch((error) => {
+      console.warn('[expenses] local migration failed:', error);
+      feedback.error(t.common.error, t.budget.expenseMigrationError);
+    });
+  }, [expenseEventId, migrateLocalExpenses, t.budget.expenseMigrationError, t.common.error]);
+
+  const refundEventId = capabilities.canEditEvent ? selectedEventId ?? undefined : undefined;
+  const {
+    data: addedRefunds = [],
+    isFetchedAfterMount: refundsFetchedFromDatabase,
+    isSuccess: refundsLoaded,
+  } = useEventRefunds(refundEventId);
+  const createRefund = useCreateRefund(refundEventId);
+  const importRefunds = useImportRefunds(refundEventId);
+  const updateRefund = useUpdateRefund(refundEventId);
+  const deleteRefund = useDeleteRefund(refundEventId);
+  const refundMigrationAttempted = useRef(new Set<string>());
+  // Package costs freeze once the event has ended; Other Expenses stays editable
+  const isPackageFrozen = selectedEvent ? isReadOnlyEvent(selectedEvent) : false;
+
+  // One-time bridge from the old device-local refund ledger. We wait for a
+  // network-backed query result so a persisted empty React Query cache cannot
+  // cause duplicate rows. The local key is cleared only after every row is
+  // successfully inserted.
+  useEffect(() => {
+    if (
+      !refundEventId ||
+      !user?.id ||
+      !refundsFetchedFromDatabase ||
+      !refundsLoaded ||
+      addedRefunds.length > 0 ||
+      refundMigrationAttempted.current.has(refundEventId)
+    ) {
+      return;
+    }
+
+    refundMigrationAttempted.current.add(refundEventId);
+    void (async () => {
+      const storageKey = `gameover:refunds:${refundEventId}`;
+      try {
+        const raw = await AsyncStorage.getItem(storageKey);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed) || parsed.length === 0) return;
+
+        const migrated: CreateEventRefund[] = [];
+        for (const item of parsed as unknown[]) {
+          if (!item || typeof item !== 'object') {
+            console.warn('[refunds] local migration kept malformed data for manual recovery');
+            return;
+          }
+          const local = item as Record<string, unknown>;
+          const description = typeof local.description === 'string' ? local.description.trim() : '';
+          const amountCents = typeof local.amount === 'string'
+            ? parseRefundAmountToCents(local.amount)
+            : 0;
+          if (!description || amountCents <= 0) {
+            console.warn('[refunds] local migration kept invalid data for manual recovery');
+            return;
+          }
+
+          const template = REFUND_TEMPLATES.find((candidate) =>
+            candidate.icon === local.icon &&
+            candidate.color === local.color &&
+            candidate.bg === local.bg
+          );
+          const status: RefundStatus = local.status === 'received' ? 'received' : 'pending';
+          migrated.push({
+            eventId: refundEventId,
+            createdBy: user.id,
+            templateKey: template?.key ?? null,
+            description,
+            amountCents,
+            status,
+            expectedBy: null,
+            receivedAt: status === 'received' ? new Date().toISOString() : null,
+          });
+        }
+
+        if (migrated.length === 0) return;
+        await importRefunds.mutateAsync(migrated);
+        await AsyncStorage.removeItem(storageKey);
+      } catch (error) {
+        refundMigrationAttempted.current.delete(refundEventId);
+        console.warn('[refunds] local migration failed:', error);
+      }
+    })();
+  }, [
+    addedRefunds.length,
+    importRefunds,
+    refundEventId,
+    refundsFetchedFromDatabase,
+    refundsLoaded,
+    user?.id,
+  ]);
+
+  const submitRefund = useCallback(async () => {
+    if (!refundEventId || !user?.id || !refundModal.description.trim()) return;
+    const amountCents = parseRefundAmountToCents(refundModal.amount);
+    if (amountCents <= 0) {
+      feedback.warning(t.common.error, t.budget.refundInvalidAmount);
+      return;
+    }
+
+    const receivedAt = refundModal.status === 'received'
+      ? refundModal.receivedAt ?? new Date().toISOString()
+      : null;
+    try {
+      if (refundModal.editingId) {
+        await updateRefund.mutateAsync({
+          id: refundModal.editingId,
+          patch: {
+            description: refundModal.description.trim(),
+            amountCents,
+            expectedBy: refundModal.expectedBy,
+            status: refundModal.status,
+            receivedAt,
+          },
+        });
+      } else {
+        await createRefund.mutateAsync({
+          eventId: refundEventId,
+          createdBy: user.id,
+          templateKey: refundModal.templateKey === 'custom' ? null : refundModal.templateKey,
+          description: refundModal.description.trim(),
+          amountCents,
+          status: refundModal.status,
+          expectedBy: refundModal.expectedBy,
+          receivedAt,
+        });
+      }
+      setShowRefundDatePicker(false);
+      setRefundModal((current) => ({ ...current, visible: false }));
+    } catch (error) {
+      console.error('[refunds] save failed:', error);
+      feedback.error(t.common.error, t.budget.refundError);
+    }
+  }, [createRefund, refundEventId, refundModal, t, updateRefund, user?.id]);
+
+  const formatRefundDate = useCallback((value: string) => {
+    return dateFromISO(value).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US');
+  }, [language]);
+
+  // Fetch invite codes to include non-registered invited guests in contributors list
+  const { data: rawInviteGuests = [] } = useInviteGuests(selectedEventId ?? null);
+  const inviteCodeGuests = useMemo(
+    () => rawInviteGuests
+      .filter(ic => ic.guest_email || ic.guest_first_name)
+      .map(ic => ({
+        id: ic.id,
+        name: [ic.guest_first_name, ic.guest_last_name].filter(Boolean).join(' ')
+          || ic.guest_email?.split('@')[0] || 'Guest',
+        email: ic.guest_email?.toLowerCase() || '',
+      })),
+    [rawInviteGuests]
+  );
+
+  // Load device-local data that still belongs to package budgeting. Extra costs
+  // have their own shared database ledger and are migrated above exactly once.
   useEffect(() => {
     if (!selectedEventId) return;
-    // Reset local state before loading new event's data
-    setAddedExpenses([]);
-    setAddedRefunds([]);
-    setCustomCategories([]);
-    // Budget cache
     loadBudgetInfo(selectedEventId).then(info => setCachedBudget(info ?? null));
     loadDesiredParticipants(selectedEventId).then(count => setCachedParticipantCount(count ?? null));
     loadGuestDetails(selectedEventId).then(guests => setCachedGuests(guests ?? {}));
-    // Persisted expenses / refunds / custom categories
-    AsyncStorage.getItem(`gameover:expenses:${selectedEventId}`).then(json => {
-      if (json) try { setAddedExpenses(JSON.parse(json)); } catch {}
-    });
-    AsyncStorage.getItem(`gameover:refunds:${selectedEventId}`).then(json => {
-      if (json) try { setAddedRefunds(JSON.parse(json)); } catch {}
-    });
-    AsyncStorage.getItem(`gameover:custom_cats:${selectedEventId}`).then(json => {
-      if (json) try { setCustomCategories(JSON.parse(json)); } catch {}
-    });
   }, [selectedEventId]);
 
   // Calculate budget stats — fall back to cache when DB booking doesn't exist
@@ -409,102 +730,86 @@ export default function BudgetDashboardScreen() {
       };
     }
 
-    const totalBudget = booking!.total_amount_cents || 0;
-    let collected = 0;
-    let paidCount = 0;
-    let pendingCount = 0;
-
-    (participants ?? []).forEach((p) => {
-      if (p.payment_status === 'paid') {
-        collected += p.contribution_amount_cents || 0;
-        paidCount++;
-      } else if (p.payment_status === 'pending') {
-        pendingCount++;
-      }
-    });
-
-    const perPersonCents = booking!.per_person_cents || 0;
-    // Reverse-engineer paying count from total: assumes total = perPerson × count × 1.1 (10% service fee)
-    // This is display-only — not used for payment calculations
-    const dbPayingCount = perPersonCents > 0 ? Math.round(totalBudget / (perPersonCents * 1.1)) : (participants?.length || 0);
-    return {
-      totalBudget,
-      collected,
-      pending: totalBudget - collected,
-      percentage: totalBudget > 0 ? Math.round((collected / totalBudget) * 100) : 0,
-      paidCount,
-      perPerson: perPersonCents,
-      pendingCount,
-      payingCount: dbPayingCount,
-    };
+    // `collected` und `pending` kommen aus der Buchung, nicht aus den
+    // Gaestebeitraegen - die beiden Karten oben beschriften das Kassenbuch
+    // gegenueber Game Over. Siehe src/utils/budgetStats.ts.
+    return computeBookedBudgetStats(
+      {
+        totalAmountCents: booking!.total_amount_cents ?? 0,
+        depositAmountCents: booking!.deposit_amount_cents ?? null,
+        remainingAmountCents: booking!.remaining_amount_cents ?? null,
+        perPersonCents: booking!.per_person_cents ?? null,
+        payingParticipants: booking!.paying_participants ?? null,
+        fullyPaid: booking!.fully_paid_at != null,
+      },
+      (participants ?? []).map((p) => ({
+        paymentStatus: p.payment_status ?? null,
+        contributionAmountCents: p.contribution_amount_cents ?? null,
+      })),
+    );
   }, [booking, participants, cachedBudget, cachedParticipantCount, cachedGuests]);
 
-  // Format currency (with cents)
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(cents / 100);
-  };
+  // Betraege des Buchungs-Kassenbuchs, gerundet auf ganze Euro.
+  // Owner-Regel vom 05.08.: keine Cent-Betraege, weder hier noch in der
+  // Buchungsstrecke. Anzahlung und Rest kommen als Paar aus `depositAndDue`,
+  // damit der Rest immer die Differenz zum Gesamtbetrag ist und die Summe
+  // aufgeht - getrennt gerundet lagen sie einen Euro daneben.
+  const ledger = useMemo(
+    () => depositAndDue(budgetStats.totalBudget, budgetStats.collected),
+    [budgetStats.totalBudget, budgetStats.collected],
+  );
 
-  // Format currency rounded to nearest euro (no decimal places)
-  const formatCurrencyRounded = (cents: number) => {
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(Math.round(cents / 100));
-  };
+  // Aufteilung auf die Zahlenden, abgeleitet aus der Buchung - nicht aus
+  // `contribution_amount_cents` der einzelnen Zeile. Der gespeicherte Wert
+  // friert den Stand zum Zeitpunkt des Beitritts ein und driftet danach von der
+  // Buchung weg: bei Natalia standen 229 € je Zeile, waehrend die Buchung
+  // 1145 € auf 4 Zahlende fuehrte - vier sichtbare Betraege ergaben 916 €
+  // statt 1145 € (Befund 05.08.).
+  // Der Organisator traegt die Differenz, damit die Summe exakt aufgeht.
+  const share = useMemo(
+    () => splitPerPerson(budgetStats.totalBudget, budgetStats.payingCount),
+    [budgetStats.totalBudget, budgetStats.payingCount],
+  );
 
-  // Format Deposit and Due so they always sum exactly to the rounded total.
-  // Deposit floors to avoid overcharging upfront; Due = total - deposit (no independent rounding).
-  const formatDepositAndDue = (collectedCents: number, totalCents: number) => {
-    const fmt = (euros: number) => new Intl.NumberFormat('de-DE', {
-      style: 'currency', currency: 'EUR',
-      minimumFractionDigits: 0, maximumFractionDigits: 0,
-    }).format(euros);
-    const depositEuros = Math.round(collectedCents / 100);
-    const totalEuros = Math.round(totalCents / 100);
-    const dueEuros = totalEuros - depositEuros;
-    return { deposit: fmt(depositEuros), due: fmt(dueEuros) };
-  };
-
-  // Navigate to share/invite screen
   const handleInvite = useCallback(() => {
     const effectiveEventId = selectedEventId || eventIdParam;
     if (effectiveEventId) {
-      router.push(`/event/${effectiveEventId}/share`);
+      setShareModalVisible(true);
     } else {
-      Alert.alert('No Event Selected', 'Select an event first to send invitations.');
+      feedback.info(t.budget.noEventSelected, t.budget.noEventSelectedMsg);
     }
-  }, [selectedEventId, eventIdParam, router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
+  }, [selectedEventId, eventIdParam]);
 
   // Remind All — opens channel picker modal (same UX as Manage Invitations)
   const handleRemindAll = useCallback(() => {
-    setRemindSendStatus('idle');
-    setRemindResults([]);
-    setRemindActiveChannel(null);
-    setRemindModalVisible(true);
+    setRemindModal({ visible: true, sendStatus: 'idle', activeChannel: null, results: [] });
   }, []);
 
-  // Send reminder via chosen channel using the guest-invitations edge function
-  const handleRemindViaChannel = useCallback(async (channel: 'email' | 'sms' | 'whatsapp') => {
+  // Send a PAYMENT reminder (not an invitation) to registered guests with an
+  // open balance, via the dedicated send-payment-reminders edge function.
+  const handleRemindViaChannel = useCallback(async (channel: 'email' | 'whatsapp') => {
     if (!selectedEventId) return;
-    setRemindActiveChannel(channel);
-    setRemindSendStatus('sending');
+    setRemindModal(prev => ({ ...prev, activeChannel: channel, sendStatus: 'sending' }));
     try {
       await supabase.auth.refreshSession().catch(() => {});
-      const guestDetailsMap = await loadGuestDetails(selectedEventId);
-      const guests = Object.entries(guestDetailsMap).map(([, g]) => ({
-        firstName: g.firstName,
-        lastName: g.lastName,
-        email: g.email,
-        phone: g.phone,
-      })).filter(g => g.email || g.phone);
+      const { data: sessionData } = await supabase.auth.getSession();
 
-      const { data, error } = await supabase.functions.invoke('send-guest-invitations', {
-        body: { eventId: selectedEventId, channel, guests },
+      const recipients = reminderRecipientsRef.current
+        .filter(r => (channel === 'email' ? r.email : r.phone))
+        .map(r => ({
+          userId: r.userId,
+          firstName: r.firstName,
+          email: r.email,
+          phone: r.phone,
+          amount: formatEuroCents(r.amountCents),
+        }));
+
+      const { data, error } = await supabase.functions.invoke('send-payment-reminders', {
+        body: { eventId: selectedEventId, channel, variant: reminderVariant, language, recipients },
+        headers: sessionData.session
+          ? { Authorization: `Bearer ${sessionData.session.access_token}` }
+          : undefined,
       });
       if (error) {
         let detail = error.message ?? 'Unknown error';
@@ -512,20 +817,17 @@ export default function BudgetDashboardScreen() {
           const body = await (error as any).context?.json?.();
           if (body?.error) detail = body.error;
         } catch {}
-        Alert.alert('Send failed', detail);
-        setRemindSendStatus('idle');
+        feedback.error(t.budget.sendFailed, detail);
+        setRemindModal(prev => ({ ...prev, sendStatus: 'idle' }));
         return;
       }
-      setRemindResults(data?.results ?? []);
-      setRemindSendStatus('done');
+      setRemindModal(prev => ({ ...prev, results: data?.results ?? [], sendStatus: 'done' }));
     } catch {
-      Alert.alert('Error', 'Could not send reminders. Try again.');
-      setRemindSendStatus('idle');
+      feedback.error(t.common.error, t.budget.errorSendingReminders);
+      setRemindModal(prev => ({ ...prev, sendStatus: 'idle' }));
     }
-  }, [selectedEventId]);
-
-  // Only show loading for booking/participants data when we have events
-  const isLoading = hasBookedEvents && (bookingLoading || participantsLoading);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
+  }, [selectedEventId, reminderVariant, language]);
 
   // Navigate back — always use router.back(); when accessed via /event/[id]/budget
   // the stack correctly returns to Event Summary without any loops
@@ -544,16 +846,17 @@ export default function BudgetDashboardScreen() {
     })
   ).current;
 
-  // Build demo participant list when no DB booking record exists
+  // Build demo participant list only when neither DB booking nor DB participants exist
   const demoParticipants = useMemo(() => {
-    if (booking) return null; // real data — use DB participants
+    if (booking) return null; // real booking record — use DB participants
+    if (participants && participants.length > 0) return null; // DB participants loaded — use them directly
     const guestCount = Object.keys(cachedGuests).length;
     const totalPaying = (cachedBudget?.payingCount
       || (cachedParticipantCount ? cachedParticipantCount - 1 : 0)
       || guestCount
       || 0);
     if (totalPaying === 0) return null;
-    const list: Array<{ id: string; name: string; status: 'paid' | 'pending'; amount: number }> = [];
+    const list: { id: string; name: string; status: 'paid' | 'pending'; amount: number }[] = [];
     // Organizer (current user) — paid the 25% deposit
     list.push({ id: 'organizer', name: userName, status: 'paid', amount: budgetStats.collected });
     // Other participants from guest details cache or placeholders
@@ -581,25 +884,208 @@ export default function BudgetDashboardScreen() {
       list.push({ id: 'honoree', name: honoreeName, status: 'pending', amount: budgetStats.perPerson });
     }
     return list;
-  }, [booking, cachedBudget, cachedParticipantCount, cachedGuests, userName, budgetStats, selectedEvent]);
+  }, [booking, participants, cachedBudget, cachedParticipantCount, cachedGuests, userName, budgetStats, selectedEvent]);
+
+  // Sort DB participants so organizer is always first in contribution list
+  const sortedParticipants = useMemo(() => {
+    if (!participants) return null;
+    const rows = [...(participants as any[])].sort((a, b) => {
+      if (a.role === 'organizer') return -1;
+      if (b.role === 'organizer') return 1;
+      return 0;
+    });
+
+    // Zahlt der Ehrengast mit (`exclude_honoree = false`), gehoert er in die
+    // Liste - sonst fehlt genau ein Zahler und die sichtbaren Betraege ergeben
+    // weniger als den Gesamtpreis. Bei Natalia waren das vier Zeilen a 229 €
+    // = 916 € gegen 1145 € Gesamtpreis (Befund 05.08.).
+    //
+    // Er hat keine `event_participants`-Zeile, solange er nicht selbst
+    // beitritt. Deshalb eine synthetische Zeile - und deshalb steht sie
+    // bewusst auf "offen": ob er gezahlt hat, weiss die App nicht. Das als
+    // "bezahlt" auszugeben waere eine Behauptung ohne Grundlage.
+    const honoreeName = selectedEvent?.honoree_name;
+    const honoreePays = booking?.exclude_honoree === false;
+    if (!honoreePays || !honoreeName) return rows;
+
+    const alreadyListed = rows.some(
+      (r) => (r.profile?.full_name || '').trim().toLowerCase() === honoreeName.trim().toLowerCase(),
+    );
+    if (alreadyListed) return rows;
+
+    rows.push({
+      id: `honoree:${selectedEventId ?? 'current'}`,
+      role: 'honoree',
+      user_id: null,
+      payment_status: 'pending',
+      payment_claimed_at: null,
+      contribution_amount_cents: null,
+      profile: { full_name: honoreeName, email: null },
+    });
+    return rows;
+  }, [participants, booking?.exclude_honoree, selectedEvent?.honoree_name, selectedEventId]);
 
   // Normalised contributor list for expense modal (works with both demo + DB participants)
-  const allContributors = useMemo<Array<{ id: string; name: string }>>(() => {
-    if (demoParticipants) return demoParticipants.map(p => ({ id: p.id, name: p.name }));
-    if (participants) return (participants as any[]).map(p => ({
-      id: p.id as string,
-      name: p.profile?.full_name || p.profile?.email?.split('@')[0] || 'Guest',
+  // Includes userId + role for filtering (exclude self, exclude honoree)
+  const allContributors = useMemo<{ id: string; name: string; userId?: string | null; role?: string }[]>(() => {
+    if (demoParticipants) return demoParticipants.map(p => ({
+      id: p.id,
+      name: p.name,
+      userId: p.id === 'organizer' ? (selectedEvent?.created_by ?? null) : null,
+      role: p.id === 'organizer' ? 'organizer' : p.id === 'honoree' ? 'honoree' : 'guest',
     }));
+    if (sortedParticipants) {
+      const base: { id: string; name: string; userId?: string | null; role?: string }[] =
+        sortedParticipants.map(p => ({
+          id: p.id as string,
+          name: p.profile?.full_name || p.profile?.email?.split('@')[0] || 'Guest',
+          userId: (p as any).user_id ?? null,
+          role: (p as any).role,
+        }));
+      // Add non-registered invited guests from invite_codes (e.g. Hans Zimmer), deduplicated
+      const registeredEmails = new Set(
+        sortedParticipants
+          .map(p => p.profile?.email?.toLowerCase())
+          .filter(Boolean)
+      );
+      const seenInvites = new Set<string>();
+      for (const ic of inviteCodeGuests) {
+        if (ic.email && registeredEmails.has(ic.email)) continue; // already registered
+        const dedupeKey = ic.email || ic.name.toLowerCase();
+        if (seenInvites.has(dedupeKey)) continue;
+        seenInvites.add(dedupeKey);
+        base.push({ id: `invite-${ic.id}`, name: ic.name, userId: null, role: 'guest' });
+      }
+      // Also include locally-cached guests (entered in Manage Invitations but not yet sent)
+      for (const guest of Object.values(cachedGuests)) {
+        const name = [guest.firstName, guest.lastName].filter(Boolean).join(' ');
+        const email = guest.email?.toLowerCase() || '';
+        if (!name && !email) continue;
+        if (email && registeredEmails.has(email)) continue;
+        const dedupeKey = email || name.toLowerCase();
+        if (seenInvites.has(dedupeKey)) continue;
+        seenInvites.add(dedupeKey);
+        base.push({ id: `cached-${dedupeKey}`, name: name || email.split('@')[0] || 'Guest', userId: null, role: 'guest' });
+      }
+      return base;
+    }
     return [];
-  }, [demoParticipants, participants]);
+  }, [demoParticipants, sortedParticipants, inviteCodeGuests, cachedGuests, selectedEvent?.created_by]);
   // Keep ref in sync so openExpenseModal always has the latest list
   allContributorsRef.current = allContributors;
 
-  // For "Someone else paid" — only guests (no organizer, no honoree)
-  const payerOptions = useMemo(
-    () => allContributors.filter(c => c.id !== 'organizer' && c.id !== 'honoree'),
-    [allContributors]
+  const expenseParticipants = useMemo(() => {
+    const byUserId = new Map<string, { userId: string; name: string; role: string | null }>();
+    for (const participant of participants ?? []) {
+      if (!participant.user_id || participant.role === 'honoree') continue;
+      byUserId.set(participant.user_id, {
+        userId: participant.user_id,
+        name: participant.profile?.full_name
+          || participant.profile?.email?.split('@')[0]
+          || t.budget.expenseUnknownParticipant,
+        role: participant.role,
+      });
+    }
+    if (user?.id && capabilities.canViewExtraCosts && !byUserId.has(user.id)) {
+      byUserId.set(user.id, {
+        userId: user.id,
+        name: userName,
+        role: capabilities.canEditEvent ? 'organizer' : 'guest',
+      });
+    }
+    return [...byUserId.values()];
+  }, [capabilities.canEditEvent, capabilities.canViewExtraCosts, participants, t.budget.expenseUnknownParticipant, user?.id, userName]);
+
+  const expenseParticipantNames = useMemo(
+    () => new Map(expenseParticipants.map(participant => [participant.userId, participant.name])),
+    [expenseParticipants],
   );
+
+  // Registered participant emails (for deduplication with invite guests)
+  const registeredEmailSet = useMemo(() => new Set(
+    (sortedParticipants || []).map(p => p.profile?.email?.toLowerCase()).filter(Boolean) as string[]
+  ), [sortedParticipants]);
+
+  // Payment-reminder recipients: only REGISTERED guests (role 'guest' excludes
+  // organizer AND honoree) whose balance is still open. Non-registered invitees
+  // are never reminded — we don't know they owe anything.
+  const reminderRecipients = useMemo(() => {
+    return (sortedParticipants || [])
+      .filter(p => p.role === 'guest' && !!p.user_id && p.payment_status !== 'paid')
+      .map(p => {
+        const fullName = p.profile?.full_name || '';
+        return {
+          userId: p.user_id,
+          firstName: fullName.split(' ')[0] || undefined,
+          email: p.profile?.email || undefined,
+          phone: (p.profile as any)?.phone || undefined,
+          // Derselbe Wert wie in der Liste - sonst nennt die Erinnerung
+          // einen anderen Betrag als der Bildschirm daneben.
+          amountCents: share.perPersonEuros * 100,
+        };
+      })
+      .filter(r => r.email || r.phone);
+  }, [sortedParticipants, share.perPersonEuros]);
+  // Keep the ref in sync so the send handler always sees the latest recipients.
+  reminderRecipientsRef.current = reminderRecipients;
+
+  // Non-registered invited guests to show in Group Contributions
+  // Includes both invite_codes (sent invitations) AND locally-cached guests (entered but not yet sent)
+  // Deduplicated so the same person never appears twice
+  const nonRegisteredInviteGuests = useMemo(() => {
+    if (demoParticipants) return [];
+    const seen = new Set<string>();
+    const result: { id: string; name: string; email: string }[] = [];
+    // 1. Sent invitations (invite_codes DB rows)
+    for (const ic of inviteCodeGuests) {
+      if (ic.email && registeredEmailSet.has(ic.email)) continue;
+      const dedupeKey = ic.email || ic.name.toLowerCase();
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      result.push(ic);
+    }
+    // 2. Locally-cached guests (entered in Manage Invitations but not yet formally invited)
+    for (const guest of Object.values(cachedGuests)) {
+      const name = [guest.firstName, guest.lastName].filter(Boolean).join(' ');
+      const email = guest.email?.toLowerCase() || '';
+      if (!name && !email) continue;
+      if (email && registeredEmailSet.has(email)) continue;
+      const dedupeKey = email || name.toLowerCase();
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
+      result.push({ id: `cached-${dedupeKey}`, name: name || email.split('@')[0] || 'Guest', email });
+    }
+    return result;
+  }, [demoParticipants, inviteCodeGuests, registeredEmailSet, cachedGuests]);
+
+  /**
+   * Freie Plaetze: die Buchung ist fuer `paying_participants` Personen bezahlt,
+   * aber fuer manche ist noch niemand eingetragen. Ohne diese Zeilen zeigte das
+   * Budget direkt nach der Buchung nur den Organisator, und die sichtbaren
+   * Betraege ergaben einen Bruchteil des Gesamtpreises (Owner-Wunsch 05.08.).
+   *
+   * Sie sind bewusst **nicht** bearbeitbar. Gaeste werden unter „Einladung"
+   * gepflegt, weil dort E-Mail und Telefon mit erfasst werden - ohne die kann
+   * niemand eingeladen oder erinnert werden. Ein Tippen erklaert genau das.
+   */
+  const openSlots = useMemo(() => {
+    if (demoParticipants) return [];
+    const filled = (sortedParticipants?.length || 0) + nonRegisteredInviteGuests.length;
+    const missing = Math.max(0, (budgetStats.payingCount || 0) - filled);
+    // Nummerierung schliesst an die belegten Plaetze an, damit sie mit dem
+    // Einladungsbildschirm uebereinstimmt (Organisator = Platz 1).
+    return Array.from({ length: missing }, (_, i) => ({
+      id: `open-slot-${i}`,
+      number: filled + i + 1,
+    }));
+  }, [demoParticipants, sortedParticipants, nonRegisteredInviteGuests, budgetStats.payingCount]);
+
+  const handleOpenSlotPress = useCallback(() => {
+    feedback.info((t.budget as any).openSlotTitle, (t.budget as any).openSlotMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
+  }, []);
+
+  const payerOptions = expenseParticipants;
 
   // Days until event (calendar-date comparison — no time-of-day skew)
   const daysUntilEvent = useMemo(() => {
@@ -629,7 +1115,7 @@ export default function BudgetDashboardScreen() {
           body: (tr.budget as any).notif14DayBody
             .replace('{{eventName}}', eventName)
             .replace('{{count}}', String(daysUntilEvent))
-            .replace('{{amount}}', formatCurrencyRounded(budgetStats.pending)),
+            .replace('{{amount}}', formatEuroFromEuros(ledger.dueEuros)),
           data: { screen: '/(tabs)/budget', eventId: selectedEventId },
           sound: true,
         },
@@ -637,20 +1123,288 @@ export default function BudgetDashboardScreen() {
       }).catch(() => {});
       AsyncStorage.setItem(notifKey, 'shown');
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally re-runs only on daysUntilEvent/percentage milestones; selectedEvent fields used only at fire-time
   }, [selectedEventId, daysUntilEvent, budgetStats.percentage]);
 
-  // All expense categories (preset + user-created)
+  const customCategories = useMemo<ExpenseCategory[]>(
+    () => databaseExpenseCategories.map((category, index) => {
+      const colors = CUSTOM_COLORS[index % CUSTOM_COLORS.length];
+      return {
+        key: category.key,
+        labelKey: category.label,
+        icon: category.icon || 'pricetag-outline',
+        color: colors.color,
+        bg: colors.bg,
+        packageNote: false,
+      };
+    }),
+    [databaseExpenseCategories],
+  );
+
+  // All expense categories (preset + shared event categories)
   const allExpenseCategories = useMemo<ExpenseCategory[]>(
     () => [...EXPENSE_CATEGORIES, ...customCategories],
     [customCategories]
   );
-
-  // Helper: save custom categories to AsyncStorage
-  const saveCustomCategories = useCallback((cats: ExpenseCategory[]) => {
-    if (selectedEventId) {
-      AsyncStorage.setItem(`gameover:custom_cats:${selectedEventId}`, JSON.stringify(cats));
+  const displayedExpenseCategories = useMemo<ExpenseCategory[]>(() => {
+    const knownKeys = new Set(allExpenseCategories.map(category => category.key));
+    const missingKeys = new Set(
+      addedExpenses
+        .map(expense => expense.categoryKey)
+        .filter((key): key is string => !!key && !knownKeys.has(key)),
+    );
+    const fallbackCategories = [...missingKeys].map((key, index) => {
+      const colors = CUSTOM_COLORS[(customCategories.length + index) % CUSTOM_COLORS.length];
+      return {
+        key,
+        labelKey: key,
+        icon: 'pricetag-outline',
+        color: colors.color,
+        bg: colors.bg,
+        packageNote: false,
+      };
+    });
+    if (addedExpenses.some(expense => !expense.categoryKey)) {
+      fallbackCategories.push({
+        key: '__uncategorized__',
+        labelKey: t.budget.expenseUncategorized,
+        icon: 'help-circle-outline',
+        color: theme.textSecondary,
+        bg: 'rgba(255,255,255,0.05)',
+        packageNote: false,
+      });
     }
-  }, [selectedEventId]);
+    return [...allExpenseCategories, ...fallbackCategories];
+  }, [addedExpenses, allExpenseCategories, customCategories.length, t.budget.expenseUncategorized, theme.textSecondary]);
+
+  const expenseAmountCents = useMemo(
+    () => parseRefundAmountToCents(expenseModal.amount),
+    [expenseModal.amount],
+  );
+  const manualExpenseAmounts = useMemo(() => {
+    const amounts: Record<string, number> = {};
+    for (const participantId of expenseModal.participantIds) {
+      if (Object.prototype.hasOwnProperty.call(expenseModal.manualAmounts, participantId)) {
+        amounts[participantId] = parseRefundAmountToCents(expenseModal.manualAmounts[participantId]);
+      }
+    }
+    return amounts;
+  }, [expenseModal.manualAmounts, expenseModal.participantIds]);
+  const suggestedExpenseSplit = useMemo(
+    () => calculateExpenseSplit(expenseAmountCents, expenseModal.participantIds, {
+      paidBy: expenseModal.paidByUserId,
+    }),
+    [expenseAmountCents, expenseModal.paidByUserId, expenseModal.participantIds],
+  );
+  const expenseSplit = useMemo(
+    () => calculateExpenseSplit(expenseAmountCents, expenseModal.participantIds, {
+      paidBy: expenseModal.paidByUserId,
+      manualAmounts: manualExpenseAmounts,
+    }),
+    [expenseAmountCents, expenseModal.paidByUserId, expenseModal.participantIds, manualExpenseAmounts],
+  );
+  const hasZeroExpenseShare = expenseSplit.shares.some(share => share.amountCents <= 0);
+  const expenseDistributionComplete = expenseAmountCents > 0
+    && expenseSplit.status === 'complete'
+    && expenseSplit.shares.length > 0
+    && !hasZeroExpenseShare;
+  const expenseSaveDisabled = !expenseModal.description.trim()
+    || !expenseModal.categoryKey
+    || !expenseModal.paidByUserId
+    || !expenseDistributionComplete
+    || createExpense.isPending
+    || updateExpense.isPending
+    || setExpenseShares.isPending;
+  const detailExpense = addedExpenses.find(expense => expense.id === expenseModal.detailId) ?? null;
+  const detailReports = detailExpense
+    ? expenseReports.filter(report => report.expenseId === detailExpense.id)
+    : [];
+  const ownOpenExpenseCents = addedExpenses.reduce((sum, expense) => {
+    const ownShare = expense.shares.find(share => share.userId === user?.id && !share.settledAt);
+    return sum + (ownShare?.amountCents ?? 0);
+  }, 0);
+
+  const resetExpenseForm = (categoryKey: string | null) => {
+    setExpenseModal({
+      visible: true,
+      categoryKey,
+      viewMode: 'form',
+      description: '',
+      amount: '',
+      paidByUserId: user?.id ?? null,
+      participantIds: expenseParticipants.map(participant => participant.userId),
+      manualAmounts: {},
+      editingId: null,
+      detailId: null,
+      payerDropdownOpen: false,
+      reportReason: '',
+    });
+  };
+
+  const openExpenseModal = (categoryKey: string) => resetExpenseForm(categoryKey);
+
+  const openExpenseDetail = (expense: EventExpense) => {
+    setExpenseModal(current => ({
+      ...current,
+      visible: true,
+      categoryKey: expense.categoryKey,
+      viewMode: 'detail',
+      detailId: expense.id,
+      editingId: null,
+      reportReason: '',
+      payerDropdownOpen: false,
+    }));
+  };
+
+  const openEditExpense = (expense: EventExpense) => {
+    setExpenseModal({
+      visible: true,
+      categoryKey: expense.categoryKey ?? EXPENSE_CATEGORIES[0].key,
+      viewMode: 'form',
+      description: expense.title,
+      amount: formatCentsForInput(expense.amountCents),
+      paidByUserId: expense.paidBy,
+      participantIds: expense.shares.map(share => share.userId),
+      manualAmounts: Object.fromEntries(
+        expense.shares.map(share => [share.userId, formatCentsForInput(share.amountCents)]),
+      ),
+      editingId: expense.id,
+      detailId: expense.id,
+      payerDropdownOpen: false,
+      reportReason: '',
+    });
+  };
+
+  const submitExpense = async () => {
+    if (expenseSaveDisabled || !expenseModal.categoryKey || !expenseModal.paidByUserId) return;
+    const shares = expenseSplit.shares
+      .filter(share => share.amountCents > 0)
+      .map(share => ({ userId: share.userId, amountCents: share.amountCents }));
+
+    try {
+      if (expenseModal.editingId) {
+        await updateExpense.mutateAsync({
+          id: expenseModal.editingId,
+          patch: {
+            title: expenseModal.description.trim(),
+            categoryKey: expenseModal.categoryKey,
+            paidBy: expenseModal.paidByUserId,
+          },
+        });
+        await setExpenseShares.mutateAsync({
+          expenseId: expenseModal.editingId,
+          amountCents: expenseAmountCents,
+          shares,
+        });
+      } else {
+        const created = await createExpense.mutateAsync({
+          title: expenseModal.description.trim(),
+          categoryKey: expenseModal.categoryKey,
+          paidBy: expenseModal.paidByUserId,
+          amountCents: expenseAmountCents,
+        });
+        try {
+          await setExpenseShares.mutateAsync({
+            expenseId: created.id,
+            amountCents: expenseAmountCents,
+            shares,
+          });
+        } catch (error) {
+          await deleteExpense.mutateAsync(created.id).catch(() => undefined);
+          throw error;
+        }
+      }
+      setExpenseModal(current => ({ ...current, visible: false }));
+      feedback.success(t.budget.expenseSavedTitle, t.budget.expenseSavedMessage);
+    } catch (error) {
+      console.error('[expenses] save failed:', error);
+      feedback.error(t.common.error, t.budget.expenseSaveError);
+    }
+  };
+
+  const confirmDeleteExpense = async (expense: EventExpense) => {
+    setExpenseModal(current => ({ ...current, visible: false }));
+    const confirmed = await feedback.confirm({
+      title: t.budget.expenseDeleteTitle,
+      message: t.budget.expenseDeleteMessage,
+      confirmLabel: t.common.delete,
+      cancelLabel: t.common.cancel,
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await deleteExpense.mutateAsync(expense.id);
+      feedback.success(t.budget.expenseDeletedTitle, t.budget.expenseDeletedMessage);
+    } catch (error) {
+      console.error('[expenses] delete failed:', error);
+      feedback.error(t.common.error, t.budget.expenseDeleteError);
+    }
+  };
+
+  const confirmSettleOwnExpenseShare = async (expense: EventExpense) => {
+    const ownShare = expense.shares.find(share => share.userId === user?.id && !share.settledAt);
+    if (!ownShare) return;
+    setExpenseModal(current => ({ ...current, visible: false }));
+    const confirmed = await feedback.confirm({
+      title: t.budget.expenseSettleTitle,
+      message: t.budget.expenseSettleMessage.replace('{{amount}}', formatEuroCents(ownShare.amountCents)),
+      confirmLabel: t.budget.expenseSettleConfirm,
+      cancelLabel: t.common.cancel,
+    });
+    if (!confirmed) return;
+    try {
+      await settleOwnExpenseShare.mutateAsync(ownShare.id);
+      feedback.success(t.budget.expenseSettledTitle, t.budget.expenseSettledMessage);
+    } catch (error) {
+      console.error('[expenses] settlement failed:', error);
+      feedback.error(t.common.error, t.budget.expenseSettleError);
+    }
+  };
+
+  const submitExpenseReport = async (expense: EventExpense) => {
+    const reason = expenseModal.reportReason.trim();
+    if (!reason || expense.createdBy === user?.id) return;
+    setExpenseModal(current => ({ ...current, visible: false }));
+    try {
+      await reportExpense.mutateAsync({ expenseId: expense.id, reason });
+      feedback.success(t.budget.expenseReportedTitle, t.budget.expenseReportedMessage);
+    } catch (error) {
+      console.error('[expenses] report failed:', error);
+      feedback.error(t.common.error, t.budget.expenseReportError);
+    }
+  };
+
+  const confirmResolveExpenseReport = async (reportId: string) => {
+    setExpenseModal(current => ({ ...current, visible: false }));
+    const confirmed = await feedback.confirm({
+      title: t.budget.expenseResolveTitle,
+      message: t.budget.expenseResolveMessage,
+      confirmLabel: t.budget.expenseResolveConfirm,
+      cancelLabel: t.common.cancel,
+    });
+    if (!confirmed) return;
+    try {
+      await resolveExpenseReport.mutateAsync(reportId);
+      feedback.success(t.budget.expenseResolvedTitle, t.budget.expenseResolvedMessage);
+    } catch (error) {
+      console.error('[expenses] resolve report failed:', error);
+      feedback.error(t.common.error, t.budget.expenseResolveError);
+    }
+  };
+
+  const submitCustomExpenseCategory = async () => {
+    const label = customCatModal.label.trim();
+    if (!label) return;
+    const key = `custom_${Date.now().toString(36)}`;
+    try {
+      await createExpenseCategory.mutateAsync({ key, label, icon: 'pricetag-outline' });
+      setCustomCatModal({ visible: false, label: '' });
+      resetExpenseForm(key);
+    } catch (error) {
+      console.error('[expenses] create category failed:', error);
+      feedback.error(t.common.error, t.budget.expenseCategoryError);
+    }
+  };
 
   // Event selector
   const selectedEventName = selectedEvent
@@ -666,8 +1420,8 @@ export default function BudgetDashboardScreen() {
     return (
       <View style={styles.eventSelectorWrapper}>
         <Pressable
-          style={styles.eventSelectorCard}
-          onPress={() => !eventIdParam && bookedEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
+          style={[styles.eventSelectorCard, !eventIdParam && { borderColor: theme.accentGold, borderWidth: 1.5 }]}
+          onPress={() => !eventIdParam && selectableEvents.length > 1 && setEventSelectorOpen(!eventSelectorOpen)}
           testID="budget-event-selector"
         >
           <Image
@@ -677,7 +1431,7 @@ export default function BudgetDashboardScreen() {
           />
           <View style={{ flex: 1, gap: 2 }}>
             <Text style={styles.eventSelectorLabel}>
-              {t.budget.totalBudget ? 'CURRENT EVENT' : 'CURRENT EVENT'}
+              {t.budget.currentEventLabel}
             </Text>
             <Text style={styles.eventSelectorName} numberOfLines={1}>
               {selectedEventName}
@@ -690,12 +1444,12 @@ export default function BudgetDashboardScreen() {
               </Text>
             )}
           </View>
-          {!eventIdParam && bookedEvents.length > 1 && (
+          {!eventIdParam && selectableEvents.length > 1 && (
             <View style={styles.eventSelectorChevron}>
               <Ionicons
                 name={eventSelectorOpen ? 'chevron-up' : 'chevron-down'}
                 size={18}
-                color={DARK_THEME.textPrimary}
+                color={theme.textPrimary}
               />
             </View>
           )}
@@ -703,7 +1457,7 @@ export default function BudgetDashboardScreen() {
 
         {!eventIdParam && eventSelectorOpen && (
           <View style={styles.eventDropdown}>
-            {[...bookedEvents]
+            {[...selectableEvents]
               .sort((a, b) => {
                 if (a.id === selectedEventId) return -1;
                 if (b.id === selectedEventId) return 1;
@@ -743,7 +1497,7 @@ export default function BudgetDashboardScreen() {
                       </Text>
                     </View>
                     {isSelected && (
-                      <Ionicons name="checkmark-circle" size={20} color="#5A7EB0" />
+                      <Ionicons name="checkmark-circle" size={20} color={theme.accentGold} />
                     )}
                   </Pressable>
                 );
@@ -782,37 +1536,55 @@ export default function BudgetDashboardScreen() {
     </View>
   );
 
-  // Empty state - show if no booked events OR still loading (prevents flash of $0 budget UI)
-  if (eventsLoading || !hasBookedEvents) {
+  if (requestedEvent && !canOpenRequestedBudget) return null;
+
+  // While events are loading with no cached data, show a minimal blank screen (no jarring "no budget" flash)
+  if (eventsLoading && !hasBookedEvents) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-        <LinearGradient
-          colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
-          style={StyleSheet.absoluteFill}
-        />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]} />
+      </View>
+    );
+  }
+
+  // Empty state - show only when confirmed no booked events
+  if (!hasBookedEvents) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]} />
         <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-          <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
-            <XStack alignItems="center" gap={12}>
-              <View style={styles.avatarContainer}>
+          <XStack alignItems="center" paddingHorizontal={20}>
+            <View style={{ width: 44 }}>
+              <Pressable
+                onPress={() => router.push('/(tabs)/profile')}
+                style={styles.avatarContainer}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="Go to profile"
+              >
                 {userAvatar ? (
-                  <Image source={{ uri: userAvatar }} style={styles.avatar} />
+                  <CachedAvatarImage
+                    uri={userAvatar}
+                    style={styles.avatar}
+                    fallback={
+                      <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                        <Text style={styles.avatarInitial}>{userInitial}</Text>
+                      </View>
+                    }
+                  />
                 ) : (
                   <View style={[styles.avatar, styles.avatarPlaceholder]}>
                     <Text style={styles.avatarInitial}>{userInitial}</Text>
                   </View>
                 )}
-              </View>
+              </Pressable>
+            </View>
+            <View style={{ flex: 1, alignItems: 'center' }}>
               <Text style={styles.headerTitle}>Budget</Text>
-            </XStack>
-            <Pressable
-              onPress={handleNotifications}
-              style={styles.notificationButton}
-              testID="notifications-button"
-            >
-              <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
-              {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
-            </Pressable>
+            </View>
+            <View style={{ width: 44 }} />
           </XStack>
           {renderCategoryTabs()}
         </View>
@@ -828,36 +1600,51 @@ export default function BudgetDashboardScreen() {
           }}
           refreshControl={
             <RefreshControl
-              refreshing={isRefetching}
+              refreshing={manualRefreshing}
               onRefresh={handleRefresh}
-              tintColor={DARK_THEME.primary}
-              colors={[DARK_THEME.primary]}
+              tintColor={theme.accentGold}
+              colors={[theme.accentGold]}
             />
           }
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <YStack justifyContent="center" alignItems="center">
-              <View style={styles.emptyIconContainer}>
-                <LinearGradient
-                  colors={[`${DARK_THEME.primary}30`, `${DARK_THEME.primary}10`]}
-                  style={styles.emptyIconGradient}
-                >
-                  <Text fontSize={56}>💰</Text>
-                </LinearGradient>
-              </View>
-              <Text fontSize={24} fontWeight="800" color={DARK_THEME.textPrimary} marginBottom={8} textAlign="center">
-                {t.budget.noBudgetTitle}
-              </Text>
-              <Text
-                fontSize={16}
-                color={DARK_THEME.textTertiary}
-                textAlign="center"
-                maxWidth={240}
-                lineHeight={24}
-              >
-                {t.budget.noBudgetSubtitle}
-              </Text>
-            </YStack>
+            <EmptyState
+              title={t.emptyStates.budget.title}
+              subtitle={t.emptyStates.budget.subtitle}
+              previewLabel={t.emptyStates.budget.previewLabel}
+              preview={
+                <View style={styles.emptyBudgetPreview}>
+                  {[
+                    {
+                      label: t.emptyStates.budget.previewMax,
+                      color: theme.success,
+                    },
+                    {
+                      label: t.emptyStates.budget.previewTom,
+                      color: theme.success,
+                    },
+                    {
+                      label: t.emptyStates.budget.previewBen,
+                      color: theme.warning,
+                    },
+                  ].map((item) => (
+                    <View key={item.label} style={styles.emptyBudgetPreviewRow}>
+                      <View
+                        style={[
+                          styles.emptyBudgetPreviewStatus,
+                          { backgroundColor: item.color },
+                        ]}
+                      />
+                      <Text style={[styles.emptyBudgetPreviewText, { color: item.color }]}>
+                        {item.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              }
+              primaryLabel={t.emptyStates.partyPlanPrimary}
+              onPrimary={handleCreateEvent}
+            />
           }
         />
       </View>
@@ -869,58 +1656,64 @@ export default function BudgetDashboardScreen() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* Background */}
-      <LinearGradient
-        colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
-        style={StyleSheet.absoluteFill}
-      />
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: theme.background }]} />
 
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 4 }]}>
-        <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
-          {/* Back button (from Event Summary) or Avatar */}
-          <XStack alignItems="center" gap={12}>
-            {eventIdParam ? (
+        {eventIdParam ? (
+          /* ── Nested screen: back ← centered title → spacer ── */
+          <XStack alignItems="center" justifyContent="space-between" paddingHorizontal={20}>
+            <Pressable
+              onPress={handleBack}
+              hitSlop={8}
+              style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Ionicons name="arrow-back" size={24} color={theme.textPrimary} />
+            </Pressable>
+            <Text style={styles.headerTitle}>Budget</Text>
+            <View style={{ width: 36 }} />
+          </XStack>
+        ) : (
+          /* ── Tab screen: avatar | centered title | spacer ── */
+          <XStack alignItems="center" paddingHorizontal={20}>
+            {/* Left: avatar — tap to go to Profile */}
+            <View style={{ width: 44 }}>
               <Pressable
-                onPress={handleBack}
+                onPress={() => router.push('/(tabs)/profile')}
+                style={styles.avatarContainer}
                 hitSlop={8}
-                style={{ width: 36, height: 36, alignItems: 'center', justifyContent: 'center' }}
+                accessibilityRole="button"
+                accessibilityLabel="Go to profile"
               >
-                <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
-              </Pressable>
-            ) : (
-              <View style={styles.avatarContainer}>
                 {userAvatar ? (
-                  <Image
-                    source={{ uri: userAvatar }}
+                  <CachedAvatarImage
+                    uri={userAvatar}
                     style={styles.avatar}
+                    fallback={
+                      <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                        <Text style={styles.avatarInitial}>{userInitial}</Text>
+                      </View>
+                    }
                   />
                 ) : (
                   <View style={[styles.avatar, styles.avatarPlaceholder]}>
                     <Text style={styles.avatarInitial}>{userInitial}</Text>
                   </View>
                 )}
-              </View>
-            )}
-            <Text style={styles.headerTitle}>Budget</Text>
+              </Pressable>
+            </View>
+            {/* Center: title */}
+            <View style={{ flex: 1, alignItems: 'center' }}>
+              <Text style={styles.headerTitle}>Budget</Text>
+            </View>
+            {/* Right: spacer to keep title centred */}
+            <View style={{ width: 44 }} />
           </XStack>
-
-          {/* Notification Bell */}
-          <Pressable
-            onPress={handleNotifications}
-            style={styles.notificationButton}
-            testID="notifications-button"
-          >
-            <Ionicons name="notifications-outline" size={24} color={DARK_THEME.textPrimary} />
-            {hasUnseenUrgency && <View style={styles.notificationUrgentDot} />}
-          </Pressable>
-        </XStack>
+        )}
 
         {/* Category Tabs */}
         {renderCategoryTabs()}
       </View>
-
-      {/* Event Selector */}
-      {renderEventSelector()}
 
       <Animated.View style={[{ flex: 1 }, swipeAnimStyle]} {...swipeHandlers}>
       <ScrollView
@@ -928,324 +1721,572 @@ export default function BudgetDashboardScreen() {
         contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
+            refreshing={manualRefreshing}
             onRefresh={handleRefresh}
-            tintColor={DARK_THEME.primary}
+            tintColor={theme.accentGold}
           />
         }
       >
         <>
+          {/* Event Selector — scrolls with content */}
+          {renderEventSelector()}
+          {/* Share Invite — organizers only, hidden after event ends. Matches Chat's shareEventCard style. */}
+          {capabilities.canManageInvitations && !isPackageFrozen && (
+            <Pressable style={styles.shareEventCard} onPress={handleInvite} testID="budget-invite-button">
+              <Ionicons name="share-social-outline" size={18} color="#1F2A44" />
+              <Text style={styles.shareEventTitle} numberOfLines={1}>
+                {t.chat.shareInvite} {'—'} {t.chat.inviteFriendsToJoin}
+              </Text>
+            </Pressable>
+          )}
           {selectedCategory === 'package' ? (
             <>
-            {/* Total Budget Card */}
-            <View style={styles.glassCard}>
-              {/* Gradient blur effect */}
-              <View style={styles.gradientBlur} />
-
-              <YStack gap="$2" style={{ position: 'relative', zIndex: 1 }}>
-                {/* Main stats — dynamic based on payment state */}
+            {/* Total Budget Cards — two side-by-side standalone cards, no outer wrapper */}
+            <YStack gap={12} marginBottom={16}>
                 {budgetStats.percentage >= 100 ? (
-                  /* Fully paid: Package Price left (green), Due €0 right (grey) */
-                  <XStack justifyContent="space-between" alignItems="flex-start" marginBottom="$3">
-                    <YStack gap={4}>
-                      <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.5}>
-                        Total Package Paid
-                      </Text>
-                      <Text fontSize={24} fontWeight="700" color="#10B981" letterSpacing={-0.5}>
-                        {formatCurrencyRounded(budgetStats.totalBudget)}
-                      </Text>
-                    </YStack>
-                    <YStack gap={4} alignItems="flex-end">
-                      <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.3}>
-                        Due
-                      </Text>
-                      <Text fontSize={24} fontWeight="700" color={DARK_THEME.textTertiary} letterSpacing={-0.5}>
-                        {formatCurrencyRounded(0)}
-                      </Text>
-                    </YStack>
-                  </XStack>
+                  /* Fully paid */
+                  <>
+                    {/* Card 1 — Total Package Paid */}
+                    <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: `${theme.accentGold}22` }}>
+                      <XStack justifyContent="space-between" alignItems="flex-start">
+                        <YStack flex={1}>
+                          <Text fontSize={10} fontWeight="700" color={theme.accentGold} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
+                            {t.budget.totalPackagePaid}
+                          </Text>
+                          <Text fontSize={36} fontWeight="700" color={theme.accentGold} letterSpacing={-1} style={{ marginTop: 4 }}>
+                            {formatEuro(budgetStats.totalBudget)}
+                          </Text>
+                        </YStack>
+                        <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: theme.surfaceHigh, alignItems: 'center', justifyContent: 'center' }}>
+                          <Ionicons name="card-outline" size={24} color={`${theme.accentGold}60`} />
+                        </View>
+                      </XStack>
+                      <XStack alignItems="center" gap={8} style={{ marginTop: 14, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.ghostBorder }}>
+                        <Ionicons name="checkmark-circle" size={16} color={theme.success} />
+                        <Text fontSize={13} color={theme.textSecondary}>{t.budget.allPaymentsConfirmed}</Text>
+                      </XStack>
+                    </View>
+                    {/* Card 2 — Amount Due €0 → gray amount */}
+                    <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, overflow: 'hidden', flexDirection: 'row', borderWidth: 1, borderColor: theme.ghostBorder }}>
+                      <View style={{ width: 4, backgroundColor: theme.accentGold }} />
+                      <YStack flex={1} padding={20} gap={6}>
+                        <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
+                          {t.budget.amountDueLabel}
+                        </Text>
+                        <Text fontSize={36} fontWeight="700" color={theme.textTertiary} letterSpacing={-1}>
+                          {formatEuro(0)}
+                        </Text>
+                        <View style={{ alignSelf: 'flex-start', backgroundColor: `${theme.success}1A`, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginTop: 2 }}>
+                          <Text fontSize={11} fontWeight="700" color={theme.success} letterSpacing={0.5} style={{ textTransform: 'uppercase' }}>
+                            {t.budget.clearBalanceBadge}
+                          </Text>
+                        </View>
+                      </YStack>
+                    </View>
+                  </>
                 ) : (
                   /* Deposit paid, remainder still due */
                   (() => {
-                    const { deposit: fmtDeposit, due: fmtDue } = formatDepositAndDue(budgetStats.collected, budgetStats.totalBudget);
+                    const fmtDeposit = formatEuroFromEuros(ledger.paidEuros);
+                    const fmtDue = formatEuroFromEuros(ledger.dueEuros);
+                    const isUrgent = daysUntilEvent !== null && daysUntilEvent <= 14;
                     return (
-                  <XStack justifyContent="space-between" alignItems="flex-start" marginBottom="$3">
-                    <YStack gap={4}>
-                      <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.5}>
-                        Deposit (25%)
-                      </Text>
-                      <Text fontSize={24} fontWeight="700" color="#10B981" letterSpacing={-0.5}>
-                        {fmtDeposit}
-                      </Text>
-                    </YStack>
-                    <YStack gap={4} alignItems="flex-end">
-                      <Text fontSize={12} fontWeight="500" color={DARK_THEME.textTertiary} letterSpacing={0.3}>
-                        Due (75%)
-                      </Text>
-                      <Text fontSize={24} fontWeight="700" color={DARK_THEME.textPrimary} letterSpacing={-0.5}>
-                        {fmtDue}
-                      </Text>
-                      {daysUntilEvent !== null && daysUntilEvent > 0 && (
-                        <Text
-                          fontSize={11}
-                          fontWeight="600"
-                          color={daysUntilEvent <= 14 ? '#F97316' : DARK_THEME.textTertiary}
-                          letterSpacing={0.2}
-                        >
-                          {(t.budget as any).dueInDays.replace('{{count}}', String(daysUntilEvent))}
-                        </Text>
-                      )}
-                    </YStack>
-                  </XStack>
+                      <>
+                        {/* Card 1 — Deposit Paid */}
+                        <View style={{ backgroundColor: theme.surfaceCard, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: `${theme.accentGold}22` }}>
+                          <XStack justifyContent="space-between" alignItems="flex-start">
+                            <YStack flex={1}>
+                              <Text fontSize={10} fontWeight="700" color={theme.accentGold} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
+                                {t.budget.amountPaidLabel}
+                              </Text>
+                              <Text fontSize={36} fontWeight="700" color={theme.accentGold} letterSpacing={-1} style={{ marginTop: 4 }}>
+                                {fmtDeposit}
+                              </Text>
+                            </YStack>
+                            <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: theme.surfaceHigh, alignItems: 'center', justifyContent: 'center' }}>
+                              <Ionicons name="card-outline" size={24} color={`${theme.accentGold}60`} />
+                            </View>
+                          </XStack>
+                        </View>
+                        {/* Card 2 — Amount Due (merged with the "pay" CTA):
+                            the card itself is tappable for organizers, so the amount and
+                            "in X days" only render once and the chevron signals the action.
+                            Guests get the same card without the tap target. */}
+                        {(() => {
+                          const canPay = budgetStats.percentage < 100 && budgetStats.pending > 0 && !isPackageFrozen && capabilities.canManagePackages;
+                          const handlePayRemaining = () => {
+                            if (!selectedEventId) return;
+                            const packageIdForPayment = cachedBudget?.packageId || (booking as any)?.package_id;
+                            const participantsForPayment = cachedBudget?.payingCount;
+                            const params = new URLSearchParams({ payFull: '1' });
+                            if (packageIdForPayment) params.set('packageId', packageIdForPayment);
+                            if (participantsForPayment) params.set('participants', String(participantsForPayment + 1));
+                            if (selectedEvent?.city_id) params.set('cityId', selectedEvent.city_id);
+                            params.set('amountCents', String(budgetStats.pending));
+                            params.set('totalCents', String(budgetStats.totalBudget));
+                            router.push(`/booking/${selectedEventId}/payment?${params.toString()}` as any);
+                          };
+                          const cardStyle = { backgroundColor: theme.surfaceCard, borderRadius: 16, overflow: 'hidden' as const, flexDirection: 'row' as const, borderWidth: 1, borderColor: '#F97316' };
+                          const cardInner = (
+                            // Bottom-aligned so "in X days" on the left and the
+                            // "pay balance" label on the right share one baseline
+                            // instead of the label floating above it.
+                            <XStack flex={1} padding={20} alignItems="flex-end" gap={12}>
+                                <YStack flex={1} gap={4}>
+                                  <Text fontSize={10} fontWeight="700" color={theme.textTertiary} letterSpacing={1} style={{ textTransform: 'uppercase' }}>
+                                    {t.budget.outstandingBalanceLabel}
+                                  </Text>
+                                  <Text fontSize={36} fontWeight="700" color="#F97316" letterSpacing={-1}>
+                                    {fmtDue}
+                                  </Text>
+                                  {daysUntilEvent !== null && daysUntilEvent > 0 && (
+                                    <Text fontSize={12} fontWeight="600" color={isUrgent ? '#F97316' : theme.textTertiary} letterSpacing={0.2}>
+                                      {(t.budget as any).dueInDays.replace('{{count}}', String(daysUntilEvent))}
+                                    </Text>
+                                  )}
+                                </YStack>
+                                {canPay && (
+                                  // "Pay balance" label under the chevron so the affordance is
+                                  // discoverable — chevron alone left users guessing.
+                                  <YStack alignItems="center" gap={8}>
+                                    <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: 'rgba(249,115,22,0.12)', alignItems: 'center', justifyContent: 'center' }}>
+                                      <Ionicons name="chevron-forward" size={30} color="#F97316" />
+                                    </View>
+                                    <Text fontSize={12} fontWeight="700" color="#F97316" letterSpacing={0.3} textAlign="center">
+                                      {(t.budget as any).payRemainingBtn}
+                                    </Text>
+                                  </YStack>
+                                )}
+                            </XStack>
+                          );
+                          return canPay ? (
+                            <Pressable
+                              onPress={handlePayRemaining}
+                              accessibilityRole="button"
+                              accessibilityLabel={(t.budget as any).payRemainingBtn}
+                              style={({ pressed }) => [cardStyle, pressed && { opacity: 0.85 }]}
+                            >
+                              {cardInner}
+                            </Pressable>
+                          ) : (
+                            <View style={cardStyle}>{cardInner}</View>
+                          );
+                        })()}
+                      </>
                     );
                   })()
                 )}
 
-                {/* Progress Bar: blue = paid portion, bordeaux background = remaining */}
-                <View style={styles.progressContainer}>
-                  <View
-                    style={[styles.progressBar, {
-                      width: `${budgetStats.percentage}%`,
-                      backgroundColor: DARK_THEME.primary,
-                    }]}
-                  />
-                </View>
-
-                {/* Price Breakdown — always shown */}
-                {budgetStats.payingCount > 0 && (() => {
-                  const pkgSlug = cachedBudget?.packageId || (booking as any)?.package_id || '';
-                  const pkgTier = pkgSlug.split('-').pop() as string;
-                  const tierPriceCents: Record<string, number> = { essential: 9900, classic: 14900, grand: 19900 };
-                  const tierNames: Record<string, string> = { essential: 'Bronze', classic: 'Silver', grand: 'Gold' };
-                  const basePerPkg = tierPriceCents[pkgTier] ?? budgetStats.perPerson;
-                  const pkgName = tierNames[pkgTier] || 'Package';
-                  const totalCount = cachedParticipantCount || (budgetStats.payingCount + 1);
-                  const honoreeExcluded = cachedParticipantCount != null && budgetStats.payingCount < cachedParticipantCount;
-                  const baseAmount = basePerPkg * totalCount;
-                  const serviceFee = Math.ceil(baseAmount * 0.1);
-                  const grandTotal = baseAmount + serviceFee;
-                  const perPayingPerson = honoreeExcluded ? Math.ceil(grandTotal / budgetStats.payingCount) : 0;
-                  return (
-                    <View style={{ marginTop: 8 }}>
-                      {/* Thin divider */}
-                      <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 8 }} />
-                      {/* Row 1: package price × total participants */}
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text fontSize={12} color={DARK_THEME.textTertiary}>
-                          {formatCurrencyRounded(basePerPkg)} / {pkgName} Package × {totalCount}
-                        </Text>
-                        <Text fontSize={12} color={DARK_THEME.textTertiary}>
-                          {formatCurrencyRounded(baseAmount)}
-                        </Text>
-                      </View>
-                      {/* Row 2: service fee */}
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                        <Text fontSize={12} color="rgba(249,115,22,0.9)">Service Fee (10%)</Text>
-                        <Text fontSize={12} color="rgba(249,115,22,0.9)">{formatCurrencyRounded(serviceFee)}</Text>
-                      </View>
-                      {/* Row 3: total — thin divider + total line */}
-                      <View style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginBottom: 6 }} />
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: honoreeExcluded ? 8 : 0 }}>
-                        <Text fontSize={12} fontWeight="600" color={DARK_THEME.textSecondary}>Total Package Price</Text>
-                        <Text fontSize={12} fontWeight="600" color={DARK_THEME.textSecondary}>{formatCurrencyRounded(grandTotal)}</Text>
-                      </View>
-                      {/* Row 4: per paying person — only when honoree is covered by group */}
-                      {honoreeExcluded && (
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingLeft: 8, borderLeftWidth: 2, borderLeftColor: 'rgba(255,255,255,0.12)' }}>
-                          <Text fontSize={11} color={DARK_THEME.textTertiary}>
-                            ↳ {budgetStats.payingCount} persons · Honoree covered by group
-                          </Text>
-                          <Text fontSize={11} fontWeight="600" color={DARK_THEME.textSecondary}>
-                            {formatCurrencyRounded(perPayingPerson)}/person
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  );
-                })()}
-
-                {/* Pay Remaining Balance — inside card, below total price */}
-                {budgetStats.percentage < 100 && budgetStats.pending > 0 && (
-                  <Pressable
-                    style={styles.payRemainingButton}
-                    onPress={() => {
-                      if (!selectedEventId) return;
-                      // Prefer cached slug over DB package_id (which is a UUID, not a slug)
-                      const packageIdForPayment = cachedBudget?.packageId || (booking as any)?.package_id;
-                      const participantsForPayment = cachedBudget?.payingCount;
-                      const params = new URLSearchParams({ payFull: '1' });
-                      if (packageIdForPayment) params.set('packageId', packageIdForPayment);
-                      if (participantsForPayment) params.set('participants', String(participantsForPayment + 1));
-                      if (selectedEvent?.city_id) params.set('cityId', selectedEvent.city_id);
-                      // Pass remaining amount + full total so payment screen works without package lookup
-                      params.set('amountCents', String(budgetStats.pending));
-                      params.set('totalCents', String(budgetStats.totalBudget));
-                      router.push(`/booking/${selectedEventId}/payment?${params.toString()}` as any);
-                    }}
-                  >
-                    <View style={styles.payRemainingIcon}>
-                      <Ionicons name="card-outline" size={20} color="#F97316" />
-                    </View>
-                    <YStack flex={1}>
-                      <Text style={styles.payRemainingTitle}>{(t.budget as any).payRemainingBtn}</Text>
-                      <Text style={styles.payRemainingSubtitleText}>
-                        {formatCurrencyRounded(budgetStats.pending)} · {(t.budget as any).payRemainingSubtitle}
-                      </Text>
-                    </YStack>
-                    <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
-                  </Pressable>
+                {/* Guest info line — only for non-organizers when a balance is still owed */}
+                {budgetStats.percentage < 100 && budgetStats.pending > 0 && !isPackageFrozen && !capabilities.canManagePackages && (
+                  <View style={styles.guestRemainingInfo}>
+                    <Ionicons name="information-circle-outline" size={18} color={theme.textSecondary} />
+                    <Text style={styles.guestRemainingText}>
+                      {t.budget.guestRemainingText.replace('{{amount}}', formatEuroFromEuros(ledger.dueEuros))}
+                    </Text>
+                  </View>
                 )}
-              </YStack>
-            </View>
+            </YStack>
 
             {/* Group Contributions */}
             <YStack marginBottom="$4">
               <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
-                <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
+                <Text fontSize={12} fontWeight="700" color={theme.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
                   {t.budget.groupContributions}
                 </Text>
-                {budgetStats.pendingCount > 0 && (
-                  <Pressable onPress={handleRemindAll}>
-                    <Text fontSize={12} fontWeight="500" color={DARK_THEME.primary}>
+                {/* Sichtbar, aber ausgegraut, sobald niemand mehr offen ist.
+                    Vorher verschwand der Knopf ganz - das laesst offen, ob es ihn
+                    nie gab oder ob nichts mehr zu erinnern ist (Owner-Wunsch 05.08.). */}
+                {capabilities.canRemindGuests && (
+                  <Pressable
+                    onPress={handleRemindAll}
+                    disabled={budgetStats.pendingCount === 0}
+                    accessibilityState={{ disabled: budgetStats.pendingCount === 0 }}
+                  >
+                    <Text
+                      fontSize={12}
+                      fontWeight="500"
+                      color={budgetStats.pendingCount === 0 ? theme.textTertiary : theme.accentGold}
+                    >
                       {t.budget.remindAll}
                     </Text>
                   </Pressable>
                 )}
               </XStack>
 
-              <View style={[styles.glassCard, { paddingHorizontal: 8, paddingTop: 8, paddingBottom: 8 }]}>
-                {/* Use demo participants when no DB booking, otherwise DB participants */}
-                {(demoParticipants || participants)?.map((participantRaw, index) => {
+              {/* Individual cards per participant — gap between each */}
+              <YStack gap={10}>
+                {(demoParticipants || sortedParticipants)?.map((participantRaw, index) => {
                   type DemoP = { id: string; name: string; status: 'paid' | 'pending'; amount: number };
                   const isDemo = !!demoParticipants;
-                  // Normalise to common shape
                   const name = isDemo
                     ? (participantRaw as DemoP).name
                     : (((participantRaw as any).profile?.full_name) || (participantRaw as any).profile?.email?.split('@')[0] || '—');
+                  const isOrganizerRow = isDemo
+                    ? (participantRaw as DemoP).id === 'organizer'
+                    : (participantRaw as any).role === 'organizer';
                   const isPaid = isDemo
                     ? (participantRaw as DemoP).status === 'paid'
-                    : (participantRaw as any).payment_status === 'paid';
+                    : (participantRaw as any).payment_status === 'paid' || isOrganizerRow;
+                  const isClaimed = !isDemo
+                    && !isPaid
+                    && !!(participantRaw as any).payment_claimed_at;
                   const isPending = !isPaid;
+                  const participantRole = isDemo ? null : (participantRaw as any).role;
+                  const participantUserId = isDemo ? null : (participantRaw as any).user_id as string;
+                  // Betrag kommt aus der Buchungsaufteilung, nicht aus
+                  // `contribution_amount_cents` - siehe Kommentar bei `share`.
                   const amountForRow = isDemo
                     ? (participantRaw as DemoP).amount
-                    : (booking?.per_person_cents || budgetStats.perPerson || 0);
-                  const isCurrentUser = index === 0;
+                    : (isOrganizerRow ? share.organizerEuros : share.perPersonEuros) * 100;
+                  const isCurrentUser = isDemo
+                    ? (participantRaw as DemoP).id === 'organizer'
+                      ? participantUserId === user?.id
+                      : false
+                    : (participantRaw as any).user_id === user?.id;
                   const avatarColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
                   const initials = (name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2)) || '?';
                   const key = (participantRaw as any).id as string;
+                  const unpaidColor = '#F97316';
+                  const isOtherGuestRow = isDemo
+                    ? !isOrganizerRow && (participantRaw as DemoP).id !== 'honoree'
+                    : participantRole === 'guest' && !isCurrentUser;
+                  const showPaymentStatus = capabilities.canViewGroupContributions
+                    && (capabilities.canRemindGuests || !isOtherGuestRow);
+
+                  const isHighlighted = !!highlightUserId && participantUserId === highlightUserId;
+
+                  // Der Ehrengast zahlt seinen Anteil mit, wird dafuer aber nie
+                  // vor der Party angegangen - das wuerde die Ueberraschung
+                  // verderben. Statt eines Mahnstatus nennt seine Zeile die
+                  // Rolle und sagt, wann kassiert wird (Owner-Wunsch 05.08.).
+                  const isHonoreeRow = !isDemo && participantRole === 'honoree';
+                  const honoreeRoleLabel = (() => {
+                    const pt = (selectedEvent as any)?.party_type;
+                    if (pt === 'bachelorette') return (t.budget as any).honoreeRoleBachelorette;
+                    if (pt === 'bachelor') return (t.budget as any).honoreeRoleBachelor;
+                    return (t.budget as any).honoreeRoleGeneric;
+                  })();
 
                   return (
-                    <View
-                      key={key}
-                      style={[
-                        styles.contributionRow,
-                        index !== ((demoParticipants || participants)?.length || 0) - 1 && styles.contributionRowBorder,
-                      ]}
-                    >
-                      {/* Avatar */}
-                      <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
-                        <Text style={styles.participantInitialsText}>{initials}</Text>
+                    <View key={key} style={[styles.contributionCard, isHighlighted && styles.contributionCardHighlighted]}>
+                      <View style={styles.contributionMainRow}>
+                        {/* Avatar */}
+                        {!isDemo && ((participantRaw as any).profile?.avatar_url || (isCurrentUser && userAvatar)) ? (
+                          <View style={[styles.participantAvatarInitials, { overflow: 'hidden' }]}>
+                            <CachedAvatarImage
+                              uri={(participantRaw as any).profile?.avatar_url || userAvatar}
+                              style={{ width: 40, height: 40, borderRadius: 20 }}
+                              fallback={
+                                <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
+                                  <Text style={styles.participantInitialsText}>{initials}</Text>
+                                </View>
+                              }
+                            />
+                          </View>
+                        ) : (
+                          <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
+                            <Text style={styles.participantInitialsText}>{initials}</Text>
+                          </View>
+                        )}
+
+                        {/* Name + (You) */}
+                        <View style={styles.contributionName}>
+                          <XStack alignItems="center" gap={6}>
+                            <Text
+                              style={{ flexShrink: 1, fontSize: 14, fontWeight: '600', color: theme.textPrimary }}
+                              numberOfLines={1}
+                            >
+                              {name}
+                            </Text>
+                          </XStack>
+                          {isHonoreeRow && (
+                            <Text
+                              style={{ fontSize: 11, color: theme.textTertiary, marginTop: 2 }}
+                              numberOfLines={1}
+                            >
+                              {honoreeRoleLabel}
+                            </Text>
+                          )}
+                        </View>
+
+                        {/* Amount + status stacked on the right */}
+                        <YStack style={styles.contributionAmount} alignItems="flex-end" gap={2}>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
+                            {formatEuroFromEuros(Math.round(amountForRow / 100))}
+                          </Text>
+                          {/* The screen deliberately carries only two status colours -
+                              green for paid, one orange for everything still open - so
+                              "awaiting confirmation" is set apart by a clock rather than
+                              by a third shade. */}
+                          {isHonoreeRow && !isPaid ? (
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                fontWeight: '600',
+                                color: theme.textTertiary,
+                                textAlign: 'right',
+                              }}
+                              numberOfLines={2}
+                            >
+                              {(t.budget as any).honoreeCollectedAfter}
+                            </Text>
+                          ) : showPaymentStatus ? (
+                            <XStack alignItems="center" justifyContent="flex-end" gap={4} flexShrink={1}>
+                              {isClaimed && (
+                                <Ionicons name="time-outline" size={12} color={unpaidColor} />
+                              )}
+                              <Text
+                                style={{
+                                  flexShrink: 1,
+                                  fontSize: 11,
+                                  fontWeight: '700',
+                                  color: isPaid ? theme.success : unpaidColor,
+                                  letterSpacing: 0.5,
+                                  textAlign: 'right',
+                                  textTransform: 'uppercase',
+                                }}
+                                numberOfLines={2}
+                              >
+                                {isPaid ? t.budget.paid : isClaimed ? t.budget.claimed : t.budget.pending}
+                              </Text>
+                            </XStack>
+                          ) : (
+                            <View style={styles.contributionStatusPlaceholder} />
+                          )}
+                        </YStack>
                       </View>
 
-                      {/* Name + amount — flex: 1 with right margin to keep space for badge */}
-                      <View style={{ flex: 1, marginLeft: 12, marginRight: 4 }}>
-                        <Text
-                          style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}
-                          numberOfLines={1}
-                        >
-                          {name}{isCurrentUser ? ` ${t.budget.you}` : ''}
-                        </Text>
-                        <Text
-                          style={{ fontSize: 12, color: DARK_THEME.textTertiary }}
-                          numberOfLines={1}
-                        >
-                          {isPending
-                            ? t.budget.pendingOwes.replace('{{amount}}', formatCurrency(amountForRow))
-                            : t.budget.contribution.replace('{{amount}}', formatCurrency(amountForRow))
-                          }
-                        </Text>
-                      </View>
+                      {/* Payment actions wrap beneath the row to avoid collisions on narrow screens. */}
+                              {isCurrentUser && isPending && !isClaimed && !capabilities.canRemindGuests && !isDemo && (
+                        <Pressable
+                          style={[styles.markPaidButton, markingPaidUserId === user?.id && { opacity: 0.6 }]}
+                          disabled={markingPaidUserId === user?.id}
+                          onPress={async () => {
+                            const confirmed = await feedback.confirm({
+                              title: t.budget.confirmPayment,
+                              message: t.budget.confirmPaymentMsg,
+                              confirmLabel: t.budget.yesPaid,
+                              cancelLabel: t.budget.notYet,
+                            });
+                            if (!confirmed || !selectedEventId || !user?.id) return;
+                            setMarkingPaidUserId(user.id);
+                            try {
+                                      const claimedAt = new Date().toISOString();
+                                      const { error: claimError } = await supabase.rpc('mark_payment_claimed', {
+                                        p_event_id: selectedEventId,
+                                      });
+                                      if (claimError) throw claimError;
 
-                      {/* Status Badge — compact, top-aligned */}
-                      <View style={[
-                        styles.paymentBadge,
-                        { flexShrink: 0, alignSelf: 'flex-start', marginTop: 2 },
-                        isPaid ? styles.paidBadge : styles.pendingBadge,
-                      ]}>
-                        <Ionicons
-                          name={isPaid ? 'checkmark' : 'time-outline'}
-                          size={10}
-                          color={isPaid ? DARK_THEME.success : DARK_THEME.warning}
-                        />
-                        <Text style={[
-                          styles.paymentBadgeText,
-                          { color: isPaid ? DARK_THEME.success : DARK_THEME.warning }
-                        ]}>
-                          {isPaid ? t.budget.paid : t.budget.pending}
-                        </Text>
+                                      queryClient.setQueryData(
+                                        participantKeys.byEvent(selectedEventId),
+                                        (current: any[] | undefined) => current?.map(participant =>
+                                          participant.user_id === user.id
+                                            ? { ...participant, payment_claimed_at: claimedAt }
+                                            : participant
+                                        )
+                                      );
+                                      queryClient.setQueryData(
+                                        ['guestParticipations', user.id],
+                                        (current: any[] | undefined) => current?.map(participation =>
+                                          participation.event_id === selectedEventId
+                                            ? { ...participation, payment_claimed_at: claimedAt }
+                                            : participation
+                                        )
+                                      );
+                                      await queryClient.invalidateQueries({ queryKey: participantKeys.byEvent(selectedEventId) });
+                                      await queryClient.invalidateQueries({ queryKey: ['guestParticipations', user.id] });
+
+                                      if (selectedEvent?.created_by) {
+                                        const eventName = selectedEvent.title || selectedEvent.honoree_name || t.notifications.yourEventFallback;
+                                        const guestName = user.user_metadata?.full_name || user.email || name;
+                                        const { error: notificationError } = await supabase.from('notifications').insert({
+                                          event_id: selectedEventId,
+                                          title: t.notifications.paymentClaimedTitle,
+                                          body: t.notifications.paymentClaimedBody
+                                            .replace('{{guest}}', guestName)
+                                            .replace('{{event}}', eventName),
+                                          type: 'payment_claimed',
+                                          user_id: selectedEvent.created_by,
+                                          // claimedBy lets the budget screen point straight at this guest.
+                                          action_url: `/event/${selectedEventId}/budget?claimedBy=${user.id}`,
+                                        });
+                                        if (notificationError) {
+                                          console.warn('[budget] payment claim notification failed:', notificationError.message);
+                                        }
+                                      }
+                                      useUIStore.getState().showSuccess(
+                                        t.budget.thankYou,
+                                        t.budget.paymentConfirmedMsg
+                                      );
+                            } catch (error: any) {
+                              feedback.error(t.common.error, error.message || t.budget.errorUpdatingStatus);
+                            } finally {
+                              setMarkingPaidUserId(null);
+                            }
+                          }}
+                        >
+                          <Ionicons name="checkmark-circle-outline" size={14} color={theme.background} />
+                          <Text style={styles.markPaidButtonText}>{t.budget.ivePaid}</Text>
+                        </Pressable>
+                      )}
+                      {capabilities.canRemindGuests && participantRole === 'guest' && isClaimed && participantUserId && (
+                        <Pressable
+                          style={[styles.confirmClaimButton, markingPaidUserId === participantUserId && { opacity: 0.6 }]}
+                          disabled={markingPaidUserId === participantUserId}
+                          onPress={async () => {
+                            if (!selectedEventId) return;
+                            setMarkingPaidUserId(participantUserId);
+                            try {
+                              await updateParticipantPayment.mutateAsync({
+                                eventId: selectedEventId,
+                                userId: participantUserId,
+                                status: 'paid',
+                              });
+                              await queryClient.invalidateQueries({ queryKey: ['guestParticipations', participantUserId] });
+                            } catch (error: any) {
+                              feedback.error(t.common.error, error.message || t.budget.errorUpdatingStatus);
+                            } finally {
+                              setMarkingPaidUserId(null);
+                            }
+                          }}
+                        >
+                          {markingPaidUserId === participantUserId
+                            ? <ActivityIndicator size="small" color={theme.background} />
+                            : <Ionicons name="checkmark-circle-outline" size={14} color={theme.background} />}
+                          <Text style={styles.confirmClaimButtonText}>{t.budget.confirmClaim}</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  );
+                })}
+
+                {/* Non-registered invited guests */}
+                {nonRegisteredInviteGuests.map((ic, idx) => {
+                  const avatarColor = AVATAR_COLORS[((demoParticipants || sortedParticipants)?.length || 0 + idx) % AVATAR_COLORS.length];
+                  const initials = ic.name.split(' ').map((n: string) => n[0] || '').filter(Boolean).join('').toUpperCase().slice(0, 2) || '?';
+                  return (
+                    <View key={`invite-${ic.id}`} style={styles.contributionCard}>
+                      <View style={styles.contributionMainRow}>
+                        <View style={[styles.participantAvatarInitials, { backgroundColor: avatarColor }]}>
+                          <Text style={styles.participantInitialsText}>{initials}</Text>
+                        </View>
+                        <View style={styles.contributionName}>
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>
+                            {ic.name}
+                          </Text>
+                        </View>
+                        <YStack style={styles.contributionAmount} alignItems="flex-end" gap={2}>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>
+                            {formatEuroFromEuros(share.perPersonEuros)}
+                          </Text>
+                          {capabilities.canRemindGuests ? (
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#F97316', letterSpacing: 0.5, textAlign: 'right', textTransform: 'uppercase' }}>
+                              {t.budget.pending}
+                            </Text>
+                          ) : (
+                            <View style={styles.contributionStatusPlaceholder} />
+                          )}
+                        </YStack>
                       </View>
                     </View>
                   );
                 })}
-              </View>
 
-              {/* Invite button — send invitations via share sheet */}
-              <Pressable style={styles.inviteButton} onPress={handleInvite}>
-                <View style={styles.inviteButtonIcon}>
-                  <Ionicons name="share-social-outline" size={18} color="#5A7EB0" />
-                </View>
-                <Text style={styles.inviteButtonText} numberOfLines={1}>
-                  Invite Guests — Email, SMS, WhatsApp
-                </Text>
-                <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
-              </Pressable>
+                {/* Freie Plaetze: bezahlt, aber noch niemand eingetragen.
+                    Nicht bearbeitbar - Gaeste werden unter „Einladung" gepflegt,
+                    weil dort E-Mail und Telefon miterfasst werden. */}
+                {openSlots.map((slot) => (
+                  <Pressable
+                    key={slot.id}
+                    onPress={handleOpenSlotPress}
+                    style={[styles.contributionCard, { opacity: 0.6 }]}
+                  >
+                    <View style={styles.contributionMainRow}>
+                      <View
+                        style={[
+                          styles.participantAvatarInitials,
+                          { backgroundColor: theme.surfaceHigh, borderWidth: 1, borderColor: theme.textTertiary, borderStyle: 'dashed' },
+                        ]}
+                      >
+                        <Ionicons name="person-add-outline" size={16} color={theme.textTertiary} />
+                      </View>
+                      <View style={styles.contributionName}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textTertiary }} numberOfLines={1}>
+                          {t.manageInvitations.guestSlot.replace('{{number}}', String(slot.number))}
+                        </Text>
+                      </View>
+                      <YStack style={styles.contributionAmount} alignItems="flex-end" gap={2}>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textTertiary }}>
+                          {formatEuroFromEuros(share.perPersonEuros)}
+                        </Text>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textTertiary, letterSpacing: 0.5, textAlign: 'right', textTransform: 'uppercase' }}>
+                          {t.budget.pending}
+                        </Text>
+                      </YStack>
+                    </View>
+                  </Pressable>
+                ))}
+              </YStack>
 
             </YStack>
             </>
           ) : (
             <>
-            {/* Expense Breakdown */}
-            <YStack marginBottom="$4">
+            {/* Shared extra-cost ledger. Honorees are excluded by capabilities and RLS. */}
+            {capabilities.canViewExtraCosts && <YStack marginBottom="$4">
               <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
-                <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
-                  {(t.budget as any).expenseBreakdown}
-                </Text>
+                <YStack>
+                  <Text fontSize={12} fontWeight="700" color={theme.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
+                    {t.budget.expenseBreakdown}
+                  </Text>
+                  <Text fontSize={12} color={ownOpenExpenseCents > 0 ? '#F97316' : '#22C55E'}>
+                    {ownOpenExpenseCents > 0
+                      ? t.budget.expenseOwnOpen.replace('{{amount}}', formatEuroCents(ownOpenExpenseCents))
+                      : t.budget.expenseOwnSettled}
+                  </Text>
+                </YStack>
                 <Pressable
-                  onPress={() => { setExpenseCategoryKey(null); setExpenseViewMode('form'); setExpenseModalVisible(true); }}
+                  onPress={() => resetExpenseForm(null)}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 >
-                  <Ionicons name="add-circle-outline" size={16} color={DARK_THEME.primary} />
-                  <Text fontSize={12} fontWeight="500" color={DARK_THEME.primary}>Add</Text>
+                  <Ionicons name="add-circle-outline" size={16} color={theme.accentGold} />
+                  <Text fontSize={12} fontWeight="500" color={theme.accentGold}>{t.budget.addBtn}</Text>
                 </Pressable>
               </XStack>
               <View style={styles.glassCard}>
-                {allExpenseCategories.map((item, index) => {
-                  const catExpenses = [...addedExpenses.filter(e => e.categoryKey === item.key)].reverse();
-                  const totalCents = catExpenses.reduce((sum, e) => {
-                    const val = parseFloat(e.amount.replace(',', '.'));
-                    return sum + (isNaN(val) ? 0 : val);
-                  }, 0);
-                  const showBorder = index < allExpenseCategories.length - 1 || true; // always border between rows
+                {expensesLoading && (
+                  <View style={styles.emptyRefundBox}>
+                    <ActivityIndicator color={theme.accentGold} />
+                  </View>
+                )}
+                {!expensesLoading && displayedExpenseCategories.map((item) => {
+                  const catExpenses = addedExpenses.filter(expense => item.key === '__uncategorized__'
+                    ? !expense.categoryKey
+                    : expense.categoryKey === item.key);
+                  const totalCents = catExpenses.reduce((sum, expense) => sum + expense.amountCents, 0);
                   return (
                     <View key={item.key}>
-                      {/* Category header row — tap anywhere to open modal */}
-                      <Pressable style={[styles.refundRow, styles.contributionRowBorder]} onPress={() => openExpenseModal(item.key)}>
+                      <Pressable
+                        style={[styles.refundRow, styles.contributionRowBorder]}
+                        onPress={() => item.key !== '__uncategorized__' && openExpenseModal(item.key)}
+                      >
                         <XStack alignItems="center" gap="$3" flex={1}>
-                          <View style={[styles.refundIcon, { backgroundColor: item.bg }]}>
-                            <Ionicons name={item.icon as any} size={18} color={item.color} />
+                          <View style={[styles.refundIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+                            <Ionicons name={item.icon as any} size={18} color={theme.accentGold} />
                           </View>
                           <YStack>
-                            <Text fontSize={14} fontWeight="500" color={DARK_THEME.textPrimary}>
+                            <Text fontSize={14} fontWeight="500" color={theme.textPrimary}>
                               {item.labelKey in t.budget ? (t.budget as any)[item.labelKey] : item.labelKey}
                             </Text>
                             {catExpenses.length === 0 && item.packageNote && (
                               <>
-                                <Text fontSize={12} color={DARK_THEME.textTertiary}>Extra cost beyond package</Text>
-                                <Text fontSize={11} color="rgba(156,163,175,0.65)">Pre & post-event</Text>
+                                <Text fontSize={12} color={theme.textTertiary}>{t.budget.extraCostBeyondPackage}</Text>
+                                <Text fontSize={11} color="rgba(156,163,175,0.65)">{t.budget.prePostEvent}</Text>
                               </>
                             )}
                             {catExpenses.length === 0 && !item.packageNote && (
-                              <Text fontSize={12} color={DARK_THEME.textTertiary}>
+                              <Text fontSize={12} color={theme.textTertiary}>
                                 {(t.budget as any).expenseEstimated}
                               </Text>
                             )}
@@ -1254,35 +2295,57 @@ export default function BudgetDashboardScreen() {
                         <XStack alignItems="center" gap={8}>
                           {catExpenses.length > 0 && (
                             <Text fontSize={14} fontWeight="600" color={item.color}>
-                              €{totalCents.toFixed(2).replace('.', ',')}
+                              {formatEuroCents(totalCents)}
                             </Text>
                           )}
-                          <Pressable
-                            onPress={() => openExpenseModal(item.key)}
-                            hitSlop={8}
-                            style={styles.categoryAddBtn}
-                          >
-                            <Ionicons name="add-circle" size={22} color={item.color} />
-                          </Pressable>
+                          {item.key !== '__uncategorized__' && (
+                            <Pressable
+                              onPress={() => openExpenseModal(item.key)}
+                              hitSlop={8}
+                              style={styles.categoryAddBtn}
+                            >
+                              <Ionicons name="add-circle" size={22} color={theme.accentGold} />
+                            </Pressable>
+                          )}
                         </XStack>
                       </Pressable>
-                      {/* Expanded sub-items — tap to edit */}
-                      {catExpenses.map((exp, ei) => {
-                        const globalIdx = addedExpenses.indexOf(exp);
+                      {catExpenses.map((expense, expenseIndex) => {
+                        const ownShare = expense.shares.find(shareRow => shareRow.userId === user?.id);
+                        const settledCount = expense.shares.filter(shareRow => !!shareRow.settledAt).length;
+                        const mayEdit = expense.createdBy === user?.id || capabilities.canEditEvent;
                         return (
                           <Pressable
-                            key={ei}
+                            key={expense.id}
                             style={[
                               styles.expenseSubRow,
-                              ei < catExpenses.length - 1 && styles.expenseSubRowBorder,
+                              expenseIndex < catExpenses.length - 1 && styles.expenseSubRowBorder,
+                              expense.openReportCount > 0 && { borderLeftWidth: 3, borderLeftColor: '#F97316' },
                             ]}
-                            onPress={() => openEditExpense(globalIdx)}
+                            onPress={() => openExpenseDetail(expense)}
                           >
                             <View style={styles.expenseSubIndent} />
-                            <Text style={styles.expenseSubDesc} numberOfLines={1}>{exp.description}</Text>
-                            <Ionicons name="pencil-outline" size={12} color={DARK_THEME.textTertiary} style={{ marginRight: 4 }} />
+                            <YStack flex={1}>
+                              <XStack alignItems="center" gap={5}>
+                                <Text style={styles.expenseSubDesc} numberOfLines={1}>{expense.title}</Text>
+                                {expense.openReportCount > 0 && (
+                                  <Ionicons name="warning-outline" size={13} color="#F97316" />
+                                )}
+                              </XStack>
+                              <Text fontSize={11} color={theme.textTertiary}>
+                                {ownShare
+                                  ? (ownShare.settledAt
+                                    ? t.budget.expenseYourShareSettled.replace('{{amount}}', formatEuroCents(ownShare.amountCents))
+                                    : t.budget.expenseYourShareOpen.replace('{{amount}}', formatEuroCents(ownShare.amountCents)))
+                                  : t.budget.expenseNoOwnShare}
+                                {' · '}
+                                {t.budget.expenseSettledCount
+                                  .replace('{{settled}}', String(settledCount))
+                                  .replace('{{total}}', String(expense.shares.length))}
+                              </Text>
+                            </YStack>
+                            <Ionicons name={mayEdit ? 'pencil-outline' : 'eye-outline'} size={13} color={theme.textTertiary} style={{ marginRight: 4 }} />
                             <Text style={[styles.expenseSubAmount, { color: item.color }]}>
-                              €{exp.amount}
+                              {formatEuroCents(expense.amountCents)}
                             </Text>
                           </Pressable>
                         );
@@ -1294,361 +2357,453 @@ export default function BudgetDashboardScreen() {
                 <Pressable
                   style={styles.addCustomCategoryRow}
                   onPress={() => {
-                    setCustomCategoryLabel('');
-                    setCustomCategoryModalVisible(true);
+                    setCustomCatModal({ visible: true, label: '' });
                   }}
                 >
                   <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
-                    <Ionicons name="add" size={18} color={DARK_THEME.textTertiary} />
+                    <Ionicons name="add" size={18} color={theme.textTertiary} />
                   </View>
-                  <Text style={{ fontSize: 14, color: DARK_THEME.textTertiary, flex: 1 }}>
-                    Add custom category
+                  <Text style={{ fontSize: 14, color: theme.textTertiary, flex: 1 }}>
+                    {t.budget.addCustomCategory}
                   </Text>
-                  <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                  <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                 </Pressable>
               </View>
-            </YStack>
+            </YStack>}
 
-            {/* Refund Tracking */}
-            <YStack marginBottom="$6">
+            {/* Refund Tracking — the database ledger is organizer-only via RLS. */}
+            {capabilities.canViewExtraCosts && capabilities.canEditEvent && <YStack marginBottom="$6">
               <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
-                <Text fontSize={12} fontWeight="700" color={DARK_THEME.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
+                <Text fontSize={12} fontWeight="700" color={theme.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
                   {t.budget.refundTracking}
                 </Text>
                 <Pressable
                   onPress={openRefundModal}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 >
-                  <Ionicons name="add-circle-outline" size={16} color={DARK_THEME.primary} />
-                  <Text fontSize={12} fontWeight="500" color={DARK_THEME.primary}>Add</Text>
+                  <Ionicons name="add-circle-outline" size={16} color={theme.accentGold} />
+                  <Text fontSize={12} fontWeight="500" color={theme.accentGold}>{t.budget.addBtn}</Text>
                 </Pressable>
               </XStack>
               <View style={styles.glassCard}>
                 {addedRefunds.length === 0 ? (
                   <Pressable onPress={openRefundModal} style={styles.emptyRefundBox}>
-                    <Ionicons name="receipt-outline" size={22} color={DARK_THEME.textTertiary} />
-                    <Text style={styles.emptyRefundText}>Tap + Add to track a refund</Text>
+                    <Ionicons name="receipt-outline" size={22} color={theme.textTertiary} />
+                    <Text style={styles.emptyRefundText}>{t.budget.emptyRefundText}</Text>
                   </Pressable>
                 ) : (
-                  addedRefunds.map((refund, i) => (
-                    <SwipeableRefundRow
-                      key={i}
-                      description={refund.description}
-                      amount={refund.amount}
-                      icon={refund.icon}
-                      color={refund.color}
-                      bg={refund.bg}
-                      processingLabel={t.budget.securityHold}
-                      processingText={t.budget.processing}
-                      showBorder={i < addedRefunds.length - 1}
-                      onDelete={() => {
-                        const updated = addedRefunds.filter((_, idx) => idx !== i);
-                        setAddedRefunds(updated);
-                        if (selectedEventId) {
-                          AsyncStorage.setItem(`gameover:refunds:${selectedEventId}`, JSON.stringify(updated));
-                        }
-                      }}
-                    />
-                  ))
+                  addedRefunds.map((refund, i) => {
+                    const template = REFUND_TEMPLATES.find((candidate) => candidate.key === refund.templateKey);
+                    const customColor = CUSTOM_COLORS[i % CUSTOM_COLORS.length];
+                    const overdue = refund.status === 'pending' &&
+                      !!refund.expectedBy &&
+                      refund.expectedBy < dateToISO(new Date());
+                    const detailText = refund.status === 'received' && refund.receivedAt
+                      ? t.budget.refundSettledOn.replace(
+                          '{{date}}',
+                          new Date(refund.receivedAt).toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US'),
+                        )
+                      : overdue && refund.expectedBy
+                        ? t.budget.refundOverdue.replace('{{date}}', formatRefundDate(refund.expectedBy))
+                        : refund.expectedBy
+                          ? t.budget.refundExpectedDate.replace('{{date}}', formatRefundDate(refund.expectedBy))
+                          : t.budget.securityHold;
+                    return (
+                      <SwipeableRefundRow
+                        key={refund.id}
+                        description={refund.description}
+                        amount={formatEuroCents(refund.amountCents)}
+                        icon={template?.icon ?? 'receipt-outline'}
+                        color={template?.color ?? customColor.color}
+                        bg={template?.bg ?? customColor.bg}
+                        detailText={detailText}
+                        statusText={refund.status === 'received' ? t.budget.refundSettledStatus : t.budget.processing}
+                        status={refund.status}
+                        overdue={overdue}
+                        showBorder={i < addedRefunds.length - 1}
+                        onPress={() => openEditRefund(refund)}
+                        onDelete={() => {
+                          void deleteRefund.mutateAsync(refund.id).catch((error) => {
+                            console.error('[refunds] delete failed:', error);
+                            feedback.error(t.common.error, t.budget.refundDeleteError);
+                          });
+                        }}
+                      />
+                    );
+                  })
                 )}
               </View>
-            </YStack>
+            </YStack>}
             </>
           )}
 
             {/* Footer */}
-            <Text fontSize={12} color={DARK_THEME.textTertiary} textAlign="center" marginTop="$2">
+            <Text fontSize={12} color={theme.textTertiary} textAlign="center" marginTop="$2">
               {t.budget.dataUpdated}
             </Text>
         </>
       </ScrollView>
       </Animated.View>
 
-      {/* ─── Expense Popup — inline, no Modal (matches destination.tsx drag pattern) ─── */}
-      {expenseModalVisible && (
+      {/* Past-event footer banner — Package tab only, pinned above the bottom tab bar AND the central FAB */}
+      {isPackageFrozen && selectedCategory === 'package' && (
+        <PastEventBanner
+          floating
+          bottomInset={120}
+          testID="budget-package-frozen-banner"
+          message={(t.budget as any).packageFrozen || 'Package costs are locked — the event has already taken place.'}
+        />
+      )}
+
+      {/* ─── Expense Popup — shared database ledger ─── */}
+      {expenseModal.visible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setExpenseModalVisible(false)} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setExpenseModal(current => ({ ...current, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Animated.View style={[styles.modalSheet, { transform: [{ translateY: expenseSheetY }] }]}>
+            <Animated.View style={[styles.modalSheet, { paddingBottom: modalPaddingBottom, transform: [{ translateY: expenseSheetY }] }]}>
               <View {...expenseSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>
-              <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-                {!expenseCategoryKey ? (
-                  /* ── Mode 1: Category picker ── */
+              <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                {!expenseModal.categoryKey ? (
                   <>
                     <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
-                      <Text style={styles.modalTitle}>Select Category</Text>
-                      <Pressable onPress={() => setExpenseModalVisible(false)} hitSlop={10}>
-                        <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                      <Text style={styles.modalTitle}>{t.budget.selectCategoryTitle}</Text>
+                      <Pressable onPress={() => setExpenseModal(current => ({ ...current, visible: false }))} hitSlop={10}>
+                        <Ionicons name="close" size={22} color={theme.textSecondary} />
                       </Pressable>
                     </XStack>
-                    {allExpenseCategories.map(cat => (
+                    {allExpenseCategories.map(category => (
                       <Pressable
-                        key={cat.key}
+                        key={category.key}
                         style={styles.templateRow}
-                        onPress={() => {
-                          const existing = addedExpenses.filter(e => e.categoryKey === cat.key);
-                          setExpenseCategoryKey(cat.key);
-                          setExpenseViewMode(existing.length > 0 ? 'list' : 'form');
-                          setExpenseDescription('');
-                          setExpenseAmount('');
-                          setExpensePaidBy('you');
-                          setExpensePaidByPerson(null);
-                          setExpenseContributors([]);
-                        }}
+                        onPress={() => resetExpenseForm(category.key)}
                       >
-                        <View style={[styles.refundIcon, { backgroundColor: cat.bg }]}>
-                          <Ionicons name={cat.icon as any} size={18} color={cat.color} />
+                        <View style={[styles.refundIcon, { backgroundColor: category.bg }]}>
+                          <Ionicons name={category.icon as any} size={18} color={category.color} />
                         </View>
                         <Text style={styles.templateLabel}>
-                          {cat.labelKey in t.budget ? (t.budget as any)[cat.labelKey] : cat.labelKey}
+                          {category.labelKey in t.budget ? (t.budget as any)[category.labelKey] : category.labelKey}
                         </Text>
-                        <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                        <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                       </Pressable>
                     ))}
-                    {/* Add custom category */}
                     <Pressable
                       style={styles.templateRow}
                       onPress={() => {
-                        setExpenseModalVisible(false);
-                        setCustomCategoryLabel('');
-                        setCustomCategoryModalVisible(true);
+                        setExpenseModal(current => ({ ...current, visible: false }));
+                        setCustomCatModal({ visible: true, label: '' });
                       }}
                     >
                       <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
-                        <Ionicons name="add" size={18} color={DARK_THEME.textTertiary} />
+                        <Ionicons name="add" size={18} color={theme.textTertiary} />
                       </View>
-                      <Text style={[styles.templateLabel, { color: DARK_THEME.textTertiary }]}>Add custom category</Text>
-                      <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                      <Text style={[styles.templateLabel, { color: theme.textTertiary }]}>{t.budget.addCustomCategory}</Text>
+                      <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                     </Pressable>
                   </>
-                ) : expenseViewMode === 'list' ? (
-                  /* ── Mode 2: Existing expenses list ── */
+                ) : expenseModal.viewMode === 'detail' && detailExpense ? (
                   (() => {
-                    const expCat = allExpenseCategories.find(c => c.key === expenseCategoryKey)!;
-                    const catExpenses = [...addedExpenses.filter(e => e.categoryKey === expenseCategoryKey)].reverse();
+                    const category = allExpenseCategories.find(candidate => candidate.key === detailExpense.categoryKey);
+                    const mayEdit = detailExpense.createdBy === user?.id || capabilities.canEditEvent;
+                    const mayResolve = mayEdit;
+                    const ownShare = detailExpense.shares.find(share => share.userId === user?.id);
+                    const alreadyReported = detailReports.some(report => report.reportedBy === user?.id);
                     return (
                       <>
-                        <XStack alignItems="center" gap={12} marginBottom={20}>
-                          <View style={[styles.modalCatIcon, { backgroundColor: expCat.bg }]}>
-                            <Ionicons name={expCat.icon as any} size={22} color={expCat.color} />
+                        <XStack alignItems="center" gap={12} marginBottom={18}>
+                          <View style={[styles.modalCatIcon, { backgroundColor: category?.bg ?? 'rgba(198,167,94,0.15)' }]}>
+                            <Ionicons name={(category?.icon ?? 'receipt-outline') as any} size={22} color={category?.color ?? theme.accentGold} />
                           </View>
                           <YStack flex={1}>
-                            <Text style={styles.modalTitle}>
-                              {expCat.labelKey in t.budget ? (t.budget as any)[expCat.labelKey] : expCat.labelKey}
+                            <Text style={styles.modalTitle}>{detailExpense.title}</Text>
+                            <Text style={styles.modalNote}>
+                              {t.budget.paidByPersonLabel.replace(
+                                '{{name}}',
+                                detailExpense.paidBy
+                                  ? expenseParticipantNames.get(detailExpense.paidBy) ?? t.budget.expenseUnknownParticipant
+                                  : t.budget.paidBySomeoneElse,
+                              )}
                             </Text>
-                            <Text style={styles.modalNote}>{catExpenses.length} expense{catExpenses.length !== 1 ? 's' : ''}</Text>
                           </YStack>
-                          <Pressable onPress={() => setExpenseModalVisible(false)} hitSlop={10}>
-                            <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                          <Text fontSize={16} fontWeight="700" color={category?.color ?? theme.accentGold}>
+                            {formatEuroCents(detailExpense.amountCents)}
+                          </Text>
+                          <Pressable onPress={() => setExpenseModal(current => ({ ...current, visible: false }))} hitSlop={10}>
+                            <Ionicons name="close" size={22} color={theme.textSecondary} />
                           </Pressable>
                         </XStack>
-                        {catExpenses.map((exp, i) => {
-                          const globalIdx = addedExpenses.indexOf(exp);
-                          return (
-                            <Pressable
-                              key={i}
-                              style={[styles.expenseListRow, i < catExpenses.length - 1 && styles.contributionRowBorder]}
-                              onPress={() => {
-                                setEditingExpenseIndex(globalIdx);
-                                setExpenseDescription(exp.description);
-                                setExpenseAmount(exp.amount);
-                                setExpensePaidBy(exp.paidBy);
-                                setExpensePaidByPerson(exp.paidByPerson || null);
-                                setExpenseContributors(exp.contributors);
-                                setExpenseViewMode('form');
-                              }}
-                            >
-                              <YStack flex={1}>
-                                <Text style={{ fontSize: 14, fontWeight: '500', color: DARK_THEME.textPrimary }}>{exp.description}</Text>
-                                <Text style={{ fontSize: 11, color: DARK_THEME.textTertiary }}>
-                                  {exp.paidBy === 'other' ? `Paid by ${exp.paidByPerson || 'someone else'}` : 'Paid by you'}
-                                  {exp.contributors.length > 0 ? ` · ${exp.contributors.length} contributors` : ''}
-                                </Text>
-                              </YStack>
-                              <Ionicons name="pencil-outline" size={14} color={DARK_THEME.textTertiary} style={{ marginRight: 6 }} />
-                              <Text style={{ fontSize: 14, fontWeight: '600', color: expCat.color }}>€{exp.amount}</Text>
+
+                        {detailExpense.openReportCount > 0 && (
+                          <View style={[styles.contributorRow, { borderColor: '#F97316', marginBottom: 14 }]}>
+                            <Ionicons name="warning-outline" size={18} color="#F97316" />
+                            <Text style={{ color: '#F97316', fontSize: 13, flex: 1 }}>
+                              {t.budget.expenseReportedBadge.replace('{{count}}', String(detailExpense.openReportCount))}
+                            </Text>
+                          </View>
+                        )}
+
+                        <Text style={styles.inputLabel}>{t.budget.expenseDistributionTitle}</Text>
+                        {detailExpense.shares.map(share => (
+                          <View key={share.id} style={styles.contributorRow}>
+                            <YStack flex={1}>
+                              <Text style={styles.contributorName}>
+                                {expenseParticipantNames.get(share.userId) ?? t.budget.expenseUnknownParticipant}
+                              </Text>
+                              <Text fontSize={11} color={share.settledAt ? '#22C55E' : '#F97316'}>
+                                {share.settledAt ? t.budget.expenseShareSettled : t.budget.expenseShareOpen}
+                              </Text>
+                            </YStack>
+                            <Text fontSize={14} fontWeight="600" color={theme.textPrimary}>
+                              {formatEuroCents(share.amountCents)}
+                            </Text>
+                            <Ionicons
+                              name={share.settledAt ? 'checkmark-circle' : 'time-outline'}
+                              size={18}
+                              color={share.settledAt ? '#22C55E' : '#F97316'}
+                            />
+                          </View>
+                        ))}
+
+                        {detailReports.length > 0 && (
+                          <>
+                            <Text style={[styles.inputLabel, { marginTop: 16 }]}>{t.budget.expenseReportsTitle}</Text>
+                            {detailReports.map(report => (
+                              <View key={report.id} style={[styles.contributorRow, { alignItems: 'flex-start' }]}>
+                                <YStack flex={1}>
+                                  <Text style={styles.contributorName}>
+                                    {expenseParticipantNames.get(report.reportedBy) ?? t.budget.expenseUnknownParticipant}
+                                  </Text>
+                                  <Text fontSize={12} color={theme.textSecondary}>{report.reason || t.budget.expenseNoReportReason}</Text>
+                                </YStack>
+                                {mayResolve && (
+                                  <Pressable onPress={() => void confirmResolveExpenseReport(report.id)} hitSlop={8}>
+                                    <Text fontSize={12} fontWeight="600" color={theme.accentGold}>{t.budget.expenseResolveAction}</Text>
+                                  </Pressable>
+                                )}
+                              </View>
+                            ))}
+                          </>
+                        )}
+
+                        {ownShare && !ownShare.settledAt && (
+                          <Pressable
+                            style={[styles.submitButton, { marginTop: 18 }]}
+                            onPress={() => void confirmSettleOwnExpenseShare(detailExpense)}
+                            disabled={settleOwnExpenseShare.isPending}
+                          >
+                            <Text style={styles.submitButtonText}>{t.budget.expenseSettleOwnShare}</Text>
+                          </Pressable>
+                        )}
+
+                        {mayEdit && (
+                          <XStack gap={10} marginTop={ownShare && !ownShare.settledAt ? 10 : 18}>
+                            <Pressable style={[styles.paidByButton, { flex: 1 }]} onPress={() => openEditExpense(detailExpense)}>
+                              <Text style={styles.paidByText}>{t.common.edit}</Text>
                             </Pressable>
-                          );
-                        })}
-                        <Pressable
-                          style={[styles.submitButton, { marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
-                          onPress={() => {
-                            setExpenseViewMode('form');
-                            setExpenseDescription('');
-                            setExpenseAmount('');
-                            setExpensePaidBy('you');
-                            setExpensePaidByPerson(null);
-                            setExpenseContributors([]);
-                          }}
-                        >
-                          <Ionicons name="add" size={18} color="#FFFFFF" />
-                          <Text style={styles.submitButtonText}>Add Another</Text>
-                        </Pressable>
-                        <Pressable style={{ marginTop: 12, alignItems: 'center' }} onPress={() => setExpenseCategoryKey(null)}>
-                          <Text style={{ color: DARK_THEME.textSecondary, fontSize: 13 }}>← Change category</Text>
-                        </Pressable>
+                            <Pressable style={[styles.paidByButton, { flex: 1, borderColor: '#EF4444' }]} onPress={() => void confirmDeleteExpense(detailExpense)}>
+                              <Text style={[styles.paidByText, { color: '#EF4444' }]}>{t.common.delete}</Text>
+                            </Pressable>
+                          </XStack>
+                        )}
+
+                        {detailExpense.createdBy !== user?.id && !alreadyReported && (
+                          <>
+                            <Text style={[styles.inputLabel, { marginTop: 18 }]}>{t.budget.expenseReportReasonLabel}</Text>
+                            <TextInput
+                              style={styles.modalInput}
+                              placeholder={t.budget.expenseReportReasonPlaceholder}
+                              placeholderTextColor={theme.textTertiary}
+                              value={expenseModal.reportReason}
+                              onChangeText={reportReason => setExpenseModal(current => ({ ...current, reportReason }))}
+                              maxLength={500}
+                              multiline
+                            />
+                            <Pressable
+                              style={[styles.paidByButton, !expenseModal.reportReason.trim() && { opacity: 0.45 }]}
+                              disabled={!expenseModal.reportReason.trim() || reportExpense.isPending}
+                              onPress={() => void submitExpenseReport(detailExpense)}
+                            >
+                              <Text style={[styles.paidByText, { color: '#F97316' }]}>{t.budget.expenseReportAction}</Text>
+                            </Pressable>
+                          </>
+                        )}
+                        {detailExpense.createdBy !== user?.id && alreadyReported && (
+                          <Text fontSize={12} color="#F97316" textAlign="center" marginTop={16}>
+                            {t.budget.expenseAlreadyReported}
+                          </Text>
+                        )}
                       </>
                     );
                   })()
                 ) : (
-                  /* ── Mode 3: Expense form with contributor selection ── */
                   (() => {
-                    const expCat = allExpenseCategories.find(c => c.key === expenseCategoryKey)!;
-                    const hasExisting = addedExpenses.filter(e => e.categoryKey === expenseCategoryKey).length > 0;
+                    const category = allExpenseCategories.find(candidate => candidate.key === expenseModal.categoryKey);
                     return (
                       <>
                         <XStack alignItems="center" gap={12} marginBottom={20}>
-                          <View style={[styles.modalCatIcon, { backgroundColor: expCat.bg }]}>
-                            <Ionicons name={expCat.icon as any} size={22} color={expCat.color} />
+                          <View style={[styles.modalCatIcon, { backgroundColor: category?.bg ?? 'rgba(198,167,94,0.15)' }]}>
+                            <Ionicons name={(category?.icon ?? 'receipt-outline') as any} size={22} color={category?.color ?? theme.accentGold} />
                           </View>
                           <YStack flex={1}>
                             <Text style={styles.modalTitle}>
-                              {expCat.labelKey in t.budget ? (t.budget as any)[expCat.labelKey] : expCat.labelKey}
+                              {category
+                                ? (category.labelKey in t.budget ? (t.budget as any)[category.labelKey] : category.labelKey)
+                                : t.budget.selectCategoryTitle}
                             </Text>
-                            {expCat.packageNote && (
-                              <Text style={styles.modalNote}>{(t.budget as any).expensePackageNote || 'Extra costs beyond package'}</Text>
-                            )}
+                            <Text style={styles.modalNote}>{t.budget.expenseSeparateLedgerNote}</Text>
                           </YStack>
-                          <Pressable onPress={() => setExpenseModalVisible(false)} hitSlop={10}>
-                            <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                          <Pressable onPress={() => setExpenseModal(current => ({ ...current, visible: false }))} hitSlop={10}>
+                            <Ionicons name="close" size={22} color={theme.textSecondary} />
                           </Pressable>
                         </XStack>
-                        <Text style={styles.inputLabel}>What was this expense for?</Text>
+
+                        <Text style={styles.inputLabel}>{t.budget.expenseWhatFor}</Text>
                         <TextInput
                           style={styles.modalInput}
-                          placeholder="e.g. Hotel booking, train tickets..."
-                          placeholderTextColor={DARK_THEME.textTertiary}
-                          value={expenseDescription}
-                          onChangeText={setExpenseDescription}
+                          placeholder={t.budget.expenseWhatForPlaceholder}
+                          placeholderTextColor={theme.textTertiary}
+                          value={expenseModal.description}
+                          onChangeText={description => setExpenseModal(current => ({ ...current, description }))}
                           autoCapitalize="sentences"
                         />
-                        <Text style={styles.inputLabel}>Amount (€)</Text>
+                        <Text style={styles.inputLabel}>{t.budget.expenseAmount}</Text>
                         <TextInput
                           style={styles.modalInput}
-                          placeholder="0.00"
-                          placeholderTextColor={DARK_THEME.textTertiary}
-                          value={expenseAmount}
-                          onChangeText={setExpenseAmount}
+                          placeholder="0,00"
+                          placeholderTextColor={theme.textTertiary}
+                          value={expenseModal.amount}
+                          onChangeText={amount => setExpenseModal(current => ({ ...current, amount }))}
                           keyboardType="decimal-pad"
                         />
-                        <Text style={styles.inputLabel}>Who paid?</Text>
-                        <XStack gap={10} style={{ marginBottom: expensePaidBy === 'other' ? 12 : 20 }}>
-                          {(['you', 'other'] as const).map(opt => (
-                            <Pressable
-                              key={opt}
-                              style={[styles.paidByButton, expensePaidBy === opt && styles.paidByButtonActive]}
-                              onPress={() => { setExpensePaidBy(opt); if (opt !== 'other') setExpensePaidByPerson(null); }}
-                            >
-                              <Text style={[styles.paidByText, expensePaidBy === opt && styles.paidByTextActive]}>
-                                {opt === 'you' ? 'You' : 'Someone else'}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </XStack>
-                        {/* Person picker — dropdown button when "Someone else" is selected */}
-                        {expensePaidBy === 'other' && payerOptions.length > 0 && (
-                          <View style={{ marginBottom: 16 }}>
-                            {/* Dropdown trigger button */}
-                            <Pressable
-                              style={[styles.dropdownButton, expensePaidByPerson && styles.dropdownButtonSelected]}
-                              onPress={() => setPayerDropdownOpen(o => !o)}
-                            >
-                              <Text style={[styles.dropdownButtonText, expensePaidByPerson && { color: DARK_THEME.textPrimary }]}>
-                                {expensePaidByPerson
-                                  ? payerOptions.find(c => c.id === expensePaidByPerson)?.name ?? 'Select person'
-                                  : 'Select person'}
-                              </Text>
-                              <Ionicons
-                                name={payerDropdownOpen ? 'chevron-up' : 'chevron-down'}
-                                size={16}
-                                color={DARK_THEME.textTertiary}
-                              />
-                            </Pressable>
-                            {/* Dropdown list — max 4 rows visible, inner scroll for rest */}
-                            {payerDropdownOpen && (
-                              <View style={[styles.dropdownList, { maxHeight: 176 }]}>
-                                <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                                {payerOptions.map((c, i) => {
-                                  const sel = expensePaidByPerson === c.id;
-                                  return (
-                                    <Pressable
-                                      key={c.id}
-                                      style={[
-                                        styles.dropdownItem,
-                                        sel && styles.dropdownItemSelected,
-                                        i < payerOptions.length - 1 && styles.dropdownItemBorder,
-                                      ]}
-                                      onPress={() => {
-                                        setExpensePaidByPerson(sel ? null : c.id);
-                                        setPayerDropdownOpen(false);
-                                      }}
-                                    >
-                                      <Text style={[styles.dropdownItemText, sel && { color: '#5A7EB0', fontWeight: '700' as const }]}>
-                                        {c.name}
-                                      </Text>
-                                      {sel && <Ionicons name="checkmark" size={16} color="#5A7EB0" />}
-                                    </Pressable>
-                                  );
-                                })}
-                                </ScrollView>
-                              </View>
-                            )}
-                          </View>
-                        )}
-                        {/* Contributors — payer is always excluded to avoid duplication */}
-                        {(() => {
-                          const payerExcludedId = expensePaidBy === 'you'
-                            ? (allContributors[0]?.id || null)
-                            : expensePaidByPerson;
-                          const contributorOptions = allContributors.filter(c => c.id !== payerExcludedId);
-                          if (contributorOptions.length === 0) return null;
-                          return (
-                            <>
-                              <Text style={styles.inputLabel}>Who should contribute?</Text>
-                              {contributorOptions.map(contributor => {
-                                const selected = expenseContributors.includes(contributor.id);
+
+                        <Text style={styles.inputLabel}>{t.budget.expenseWhoPaid}</Text>
+                        <Pressable
+                          style={[styles.dropdownButton, expenseModal.paidByUserId && styles.dropdownButtonSelected]}
+                          onPress={() => setExpenseModal(current => ({ ...current, payerDropdownOpen: !current.payerDropdownOpen }))}
+                        >
+                          <Text style={[styles.dropdownButtonText, expenseModal.paidByUserId && { color: theme.textPrimary }]}>
+                            {expenseModal.paidByUserId
+                              ? expenseParticipantNames.get(expenseModal.paidByUserId) ?? t.budget.expenseUnknownParticipant
+                              : t.budget.expenseSelectPerson}
+                          </Text>
+                          <Ionicons name={expenseModal.payerDropdownOpen ? 'chevron-up' : 'chevron-down'} size={16} color={theme.textTertiary} />
+                        </Pressable>
+                        {expenseModal.payerDropdownOpen && (
+                          <View style={[styles.dropdownList, { maxHeight: 176, marginBottom: 16 }]}>
+                            <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                              {payerOptions.map((participant, index) => {
+                                const selected = expenseModal.paidByUserId === participant.userId;
                                 return (
                                   <Pressable
-                                    key={contributor.id}
-                                    style={[styles.contributorRow, selected && styles.contributorRowSelected]}
-                                    onPress={() => setExpenseContributors(prev =>
-                                      selected ? prev.filter(id => id !== contributor.id) : [...prev, contributor.id]
-                                    )}
+                                    key={participant.userId}
+                                    style={[
+                                      styles.dropdownItem,
+                                      selected && styles.dropdownItemSelected,
+                                      index < payerOptions.length - 1 && styles.dropdownItemBorder,
+                                    ]}
+                                    onPress={() => setExpenseModal(current => ({
+                                      ...current,
+                                      paidByUserId: participant.userId,
+                                      payerDropdownOpen: false,
+                                    }))}
                                   >
-                                    <Text style={styles.contributorName}>{contributor.name}</Text>
-                                    <View style={[styles.contributorCheck, selected && styles.contributorCheckSelected]}>
-                                      {selected && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
-                                    </View>
+                                    <Text style={[styles.dropdownItemText, selected && { color: theme.accentGold, fontWeight: '700' }]}>
+                                      {participant.name}
+                                    </Text>
+                                    {selected && <Ionicons name="checkmark" size={16} color={theme.accentGold} />}
                                   </Pressable>
                                 );
                               })}
-                            </>
+                            </ScrollView>
+                          </View>
+                        )}
+
+                        <Text style={[styles.inputLabel, { marginTop: 18 }]}>{t.budget.expenseWhoShouldContribute}</Text>
+                        <Text style={styles.modalNote}>{t.budget.expenseSplitHint}</Text>
+                        {expenseParticipants.map(participant => {
+                          const selected = expenseModal.participantIds.includes(participant.userId);
+                          const suggested = suggestedExpenseSplit.shares.find(share => share.userId === participant.userId)?.amountCents ?? 0;
+                          const effective = expenseSplit.shares.find(share => share.userId === participant.userId)?.amountCents ?? 0;
+                          return (
+                            <View key={participant.userId} style={[styles.contributorRow, selected && styles.contributorRowSelected]}>
+                              <Pressable
+                                style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}
+                                onPress={() => setExpenseModal(current => {
+                                  const nextManualAmounts = { ...current.manualAmounts };
+                                  delete nextManualAmounts[participant.userId];
+                                  return {
+                                    ...current,
+                                    participantIds: selected
+                                      ? current.participantIds.filter(id => id !== participant.userId)
+                                      : [...current.participantIds, participant.userId],
+                                    manualAmounts: nextManualAmounts,
+                                  };
+                                })}
+                              >
+                                <View style={[styles.contributorCheck, selected && styles.contributorCheckSelected]}>
+                                  {selected && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
+                                </View>
+                                <YStack flex={1}>
+                                  <Text style={styles.contributorName}>{participant.name}</Text>
+                                  {selected && (
+                                    <Text fontSize={11} color={theme.textTertiary}>
+                                      {t.budget.expenseSuggestedShare.replace('{{amount}}', formatEuroCents(suggested))}
+                                    </Text>
+                                  )}
+                                </YStack>
+                              </Pressable>
+                              {selected && (
+                                <TextInput
+                                  style={[styles.modalInput, { width: 104, marginBottom: 0, paddingVertical: 9, textAlign: 'right' }]}
+                                  value={Object.prototype.hasOwnProperty.call(expenseModal.manualAmounts, participant.userId)
+                                    ? expenseModal.manualAmounts[participant.userId]
+                                    : formatCentsForInput(effective)}
+                                  onChangeText={amount => setExpenseModal(current => ({
+                                    ...current,
+                                    manualAmounts: { ...current.manualAmounts, [participant.userId]: amount },
+                                  }))}
+                                  keyboardType="decimal-pad"
+                                />
+                              )}
+                            </View>
                           );
-                        })()}
+                        })}
+
+                        <Text
+                          style={{
+                            marginTop: 12,
+                            fontSize: 12,
+                            color: expenseDistributionComplete ? '#22C55E' : '#F97316',
+                          }}
+                        >
+                          {expenseAmountCents <= 0
+                            ? t.budget.expenseInvalidAmount
+                            : expenseSplit.shares.length === 0
+                              ? t.budget.expenseSelectShareParticipant
+                              : hasZeroExpenseShare
+                                ? t.budget.expenseZeroShare
+                                : expenseSplit.status === 'short'
+                                  ? t.budget.expenseSplitShort.replace('{{amount}}', formatEuroCents(expenseSplit.remainingCents))
+                                  : expenseSplit.status === 'over'
+                                    ? t.budget.expenseSplitOver.replace('{{amount}}', formatEuroCents(Math.abs(expenseSplit.remainingCents)))
+                                    : t.budget.expenseSplitComplete}
+                        </Text>
+
                         <Pressable
-                          style={[styles.submitButton, { marginTop: 20 }, (!expenseDescription.trim() || !expenseAmount.trim()) && styles.submitButtonDisabled]}
-                          onPress={submitExpense}
-                          disabled={!expenseDescription.trim() || !expenseAmount.trim()}
+                          style={[styles.submitButton, { marginTop: 18 }, expenseSaveDisabled && styles.submitButtonDisabled]}
+                          onPress={() => void submitExpense()}
+                          disabled={expenseSaveDisabled}
                         >
                           <Text style={styles.submitButtonText}>
-                            {editingExpenseIndex !== null ? 'Save Changes' : 'Add Expense'}
+                            {expenseModal.editingId ? t.budget.expenseSaveChanges : t.budget.expenseAddBtn}
                           </Text>
                         </Pressable>
                         <Pressable
                           style={{ marginTop: 12, alignItems: 'center' }}
-                          onPress={() => {
-                            if (hasExisting) {
-                              setExpenseViewMode('list');
-                            } else {
-                              setExpenseCategoryKey(null);
-                            }
-                          }}
+                          onPress={() => resetExpenseForm(null)}
                         >
-                          <Text style={{ color: DARK_THEME.textSecondary, fontSize: 13 }}>
-                            {hasExisting ? '← Back to list' : '← Change category'}
-                          </Text>
+                          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{t.budget.expenseChangeCategory}</Text>
                         </Pressable>
                       </>
                     );
@@ -1659,84 +2814,225 @@ export default function BudgetDashboardScreen() {
           </KeyboardAvoidingView>
         </View>
       )}
-
       {/* ─── Refund Popup — inline, no Modal (matches destination.tsx drag pattern) ─── */}
-      {refundModalVisible && (
+      {refundModal.visible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setRefundModalVisible(false)} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setRefundModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Animated.View style={[styles.modalSheet, { transform: [{ translateY: refundSheetY }] }]}>
+            <Animated.View style={[styles.modalSheet, { paddingBottom: modalPaddingBottom, transform: [{ translateY: refundSheetY }] }]}>
               <View {...refundSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
-                <Text style={styles.modalTitle}>Track a Refund</Text>
-                <Pressable onPress={() => setRefundModalVisible(false)} hitSlop={10}>
-                  <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                <Text style={styles.modalTitle}>{t.budget.trackARefund}</Text>
+                <Pressable onPress={() => setRefundModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
+                  <Ionicons name="close" size={22} color={theme.textSecondary} />
                 </Pressable>
               </XStack>
-              <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 8 }}>
-              {!refundTemplateKey ? (
+              <ScrollView
+                ref={refundScrollRef}
+                bounces={false}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                contentContainerStyle={{ paddingBottom: 8 }}
+              >
+              {!refundModal.templateKey && !refundModal.editingId ? (
                 /* Template selection */
                 <>
-                  <Text style={styles.inputLabel}>Choose a refund type</Text>
-                  {REFUND_TEMPLATES.map(tmpl => (
-                    <Pressable
-                      key={tmpl.key}
-                      style={styles.templateRow}
-                      onPress={() => {
-                        setRefundTemplateKey(tmpl.key);
-                        setRefundDescription(tmpl.label);
-                      }}
-                    >
-                      <View style={[styles.refundIcon, { backgroundColor: tmpl.bg }]}>
-                        <Ionicons name={tmpl.icon as any} size={18} color={tmpl.color} />
-                      </View>
-                      <Text style={styles.templateLabel}>{tmpl.label}</Text>
-                      <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
-                    </Pressable>
-                  ))}
+                  <Text style={styles.inputLabel}>{t.budget.chooseRefundType}</Text>
+                  {REFUND_TEMPLATES.map(tmpl => {
+                    const label = (t.budget as any)[tmpl.labelKey] as string;
+                    return (
+                      <Pressable
+                        key={tmpl.key}
+                        style={styles.templateRow}
+                        onPress={() => {
+                          setRefundModal(prev => ({ ...prev, templateKey: tmpl.key, description: label }));
+                        }}
+                      >
+                        <View style={[styles.refundIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
+                          <Ionicons name={tmpl.icon as any} size={18} color={theme.accentGold} />
+                        </View>
+                        <Text style={styles.templateLabel}>{label}</Text>
+                        <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
+                      </Pressable>
+                    );
+                  })}
                   {/* Custom refund */}
                   <Pressable
                     style={styles.templateRow}
-                    onPress={() => { setRefundTemplateKey('custom'); setRefundDescription(''); }}
+                    onPress={() => { setRefundModal(prev => ({ ...prev, templateKey: 'custom', description: '' })); }}
                   >
                     <View style={[styles.refundIcon, { backgroundColor: 'rgba(255,255,255,0.05)' }]}>
-                      <Ionicons name="add" size={18} color={DARK_THEME.textTertiary} />
+                      <Ionicons name="add" size={18} color={theme.textTertiary} />
                     </View>
-                    <Text style={[styles.templateLabel, { color: DARK_THEME.textTertiary }]}>Custom description</Text>
-                    <Ionicons name="chevron-forward" size={16} color={DARK_THEME.textTertiary} />
+                    <Text style={[styles.templateLabel, { color: theme.textTertiary }]}>{t.budget.refundCustomDescription}</Text>
+                    <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                   </Pressable>
                 </>
               ) : (
                 /* Refund form */
                 <>
-                  <Text style={styles.inputLabel}>Description</Text>
+                  <Text style={styles.inputLabel}>{t.budget.refundDescription}</Text>
                   <TextInput
                     style={styles.modalInput}
-                    value={refundDescription}
-                    onChangeText={setRefundDescription}
+                    value={refundModal.description}
+                    onChangeText={v => setRefundModal(prev => ({ ...prev, description: v }))}
                     autoCapitalize="sentences"
                   />
-                  <Text style={styles.inputLabel}>Expected Amount (€)</Text>
+                  <Text style={styles.inputLabel}>{t.budget.refundExpectedAmount}</Text>
                   <TextInput
                     style={styles.modalInput}
                     placeholder="0.00"
-                    placeholderTextColor={DARK_THEME.textTertiary}
-                    value={refundAmount}
-                    onChangeText={setRefundAmount}
+                    placeholderTextColor={theme.textTertiary}
+                    value={refundModal.amount}
+                    onChangeText={v => setRefundModal(prev => ({ ...prev, amount: v }))}
                     keyboardType="decimal-pad"
                   />
+                  <Text style={styles.inputLabel}>{t.budget.refundExpectedBy}</Text>
                   <Pressable
-                    style={[styles.submitButton, { marginTop: 8 }, (!refundDescription.trim() || !refundAmount.trim()) && styles.submitButtonDisabled]}
-                    onPress={submitRefund}
-                    disabled={!refundDescription.trim() || !refundAmount.trim()}
+                    // With the calendar open the field and the calendar are one
+                    // control, so the 16pt gap that separates form rows would
+                    // read as a seam running through the middle of it.
+                    style={[styles.refundDateInput, showRefundDatePicker && { marginBottom: 8 }]}
+                    onPress={() => {
+                      Keyboard.dismiss();
+                      setShowRefundDatePicker((current) => !current);
+                    }}
                   >
-                    <Text style={styles.submitButtonText}>Track Refund</Text>
+                    <Text style={{
+                      color: refundModal.expectedBy ? theme.textPrimary : theme.textTertiary,
+                      fontSize: 15,
+                    }}>
+                      {refundModal.expectedBy
+                        ? formatRefundDate(refundModal.expectedBy)
+                        : t.budget.refundExpectedByPlaceholder}
+                    </Text>
+                    <XStack alignItems="center" gap={10}>
+                      {refundModal.expectedBy && (
+                        <Pressable
+                          hitSlop={8}
+                          onPress={() => {
+                            setRefundModal((current) => ({ ...current, expectedBy: null }));
+                            setShowRefundDatePicker(false);
+                          }}
+                        >
+                          <Ionicons name="close-circle" size={18} color={theme.textTertiary} />
+                        </Pressable>
+                      )}
+                      <Ionicons name="calendar-outline" size={20} color={theme.accentGold} />
+                    </XStack>
                   </Pressable>
-                  <Pressable style={{ marginTop: 12, marginBottom: 8, alignItems: 'center' }} onPress={() => setRefundTemplateKey(null)}>
-                    <Text style={{ color: DARK_THEME.textSecondary, fontSize: 13 }}>← Change type</Text>
+                  {showRefundDatePicker && (
+                    <View style={styles.refundDatePicker}>
+                      <DateTimePicker
+                        value={refundModal.expectedBy ? dateFromISO(refundModal.expectedBy) : new Date()}
+                        mode="date"
+                        // A deadline in the past is already overdue the moment it
+                        // is saved, which fires the reminder immediately.
+                        minimumDate={new Date()}
+                        display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                        themeVariant="dark"
+                        locale={language === 'de' ? 'de-DE' : 'en-US'}
+                        onChange={(_event, date) => {
+                          if (Platform.OS !== 'ios') setShowRefundDatePicker(false);
+                          if (date) {
+                            setRefundModal((current) => ({ ...current, expectedBy: dateToISO(date) }));
+                          }
+                        }}
+                      />
+                      {Platform.OS === 'ios' && (
+                        <Pressable
+                          style={styles.refundDateDone}
+                          onPress={() => setShowRefundDatePicker(false)}
+                        >
+                          <Text style={{ color: theme.textOnPrimary, fontWeight: '600' }}>{t.common.done}</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  )}
+                  {refundModal.editingId && (
+                    <Pressable
+                      style={[
+                        styles.refundStatusToggle,
+                        refundModal.status === 'received'
+                          ? styles.refundStatusReceived
+                          : styles.refundStatusPending,
+                      ]}
+                      onPress={() => setRefundModal((current) => ({
+                        ...current,
+                        status: current.status === 'received' ? 'pending' : 'received',
+                        receivedAt: current.status === 'received'
+                          ? null
+                          : current.receivedAt ?? new Date().toISOString(),
+                      }))}
+                    >
+                      <Ionicons
+                        name={refundModal.status === 'received' ? 'checkmark-circle' : 'time-outline'}
+                        size={20}
+                        color={refundModal.status === 'received' ? '#22C55E' : '#F97316'}
+                      />
+                      <Text style={{
+                        color: refundModal.status === 'received' ? '#22C55E' : '#F97316',
+                        fontSize: 14,
+                        fontWeight: '600',
+                      }}>
+                        {refundModal.status === 'received'
+                          ? t.budget.refundMarkPending
+                          : t.budget.refundMarkReceived}
+                      </Text>
+                    </Pressable>
+                  )}
+                  <Pressable
+                    style={[
+                      styles.submitButton,
+                      { marginTop: 8 },
+                      (!refundModal.description.trim() ||
+                        !refundModal.amount.trim() ||
+                        createRefund.isPending ||
+                        updateRefund.isPending) &&
+                        styles.submitButtonDisabled,
+                    ]}
+                    onPress={() => void submitRefund()}
+                    disabled={
+                      !refundModal.description.trim() ||
+                      !refundModal.amount.trim() ||
+                      createRefund.isPending ||
+                      updateRefund.isPending
+                    }
+                  >
+                    {createRefund.isPending || updateRefund.isPending ? (
+                      <ActivityIndicator color={theme.textOnPrimary} />
+                    ) : (
+                      <Text style={styles.submitButtonText}>
+                        {refundModal.editingId ? t.budget.refundSave : t.budget.refundSubmit}
+                      </Text>
+                    )}
                   </Pressable>
+                  {refundModal.editingId ? (
+                    <Pressable
+                      style={styles.refundDeleteButton}
+                      disabled={deleteRefund.isPending}
+                      onPress={() => {
+                        if (!refundModal.editingId) return;
+                        void deleteRefund.mutateAsync(refundModal.editingId)
+                          .then(() => setRefundModal((current) => ({ ...current, visible: false })))
+                          .catch((error) => {
+                            console.error('[refunds] delete failed:', error);
+                            feedback.error(t.common.error, t.budget.refundDeleteError);
+                          });
+                      }}
+                    >
+                      <Ionicons name="trash-outline" size={16} color={theme.error} />
+                      <Text style={{ color: theme.error, fontSize: 13, fontWeight: '600' }}>
+                        {t.budget.refundDelete}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    <Pressable style={{ marginTop: 12, marginBottom: 8, alignItems: 'center' }} onPress={() => setRefundModal(prev => ({ ...prev, templateKey: null }))}>
+                      <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{t.budget.refundChangeType}</Text>
+                    </Pressable>
+                  )}
                 </>
               )}
               </ScrollView>
@@ -1746,60 +3042,39 @@ export default function BudgetDashboardScreen() {
       )}
 
       {/* ─── Custom Category Popup — inline, no Modal (matches destination.tsx drag pattern) ─── */}
-      {customCategoryModalVisible && (
+      {customCatModal.visible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setCustomCategoryModalVisible(false)} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setCustomCatModal(prev => ({ ...prev, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
-            <Animated.View style={[styles.modalSheet, { transform: [{ translateY: customCatSheetY }] }]}>
+            <Animated.View style={[styles.modalSheet, { paddingBottom: modalPaddingBottom, transform: [{ translateY: customCatSheetY }] }]}>
               <View {...customCatSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>
               <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
-                <Text style={styles.modalTitle}>New Category</Text>
-                <Pressable onPress={() => setCustomCategoryModalVisible(false)} hitSlop={10}>
-                  <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                <Text style={styles.modalTitle}>{t.budget.newCategoryTitle}</Text>
+                <Pressable onPress={() => setCustomCatModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
+                  <Ionicons name="close" size={22} color={theme.textSecondary} />
                 </Pressable>
               </XStack>
-              <Text style={styles.inputLabel}>Category name</Text>
+              <Text style={styles.inputLabel}>{t.budget.categoryNameLabel}</Text>
               <TextInput
                 style={styles.modalInput}
-                placeholder="e.g. Decorations, Photography..."
-                placeholderTextColor={DARK_THEME.textTertiary}
-                value={customCategoryLabel}
-                onChangeText={setCustomCategoryLabel}
+                placeholder={t.budget.categoryNamePlaceholder}
+                placeholderTextColor={theme.textTertiary}
+                value={customCatModal.label}
+                onChangeText={v => setCustomCatModal(prev => ({ ...prev, label: v }))}
                 autoCapitalize="sentences"
                 autoFocus
               />
               <Pressable
-                style={[styles.submitButton, !customCategoryLabel.trim() && styles.submitButtonDisabled]}
-                disabled={!customCategoryLabel.trim()}
-                onPress={() => {
-                  const key = `custom_${Date.now()}`;
-                  const customCatColor = CUSTOM_COLORS[customCategories.length % CUSTOM_COLORS.length];
-                  const newCat: ExpenseCategory = {
-                    key,
-                    labelKey: customCategoryLabel.trim(),
-                    icon: 'pricetag-outline',
-                    color: customCatColor.color,
-                    bg: customCatColor.bg,
-                    packageNote: false,
-                  };
-                  const updated = [...customCategories, newCat];
-                  setCustomCategories(updated);
-                  saveCustomCategories(updated);
-                  setCustomCategoryModalVisible(false);
-                  // Open expense form directly for new category
-                  setExpenseCategoryKey(key);
-                  setExpenseViewMode('form');
-                  setExpenseDescription('');
-                  setExpenseAmount('');
-                  setExpensePaidBy('you');
-                  setExpensePaidByPerson(null);
-                  setExpenseContributors([]);
-                  setExpenseModalVisible(true);
-                }}
+                style={[
+                  styles.submitButton,
+                  (!customCatModal.label.trim() || createExpenseCategory.isPending) && styles.submitButtonDisabled,
+                ]}
+                disabled={!customCatModal.label.trim() || createExpenseCategory.isPending}
+                onPress={() => void submitCustomExpenseCategory()}
               >
-                <Text style={styles.submitButtonText}>Create & Add Expense</Text>
+                <Text style={styles.submitButtonText}>{t.budget.createAndAddExpense}</Text>
               </Pressable>
             </Animated.View>
           </KeyboardAvoidingView>
@@ -1807,91 +3082,108 @@ export default function BudgetDashboardScreen() {
       )}
 
       {/* ─── Remind All Channel Picker (matches Manage Invitations UX) ── */}
-      {remindModalVisible && (() => {
-        const guestList = Object.values(cachedGuests);
-        const emailCount = guestList.filter(g => g.email).length;
-        const phoneCount = guestList.filter(g => g.phone).length;
+      {remindModal.visible && (() => {
+        const emailCount = reminderRecipients.filter(r => r.email).length;
+        const phoneCount = reminderRecipients.filter(r => r.phone).length;
         const hasEmails = emailCount > 0;
         const hasPhones = phoneCount > 0;
         return (
           <Modal
-            visible={remindModalVisible}
+            visible={remindModal.visible}
             transparent
             animationType="slide"
-            onRequestClose={() => setRemindModalVisible(false)}
+            onRequestClose={() => setRemindModal(prev => ({ ...prev, visible: false }))}
           >
             <View style={remindStyles.inviteOverlay}>
-              <Pressable style={{ flex: 1 }} onPress={() => setRemindModalVisible(false)} />
-              <View style={remindStyles.inviteSheet}>
+              <Pressable style={{ flex: 1 }} onPress={() => setRemindModal(prev => ({ ...prev, visible: false }))} />
+              <View style={remindStyles.inviteSheet} accessibilityViewIsModal={true}>
                 {/* Handle */}
                 <View style={remindStyles.inviteHandle} />
 
                 {/* Header */}
                 <XStack justifyContent="space-between" alignItems="center" marginBottom={16}>
                   <Text style={remindStyles.inviteTitle}>
-                    {remindSendStatus === 'done'
-                      ? `${remindActiveChannel === 'email' ? 'Email' : remindActiveChannel === 'sms' ? 'SMS' : 'WhatsApp'} sent`
-                      : 'Remind All Guests'}
+                    {remindModal.sendStatus === 'done'
+                      ? (remindModal.activeChannel === 'email' ? t.budget.reminderEmailSent : t.budget.reminderWhatsappSent)
+                      : t.budget.remindAllTitle}
                   </Text>
-                  {remindSendStatus !== 'sending' && (
-                    <Pressable onPress={() => setRemindModalVisible(false)} hitSlop={10}>
-                      <Ionicons name="close" size={22} color={DARK_THEME.textSecondary} />
+                  {remindModal.sendStatus !== 'sending' && (
+                    <Pressable onPress={() => setRemindModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
+                      <Ionicons name="close" size={22} color={theme.textSecondary} />
                     </Pressable>
                   )}
                 </XStack>
 
-                {/* idle: horizontal 3 channel buttons */}
-                {remindSendStatus === 'idle' && (
+                {/* idle: horizontal channel buttons — SMS intentionally omitted;
+                    guest reminder channels are Email + WhatsApp only, matching the
+                    invite-channel policy (see send-guest-invitations edge fn). */}
+                {remindModal.sendStatus === 'idle' && (
                   <>
-                    <Text style={remindStyles.inviteSectionLabel}>SEND PAYMENT REMINDER VIA</Text>
+                    {/* Tone toggle — compare playful (A) vs friendly (B) copy */}
+                    <XStack alignItems="center" gap={10} marginBottom={14}>
+                      <Text style={remindStyles.inviteSectionLabel}>{t.budget.reminderToneLabel}</Text>
+                      <XStack gap={6}>
+                        {(['A', 'B'] as const).map((v) => (
+                          <Pressable
+                            key={v}
+                            onPress={() => setReminderVariant(v)}
+                            style={[remindStyles.toneChip, reminderVariant === v && remindStyles.toneChipActive]}
+                          >
+                            <Text style={[remindStyles.toneChipText, reminderVariant === v && remindStyles.toneChipTextActive]}>
+                              {v === 'A' ? t.budget.reminderTonePlayful : t.budget.reminderToneFriendly}
+                            </Text>
+                          </Pressable>
+                        ))}
+                      </XStack>
+                    </XStack>
+
+                    <Text style={remindStyles.inviteSectionLabel}>{t.budget.sendReminderVia}</Text>
+                    {emailCount === 0 && phoneCount === 0 && (
+                      <Text style={{ fontSize: 13, color: theme.textTertiary, marginBottom: 12 }}>
+                        {t.budget.noReminderRecipients}
+                      </Text>
+                    )}
                     <XStack gap={10} marginBottom={20}>
                       <Pressable
                         style={[remindStyles.inviteChannelBtn, !hasEmails && remindStyles.inviteChannelBtnDisabled]}
                         onPress={() => hasEmails && handleRemindViaChannel('email')}
                       >
-                        <Ionicons name="mail-outline" size={22} color={hasEmails ? '#3B82F6' : DARK_THEME.textTertiary} />
-                        <Text style={[remindStyles.inviteChannelLabel, { color: hasEmails ? '#3B82F6' : DARK_THEME.textTertiary }]}>Email</Text>
-                        <Text style={remindStyles.inviteChannelCount}>{emailCount} guest{emailCount !== 1 ? 's' : ''}</Text>
-                      </Pressable>
-                      <Pressable
-                        style={[remindStyles.inviteChannelBtn, !hasPhones && remindStyles.inviteChannelBtnDisabled]}
-                        onPress={() => hasPhones && handleRemindViaChannel('sms')}
-                      >
-                        <Ionicons name="chatbubble-outline" size={22} color={hasPhones ? '#10B981' : DARK_THEME.textTertiary} />
-                        <Text style={[remindStyles.inviteChannelLabel, { color: hasPhones ? '#10B981' : DARK_THEME.textTertiary }]}>SMS</Text>
-                        <Text style={remindStyles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
+                        <Ionicons name="mail-outline" size={22} color={hasEmails ? '#3B82F6' : theme.textTertiary} />
+                        <Text style={[remindStyles.inviteChannelLabel, { color: hasEmails ? '#3B82F6' : theme.textTertiary }]}>{t.budget.channelEmail}</Text>
+                        <Text style={remindStyles.inviteChannelCount}>{emailCount} {emailCount === 1 ? t.budget.reminderGuest : t.budget.reminderGuests}</Text>
                       </Pressable>
                       <Pressable
                         style={[remindStyles.inviteChannelBtn, !hasPhones && remindStyles.inviteChannelBtnDisabled]}
                         onPress={() => hasPhones && handleRemindViaChannel('whatsapp')}
                       >
-                        <Ionicons name="logo-whatsapp" size={22} color={hasPhones ? '#25D366' : DARK_THEME.textTertiary} />
-                        <Text style={[remindStyles.inviteChannelLabel, { color: hasPhones ? '#25D366' : DARK_THEME.textTertiary }]}>WhatsApp</Text>
-                        <Text style={remindStyles.inviteChannelCount}>{phoneCount} guest{phoneCount !== 1 ? 's' : ''}</Text>
+                        <Ionicons name="logo-whatsapp" size={22} color={hasPhones ? '#25D366' : theme.textTertiary} />
+                        <Text style={[remindStyles.inviteChannelLabel, { color: hasPhones ? '#25D366' : theme.textTertiary }]}>WhatsApp</Text>
+                        <Text style={remindStyles.inviteChannelCount}>{phoneCount} {phoneCount === 1 ? t.budget.reminderGuest : t.budget.reminderGuests}</Text>
                       </Pressable>
                     </XStack>
                   </>
                 )}
 
                 {/* sending: spinner */}
-                {remindSendStatus === 'sending' && (
+                {remindModal.sendStatus === 'sending' && (
                   <View style={{ alignItems: 'center', paddingVertical: 32, gap: 16 }}>
-                    <ActivityIndicator size="large" color="#5A7EB0" />
-                    <Text style={{ fontSize: 15, fontWeight: '600', color: DARK_THEME.textPrimary }}>
-                      Sending {remindActiveChannel === 'email' ? 'email' : remindActiveChannel === 'sms' ? 'SMS' : 'WhatsApp'} reminders…
+                    <ActivityIndicator size="large" color={theme.accentGold} />
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textPrimary }}>
+                      {t.budget.sendingReminders}
                     </Text>
                   </View>
                 )}
 
                 {/* done: results */}
-                {remindSendStatus === 'done' && (
+                {remindModal.sendStatus === 'done' && (
                   <>
-                    <View style={{ backgroundColor: DARK_THEME.deepNavy, borderRadius: 12, padding: 12, marginBottom: 16 }}>
-                      <Text style={{ fontSize: 13, color: DARK_THEME.textSecondary, marginBottom: 8 }}>
-                        {remindResults.filter(r => r.status === 'sent').length} sent ·{' '}
-                        {remindResults.filter(r => r.status === 'failed').length} failed
+                    <View style={{ backgroundColor: theme.surfaceHigh, borderRadius: 12, padding: 12, marginBottom: 16 }}>
+                      <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 8 }}>
+                        {t.budget.reminderResultSummary
+                          .replace('{{sent}}', String(remindModal.results.filter(r => r.status === 'sent').length))
+                          .replace('{{failed}}', String(remindModal.results.filter(r => r.status === 'failed').length))}
                       </Text>
-                      {remindResults.map((r, i) => (
+                      {remindModal.results.map((r, i) => (
                         <XStack key={i} alignItems="center" gap={10} paddingVertical={6}
                           style={{ borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
                           <Ionicons
@@ -1899,7 +3191,7 @@ export default function BudgetDashboardScreen() {
                             size={18}
                             color={r.status === 'sent' ? '#10B981' : '#EF4444'}
                           />
-                          <Text style={{ flex: 1, fontSize: 13, color: DARK_THEME.textSecondary }}>
+                          <Text style={{ flex: 1, fontSize: 13, color: theme.textSecondary }}>
                             {r.recipient}{r.error ? ` — ${r.error}` : ''}
                           </Text>
                         </XStack>
@@ -1907,9 +3199,9 @@ export default function BudgetDashboardScreen() {
                     </View>
                     <Pressable
                       style={[remindStyles.inviteChannelBtn, { flex: 0, paddingHorizontal: 20 }]}
-                      onPress={() => { setRemindSendStatus('idle'); setRemindResults([]); setRemindActiveChannel(null); }}
+                      onPress={() => { setRemindModal(prev => ({ ...prev, sendStatus: 'idle', results: [], activeChannel: null })); }}
                     >
-                      <Text style={[remindStyles.inviteChannelLabel, { color: '#5A7EB0' }]}>Send via another channel</Text>
+                      <Text style={[remindStyles.inviteChannelLabel, { color: theme.accentGold }]}>{t.budget.sendAnotherChannel}</Text>
                     </Pressable>
                   </>
                 )}
@@ -1918,18 +3210,25 @@ export default function BudgetDashboardScreen() {
           </Modal>
         );
       })()}
+
+      <ShareModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        eventId={selectedEventId || eventIdParam}
+        eventTitle={selectedEventName}
+      />
     </View>
   );
 }
 
-const remindStyles = StyleSheet.create({
+const makeRemindStyles = (theme: EditorialTheme) => StyleSheet.create({
   inviteOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'flex-end',
   },
   inviteSheet: {
-    backgroundColor: '#1E2329',
+    backgroundColor: '#12253A',
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: 18,
@@ -1949,19 +3248,19 @@ const remindStyles = StyleSheet.create({
   inviteTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   inviteSectionLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     letterSpacing: 0.8,
     marginBottom: 10,
   },
   inviteChannelBtn: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.07)',
@@ -1977,19 +3276,56 @@ const remindStyles = StyleSheet.create({
   },
   inviteChannelCount: {
     fontSize: 11,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
+  },
+  toneChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: theme.surfaceCard,
+  },
+  toneChipActive: {
+    borderColor: theme.accentGold,
+    backgroundColor: 'rgba(198,167,94,0.14)',
+  },
+  toneChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textTertiary,
+  },
+  toneChipTextActive: {
+    color: theme.accentGold,
   },
 });
 
-const styles = StyleSheet.create({
+const makeStyles = (theme: EditorialTheme) => StyleSheet.create({
+  // Share Invite pill — matches Chat's shareEventCard for a consistent look across tabs
+  shareEventCard: {
+    backgroundColor: '#C6A75E',
+    borderRadius: 999,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+  shareEventTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F2A44',
+  },
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: theme.background,
   },
   header: {
     paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
+    borderBottomColor: theme.ghostBorder,
   },
   avatarContainer: {
     position: 'relative',
@@ -2000,14 +3336,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   avatarPlaceholder: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   onlineIndicator: {
     position: 'absolute',
@@ -2018,18 +3354,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     backgroundColor: '#10B981',
     borderWidth: 2,
-    borderColor: DARK_THEME.background,
+    borderColor: theme.background,
   },
   headerTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    fontSize: 17,
+    fontWeight: '600',
+    color: theme.textPrimary,
+    fontFamily: 'Inter_500Medium',
   },
   notificationButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2051,7 +3388,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     backgroundColor: '#F97316',
     borderWidth: 2,
-    borderColor: DARK_THEME.surfaceCard,
+    borderColor: theme.surfaceCard,
   },
   filterContainer: {
     paddingHorizontal: 20,
@@ -2068,12 +3405,12 @@ const styles = StyleSheet.create({
     paddingBottom: 180,
   },
   glassCard: {
-    backgroundColor: DARK_THEME.glassLight,
+    backgroundColor: theme.surfaceLow,
     borderRadius: 12,
     padding: 24,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: theme.ghostBorder,
     overflow: 'hidden',
     position: 'relative',
   },
@@ -2083,7 +3420,7 @@ const styles = StyleSheet.create({
     right: -48,
     width: 160,
     height: 160,
-    backgroundColor: `${DARK_THEME.primary}4D`,
+    backgroundColor: `${theme.accentGold}4D`,
     borderRadius: 80,
     opacity: 0.3,
   },
@@ -2093,12 +3430,12 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: DARK_THEME.borderLight,
+    borderColor: theme.ghostBorder,
   },
   statusText: {
     fontSize: 10,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   progressContainer: {
     height: 12,
@@ -2115,7 +3452,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#60A5FA',
+    backgroundColor: '#C6A75E',
   },
   contributionRow: {
     flexDirection: 'row',
@@ -2125,21 +3462,54 @@ const styles = StyleSheet.create({
   },
   contributionRowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.borderLight,
+    borderBottomColor: theme.ghostBorder,
+  },
+  contributionCard: {
+    backgroundColor: theme.surfaceCard,
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: theme.ghostBorder,
+    overflow: 'hidden',
+  },
+  // Transient, set only when arriving from a "payment claimed" notification.
+  contributionCardHighlighted: {
+    borderColor: '#F97316',
+    backgroundColor: 'rgba(249, 115, 22, 0.09)',
+  },
+  contributionMainRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  contributionName: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: 12,
+    marginRight: 8,
+  },
+  contributionAmount: {
+    flexShrink: 0,
+    maxWidth: '42%',
+  },
+  // One fixed height for every hidden status. Varying it with the underlying
+  // state would leak that state through the row geometry.
+  contributionStatusPlaceholder: {
+    height: 14,
   },
   participantAvatarGradient: {
     width: 40,
     height: 40,
     borderRadius: 20,
     padding: 2,
-    backgroundColor: `${DARK_THEME.primary}50`,
+    backgroundColor: `${theme.accentGold}50`,
   },
   participantAvatar: {
     width: '100%',
     height: '100%',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: DARK_THEME.background,
+    borderColor: theme.background,
   },
   participantAvatarInitials: {
     width: 40,
@@ -2148,12 +3518,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: DARK_THEME.borderLight,
+    borderColor: theme.ghostBorder,
   },
   participantInitialsText: {
     fontSize: 14,
     fontWeight: '700',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   paymentBadge: {
     flexDirection: 'row',
@@ -2165,12 +3535,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   paidBadge: {
-    backgroundColor: `${DARK_THEME.success}1A`,
-    borderColor: `${DARK_THEME.success}33`,
+    backgroundColor: 'rgba(107,114,128,0.12)',
+    borderColor: 'rgba(107,114,128,0.2)',
   },
   pendingBadge: {
-    backgroundColor: `${DARK_THEME.warning}1A`,
-    borderColor: `${DARK_THEME.warning}33`,
+    backgroundColor: 'rgba(249,115,22,0.12)',
+    borderColor: 'rgba(249,115,22,0.3)',
   },
   paymentBadgeText: {
     fontSize: 9,
@@ -2200,6 +3570,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
   },
+  refundRowReceived: {
+    backgroundColor: 'rgba(34,197,94,0.08)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#22C55E',
+  },
+  refundRowOverdue: {
+    backgroundColor: 'rgba(249,115,22,0.08)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#F97316',
+  },
   refundIcon: {
     width: 36,
     height: 36,
@@ -2208,7 +3588,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: DARK_THEME.borderLight,
+    borderColor: theme.ghostBorder,
   },
   processingBadge: {
     backgroundColor: `${'#F97316'}1A`,
@@ -2223,7 +3603,7 @@ const styles = StyleSheet.create({
     color: 'rgba(249, 115, 22, 0.8)',
   },
   receivedBadge: {
-    backgroundColor: `${DARK_THEME.success}1A`,
+    backgroundColor: 'rgba(34,197,94,0.1)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
@@ -2238,27 +3618,69 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: DARK_THEME.primary,
+    backgroundColor: theme.accentGold,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderRadius: 12,
+  },
+  markPaidButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignSelf: 'stretch',
+    marginTop: 14,
+    marginHorizontal: -14,
+    marginBottom: -14,
+    borderRadius: 0,
+    borderTopWidth: 1,
+    borderTopColor: theme.ghostBorder,
+    backgroundColor: theme.accentGold,
+  },
+  markPaidButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.background,
+  },
+  confirmClaimButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignSelf: 'stretch',
+    marginTop: 14,
+    marginHorizontal: -14,
+    marginBottom: -14,
+    borderRadius: 0,
+    borderTopWidth: 1,
+    borderTopColor: theme.ghostBorder,
+    backgroundColor: theme.accentGold,
+  },
+  confirmClaimButtonText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.background,
   },
   inviteButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 14,
     padding: 14,
     marginTop: 12,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: theme.ghostBorder,
   },
   inviteButtonIcon: {
     width: 36,
     height: 36,
     borderRadius: 10,
-    backgroundColor: 'rgba(90, 126, 176, 0.15)',
+    backgroundColor: 'rgba(198, 167, 94, 0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2266,7 +3688,24 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
+  },
+  guestRemainingInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: 'rgba(198, 167, 94, 0.1)',
+    borderRadius: 10,
+    padding: 12,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(198, 167, 94, 0.25)',
+  },
+  guestRemainingText: {
+    flex: 1,
+    fontSize: 13,
+    color: theme.textSecondary,
+    lineHeight: 18,
   },
   payRemainingButton: {
     flexDirection: 'row',
@@ -2296,25 +3735,39 @@ const styles = StyleSheet.create({
   },
   payRemainingSubtitleText: {
     fontSize: 12,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     marginTop: 2,
   },
-  emptyIconContainer: {
-    marginBottom: 24,
+  emptyBudgetPreview: {
+    overflow: 'hidden',
+    borderRadius: 12,
+    backgroundColor: theme.surfaceLow,
   },
-  emptyIconGradient: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    justifyContent: 'center',
+  emptyBudgetPreviewRow: {
+    minHeight: 42,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.ghostBorder,
+  },
+  emptyBudgetPreviewStatus: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  emptyBudgetPreviewText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
   },
   budgetCategoryBar: {
-    backgroundColor: DARK_THEME.glassLight,
+    backgroundColor: theme.surfaceLow,
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: DARK_THEME.border,
+    borderColor: theme.ghostBorder,
   },
   progressBarEmpty: {
     height: 6,
@@ -2324,16 +3777,19 @@ const styles = StyleSheet.create({
   },
   // Event Selector
   eventSelectorWrapper: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    marginBottom: 20,
     zIndex: 10,
   },
   eventSelectorCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#5A7EB0',
+    backgroundColor: theme.surfaceHigh,
     borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: theme.ghostBorder,
     padding: 14,
   },
   eventSelectorImage: {
@@ -2344,13 +3800,14 @@ const styles = StyleSheet.create({
   eventSelectorLabel: {
     fontSize: 10,
     fontWeight: '600',
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: theme.textTertiary,
     letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   eventSelectorName: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#FFFFFF',
+    color: theme.textPrimary,
   },
   eventSelectorDate: {
     fontSize: 12,
@@ -2367,10 +3824,10 @@ const styles = StyleSheet.create({
   },
   eventDropdown: {
     marginTop: 6,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: theme.ghostBorder,
     overflow: 'hidden',
   },
   eventDropdownItem: {
@@ -2380,10 +3837,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderBottomWidth: 1,
-    borderBottomColor: DARK_THEME.glassBorder,
+    borderBottomColor: theme.ghostBorder,
   },
   eventDropdownItemActive: {
-    backgroundColor: 'rgba(90, 126, 176, 0.12)',
+    backgroundColor: 'rgba(198,167,94,0.12)',
+    borderWidth: 1,
+    borderColor: theme.accentGold,
   },
   eventDropdownImage: {
     width: 36,
@@ -2393,40 +3852,44 @@ const styles = StyleSheet.create({
   eventDropdownText: {
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   eventDropdownTextActive: {
-    color: '#5A7EB0',
+    color: theme.accentGold,
     fontWeight: '700',
   },
   eventDropdownDate: {
     fontSize: 11,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
   },
   filterPill: {
     flexDirection: 'row',
-    backgroundColor: DARK_THEME.surfaceCard,
-    borderRadius: 25,
+    backgroundColor: '#1A2F47',
+    borderRadius: 999,
     padding: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   filterTab: {
     flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    height: 40,
+    borderRadius: 999,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   filterTabActive: {
-    backgroundColor: '#5A7EB0',
+    backgroundColor: '#22385A',
   },
   filterTabText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.55)',
+    fontFamily: 'Inter_600SemiBold',
   },
   filterTabTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '600',
+    color: '#C6A75E',
+    fontWeight: '700',
+    fontFamily: 'Inter_600SemiBold',
   },
   // ─── Modals ────────────────────────────────────
   popupOverlay: {
@@ -2442,15 +3905,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   modalSheet: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
     paddingTop: 12,
-    paddingBottom: 16,
+    // paddingBottom is set inline based on whether the tab bar is visible
     borderTopWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    maxHeight: '85%',
+    borderColor: theme.ghostBorder,
+    maxHeight: '90%',
   },
   modalDragHandle: {
     width: 36,
@@ -2463,11 +3926,11 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   modalNote: {
     fontSize: 11,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     marginTop: 2,
   },
   modalCatIcon: {
@@ -2480,52 +3943,107 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   modalInput: {
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: theme.surfaceLow,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
+  },
+  refundDateInput: {
+    minHeight: 48,
+    backgroundColor: theme.surfaceLow,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: theme.ghostBorder,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  refundDatePicker: {
+    backgroundColor: theme.surfaceLow,
+    borderRadius: 12,
+    padding: 8,
+    marginBottom: 16,
+    overflow: 'hidden',
+  },
+  refundDateDone: {
+    backgroundColor: theme.accentGold,
+    borderRadius: 8,
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginHorizontal: 8,
+    marginBottom: 8,
+  },
+  refundStatusToggle: {
+    minHeight: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  refundStatusPending: {
+    backgroundColor: 'rgba(249,115,22,0.08)',
+    borderColor: 'rgba(249,115,22,0.35)',
+  },
+  refundStatusReceived: {
+    backgroundColor: 'rgba(34,197,94,0.08)',
+    borderColor: 'rgba(34,197,94,0.35)',
+  },
+  refundDeleteButton: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 8,
+    marginBottom: 4,
   },
   paidByButton: {
     flex: 1,
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: theme.surfaceLow,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
   paidByButtonActive: {
-    backgroundColor: 'rgba(90,126,176,0.2)',
-    borderColor: '#5A7EB0',
+    backgroundColor: 'rgba(198, 167, 94,0.2)',
+    borderColor: theme.accentGold,
   },
   paidByText: {
     fontSize: 13,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   paidByTextActive: {
-    color: '#5A7EB0',
+    color: theme.accentGold,
     fontWeight: '700',
   },
   submitButton: {
-    backgroundColor: '#5A7EB0',
+    backgroundColor: theme.accentGold,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
   },
   submitButtonDisabled: {
-    backgroundColor: 'rgba(90,126,176,0.3)',
+    opacity: 0.45,
   },
   submitButtonText: {
     fontSize: 15,
@@ -2544,7 +4062,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
   emptyRefundBox: {
     padding: 24,
@@ -2555,7 +4073,7 @@ const styles = StyleSheet.create({
   },
   emptyRefundText: {
     fontSize: 14,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
   },
   expenseListRow: {
     flexDirection: 'row',
@@ -2572,31 +4090,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 8,
     marginBottom: 6,
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: theme.surfaceLow,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
   },
   contributorRowSelected: {
-    backgroundColor: 'rgba(90,126,176,0.12)',
-    borderColor: '#5A7EB0',
+    backgroundColor: 'rgba(198, 167, 94,0.12)',
+    borderColor: theme.accentGold,
   },
   contributorName: {
     fontSize: 14,
     fontWeight: '500',
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   contributorCheck: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 1.5,
-    borderColor: DARK_THEME.borderLight,
+    borderColor: theme.ghostBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
   contributorCheckSelected: {
-    backgroundColor: '#5A7EB0',
-    borderColor: '#5A7EB0',
+    backgroundColor: theme.accentGold,
+    borderColor: theme.accentGold,
   },
   categoryAddBtn: {
     padding: 2,
@@ -2618,7 +4136,7 @@ const styles = StyleSheet.create({
   expenseSubDesc: {
     flex: 1,
     fontSize: 12,
-    color: DARK_THEME.textSecondary,
+    color: theme.textSecondary,
   },
   expenseSubAmount: {
     fontSize: 12,
@@ -2631,13 +4149,13 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 12,
     borderTopWidth: 1,
-    borderTopColor: DARK_THEME.borderLight,
+    borderTopColor: theme.ghostBorder,
   },
   dropdownButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: DARK_THEME.surface,
+    backgroundColor: theme.surfaceLow,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
@@ -2646,15 +4164,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.08)',
   },
   dropdownButtonSelected: {
-    borderColor: '#5A7EB0',
+    borderColor: theme.accentGold,
   },
   dropdownButtonText: {
     fontSize: 14,
-    color: DARK_THEME.textTertiary,
+    color: theme.textTertiary,
     flex: 1,
   },
   dropdownList: {
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: theme.surfaceCard,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
@@ -2668,7 +4186,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   dropdownItemSelected: {
-    backgroundColor: 'rgba(90,126,176,0.12)',
+    backgroundColor: 'rgba(198, 167, 94,0.12)',
   },
   dropdownItemBorder: {
     borderBottomWidth: 1,
@@ -2676,6 +4194,6 @@ const styles = StyleSheet.create({
   },
   dropdownItemText: {
     fontSize: 14,
-    color: DARK_THEME.textPrimary,
+    color: theme.textPrimary,
   },
 });

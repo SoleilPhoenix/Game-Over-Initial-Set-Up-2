@@ -5,8 +5,9 @@
 
 import React, { memo } from 'react';
 import { YStack, XStack, Text, Avatar } from 'tamagui';
-import { colors } from '@/constants/colors';
+import { StyleSheet } from 'react-native';
 import type { MessageWithAuthor } from '@/repositories/messages';
+import { CachedAvatarImage } from '@/components/ui/CachedAvatarImage';
 
 interface MessageBubbleProps {
   message: MessageWithAuthor;
@@ -31,7 +32,7 @@ function MessageBubbleComponent({
   };
 
   const getInitials = (name: string | null) => {
-    if (!name) return '?';
+    if (!name) return '';
     return name
       .split(' ')
       .map((n) => n[0])
@@ -58,7 +59,15 @@ function MessageBubbleComponent({
         {showAvatar && !isOwnMessage && (
           <Avatar circular size="$3">
             {message.author?.avatar_url ? (
-              <Avatar.Image src={message.author.avatar_url} />
+              <CachedAvatarImage
+                uri={message.author.avatar_url}
+                style={styles.avatarImage}
+                fallback={
+                  <Text fontSize="$1" fontWeight="600" color="white">
+                    {getInitials(message.author.full_name)}
+                  </Text>
+                }
+              />
             ) : (
               <Avatar.Fallback
                 backgroundColor="$primary"
@@ -89,15 +98,14 @@ function MessageBubbleComponent({
 
           {/* Bubble */}
           <YStack
-            backgroundColor={isOwnMessage ? '$primary' : '$surface'}
+            backgroundColor={isOwnMessage ? '#22385A' : '#1A2F47'}
             paddingHorizontal="$3"
             paddingVertical="$2"
             borderRadius="$lg"
             borderBottomRightRadius={isOwnMessage ? '$sm' : '$lg'}
             borderBottomLeftRadius={isOwnMessage ? '$lg' : '$sm'}
-            borderWidth={isOwnMessage ? 0 : 1}
-            borderColor="$borderColor"
-            elevation={isOwnMessage ? 0 : 1}
+            borderWidth={1}
+            borderColor={isOwnMessage ? 'rgba(198,167,94,0.25)' : 'rgba(230,220,200,0.12)'}
           >
             <Text
               fontSize="$3"
@@ -131,3 +139,10 @@ function MessageBubbleComponent({
 }
 
 export const MessageBubble = memo(MessageBubbleComponent);
+
+const styles = StyleSheet.create({
+  avatarImage: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 999,
+  },
+});

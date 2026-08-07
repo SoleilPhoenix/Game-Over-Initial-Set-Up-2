@@ -11,12 +11,30 @@ type EventInsert = Database['public']['Tables']['events']['Insert'];
 type EventUpdate = Database['public']['Tables']['events']['Update'];
 type EventPreferences = Database['public']['Tables']['event_preferences']['Row'];
 type EventPreferencesInsert = Database['public']['Tables']['event_preferences']['Insert'];
+type ParticipantRole = Database['public']['Enums']['participant_role'];
+
+/** Nur die Geldfelder, die die Eventliste fuer ihren Zahlungsstand braucht. */
+export interface EventBookingSummary {
+  total_amount_cents: number | null;
+  deposit_amount_cents: number | null;
+  fully_paid_at: string | null;
+}
 
 export interface EventWithDetails extends Omit<Event, 'planning_checklist'> {
   city: { id: string; name: string; country: string } | null;
   preferences: EventPreferences | null;
   participant_count: number;
   planning_checklist?: Record<string, boolean>;
+  /**
+   * Zahlungsstand direkt aus der Buchung. Die Eventliste las ihn vorher aus dem
+   * AsyncStorage-Cache und fiel ohne Cache auf fest verdrahtete 25 % zurueck -
+   * daher die Widersprueche zum Budget-Bildschirm (Befund 05.08.).
+   * `null`, wenn keine Buchung existiert oder RLS sie fuer diesen Nutzer verbirgt.
+   */
+  booking?: EventBookingSummary | null;
+  /** The current user's participant role, loaded from event data rather than navigation. */
+  current_user_role: ParticipantRole | null;
+  current_user_id: string | null;
 }
 
 function generateUUID(): string {
@@ -27,6 +45,16 @@ function generateUUID(): string {
 }
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * PostgREST liefert eine eingebettete Beziehung als Array, auch wenn es je Event
+ * nur eine Buchung gibt. Ohne diese Normalisierung greift jeder Zugriff auf
+ * `event.booking.total_amount_cents` ins Leere.
+ */
+function firstBooking(value: unknown): EventBookingSummary | null {
+  if (Array.isArray(value)) return (value[0] as EventBookingSummary) ?? null;
+  return (value as EventBookingSummary) ?? null;
+}
 
 async function resolveCityId(cityId: string): Promise<string> {
   if (UUID_REGEX.test(cityId)) return cityId;
@@ -59,7 +87,8 @@ export const eventsRepository = {
       .from('events')
       .select(`
         *,
-        city:cities(id, name, country)
+        city:cities(id, name, country),
+        booking:bookings(total_amount_cents, deposit_amount_cents, fully_paid_at)
       `)
       .eq('created_by', userId)
       .is('deleted_at', null)
@@ -72,27 +101,40 @@ export const eventsRepository = {
 
     // Query 2: Events where user is a non-organizer participant
     let participatingEvents: typeof createdEvents = [];
+    const participantRoleMap = new Map<string, ParticipantRole>();
     try {
       const { data: participantRows } = await supabase
         .from('event_participants')
-        .select('event_id')
+        .select('event_id, role')
         .eq('user_id', userId)
         .neq('role', 'organizer');
 
-      const participantEventIds = (participantRows || []).map(r => r.event_id);
-      if (participantEventIds.length > 0) {
-        const { data, error } = await supabase
+      for (const row of participantRows || []) participantRoleMap.set(row.event_id, row.role);
+      const guestEventIds = (participantRows || []).filter(r => r.role === 'guest').map(r => r.event_id);
+      const honoreeEventIds = (participantRows || []).filter(r => r.role === 'honoree').map(r => r.event_id);
+      const participantQueries = [];
+      if (guestEventIds.length > 0) {
+        participantQueries.push(supabase
           .from('events')
-          .select(`*, city:cities(id, name, country)`)
-          .in('id', participantEventIds)
+          .select(`*, city:cities(id, name, country), booking:bookings(total_amount_cents, deposit_amount_cents, fully_paid_at)`)
+          .in('id', guestEventIds)
           .is('deleted_at', null)
-          .order('created_at', { ascending: false });
-
-        if (error) {
-          console.error('[events.getByUser] participating query failed:', error.code, error.message);
-        } else {
-          participatingEvents = data;
-        }
+          .order('created_at', { ascending: false }));
+      }
+      if (honoreeEventIds.length > 0) {
+        // Honorees are deliberately never joined to bookings; booking RLS denies
+        // them and financial data must not be requested in the first place.
+        participantQueries.push(supabase
+          .from('events')
+          .select('*, city:cities(id, name, country)')
+          .in('id', honoreeEventIds)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false }));
+      }
+      const results = await Promise.all(participantQueries);
+      for (const { data, error } of results) {
+        if (error) console.error('[events.getByUser] participating query failed:', error.code, error.message);
+        else participatingEvents = [...participatingEvents, ...(data || [])] as typeof createdEvents;
       }
     } catch (err) {
       console.warn('[events.getByUser] participating lookup failed, skipping:', err);
@@ -126,6 +168,11 @@ export const eventsRepository = {
       ...event,
       city: event.city as EventWithDetails['city'],
       preferences: null,
+      booking: firstBooking((event as any).booking),
+      current_user_role: event.created_by === userId
+        ? 'organizer'
+        : (participantRoleMap.get(event.id) ?? null),
+      current_user_id: userId,
       participant_count: countMap.get(event.id) || 0,
       planning_checklist: (event as any).planning_checklist as Record<string, boolean> | undefined,
     }));
@@ -134,7 +181,7 @@ export const eventsRepository = {
   /**
    * Get a single event by ID with all details
    */
-  async getById(eventId: string): Promise<EventWithDetails | null> {
+  async getById(eventId: string, userId?: string | null): Promise<EventWithDetails | null> {
     const { data, error } = await supabase
       .from('events')
       .select(`
@@ -151,8 +198,21 @@ export const eventsRepository = {
       throw error;
     }
 
-    // Fetch preferences and participant count in parallel (avoids RLS recursion)
-    const [prefsResult, countResult] = await Promise.allSettled([
+    const currentRole: ParticipantRole | null = data.created_by === userId
+      ? 'organizer'
+      : userId
+        ? await supabase
+            .from('event_participants')
+            .select('role')
+            .eq('event_id', eventId)
+            .eq('user_id', userId)
+            .maybeSingle()
+            .then(({ data: participant }) => participant?.role ?? null)
+        : null;
+
+    // Fetch preferences, participant count, and (when allowed) the booking
+    // separately. This avoids RLS recursion and never requests bookings for a honoree.
+    const [prefsResult, countResult, bookingResult] = await Promise.allSettled([
       supabase
         .from('event_preferences')
         .select('*')
@@ -162,6 +222,13 @@ export const eventsRepository = {
         .from('event_participants')
         .select('*', { count: 'exact', head: true })
         .eq('event_id', eventId),
+      currentRole === 'organizer' || currentRole === 'guest'
+        ? supabase
+            .from('bookings')
+            .select('total_amount_cents, deposit_amount_cents, fully_paid_at')
+            .eq('event_id', eventId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
 
     const preferences = prefsResult.status === 'fulfilled'
@@ -170,11 +237,17 @@ export const eventsRepository = {
     const participantCount = countResult.status === 'fulfilled'
       ? (countResult.value.count || 0)
       : 0;
+    const booking = bookingResult.status === 'fulfilled'
+      ? firstBooking(bookingResult.value.data)
+      : null;
 
     return {
       ...data,
       city: data.city as EventWithDetails['city'],
       preferences,
+      booking,
+      current_user_role: currentRole,
+      current_user_id: userId ?? null,
       participant_count: participantCount,
       planning_checklist: (data as any).planning_checklist as Record<string, boolean> | undefined,
     };
@@ -245,6 +318,7 @@ export const eventsRepository = {
         event_id: eventId,
         name: 'Main Lobby',
         category: 'general',
+        created_by: event.created_by,
       });
 
     if (channelError) {

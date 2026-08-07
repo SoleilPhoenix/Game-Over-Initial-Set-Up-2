@@ -4,17 +4,19 @@
  */
 
 import { Stack } from 'expo-router';
-import { DARK_THEME } from '@/constants/theme';
 
 export default function AuthLayout() {
   return (
     <Stack
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: DARK_THEME.background },
+        contentStyle: { backgroundColor: '#0D1B2A' },
         animation: 'slide_from_right',
       }}
     >
+      {/* Fades rather than slides: a launch intro should feel like the app
+          coming up, not like a screen the user navigated to. */}
+      <Stack.Screen name="intro" options={{ animation: 'fade', gestureEnabled: false }} />
       <Stack.Screen name="welcome" />
       <Stack.Screen name="login" />
       <Stack.Screen name="signup" />

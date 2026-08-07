@@ -4,30 +4,29 @@
  */
 
 import React, { useCallback, useEffect, useState, useRef, useMemo } from 'react';
-import { ScrollView, Alert, Image, View, StyleSheet } from 'react-native';
+import { ScrollView, Image, View, StyleSheet, Pressable, Text as RNText, type ImageSourcePropType } from 'react-native';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useWizardStore } from '@/stores/wizardStore';
 import { useMatchedPackages } from '@/hooks/queries/usePackages';
 import { useCreateEvent } from '@/hooks/queries/useEvents';
-import { Button } from '@/components/ui/Button';
 import { WizardFooter } from '@/components/ui/WizardFooter';
-import { DARK_THEME } from '@/constants/theme';
-import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
+import { isImageUrl, resolvePackageImage } from '@/constants/packageImages';
+import { CITY_UUID_TO_SLUG } from '@/constants/citySlugMap';
 import { LinearGradient } from 'expo-linear-gradient';
 import { setDesiredParticipants, setBudgetInfo } from '@/lib/participantCountCache';
-import { assemblePackages } from '@/utils/packageAssembly';
+import { assemblePackages, resolvePackageFeatures } from '@/utils/packageAssembly';
+import { translateFeature } from '@/i18n/packageContent';
+import { TIER_SIZE_LABEL, getTierName } from '@/constants/packageTiers';
+import { useTranslation } from '@/i18n';
+import { feedback } from '@/stores/uiStore';
 
 // Feature counts by tier: S=3, M=4, L=5
 // Fallback packages when DB returns empty (for Berlin, Hamburg, Hannover)
-// UUIDs must match supabase/migrations/20260211000000_add_german_cities.sql
-const CITY_UUID_TO_SLUG: Record<string, string> = {
-  '550e8400-e29b-41d4-a716-446655440101': 'berlin',
-  '550e8400-e29b-41d4-a716-446655440102': 'hamburg',
-  '550e8400-e29b-41d4-a716-446655440103': 'hannover',
-};
+const TIER_ORDER: Record<string, number> = { essential: 0, classic: 1, grand: 2 };
 
 function formatPrice(cents: number): string {
   return '\u20AC' + (cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
@@ -38,9 +37,10 @@ interface DisplayPackage {
   id: string;
   name: string;
   tier: string;
+  city_id?: string;
   price_per_person_cents?: number;
   base_price_cents?: number;
-  hero_image_url?: unknown;
+  hero_image_url?: string | ImageSourcePropType | null;
   rating?: number;
   review_count?: number;
   features?: unknown[];
@@ -54,6 +54,7 @@ interface PackageSelectionCardProps {
   isSelected: boolean;
   pricingMode: 'per_person' | 'total_group';
   participantCount: number;
+  citySlug: string;
   onSelect: (id: string) => void;
   onViewDetails: (id: string) => void;
 }
@@ -65,29 +66,23 @@ function PackageSelectionCard({
   isSelected,
   pricingMode,
   participantCount,
+  citySlug,
   onSelect,
   onViewDetails,
 }: PackageSelectionCardProps) {
-  const tierLabels: Record<string, string> = {
-    essential: 'S',
-    classic: 'M',
-    grand: 'L',
-  };
-  const tierNames: Record<string, string> = {
-    essential: 'Essential',
-    classic: 'Classic',
-    grand: 'Grand',
-  };
-  const tierLabel = tierLabels[pkg.tier] || '';
-  const tierName = tierNames[pkg.tier] || pkg.name;
-  const displayName = `${tierName} (${tierLabel})`;
+  const { t, language } = useTranslation();
+  const tierLabel = TIER_SIZE_LABEL[pkg.tier as keyof typeof TIER_SIZE_LABEL] || '';
+  const tierName = getTierName(pkg.tier, language) || pkg.name;
+  const displayName = tierLabel ? `${tierName} (${tierLabel})` : tierName;
 
   const perPersonCents = pkg.price_per_person_cents || pkg.base_price_cents || 0;
   const totalGroupCents = perPersonCents * participantCount;
   const displayPrice = pricingMode === 'per_person'
     ? formatPrice(perPersonCents)
     : formatPrice(totalGroupCents);
-  const priceLabel = pricingMode === 'per_person' ? 'Per Person' : `Total (${participantCount} people)`;
+  const priceLabel = pricingMode === 'per_person'
+    ? t.wizard.pricingPerPerson
+    : t.wizard.pricingTotalWithCount.replace('{{count}}', String(participantCount));
 
   // Feature count by tier: S=3, M=4, L=5
   const featureLimit = pkg.tier === 'grand' ? 5 : pkg.tier === 'classic' ? 4 : 3;
@@ -95,7 +90,13 @@ function PackageSelectionCard({
     ? (pkg.features as unknown[]).filter((f): f is string => typeof f === 'string').slice(0, featureLimit)
     : [];
 
-  const imageSource = resolveImageSource(pkg.hero_image_url || getPackageImage('berlin', 'essential'));
+  const imageSource = resolvePackageImage({
+    heroImageUrl: pkg.hero_image_url,
+    cityId: pkg.city_id,
+    citySlug,
+    tier: pkg.tier,
+    packageId: pkg.id,
+  });
   const cardHeight = isBestMatch ? 480 : 420;
 
   // Shared inner content — identical between selected (KenBurns) and unselected (static image) branches
@@ -106,33 +107,22 @@ function PackageSelectionCard({
         <YStack position="absolute" top={16} left={16} gap="$1.5">
           {isBestMatch && (
             <XStack
-              backgroundColor={DARK_THEME.primary}
-              paddingHorizontal={12}
-              paddingVertical={6}
-              borderRadius={20}
-              gap="$1.5"
               alignItems="center"
-              alignSelf="flex-start"
-            >
-              <Ionicons name="sparkles" size={12} color="white" />
-              <Text color="white" fontSize={11} fontWeight="600">
-                Recommendation based on preferences
-              </Text>
-            </XStack>
-          )}
-          {isSelected && (
-            <XStack
-              backgroundColor="rgba(71, 184, 129, 0.9)"
-              paddingHorizontal={12}
-              paddingVertical={6}
-              borderRadius={20}
               gap="$1.5"
-              alignItems="center"
               alignSelf="flex-start"
+              backgroundColor="rgba(232,220,200,0.90)"
+              paddingHorizontal={8}
+              paddingVertical={4}
+              borderRadius={20}
             >
-              <Ionicons name="checkmark-circle" size={12} color="white" />
-              <Text color="white" fontSize={11} fontWeight="600">
-                Selected
+              <Ionicons name="sparkles" size={11} color="#0D1B2A" />
+              <Text
+                color="#0D1B2A"
+                fontSize={11}
+                fontWeight="700"
+                letterSpacing={0.3}
+              >
+                {t.packageDetail.recommendationBadge}
               </Text>
             </XStack>
           )}
@@ -147,15 +137,17 @@ function PackageSelectionCard({
             <Text fontSize={22} fontWeight="800" color="white">
               {displayName}
             </Text>
-            <XStack alignItems="center" gap="$1" marginTop="$1">
-              <Ionicons name="star" size={14} color="#FFB800" />
-              <Text fontSize={13} fontWeight="600" color="white">
-                {(pkg.rating || 4.5).toFixed(1)}
-              </Text>
-              <Text fontSize={13} color="rgba(255,255,255,0.7)">
-                ({pkg.review_count || 0} reviews)
-              </Text>
-            </XStack>
+            {(pkg.review_count ?? 0) > 0 && typeof pkg.rating === 'number' && (
+              <XStack alignItems="center" gap="$1" marginTop="$1">
+                <Ionicons name="star" size={14} color="#FFB800" />
+                <Text fontSize={13} fontWeight="600" color="white">
+                  {pkg.rating.toFixed(1)}
+                </Text>
+                <Text fontSize={13} color="rgba(255,255,255,0.7)">
+                  {(t.packageDetail as any).reviewsCount.replace('{{count}}', String(pkg.review_count))}
+                </Text>
+              </XStack>
+            )}
           </YStack>
           <YStack alignItems="flex-end">
             <Text fontSize={24} fontWeight="800" color="white">
@@ -171,28 +163,36 @@ function PackageSelectionCard({
         <YStack gap="$2">
           {features.map((feature: string, i: number) => (
             <XStack key={i} alignItems="center" gap="$2">
-              <Ionicons name="checkmark-circle" size={16} color={DARK_THEME.primary} />
-              <Text fontSize={14} color="rgba(255,255,255,0.9)">{feature}</Text>
+              <Ionicons name="checkmark-circle" size={16} color="#C6A75E" />
+              <Text fontSize={14} color="rgba(255,255,255,0.9)">{translateFeature(feature)}</Text>
             </XStack>
           ))}
         </YStack>
 
         {/* Actions */}
         <XStack gap="$2" alignItems="center">
-          <Button
-            flex={1}
+          <Pressable
+            style={({ pressed }) => ({
+              flex: 1,
+              backgroundColor: isSelected ? '#C6A75E' : 'rgba(180,180,180,0.75)',
+              borderRadius: 10,
+              paddingVertical: 14,
+              alignItems: 'center' as const,
+              justifyContent: 'center' as const,
+              opacity: pressed ? 0.8 : 1,
+            })}
             onPress={() => onSelect(pkg.id)}
-            variant={isSelected ? 'primary' : isBestMatch ? 'primary' : 'outline'}
             testID={`select-package-${index}`}
           >
-            {isSelected && isBestMatch
-              ? 'Recommendation Selected'
-              : isSelected
-              ? 'Currently Selected'
-              : isBestMatch
-              ? 'Select Recommended'
-              : 'Select Package'}
-          </Button>
+            <RNText style={{
+              color: '#0D1B2A',
+              fontSize: 15,
+              fontWeight: isSelected ? '700' : '600',
+              fontFamily: 'Inter_600SemiBold',
+            }}>
+              {isSelected ? (t.wizard as any).packageSelected : t.wizard.selectPackage}
+            </RNText>
+          </Pressable>
           <XStack
             width={44}
             height={44}
@@ -219,8 +219,8 @@ function PackageSelectionCard({
       marginBottom="$5"
       borderRadius={16}
       overflow="hidden"
-      borderWidth={(isBestMatch || isSelected) ? 2 : 0}
-      borderColor={isSelected ? '#47B881' : isBestMatch ? DARK_THEME.primary : 'transparent'}
+      borderWidth={isSelected ? 2 : 0}
+      borderColor={isSelected ? '#C6A75E' : 'transparent'}
       pressStyle={{ scale: 0.99 }}
       onPress={() => onSelect(pkg.id)}
       testID={`package-card-${index}`}
@@ -253,8 +253,20 @@ function PackageSelectionCard({
 
 export default function WizardStep4() {
   const router = useRouter();
+  const { t, language } = useTranslation();
   const [pricingMode, setPricingMode] = useState<'per_person' | 'total_group'>('per_person');
   const [isCreating, setIsCreating] = useState(false);
+
+  const swipeGesture = useMemo(() =>
+    Gesture.Pan()
+      .runOnJS(true)
+      .activeOffsetX([-30, 30])
+      .failOffsetY([-15, 15])
+      .onEnd((e) => {
+        if (Math.abs(e.translationX) < 50) return;
+        setPricingMode(e.translationX > 0 ? 'total_group' : 'per_person');
+      }),
+  []);
   const wizardState = useWizardStore();
   const {
     cityId,
@@ -279,26 +291,33 @@ export default function WizardStep4() {
   // Use fallback packages when DB returns empty (for German cities)
   // Resolve UUID to slug for fallback lookup
   // Sort order: S (essential) → M (classic/recommended) → L (grand)
-  const TIER_ORDER: Record<string, number> = { essential: 0, classic: 1, grand: 2 };
   const citySlug = cityId ? (CITY_UUID_TO_SLUG[cityId] || 'berlin') : 'berlin';
   const assembledPackages = useMemo(() => assemblePackages({
     h1: energyLevel, h2: spotlightComfort, h3: competitionStyle,
     h4: enjoymentType, h5: indoorOutdoor, h6: eveningStyle,
     g1: averageAge, g2: groupCohesion, g3: fitnessLevel,
     g4: drinkingCulture, g5: groupDynamic, g6: groupVibe,
+  // assemblePackages reads the current language synchronously from the i18n store.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, citySlug), [
     citySlug,
     energyLevel, spotlightComfort, competitionStyle,
     enjoymentType, indoorOutdoor, eveningStyle,
     averageAge, groupCohesion, fitnessLevel,
-    drinkingCulture, groupDynamic, groupVibe,
+    drinkingCulture, groupDynamic, groupVibe, language,
   ]);
-  const rawPackages = (dbPackages && dbPackages.length > 0)
-    ? dbPackages
-    : assembledPackages;
-  const packages = [...rawPackages].sort(
-    (a, b) => (TIER_ORDER[a.tier] ?? 1) - (TIER_ORDER[b.tier] ?? 1)
-  );
+  const packages = useMemo(() => {
+    const rawPackages = (dbPackages && dbPackages.length > 0)
+      ? dbPackages
+      : assembledPackages;
+
+    return rawPackages
+      .map((pkg) => ({
+        ...pkg,
+        features: resolvePackageFeatures(pkg.features, pkg.tier, assembledPackages),
+      }))
+      .sort((a, b) => (TIER_ORDER[a.tier] ?? 1) - (TIER_ORDER[b.tier] ?? 1));
+  }, [assembledPackages, dbPackages]);
 
   // Auto-select best match (classic/M tier) when packages load and nothing is selected
   const didAutoSelect = useRef(false);
@@ -331,14 +350,15 @@ export default function WizardStep4() {
 
       const eventData = wizardState.getEventData();
       if (!eventData) {
-        Alert.alert('Error', 'Please complete all required fields.');
+        feedback.warning('Error', 'Please complete all required fields.');
         return;
       }
-      // Store hero image reference: remote URL string or local package slug (e.g. "hamburg-classic")
+      // Persist only real image URLs. Local assets are derived from city + package tier.
       const selectedPkg = packages.find((p) => p.id === wizardState.selectedPackageId);
-      const heroUrl = typeof selectedPkg?.hero_image_url === 'string'
-        ? selectedPkg.hero_image_url
-        : (typeof selectedPkg?.id === 'string' ? selectedPkg.id : null);
+      const selectedHeroImage = selectedPkg?.hero_image_url;
+      const heroUrl = typeof selectedHeroImage === 'string' && isImageUrl(selectedHeroImage)
+        ? selectedHeroImage
+        : null;
 
       const apiData = {
         ...eventData,
@@ -363,7 +383,7 @@ export default function WizardStep4() {
         // even after the wizard is cleared post-confirmation.
         const selPkg = packages.find(p => p.id === packageId);
         if (selPkg && Array.isArray(selPkg.features) && selPkg.features.length > 0) {
-          const perPerson = (selPkg as any).price_per_person_cents || 149_00;
+          const perPerson = (selPkg as any).price_per_person_cents || 179_00;
           setBudgetInfo(eventId, {
             totalCents: perPerson * wizParticipants,
             perPersonCents: perPerson,
@@ -394,7 +414,7 @@ export default function WizardStep4() {
       router.push(`/booking/${eventId || 'draft'}/summary?packageId=${packageId}&cityId=${wizCityId}&participants=${wizParticipants}`);
     } catch (error) {
       console.error('Failed to create event:', error);
-      Alert.alert('Error', 'Failed to create event. Please try again.');
+      feedback.error('Error', 'Failed to create event. Please try again.');
     } finally {
       setIsCreating(false);
     }
@@ -416,9 +436,9 @@ export default function WizardStep4() {
   const hasFallbackData = !!(dbPackages && dbPackages.length > 0) || CITY_UUID_TO_SLUG[cityId ?? ''] !== undefined;
   if (isLoading && !hasFallbackData) {
     return (
-      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="$background">
-        <Spinner size="large" color="$primary" />
-        <Text marginTop="$4" color="$textSecondary">
+      <YStack flex={1} justifyContent="center" alignItems="center" backgroundColor="#0D1B2A">
+        <Spinner size="large" color="#C6A75E" />
+        <Text marginTop="$4" color="rgba(255,255,255,0.72)">
           Finding perfect packages for you...
         </Text>
       </YStack>
@@ -426,28 +446,31 @@ export default function WizardStep4() {
   }
 
   return (
-    <YStack flex={1} backgroundColor="$background">
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+    <GestureDetector gesture={swipeGesture}>
+    <YStack flex={1} backgroundColor="#0D1B2A">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 120 }}>
         {/* Title */}
-        <Text fontSize="$6" fontWeight="800" color="$textPrimary" marginBottom="$1">
-          Choose Your Experience
+        <Text fontSize={22} fontWeight="700" color="#FFFFFF" marginBottom="$1" textAlign="center" style={{ fontFamily: 'Inter_600SemiBold' }}>
+          {t.wizard.chooseExperience}
         </Text>
-        <Text fontSize="$2" color="rgba(255, 255, 255, 0.7)" marginBottom="$5">
-          Select a tier that fits your group's vibe.
+        <Text fontSize={14} color="rgba(255,255,255,0.55)" marginBottom="$5" textAlign="center" style={{ fontFamily: 'Inter_400Regular' }}>
+          {t.wizard.chooseExperienceSubtitle}
         </Text>
 
         {/* Pricing Toggle */}
         <XStack
-          backgroundColor="rgba(45, 55, 72, 0.6)"
-          borderRadius="$full"
+          backgroundColor="#1A2F47"
+          borderRadius={999}
+          borderWidth={1}
+          borderColor="rgba(230,220,200,0.15)"
           padding={4}
           marginBottom="$5"
         >
           <XStack
             flex={1}
             height={40}
-            borderRadius="$full"
-            backgroundColor={pricingMode === 'per_person' ? DARK_THEME.primary : 'transparent'}
+            borderRadius={999}
+            backgroundColor={pricingMode === 'per_person' ? '#22385A' : 'transparent'}
             alignItems="center"
             justifyContent="center"
             pressStyle={{ opacity: 0.8 }}
@@ -455,18 +478,19 @@ export default function WizardStep4() {
             testID="pricing-per-person"
           >
             <Text
-              fontWeight="600"
-              fontSize={14}
-              color={pricingMode === 'per_person' ? 'white' : '$textSecondary'}
+              fontWeight="700"
+              fontSize={13}
+              color={pricingMode === 'per_person' ? '#C6A75E' : 'rgba(255,255,255,0.55)'}
+              style={{ fontFamily: 'Inter_600SemiBold' }}
             >
-              Per Person
+              {t.wizard.pricingPerPerson}
             </Text>
           </XStack>
           <XStack
             flex={1}
             height={40}
-            borderRadius="$full"
-            backgroundColor={pricingMode === 'total_group' ? DARK_THEME.primary : 'transparent'}
+            borderRadius={999}
+            backgroundColor={pricingMode === 'total_group' ? '#22385A' : 'transparent'}
             alignItems="center"
             justifyContent="center"
             pressStyle={{ opacity: 0.8 }}
@@ -474,11 +498,12 @@ export default function WizardStep4() {
             testID="pricing-total-group"
           >
             <Text
-              fontWeight="600"
-              fontSize={14}
-              color={pricingMode === 'total_group' ? 'white' : '$textSecondary'}
+              fontWeight="700"
+              fontSize={13}
+              color={pricingMode === 'total_group' ? '#C6A75E' : 'rgba(255,255,255,0.55)'}
+              style={{ fontFamily: 'Inter_600SemiBold' }}
             >
-              Total Group
+              {t.wizard.pricingTotalGroup}
             </Text>
           </XStack>
         </XStack>
@@ -490,10 +515,11 @@ export default function WizardStep4() {
               key={pkg.id}
               pkg={pkg as DisplayPackage}
               index={index}
-              isBestMatch={(pkg as DisplayPackage).bestMatch === true || (!rawPackages.some((p) => (p as DisplayPackage).bestMatch) && pkg.tier === 'classic')}
+              isBestMatch={(pkg as DisplayPackage).bestMatch === true || (!packages.some((p) => (p as DisplayPackage).bestMatch) && pkg.tier === 'classic')}
               isSelected={selectedPackageId === pkg.id}
               pricingMode={pricingMode}
               participantCount={participantCount}
+              citySlug={citySlug}
               onSelect={handleSelectPackage}
               onViewDetails={handleViewDetails}
             />
@@ -511,9 +537,10 @@ export default function WizardStep4() {
       <WizardFooter
         onBack={handleBack}
         onNext={handleNext}
-        nextLabel={isCreating ? 'Creating...' : 'Proceed to Booking'}
+        nextLabel={isCreating ? (t.wizard as any).creatingEvent : (t.wizard as any).proceedToBooking}
         nextDisabled={!canProceed || isCreating}
       />
     </YStack>
+    </GestureDetector>
   );
 }

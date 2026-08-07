@@ -5,10 +5,10 @@
 
 import { supabase } from '@/lib/supabase/client';
 import type { Database } from '@/lib/supabase/types';
+import { calculateBookingPricing } from '@/utils/pricing';
 
 type Booking = Database['public']['Tables']['bookings']['Row'];
 type BookingInsert = Database['public']['Tables']['bookings']['Insert'];
-type BookingUpdate = Database['public']['Tables']['bookings']['Update'];
 type Package = Database['public']['Tables']['packages']['Row'];
 
 export interface BookingWithDetails extends Booking {
@@ -19,9 +19,6 @@ export interface BookingWithDetails extends Booking {
     honoree_name: string;
   } | null;
 }
-
-const SERVICE_FEE_PERCENTAGE = 0.10; // 10%
-const MIN_SERVICE_FEE_CENTS = 5000; // €50
 
 export const bookingsRepository = {
   /**
@@ -80,25 +77,54 @@ export const bookingsRepository = {
    * Create a new booking
    */
   async create(booking: BookingInsert): Promise<Booking> {
+    const findExisting = async (): Promise<Booking | null> => {
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('event_id', booking.event_id)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    };
+
+    const existing = await findExisting();
+    if (existing) return existing;
+
     const { data, error } = await supabase
       .from('bookings')
       .insert(booking)
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // One event has one booking (`bookings_event_id_key`). If another request
+      // won the race after the lookup, reuse that row instead of surfacing 23505.
+      if (error.code === '23505') {
+        const concurrentBooking = await findExisting();
+        if (concurrentBooking) return concurrentBooking;
+      }
+      throw error;
+    }
 
-    // Update event status to 'booked'
-    await supabase
-      .from('events')
-      .update({ status: 'booked' })
-      .eq('id', booking.event_id);
-
+    // NOTE: the event status is deliberately NOT set here.
+    //
+    // `enforce_event_status_integrity` locks the transition to 'booked' to the service
+    // role, so a client-side update is rejected with "Event can only be marked booked by
+    // the payment service" — and the throw that used to follow aborted the whole payment
+    // AFTER the booking row had already been written, leaving an orphaned booking on a
+    // draft event. That is exactly what happened on 2026-07-29 with GO-0614B6, the first
+    // real booking ever created, once seeded packages moved the app onto the real Stripe path.
+    //
+    // The transition belongs to the payment service and already happens there:
+    // stripe-webhook (~line 218) flips the event to 'booked' once payment succeeds, and
+    // confirm-demo-booking does it for the simulated path. Creating a booking is not the
+    // same event as paying for one, so the status must not move yet.
     return data;
   },
 
   /**
-   * Calculate booking costs
+   * Calculate booking costs — delegates to canonical pricing utility.
    */
   calculateCosts(
     pkg: Package,
@@ -111,99 +137,45 @@ export const bookingsRepository = {
     payingParticipants: number;
     perPersonCents: number;
   } {
-    const payingParticipants = excludeHonoree
-      ? Math.max(1, participantCount - 1)
-      : participantCount;
-
-    const packageBaseCents =
-      pkg.base_price_cents + pkg.price_per_person_cents * participantCount;
-
-    const calculatedFee = Math.round(packageBaseCents * SERVICE_FEE_PERCENTAGE);
-    const servicFeeCents = Math.max(calculatedFee, MIN_SERVICE_FEE_CENTS);
-
-    const totalAmountCents = packageBaseCents + servicFeeCents;
-    const perPersonCents = Math.ceil(totalAmountCents / payingParticipants);
-
-    return {
-      packageBaseCents,
-      servicFeeCents,
-      totalAmountCents,
-      payingParticipants,
-      perPersonCents,
-    };
-  },
-
-  /**
-   * Update payment status
-   */
-  async updatePaymentStatus(
-    bookingId: string,
-    status: Booking['payment_status'],
-    stripePaymentIntentId?: string
-  ): Promise<Booking> {
-    const updates: BookingUpdate = {
-      payment_status: status,
-    };
-
-    if (stripePaymentIntentId) {
-      updates.stripe_payment_intent_id = stripePaymentIntentId;
-    }
-
-    // Add to audit log
-    const { data: existing } = await supabase
-      .from('bookings')
-      .select('audit_log')
-      .eq('id', bookingId)
-      .single();
-
-    const auditLog = Array.isArray(existing?.audit_log) ? existing.audit_log : [];
-    auditLog.push({
-      action: 'payment_status_updated',
-      status,
-      timestamp: new Date().toISOString(),
+    const result = calculateBookingPricing({
+      pricePerPersonCents: pkg.price_per_person_cents,
+      baseFeeCents: pkg.base_price_cents,
+      totalParticipants: participantCount,
+      excludeHonoree,
     });
-
-    updates.audit_log = auditLog;
-
-    const { data, error } = await supabase
-      .from('bookings')
-      .update(updates)
-      .eq('id', bookingId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    return data;
+    return {
+      packageBaseCents: result.packageBaseCents,
+      servicFeeCents: result.serviceFeeCents,
+      totalAmountCents: result.totalCents,
+      payingParticipants: result.payingCount,
+      perPersonCents: result.perPersonCents,
+    };
   },
 
   /**
    * Request a refund
    */
   async requestRefund(bookingId: string, reason: string): Promise<Booking> {
-    const { data: existing } = await supabase
-      .from('bookings')
-      .select('audit_log')
-      .eq('id', bookingId)
-      .single();
-
-    const auditLog = Array.isArray(existing?.audit_log) ? existing.audit_log : [];
-    auditLog.push({
-      action: 'refund_requested',
-      reason,
-      timestamp: new Date().toISOString(),
-    });
-
     const { data, error } = await supabase
       .from('bookings')
       .update({
         payment_status: 'refunded',
-        audit_log: auditLog,
       })
       .eq('id', bookingId)
       .select()
       .single();
 
     if (error) throw error;
+
+    // Atomically append to audit log (prevents race conditions on concurrent webhook retries)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    void (supabase as any).rpc('append_booking_audit_log', {
+      booking_id: bookingId,
+      entry: { action: 'refund_requested', reason, timestamp: new Date().toISOString() },
+    }).catch((err: unknown) => {
+      console.error('[bookings] audit log append failed in requestRefund', err);
+    });
+
     return data;
   },
 

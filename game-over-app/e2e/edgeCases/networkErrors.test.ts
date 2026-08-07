@@ -12,14 +12,13 @@ import {
   waitForElement,
   assertTextVisible,
   assertVisible,
-  assertNotVisible,
   tap,
   typeInInput,
   dismissKeyboard,
   restartApp,
   waitForLoadingComplete,
 } from '../utils/testHelpers';
-import { loginAsTestUser, createTestEvent } from '../utils/auth';
+import { loginAsTestUser } from '../utils/auth';
 import { navigateToTab } from '../utils/navigation';
 
 describe('Network Error Handling', () => {

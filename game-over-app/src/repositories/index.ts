@@ -26,3 +26,30 @@ export type { PollWithOptions } from './polls';
 export { notificationsRepository } from './notifications';
 
 export { citiesRepository } from './cities';
+
+export { scheduleRepository } from './schedule';
+export type { ScheduleItem, ScheduleItemInsert, ScheduleItemUpdate } from './schedule';
+
+export { refundsRepository } from './refunds';
+export type {
+  CreateEventRefund,
+  EventRefund,
+  RefundStatus,
+  UpdateEventRefund,
+} from './refunds';
+
+export { expensesRepository } from './expenses';
+export type {
+  CreateEventExpense,
+  CreateEventExpenseCategory,
+  EventExpense,
+  EventExpenseCategory,
+  EventExpenseReport,
+  EventExpenseShare,
+  ExpenseShareInput,
+  ReportEventExpense,
+  UpdateEventExpense,
+} from './expenses';
+
+export { localExpenseMigrationRepository } from './localExpenseMigration';
+export type { LocalExpenseMigrationResult } from './localExpenseMigration';

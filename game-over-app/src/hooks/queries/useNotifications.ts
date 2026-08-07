@@ -5,8 +5,10 @@
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
+import { AccessibilityInfo } from 'react-native';
 import { notificationsRepository } from '@/repositories';
 import { useAuthStore } from '@/stores/authStore';
+import { useAppState } from '@/hooks/useAppState';
 import type { Database } from '@/lib/supabase/types';
 
 type Notification = Database['public']['Tables']['notifications']['Row'];
@@ -42,12 +44,13 @@ export function useNotifications() {
  */
 export function useUnreadNotificationsCount() {
   const user = useAuthStore((state) => state.user);
+  const appState = useAppState();
 
   return useQuery({
     queryKey: notificationKeys.unreadCount(user?.id || ''),
     queryFn: () => notificationsRepository.getUnreadCount(user!.id),
     enabled: !!user?.id,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: appState === 'active' ? 30000 : false,
   });
 }
 
@@ -124,6 +127,9 @@ export function useRealtimeNotifications(
           notificationKeys.unreadCount(user.id),
           (old: number | undefined) => (old || 0) + 1
         );
+
+        // Announce new notification to screen readers
+        AccessibilityInfo.announceForAccessibility('New notification received');
 
         // Notify callback via ref (avoids stale closure)
         onNotificationRef.current(notification);

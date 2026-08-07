@@ -3,16 +3,16 @@
  * Stripe Payment Sheet integration for package bookings
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { Alert, ScrollView, Platform } from 'react-native';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text, Spinner } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useQueryClient } from '@tanstack/react-query';
 import { useBookingFlow } from '@/hooks/useBookingFlow';
 import { usePaymentSheet } from '@/hooks/usePaymentSheet';
-import { useCreateBooking, useUpdatePaymentStatus } from '@/hooks/queries/useBookings';
+import { bookingKeys, useCreateBooking } from '@/hooks/queries/useBookings';
 import { eventKeys } from '@/hooks/queries/useEvents';
 import { useWizardStore } from '@/stores/wizardStore';
 import { supabase } from '@/lib/supabase/client';
@@ -20,18 +20,21 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { useTranslation, getTranslation } from '@/i18n';
 import { setDesiredParticipants, setBudgetInfo } from '@/lib/participantCountCache';
+import { formatEuroFromEuros, splitPerPerson } from '@/utils/money';
+import { getCityTierName, getTierDisplayLabel, TIER_PRICE_PER_PERSON_CENTS } from '@/constants/packageTiers';
+import { feedback } from '@/stores/uiStore';
 
-// Fallback packages for draft mode
+// Fallback packages for draft mode — names + prices from packageTiers constants
 const FALLBACK_PKG: Record<string, { id: string; name: string; tier: string; price_per_person_cents: number }> = {
-  'berlin-classic': { id: 'berlin-classic', name: 'Berlin Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'berlin-essential': { id: 'berlin-essential', name: 'Berlin Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'berlin-grand': { id: 'berlin-grand', name: 'Berlin Grand', tier: 'grand', price_per_person_cents: 199_00 },
-  'hamburg-classic': { id: 'hamburg-classic', name: 'Hamburg Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'hamburg-essential': { id: 'hamburg-essential', name: 'Hamburg Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'hamburg-grand': { id: 'hamburg-grand', name: 'Hamburg Grand', tier: 'grand', price_per_person_cents: 199_00 },
-  'hannover-classic': { id: 'hannover-classic', name: 'Hannover Classic', tier: 'classic', price_per_person_cents: 149_00 },
-  'hannover-essential': { id: 'hannover-essential', name: 'Hannover Essential', tier: 'essential', price_per_person_cents: 99_00 },
-  'hannover-grand': { id: 'hannover-grand', name: 'Hannover Grand', tier: 'grand', price_per_person_cents: 199_00 },
+  'berlin-essential':   { id: 'berlin-essential',   name: getCityTierName('berlin',   'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential },
+  'berlin-classic':     { id: 'berlin-classic',     name: getCityTierName('berlin',   'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic },
+  'berlin-grand':       { id: 'berlin-grand',       name: getCityTierName('berlin',   'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand },
+  'hamburg-essential':  { id: 'hamburg-essential',  name: getCityTierName('hamburg',  'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential },
+  'hamburg-classic':    { id: 'hamburg-classic',    name: getCityTierName('hamburg',  'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic },
+  'hamburg-grand':      { id: 'hamburg-grand',      name: getCityTierName('hamburg',  'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand },
+  'hannover-essential': { id: 'hannover-essential', name: getCityTierName('hannover', 'essential'), tier: 'essential', price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.essential },
+  'hannover-classic':   { id: 'hannover-classic',   name: getCityTierName('hannover', 'classic'),   tier: 'classic',   price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.classic },
+  'hannover-grand':     { id: 'hannover-grand',     name: getCityTierName('hannover', 'grand'),     tier: 'grand',     price_per_person_cents: TIER_PRICE_PER_PERSON_CENTS.grand },
 };
 const CITY_NAMES: Record<string, string> = {
   berlin: 'Berlin', hamburg: 'Hamburg', hannover: 'Hannover',
@@ -39,8 +42,7 @@ const CITY_NAMES: Record<string, string> = {
   '550e8400-e29b-41d4-a716-446655440102': 'Hamburg',
   '550e8400-e29b-41d4-a716-446655440103': 'Hannover',
 };
-const SERVICE_FEE_RATE = 0.10;
-const MIN_SERVICE_FEE_CENTS = 5000;
+// Service fee removed — package prices are final all-in.
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // In E2E mode, we mock the payment
@@ -59,7 +61,7 @@ export default function PaymentScreen() {
   const insets = useSafeAreaInsets();
   const [paymentStep, setPaymentStep] = useState<PaymentStep>('ready');
   const isDraft = eventId === 'draft';
-  const { t } = useTranslation();
+  const { t, language } = useTranslation();
 
   // Wizard store data for draft mode
   const wizardCityId = useWizardStore((s) => s.cityId);
@@ -94,12 +96,10 @@ export default function PaymentScreen() {
     const perPersonPrice = draftPkg.price_per_person_cents;
     // Package Base is ALWAYS price × total participants (fixed amount)
     const packagePrice = perPersonPrice * totalParticipants;
-    const serviceFee = Math.max(Math.ceil(packagePrice * SERVICE_FEE_RATE / 100) * 100, MIN_SERVICE_FEE_CENTS);
-    // Round total to whole euros — perPerson × payingCount must match displayed Total Group Cost
-    const totalEurosRounded = Math.round((packagePrice + serviceFee) / 100);
-    const total = totalEurosRounded * 100;
+    // No service fee — package prices are final all-in
+    const total = packagePrice;
     const perPerson = Math.ceil(total / payingCount);
-    return { packagePriceCents: packagePrice, serviceFeeCents: serviceFee, totalCents: total, perPersonCents: perPerson, payingParticipantCount: payingCount };
+    return { packagePriceCents: packagePrice, serviceFeeCents: 0, totalCents: total, perPersonCents: perPerson, payingParticipantCount: payingCount };
   }, [draftPkg, urlParticipantCount, wizardParticipantCount, honoreeExcluded]);
 
   const effectiveCityId = paramCityId || wizardCityId;
@@ -109,11 +109,11 @@ export default function PaymentScreen() {
   const event = isDraft
     ? { city: { name: cityFallback }, honoree_name: honoreeNameFallback }
     : (bookingFlow.event || { city: { name: cityFallback }, honoree_name: honoreeNameFallback });
-  // Use bookingFlow pricing when available, fallback to local pricing for instant render
-  const pricing = isDraft ? draftPricing : (bookingFlow.pricing || draftPricing);
+  // Real events must use the authoritative source chain in useBookingFlow.
+  const pricing = isDraft ? draftPricing : bookingFlow.pricing;
   const excludeHonoree = isDraft ? honoreeExcluded : bookingFlow.excludeHonoree;
-  // Don't show loading if we already have fallback data OR a direct amountCents param
-  const isLoading = isDraft ? false : (bookingFlow.isLoading && !draftPricing && !paramAmountCents);
+  // Real events remain loading until the authoritative booking-flow inputs are ready.
+  const isLoading = isDraft ? false : bookingFlow.isLoading;
 
   // When navigating from Budget with amountCents (no package in URL), create synthetic values
   const syntheticPkg = paramAmountCents > 0 && !pkg
@@ -132,8 +132,40 @@ export default function PaymentScreen() {
   const activePricing = pricing || syntheticPricing;
 
   const createBookingMutation = useCreateBooking();
-  const updatePaymentMutation = useUpdatePaymentStatus();
-  const { processPayment, isLoading: isPaymentLoading, showError } = usePaymentSheet();
+  const { processPayment, isLoading: isPaymentLoading } = usePaymentSheet();
+  const participantCountFeedbackShown = useRef(false);
+
+  useEffect(() => {
+    if (!bookingFlow.isParticipantCountUnavailable) {
+      participantCountFeedbackShown.current = false;
+      return;
+    }
+    if (participantCountFeedbackShown.current) return;
+    participantCountFeedbackShown.current = true;
+    feedback.error(
+      t.booking.participantCountUnavailableTitle,
+      t.booking.participantCountUnavailableMessage,
+    );
+  }, [bookingFlow.isParticipantCountUnavailable, t.booking.participantCountUnavailableMessage, t.booking.participantCountUnavailableTitle]);
+
+  if (!isDraft && bookingFlow.isParticipantCountUnavailable) {
+    return (
+      <YStack flex={1} justifyContent="center" alignItems="center" gap="$4" padding="$6" backgroundColor="$background">
+        <Ionicons name="alert-circle-outline" size={48} color="#F97316" />
+        <Text fontSize="$6" fontWeight="700" color="$textPrimary" textAlign="center">
+          {t.booking.participantCountUnavailableTitle}
+        </Text>
+        <Text fontSize="$3" color="$textSecondary" textAlign="center">
+          {t.booking.participantCountUnavailableMessage}
+        </Text>
+        <Button onPress={() => router.back()} testID="participant-count-unavailable-back-button">
+          <Text color="#0D1B2A" fontWeight="700">
+            {t.booking.participantCountUnavailableBack}
+          </Text>
+        </Button>
+      </YStack>
+    );
+  }
 
   if (isLoading || !activePkg || !activePricing) {
     return (
@@ -153,8 +185,16 @@ export default function PaymentScreen() {
   };
 
   // Decimal format for per-person display — must match summary screen
-  const formatPriceDecimal = (cents: number) =>
-    '\u20AC' + (cents / 100).toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Anteil pro Person, auf ganze Euro abgerundet (Owner-Regel 05.08.).
+  // Zeigte vorher zwei Nachkommastellen, waehrend direkt darueber Anzahlung und
+  // Gesamtbetrag glatt standen - derselbe Bildschirm in zwei Waehrungsformaten.
+  const perPersonLabel = () =>
+    formatEuroFromEuros(
+      splitPerPerson(
+        paramTotalCents || activePricing.totalCents,
+        activePricing.payingParticipantCount,
+      ).perPersonEuros,
+    );
 
   const getStepMessage = () => {
     switch (paymentStep) {
@@ -179,15 +219,11 @@ export default function PaymentScreen() {
 
       if (useSimulatedPayment) {
         const tr = getTranslation();
-        const confirmed = await new Promise<boolean>((resolve) => {
-          Alert.alert(
-            'Demo Mode',
-            'In production, Stripe\'s payment sheet would open here for card details. Continue with simulated payment?',
-            [
-              { text: tr.wizard.cancel, style: 'cancel', onPress: () => resolve(false) },
-              { text: 'Continue', onPress: () => resolve(true) },
-            ]
-          );
+        const confirmed = await feedback.confirm({
+          title: 'Demo Mode',
+          message: 'In production, Stripe\'s payment sheet would open here for card details. Continue with simulated payment?',
+          confirmLabel: 'Continue',
+          cancelLabel: tr.wizard.cancel,
         });
         if (!confirmed) return;
 
@@ -197,14 +233,40 @@ export default function PaymentScreen() {
         setPaymentStep('processing_payment');
         await new Promise(resolve => setTimeout(resolve, 1200));
 
-        // If we have a real event in DB, update its status to 'booked'
+        // If we have a real event in DB, mark it 'booked' via the server. The
+        // `enforce_event_status_integrity` DB trigger blocks clients from setting
+        // status = 'booked' directly (payment-integrity guard), so a client-side
+        // .update() is silently rejected. The confirm-demo-booking edge function
+        // performs the transition with the service role, which the trigger allows.
         if (!isDraft) {
-          const { error: updateError } = await supabase
-            .from('events')
-            .update({ status: 'booked' })
-            .eq('id', eventId);
-          if (updateError) {
-            console.warn('Event status update failed (non-blocking):', updateError.message);
+          // Force a fresh access token before hitting the edge function. A lapsed
+          // token makes the function's getUser() return 401 ("Unauthorized").
+          await supabase.auth.refreshSession().catch(() => {});
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session?.access_token) {
+            feedback.error('Session expired', 'Please log out and log back in, then try booking again.');
+            setPaymentStep('ready');
+            return;
+          }
+          const { data: bookingData, error: bookingError } = await supabase.functions.invoke(
+            'confirm-demo-booking',
+            {
+              body: { eventId, paymentKind: isFullPayment ? 'full' : 'deposit' },
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            },
+          );
+          if (bookingError || !(bookingData as any)?.success) {
+            // Surface the failure instead of swallowing it — a silent failure here
+            // is exactly what caused booked events to vanish from the Events list.
+            let detail = bookingError?.message ?? 'Could not confirm your booking.';
+            try {
+              const ctx = (bookingError as any)?.context;
+              const text = await ctx?.text?.();
+              if (text) { const b = JSON.parse(text); if (b?.error) detail = b.error; }
+            } catch { /* keep default */ }
+            feedback.error('Booking not confirmed', detail);
+            setPaymentStep('ready');
+            return;
           }
           // Cache desired participant count + budget info for event summary/budget screens
           // Skip when paying remaining balance — count was already stored during first payment
@@ -230,6 +292,12 @@ export default function PaymentScreen() {
           }).catch(() => {});
           // Invalidate events cache so bell dot clears immediately on navigation back
           queryClient.invalidateQueries({ queryKey: eventKeys.all });
+          // ...und die Buchung selbst. Ohne das behielt der Budget-Bildschirm den
+          // Wert von *vor* der Zahlung - bei einem frisch angelegten Event ist das
+          // `null`, weil die Abfrage lief, bevor die Buchung existierte. Der
+          // Bildschirm fiel dann in seinen Demo-Zweig und zeigte "Bezahlter Betrag
+          // 0 €", obwohl die Anzahlung in der DB stand (Befund vom 05.08.).
+          queryClient.invalidateQueries({ queryKey: bookingKeys.all });
         }
 
         setPaymentStep('confirming');
@@ -276,9 +344,14 @@ export default function PaymentScreen() {
 
       // Process payment with Stripe
       setPaymentStep('processing_payment');
+      // Derive payment type from URL params — never hardcode 'full'
+      const stripePaymentType: 'deposit' | 'remaining' | 'full' =
+        paramAmountCents > 0 ? 'remaining' :
+        isFullPayment ? 'full' :
+        'deposit';
       const { success, error } = await processPayment({
         bookingId: booking.id,
-        amountCents: activePricing.totalCents,
+        paymentType: stripePaymentType,
         currency: 'eur',
       });
 
@@ -290,12 +363,8 @@ export default function PaymentScreen() {
         throw new Error(error || 'Payment failed');
       }
 
-      // Confirm booking
+      // The webhook owns payment state; a successful sheet can proceed immediately.
       setPaymentStep('confirming');
-      await updatePaymentMutation.mutateAsync({
-        bookingId: booking.id,
-        status: 'completed',
-      });
 
       // Pass package info so confirmation shows the correct tier image
       const realConfirmParams = new URLSearchParams();
@@ -310,12 +379,11 @@ export default function PaymentScreen() {
 
       const errorMessage = error instanceof Error ? error.message : 'Payment failed';
       const tr = getTranslation();
-      Alert.alert(
+      feedback.error(
         tr.booking.paymentFailed,
         errorMessage === 'Payment cancelled'
           ? tr.booking.paymentCancelled
           : tr.booking.paymentErrorDetail.replace('{{error}}', errorMessage),
-        [{ text: tr.common.ok }]
       );
     }
   };
@@ -330,14 +398,14 @@ export default function PaymentScreen() {
   const isProcessing = paymentStep !== 'ready' || isPaymentLoading;
 
   return (
-    <YStack flex={1} backgroundColor="$background">
+    <YStack flex={1} backgroundColor="#0D1B2A">
       {/* Header */}
       <XStack
         paddingTop={insets.top}
         paddingHorizontal="$4"
         paddingBottom="$2"
         alignItems="center"
-        backgroundColor="$background"
+        backgroundColor="#0D1B2A"
       >
         <XStack
           width={40}
@@ -352,7 +420,7 @@ export default function PaymentScreen() {
         >
           <Ionicons name="arrow-back" size={24} color="white" />
         </XStack>
-        <Text flex={1} fontSize="$5" fontWeight="700" color="$textPrimary" textAlign="center">
+        <Text flex={1} fontSize={18} fontWeight="700" color="$textPrimary" textAlign="center" style={{ fontFamily: 'Inter_600SemiBold' }}>
           {t.booking.paymentTitle}
         </Text>
         <YStack width={40} />
@@ -406,10 +474,10 @@ export default function PaymentScreen() {
         ) : (
           <YStack width="100%" gap="$4">
             {/* Amount Card */}
-            <Card testID="payment-amount-card">
+            <Card testID="payment-amount-card" backgroundColor="#12253A" borderColor="rgba(230,220,200,0.15)" borderWidth={1}>
               <YStack alignItems="center" gap="$2">
                 <Text fontSize="$2" color="$textSecondary">
-                  {paramAmountCents > 0 ? 'Remaining Balance' : isFullPayment ? t.booking.totalAmount : t.booking.depositLabel}
+                  {paramAmountCents > 0 ? t.booking.remainingBalance : isFullPayment ? t.booking.totalAmount : t.booking.depositLabel}
                 </Text>
                 <Text fontSize="$9" fontWeight="800" color="$primary">
                   {formatPrice(amountDue)}
@@ -424,8 +492,8 @@ export default function PaymentScreen() {
                     )}
                     <Text fontSize="$2" color="$textSecondary">
                       {paramAmountCents > 0
-                        ? `(${formatPrice(paramTotalCents - paramAmountCents)} = 25% Deposit Already Paid)`
-                        : t.booking.perPersonGuests.replace('{{price}}', formatPriceDecimal(activePricing.perPersonCents)).replace('{{count}}', String(activePricing.payingParticipantCount))}
+                        ? t.booking.depositAlreadyPaid.replace('{{amount}}', formatPrice(paramTotalCents - paramAmountCents))
+                        : t.booking.perPersonGuests.replace('{{price}}', perPersonLabel()).replace('{{count}}', String(activePricing.payingParticipantCount))}
                     </Text>
                   </YStack>
                 )}
@@ -433,7 +501,7 @@ export default function PaymentScreen() {
             </Card>
 
             {/* Payment Method */}
-            <Card testID="payment-method-card">
+            <Card testID="payment-method-card" backgroundColor="#12253A" borderColor="rgba(230,220,200,0.15)" borderWidth={1}>
               <YStack gap="$3">
                 <Text fontSize="$4" fontWeight="700" color="$textPrimary">
                   {t.booking.paymentMethod}
@@ -448,7 +516,7 @@ export default function PaymentScreen() {
                   alignItems="center"
                   gap="$3"
                 >
-                  <Ionicons name="card" size={24} color="#258CF4" />
+                  <Ionicons name="card" size={24} color="#C6A75E" />
                   <YStack flex={1}>
                     <Text fontWeight="600" color="$textPrimary">
                       {t.booking.creditOrDebit}
@@ -457,13 +525,13 @@ export default function PaymentScreen() {
                       {t.booking.visaMastercard}
                     </Text>
                   </YStack>
-                  <Ionicons name="checkmark-circle" size={24} color="#258CF4" />
+                  <Ionicons name="checkmark-circle" size={24} color="#C6A75E" />
                 </XStack>
 
                 {/* Apple Pay — Coming Soon */}
                 <XStack
                   padding="$3"
-                  backgroundColor="$backgroundHover"
+                  backgroundColor="#1A2F47"
                   borderRadius="$lg"
                   alignItems="center"
                   gap="$3"
@@ -472,30 +540,30 @@ export default function PaymentScreen() {
                   <Ionicons name="logo-apple" size={22} color="white" />
                   <YStack flex={1}>
                     <Text fontSize="$3" fontWeight="600" color="$textPrimary">Apple Pay</Text>
-                    <Text fontSize="$1" color="$textSecondary">Coming Soon</Text>
+                    <Text fontSize="$1" color="$textSecondary">{t.profile.comingSoon}</Text>
                   </YStack>
                 </XStack>
 
                 {/* Google Pay — Coming Soon */}
                 <XStack
                   padding="$3"
-                  backgroundColor="$backgroundHover"
+                  backgroundColor="#1A2F47"
                   borderRadius="$lg"
                   alignItems="center"
                   gap="$3"
                   opacity={0.45}
                 >
-                  <Ionicons name="logo-google" size={22} color="white" />
+                  <Ionicons name="logo-google" size={22} color="#4285F4" />
                   <YStack flex={1}>
                     <Text fontSize="$3" fontWeight="600" color="$textPrimary">Google Pay</Text>
-                    <Text fontSize="$1" color="$textSecondary">Coming Soon</Text>
+                    <Text fontSize="$1" color="$textSecondary">{t.profile.comingSoon}</Text>
                   </YStack>
                 </XStack>
 
                 {/* PayPal — Coming Soon */}
                 <XStack
                   padding="$3"
-                  backgroundColor="$backgroundHover"
+                  backgroundColor="#1A2F47"
                   borderRadius="$lg"
                   alignItems="center"
                   gap="$3"
@@ -504,32 +572,28 @@ export default function PaymentScreen() {
                   <Ionicons name="logo-paypal" size={22} color="#009CDE" />
                   <YStack flex={1}>
                     <Text fontSize="$3" fontWeight="600" color="$textPrimary">PayPal</Text>
-                    <Text fontSize="$1" color="$textSecondary">Coming Soon</Text>
+                    <Text fontSize="$1" color="$textSecondary">{t.profile.comingSoon}</Text>
                   </YStack>
                 </XStack>
               </YStack>
             </Card>
 
             {/* Package Summary */}
-            <Card testID="package-summary-card">
+            <Card testID="package-summary-card" backgroundColor="#12253A" borderColor="rgba(230,220,200,0.15)" borderWidth={1}>
               <XStack gap="$3" alignItems="center">
                 <YStack
                   width={48}
                   height={48}
                   borderRadius="$md"
-                  backgroundColor="rgba(37, 140, 244, 0.1)"
+                  backgroundColor="rgba(198, 167, 94, 0.1)"
                   alignItems="center"
                   justifyContent="center"
                 >
-                  <Ionicons name="gift" size={24} color="#258CF4" />
+                  <Ionicons name="gift" size={24} color="#C6A75E" />
                 </YStack>
                 <YStack flex={1}>
                   <Text fontWeight="600" color="$textPrimary">
-                    {(() => {
-                      const tierLabels: Record<string, string> = { essential: 'S', classic: 'M', grand: 'L' };
-                      const tierNames: Record<string, string> = { essential: 'Essential', classic: 'Classic', grand: 'Grand' };
-                      return activePkg.tier ? `${tierNames[activePkg.tier] || activePkg.tier} (${tierLabels[activePkg.tier] || ''})` : activePkg.name;
-                    })()}
+                    {activePkg.tier ? getTierDisplayLabel(activePkg.tier, language) : activePkg.name}
                   </Text>
                   <Text fontSize="$2" color="$textSecondary">
                     {[
@@ -538,9 +602,9 @@ export default function PaymentScreen() {
                         const dateStr = (event as any).start_date || wizardStartDate;
                         if (!dateStr) return null;
                         const d = new Date(dateStr);
-                        return isNaN(d.getTime()) ? null : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                        return isNaN(d.getTime()) ? null : d.toLocaleDateString(language === 'de' ? 'de-DE' : 'en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                       })(),
-                      `${urlParticipantCount || wizardParticipantCount || activePricing.payingParticipantCount || ''} Guests`,
+                      t.booking.guestsSuffix.replace('{{count}}', String(urlParticipantCount || wizardParticipantCount || activePricing.payingParticipantCount || '')),
                     ].filter(Boolean).join(' \u2022 ')}
                   </Text>
                 </YStack>
@@ -550,12 +614,12 @@ export default function PaymentScreen() {
             {/* Security Notice */}
             <XStack
               padding="$3"
-              backgroundColor="rgba(71, 184, 129, 0.1)"
+              backgroundColor="rgba(249, 115, 22, 0.1)"
               borderRadius="$lg"
               gap="$2"
               alignItems="center"
             >
-              <Ionicons name="lock-closed" size={18} color="#47B881" />
+              <Ionicons name="lock-closed" size={18} color="#F97316" />
               <Text fontSize="$2" color="$textSecondary" flex={1}>
                 {t.booking.secureEncryption}
               </Text>
@@ -587,7 +651,7 @@ export default function PaymentScreen() {
           right={0}
           padding="$4"
           paddingBottom={insets.bottom + 8}
-          backgroundColor="$surface"
+          backgroundColor="#12253A"
           borderTopWidth={1}
           borderTopColor="$borderColor"
         >
@@ -596,11 +660,13 @@ export default function PaymentScreen() {
             onPress={handlePayment}
             testID="pay-now-button"
           >
-            {paramAmountCents > 0
-              ? t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(amountDue))
-              : isFullPayment
-                ? ((t.booking as any).payFullButtonLabel?.replace('{{amount}}', formatPrice(amountDue)) || t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(amountDue)))
-                : t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(depositCents))}
+            <Text color="#0D1B2A" fontWeight="700" fontSize="$3">
+              {paramAmountCents > 0
+                ? t.booking.payRemainingButtonLabel.replace('{{amount}}', formatPrice(amountDue))
+                : isFullPayment
+                  ? ((t.booking as any).payFullButtonLabel?.replace('{{amount}}', formatPrice(amountDue)) || t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(amountDue)))
+                  : t.booking.payDepositButtonLabel.replace('{{amount}}', formatPrice(depositCents))}
+            </Text>
           </Button>
         </XStack>
       )}

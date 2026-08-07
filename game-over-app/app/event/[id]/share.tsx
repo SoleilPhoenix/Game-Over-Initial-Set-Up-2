@@ -4,26 +4,26 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { Pressable, StyleSheet, Linking, Alert, Share, ScrollView, View, Image as RNImage } from 'react-native';
+import { Pressable, StyleSheet, Linking, Share, ScrollView, View, Image as RNImage } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { YStack, XStack, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useEvent } from '@/hooks/queries/useEvents';
 import { useCreateInvite } from '@/hooks/queries/useInvites';
-import { DARK_THEME } from '@/constants/theme';
 import { KenBurnsImage } from '@/components/ui/KenBurnsImage';
 import { getEventImage } from '@/constants/packageImages';
+import { feedback } from '@/stores/uiStore';
 
 // Social platform config — each opens native app, falls back to web
-const SOCIALS: Array<{
+const SOCIALS: {
   key: string;
   label: string;
   bgColor: string;
   renderIcon: () => React.ReactNode;
   onPress: (msg: string, url: string) => Promise<void>;
-}> = [
+}[] = [
   {
     key: 'instagram',
     label: 'Instagram',
@@ -163,7 +163,7 @@ export default function ShareEventScreen() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2500);
     } catch {
-      Alert.alert('Error', 'Could not generate invite link. Please try again.');
+      feedback.error('Error', 'Could not generate invite link. Please try again.');
     }
   };
 
@@ -173,7 +173,7 @@ export default function ShareEventScreen() {
       const msg = `You're invited to "${eventTitle}"! 🎉`;
       await social.onPress(msg, url);
     } catch {
-      Alert.alert('Error', `Could not open ${social.label}.`);
+      feedback.error('Error', `Could not open ${social.label}.`);
     }
   };
 
@@ -193,11 +193,11 @@ export default function ShareEventScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10} style={styles.headerBack}>
-          <Ionicons name="arrow-back" size={22} color={DARK_THEME.textPrimary} />
+          <Ionicons name="arrow-back" size={22} color={'#FFFFFF'} />
         </Pressable>
         <Text style={styles.headerTitle}>Share Event</Text>
         <Pressable onPress={handleNativeShare} hitSlop={10} style={styles.headerRight}>
-          <Ionicons name="share-outline" size={22} color={DARK_THEME.textSecondary} />
+          <Ionicons name="share-outline" size={22} color={'rgba(255,255,255,0.72)'} />
         </Pressable>
       </View>
 
@@ -245,7 +245,7 @@ export default function ShareEventScreen() {
           disabled={isGenerating}
         >
           <View style={styles.copyIconCircle}>
-            <Ionicons name="link" size={20} color="#5A7EB0" />
+            <Ionicons name="link" size={20} color="#C6A75E" />
           </View>
           <View style={{ flex: 1, marginLeft: 14 }}>
             <Text style={styles.copyTitle}>Copy Invite Link</Text>
@@ -274,7 +274,7 @@ export default function ShareEventScreen() {
                 {social.renderIcon()}
               </View>
               <Text style={styles.socialLabel}>{social.label}</Text>
-              <Ionicons name="chevron-forward" size={18} color={DARK_THEME.textTertiary} />
+              <Ionicons name="chevron-forward" size={18} color={'rgba(255,255,255,0.48)'} />
             </Pressable>
           ))}
         </View>
@@ -286,7 +286,7 @@ export default function ShareEventScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
   },
   header: {
     flexDirection: 'row',
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 17,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
   headerRight: {
     width: 36,
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   eventCard: {
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
   },
   heroImageContainer: {
     height: 200,
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
   copyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
@@ -386,31 +386,31 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    backgroundColor: 'rgba(90,126,176,0.18)',
+    backgroundColor: 'rgba(198,167,94,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   copyTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     marginBottom: 2,
   },
   copySubtitle: {
     fontSize: 12,
-    color: DARK_THEME.textTertiary,
+    color: 'rgba(255,255,255,0.48)',
   },
   copyButton: {
     marginLeft: 10,
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 8,
-    backgroundColor: 'rgba(90,126,176,0.15)',
+    backgroundColor: 'rgba(198,167,94,0.15)',
   },
   copyButtonText: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#5A7EB0',
+    color: '#C6A75E',
   },
   copyButtonTextDone: {
     color: '#10B981',
@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
     marginTop: 4,
   },
   // Social list — each item is its own free-floating pill card
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 16,
     gap: 14,
-    backgroundColor: DARK_THEME.surfaceCard,
+    backgroundColor: '#1A2F47',
     borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.07)',
@@ -449,6 +449,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '600',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
   },
 });

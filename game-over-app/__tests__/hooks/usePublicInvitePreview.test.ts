@@ -16,15 +16,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
 
+import { invitesRepository } from '@/repositories/invites';
+import { inviteKeys } from '@/hooks/queries/useInvites';
+
 // Mock the repository — do not test Supabase internals here
 vi.mock('@/repositories/invites', () => ({
   invitesRepository: {
     getPreview: vi.fn(),
   },
 }));
-
-import { invitesRepository } from '@/repositories/invites';
-import { inviteKeys } from '@/hooks/queries/useInvites';
 
 describe('usePublicInvitePreview', () => {
   beforeEach(() => { vi.clearAllMocks(); });

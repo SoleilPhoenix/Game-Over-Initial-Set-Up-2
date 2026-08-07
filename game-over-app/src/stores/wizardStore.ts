@@ -9,13 +9,12 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { useEffect, useRef } from 'react';
-import { createSyncStorage, deleteFromStorage } from '@/lib/storage';
+import { createSyncStorage } from '@/lib/storage';
+import { clampParticipantCount, DEFAULT_PARTICIPANT_COUNT } from '@/constants/participantLimits';
 
 // Storage instance for wizard (works in both Expo Go and dev builds)
 const wizardStorage = createSyncStorage('wizard-storage');
 
-// Auto-save timer reference
-let autoSaveTimer: ReturnType<typeof setInterval> | null = null;
 const AUTO_SAVE_INTERVAL = 30000; // 30 seconds
 
 // Types
@@ -40,6 +39,7 @@ export interface DraftSnapshot {
   id: string;
   createdAt: string;
   updatedAt: string;
+  createdBy: string | null;
   partyType: PartyType | null;
   honoreeName: string;
   honoreeLastName: string;
@@ -104,6 +104,7 @@ interface WizardState {
   currentStep: number;
   lastSavedAt: string | null;
   isDirty: boolean;
+  activeDraftOwner: string | null;
 
   // Multi-draft
   activeDraftId: string | null;
@@ -138,7 +139,7 @@ interface WizardActions {
 
   // Step 4 actions
   setSelectedPackageId: (packageId: string) => void;
-  setCreatedEventId: (eventId: string) => void;
+  setCreatedEventId: (eventId: string | null) => void;
 
   // Navigation
   nextStep: () => void;
@@ -153,13 +154,11 @@ interface WizardActions {
   saveDraft: () => void;
   clearDraft: () => void;
   reset: () => void;
-  startAutoSave: () => void;
-  stopAutoSave: () => void;
   hasDraft: () => boolean;
   getTimeSinceLastSave: () => number | null;
 
   // Multi-draft actions
-  startNewDraft: () => void;
+  startNewDraft: (userId?: string) => void;
   loadDraft: (id: string) => void;
   deleteDraft: (id: string) => void;
   getAllDrafts: () => DraftSnapshot[];
@@ -196,7 +195,7 @@ const initialWizardFields = {
   honoreeName: '',
   honoreeLastName: '',
   cityId: null as string | null,
-  participantCount: 10,
+  participantCount: DEFAULT_PARTICIPANT_COUNT,
   startDate: null as string | null,
   endDate: null as string | null,
   energyLevel: null as HonoreeEnergyLevel | null,
@@ -220,6 +219,7 @@ const initialState: WizardState = {
   ...initialWizardFields,
   lastSavedAt: null,
   isDirty: false,
+  activeDraftOwner: null,
   activeDraftId: null,
   savedDrafts: {},
 };
@@ -233,6 +233,7 @@ function snapshotFromState(state: WizardState, id: string, now: string): DraftSn
     id,
     createdAt: now,
     updatedAt: now,
+    createdBy: state.activeDraftOwner,
     partyType: state.partyType,
     honoreeName: state.honoreeName,
     honoreeLastName: state.honoreeLastName,
@@ -278,7 +279,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       setHonoreeName: (name: string) => set({ honoreeName: name, isDirty: true }),
       setHonoreeLastName: (name: string) => set({ honoreeLastName: name, isDirty: true }),
       setCityId: (cityId: string) => set({ cityId, isDirty: true }),
-      setParticipantCount: (count: number) => set({ participantCount: Math.max(1, Math.min(30, count)), isDirty: true }),
+      setParticipantCount: (count: number) => set({ participantCount: clampParticipantCount(count), isDirty: true }),
       setDates: (startDate: string, endDate: string) =>
         set({ startDate, endDate, isDirty: true }),
 
@@ -312,7 +313,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       // Step 4 actions
       setSelectedPackageId: (packageId: string) =>
         set({ selectedPackageId: packageId, isDirty: true }),
-      setCreatedEventId: (eventId: string) =>
+      setCreatedEventId: (eventId: string | null) =>
         set({ createdEventId: eventId }),
 
       // Navigation
@@ -398,34 +399,11 @@ export const useWizardStore = create<WizardState & WizardActions>()(
         if (state.activeDraftId) {
           get().deleteDraft(state.activeDraftId);
         } else {
-          if (autoSaveTimer) {
-            clearInterval(autoSaveTimer);
-            autoSaveTimer = null;
-          }
-          set({ ...initialWizardFields, lastSavedAt: null, isDirty: false, activeDraftId: null });
+          set({ ...initialWizardFields, lastSavedAt: null, isDirty: false, activeDraftId: null, activeDraftOwner: null });
         }
       },
       reset: () => {
         set(initialState);
-      },
-      startAutoSave: () => {
-        // Clear any existing timer
-        if (autoSaveTimer) {
-          clearInterval(autoSaveTimer);
-        }
-        // Start new auto-save timer
-        autoSaveTimer = setInterval(() => {
-          const state = get();
-          if (state.isDirty) {
-            state.saveDraft();
-          }
-        }, AUTO_SAVE_INTERVAL);
-      },
-      stopAutoSave: () => {
-        if (autoSaveTimer) {
-          clearInterval(autoSaveTimer);
-          autoSaveTimer = null;
-        }
       },
       hasDraft: () => {
         return Object.keys(get().savedDrafts).length > 0 || hasActiveData(get());
@@ -437,7 +415,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       },
 
       // Multi-draft actions
-      startNewDraft: () => {
+      startNewDraft: (userId?: string) => {
         const state = get();
         const now = new Date().toISOString();
         let drafts = { ...state.savedDrafts };
@@ -455,6 +433,7 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           ...initialWizardFields,
           lastSavedAt: null,
           isDirty: false,
+          activeDraftOwner: userId ?? state.activeDraftOwner ?? null,
           activeDraftId: newId,
           savedDrafts: drafts,
         });
@@ -462,12 +441,13 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       loadDraft: (id: string) => {
         const draft = get().savedDrafts[id];
         if (!draft) return;
+        const participantCount = clampParticipantCount(draft.participantCount);
         set({
           partyType: draft.partyType,
           honoreeName: draft.honoreeName,
           honoreeLastName: draft.honoreeLastName ?? '',
           cityId: draft.cityId,
-          participantCount: draft.participantCount,
+          participantCount,
           startDate: draft.startDate,
           endDate: draft.endDate,
           energyLevel: draft.energyLevel,
@@ -485,6 +465,10 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           selectedPackageId: draft.selectedPackageId,
           currentStep: draft.currentStep,
           activeDraftId: id,
+          savedDrafts: {
+            ...get().savedDrafts,
+            [id]: { ...draft, participantCount },
+          },
           isDirty: false,
           lastSavedAt: draft.updatedAt,
         });
@@ -492,16 +476,13 @@ export const useWizardStore = create<WizardState & WizardActions>()(
       deleteDraft: (id: string) => {
         const state = get();
         const { [id]: _removed, ...remaining } = state.savedDrafts;
-        if (autoSaveTimer) {
-          clearInterval(autoSaveTimer);
-          autoSaveTimer = null;
-        }
         if (id === state.activeDraftId) {
           set({
             ...initialWizardFields,
             lastSavedAt: null,
             isDirty: false,
             activeDraftId: null,
+            activeDraftOwner: null,
             savedDrafts: remaining,
           });
         } else {
@@ -606,9 +587,11 @@ export const useWizardStore = create<WizardState & WizardActions>()(
           if (!Array.isArray(draft.groupVibe)) {
             draft.groupVibe = Array.isArray(draft.vibePreferences) ? draft.vibePreferences : [];
           }
+          draft.participantCount = clampParticipantCount(draft.participantCount);
           cleanDrafts[id] = draft;
         }
         merged.savedDrafts = cleanDrafts;
+        merged.participantCount = clampParticipantCount(merged.participantCount);
         // If active draft was removed, reset to null
         if (merged.activeDraftId && !cleanDrafts[merged.activeDraftId]) {
           merged.activeDraftId = null;

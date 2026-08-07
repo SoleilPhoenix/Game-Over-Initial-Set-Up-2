@@ -5,8 +5,14 @@
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { channelsRepository, messagesRepository, MessageWithAuthor } from '@/repositories';
+import {
+  channelsRepository,
+  messagesRepository,
+  MessageWithAuthor,
+} from '@/repositories';
+import { localChatMigrationRepository } from '@/repositories/localChatMigration';
 import { useAuthStore } from '@/stores/authStore';
+import { useAppState } from '@/hooks/useAppState';
 import type { Database } from '@/lib/supabase/types';
 
 type ChatChannelInsert = Database['public']['Tables']['chat_channels']['Insert'];
@@ -65,11 +71,13 @@ export function useMessages(channelId: string | undefined) {
  * Get total unread count for an event
  */
 export function useUnreadCount(eventId: string | undefined) {
+  const appState = useAppState();
+
   return useQuery({
     queryKey: chatKeys.unreadCount(eventId || ''),
     queryFn: () => channelsRepository.getTotalUnreadCount(eventId!),
     enabled: !!eventId,
-    refetchInterval: 30000, // Refetch every 30 seconds
+    refetchInterval: appState === 'active' ? 30000 : false,
   });
 }
 
@@ -85,6 +93,22 @@ export function useCreateChannel() {
       queryClient.invalidateQueries({
         queryKey: chatKeys.channels(event_id),
       });
+    },
+  });
+}
+
+/**
+ * Move legacy AsyncStorage channels for one event into the database.
+ */
+export function useMigrateLocalChannels() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (eventId: string) => localChatMigrationRepository.migrateEvent(eventId),
+    onSuccess: (result, eventId) => {
+      if (result.migratedChannels > 0) {
+        queryClient.invalidateQueries({ queryKey: chatKeys.channels(eventId) });
+      }
     },
   });
 }
@@ -118,6 +142,12 @@ export function useMarkChannelAsRead() {
     onSuccess: (_, channelId) => {
       queryClient.invalidateQueries({
         queryKey: chatKeys.channel(channelId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: [...chatKeys.all, 'channels'],
+      });
+      queryClient.invalidateQueries({
+        queryKey: [...chatKeys.all, 'unread'],
       });
     },
   });

@@ -7,11 +7,14 @@
 import React, { memo } from 'react';
 import { ImageSourcePropType } from 'react-native';
 import { styled, YStack, XStack, Text } from 'tamagui';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Badge } from '../ui/Badge';
 import { Card } from '../ui/Card';
 import { OptimizedImage } from '../ui/OptimizedImage';
 import { getPackageImage, resolveImageSource } from '@/constants/packageImages';
+
+import { getTierName } from '@/constants/packageTiers';
+import { useTranslation } from '@/i18n';
 
 const BestMatchBadge = styled(XStack, {
   position: 'absolute',
@@ -41,10 +44,10 @@ export interface PackageCardProps {
   testID?: string;
 }
 
-const tierConfig = {
-  essential: { label: 'Essential', color: '$textSecondary' },
-  classic: { label: 'Classic', color: '$primary' },
-  grand: { label: 'Grand', color: '$warning' },
+const TIER_COLOR: Record<string, string> = {
+  essential: '$textSecondary',
+  classic:   '$primary',
+  grand:     '$warning',
 };
 
 export const PackageCard = memo(function PackageCard({
@@ -60,7 +63,8 @@ export const PackageCard = memo(function PackageCard({
   onPress,
   testID,
 }: PackageCardProps) {
-  const tierInfo = tierConfig[tier];
+  const { language } = useTranslation();
+  const tierInfo = { label: getTierName(tier, language), color: TIER_COLOR[tier] || '$textSecondary' };
   const formattedPrice = (basePriceCents / 100).toLocaleString('en-US', {
     style: 'currency',
     currency: 'EUR',

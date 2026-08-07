@@ -5,7 +5,6 @@
 
 import React from 'react';
 import { Pressable, StyleSheet, Animated } from 'react-native';
-import { View } from 'tamagui';
 
 interface ToggleProps {
   value: boolean;
@@ -44,7 +43,7 @@ export function Toggle({ value, onValueChange, disabled = false, testID }: Toggl
 
   const backgroundColor = animatedValue.interpolate({
     inputRange: [0, 1],
-    outputRange: ['#4B5563', '#4A6FA5'],
+    outputRange: ['#4B5563', '#C6A75E'],
   });
 
   return (

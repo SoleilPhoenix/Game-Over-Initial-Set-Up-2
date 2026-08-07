@@ -3,12 +3,14 @@
  * Dark glassmorphic design matching UI specifications
  */
 
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   StatusBar,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -20,11 +22,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { LinearGradient } from 'expo-linear-gradient';
 import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { DARK_THEME } from '@/constants/theme';
 import { useTranslation } from '@/i18n';
 import { useAuthStore } from '@/stores/authStore';
 import { supabase } from '@/lib/supabase/client';
@@ -38,7 +37,14 @@ type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function LoginScreen() {
   const [isLoading, setIsLoading] = React.useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView>(null);
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const fieldPositions = useRef({ email: 0, password: 0 });
+  const focusedField = useRef<keyof typeof fieldPositions.current | null>(null);
   const { setError, error, clearError } = useAuthStore();
   const { t } = useTranslation();
   const { redirect } = useLocalSearchParams<{ redirect?: string }>();
@@ -54,6 +60,37 @@ export default function LoginScreen() {
       password: '',
     },
   });
+
+  const scrollFocusedFieldIntoView = useCallback(() => {
+    const field = focusedField.current;
+    if (!field) return;
+
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: Math.max(0, fieldPositions.current[field] - 24),
+        animated: true,
+      });
+    });
+  }, []);
+
+  const handleFieldFocus = useCallback((field: keyof typeof fieldPositions.current) => {
+    focusedField.current = field;
+    scrollFocusedFieldIntoView();
+  }, [scrollFocusedFieldIntoView]);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const shown = Keyboard.addListener(showEvent, () => setKeyboardOpen(true));
+    const hidden = Keyboard.addListener(hideEvent, () => setKeyboardOpen(false));
+    return () => { shown.remove(); hidden.remove(); };
+  }, []);
+
+  useEffect(() => {
+    if (keyboardOpen && focusedField.current) {
+      scrollFocusedFieldIntoView();
+    }
+  }, [keyboardOpen, scrollFocusedFieldIntoView]);
 
   const onSubmit = async (data: LoginFormData) => {
     try {
@@ -85,7 +122,7 @@ export default function LoginScreen() {
 
       {/* Background gradient */}
       <LinearGradient
-        colors={[DARK_THEME.deepNavy, DARK_THEME.background]}
+        colors={['#1A2F47', '#0D1B2A']}
         style={StyleSheet.absoluteFill}
       />
 
@@ -98,11 +135,13 @@ export default function LoginScreen() {
         style={styles.keyboardView}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 },
+            { paddingTop: insets.top + 16, paddingBottom: 24 },
           ]}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
           showsVerticalScrollIndicator={false}
         >
           {/* Header with back button */}
@@ -113,7 +152,7 @@ export default function LoginScreen() {
               hitSlop={10}
               testID="back-button"
             >
-              <Ionicons name="arrow-back" size={24} color={DARK_THEME.textPrimary} />
+              <Ionicons name="arrow-back" size={24} color={'#FFFFFF'} />
             </Pressable>
           </View>
 
@@ -131,37 +170,45 @@ export default function LoginScreen() {
               {/* Error Message */}
               {error && (
                 <View style={styles.errorContainer} testID="error-message">
-                  <Ionicons name="alert-circle" size={18} color={DARK_THEME.error} />
+                  <Ionicons name="alert-circle" size={18} color={'#E8836B'} />
                   <Text style={styles.errorText}>{error}</Text>
                 </View>
               )}
 
               {/* Form */}
               <View style={styles.form}>
-                <View style={styles.inputWrapper}>
+                <View
+                  style={styles.inputWrapper}
+                  onLayout={(event) => {
+                    fieldPositions.current.email = event.nativeEvent.layout.y;
+                  }}
+                >
                   <Text style={styles.inputLabel}>{t.auth.email}</Text>
                   <Controller
                     control={control}
                     name="email"
                     render={({ field: { onChange, onBlur, value } }) => (
-                      <View style={[styles.inputContainer, errors.email && styles.inputError]}>
-                        <Ionicons name="mail-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.enterEmail}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            keyboardType="email-address"
-                            autoCapitalize="none"
-                            autoComplete="email"
-                            textContentType="emailAddress"
-                            testID="input-email"
-                            style={styles.darkInput}
-                          />
-                        </View>
-                      </View>
+                      <Pressable
+                        style={[styles.inputContainer, errors.email && styles.inputError]}
+                        onPress={() => emailInputRef.current?.focus()}
+                      >
+                        <Ionicons name="mail-outline" size={20} color={'rgba(255,255,255,0.48)'} />
+                        <TextInput
+                          ref={emailInputRef}
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          onFocus={() => handleFieldFocus('email')}
+                          placeholder={t.auth.enterEmail}
+                          placeholderTextColor={'rgba(255,255,255,0.48)'}
+                          keyboardType="email-address"
+                          autoCapitalize="none"
+                          autoComplete="email"
+                          textContentType="emailAddress"
+                          testID="input-email"
+                        />
+                      </Pressable>
                     )}
                   />
                   {errors.email && (
@@ -169,29 +216,45 @@ export default function LoginScreen() {
                   )}
                 </View>
 
-                <View style={styles.inputWrapper}>
+                <View
+                  style={styles.inputWrapper}
+                  onLayout={(event) => {
+                    fieldPositions.current.password = event.nativeEvent.layout.y;
+                  }}
+                >
                   <Text style={styles.inputLabel}>{t.auth.password}</Text>
                   <Controller
                     control={control}
                     name="password"
                     render={({ field: { onChange, onBlur, value } }) => (
-                      <View style={[styles.inputContainer, errors.password && styles.inputError]}>
-                        <Ionicons name="lock-closed-outline" size={20} color={DARK_THEME.textTertiary} />
-                        <View style={styles.inputInner}>
-                          <Input
-                            value={value}
-                            onChangeText={onChange}
-                            onBlur={onBlur}
-                            placeholder={t.auth.enterPassword}
-                            placeholderTextColor={DARK_THEME.textTertiary}
-                            secureTextEntry
-                            autoComplete="password"
-                            textContentType="password"
-                            testID="input-password"
-                            style={styles.darkInput}
-                          />
-                        </View>
-                      </View>
+                      <Pressable
+                        style={[styles.inputContainer, errors.password && styles.inputError]}
+                        onPress={() => passwordInputRef.current?.focus()}
+                      >
+                        <Ionicons name="lock-closed-outline" size={20} color={'rgba(255,255,255,0.48)'} />
+                        <TextInput
+                          ref={passwordInputRef}
+                          style={[styles.darkInput, { flex: 1 }]}
+                          value={value}
+                          onChangeText={onChange}
+                          onBlur={onBlur}
+                          onFocus={() => handleFieldFocus('password')}
+                          placeholder={t.auth.enterPassword}
+                          placeholderTextColor={'rgba(255,255,255,0.48)'}
+                          secureTextEntry={!showPassword}
+                          autoComplete="password"
+                          textContentType="password"
+                          testID="input-password"
+                        />
+                        <Pressable
+                          onPress={(event) => {
+                            event.stopPropagation();
+                            setShowPassword(!showPassword);
+                          }}
+                        >
+                          <Text style={styles.showHideText}>{showPassword ? 'Hide' : 'Show'}</Text>
+                        </Pressable>
+                      </Pressable>
                     )}
                   />
                   {errors.password && (
@@ -206,26 +269,6 @@ export default function LoginScreen() {
                 </Link>
               </View>
 
-              {/* Submit Button */}
-              <Pressable
-                style={({ pressed }) => [
-                  styles.primaryButton,
-                  pressed && styles.primaryButtonPressed,
-                  isLoading && styles.primaryButtonDisabled,
-                ]}
-                onPress={handleSubmit(onSubmit)}
-                disabled={isLoading}
-                testID="login-submit-button"
-              >
-                {isLoading ? (
-                  <Text style={styles.primaryButtonText}>{t.auth.signingIn}</Text>
-                ) : (
-                  <>
-                    <Text style={styles.primaryButtonText}>{t.auth.logIn}</Text>
-                    <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
-                  </>
-                )}
-              </Pressable>
             </View>
           </BlurView>
 
@@ -239,6 +282,27 @@ export default function LoginScreen() {
             </Link>
           </View>
         </ScrollView>
+        <View style={[styles.submitFooter, { paddingBottom: keyboardOpen ? 12 : insets.bottom + 12 }]}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.primaryButton,
+              pressed && styles.primaryButtonPressed,
+              isLoading && styles.primaryButtonDisabled,
+            ]}
+            onPress={handleSubmit(onSubmit)}
+            disabled={isLoading}
+            testID="login-submit-button"
+          >
+            {isLoading ? (
+              <Text style={styles.primaryButtonText}>{t.auth.signingIn}</Text>
+            ) : (
+              <>
+                <Text style={styles.primaryButtonText}>{t.auth.logIn}</Text>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+              </>
+            )}
+          </Pressable>
+        </View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -247,7 +311,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: DARK_THEME.background,
+    backgroundColor: '#0D1B2A',
   },
   decorCircle1: {
     position: 'absolute',
@@ -256,7 +320,7 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: `${DARK_THEME.primary}20`,
+    backgroundColor: 'rgba(198,167,94,0.12)',
   },
   decorCircle2: {
     position: 'absolute',
@@ -265,7 +329,7 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: `${DARK_THEME.primary}10`,
+    backgroundColor: 'rgba(198,167,94,0.06)',
   },
   keyboardView: {
     flex: 1,
@@ -293,23 +357,23 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 32,
     fontWeight: '800',
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     marginBottom: 8,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 16,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
     lineHeight: 24,
   },
   glassCard: {
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: DARK_THEME.glassBorder,
+    borderColor: 'rgba(230,220,200,0.15)',
   },
   glassCardInner: {
-    backgroundColor: DARK_THEME.glass,
+    backgroundColor: 'rgba(26,47,71,0.8)',
     padding: 24,
     gap: 24,
   },
@@ -317,16 +381,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: `${DARK_THEME.error}15`,
+    backgroundColor: 'rgba(232,131,107,0.08)',
     borderRadius: 8,
     padding: 12,
     borderWidth: 1,
-    borderColor: `${DARK_THEME.error}30`,
+    borderColor: 'rgba(232,131,107,0.19)',
   },
   errorText: {
     flex: 1,
     fontSize: 14,
-    color: DARK_THEME.error,
+    color: '#E8836B',
   },
   form: {
     gap: 20,
@@ -337,7 +401,7 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
@@ -353,7 +417,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   inputError: {
-    borderColor: DARK_THEME.error,
+    borderColor: '#E8836B',
   },
   inputInner: {
     flex: 1,
@@ -361,7 +425,7 @@ const styles = StyleSheet.create({
   darkInput: {
     backgroundColor: 'transparent',
     borderWidth: 0,
-    color: '#1A202C', // Dark text for visibility on light input backgrounds
+    color: '#FFFFFF',
     fontSize: 16,
     paddingVertical: 0,
     paddingHorizontal: 0,
@@ -369,15 +433,29 @@ const styles = StyleSheet.create({
   },
   fieldError: {
     fontSize: 12,
-    color: DARK_THEME.error,
+    color: '#E8836B',
     marginTop: 4,
+  },
+  showHideText: {
+    color: '#C6A75E',
+    fontSize: 14,
+    fontWeight: '600',
+    paddingLeft: 8,
+  },
+  submitFooter: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    paddingBottom: 12,
+    backgroundColor: '#0D1B2A',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(230,220,200,0.15)',
   },
   forgotPassword: {
     alignSelf: 'flex-end',
   },
   forgotPasswordText: {
     fontSize: 14,
-    color: DARK_THEME.primary,
+    color: '#C6A75E',
     fontWeight: '600',
   },
   primaryButton: {
@@ -385,10 +463,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: DARK_THEME.primary,
+    backgroundColor: '#C6A75E',
     paddingVertical: 16,
     borderRadius: 12,
-    shadowColor: DARK_THEME.primary,
+    shadowColor: '#C6A75E',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -402,7 +480,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   primaryButtonText: {
-    color: DARK_THEME.textPrimary,
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -413,11 +491,11 @@ const styles = StyleSheet.create({
   },
   signupText: {
     fontSize: 14,
-    color: DARK_THEME.textSecondary,
+    color: 'rgba(255,255,255,0.72)',
   },
   signupLinkText: {
     fontSize: 14,
-    color: DARK_THEME.primary,
+    color: '#C6A75E',
     fontWeight: '700',
   },
 });

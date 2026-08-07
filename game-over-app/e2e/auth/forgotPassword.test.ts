@@ -2,7 +2,7 @@
  * Forgot Password Screen E2E Tests
  */
 
-import { device, element, by, expect } from 'detox';
+import { device, element, by } from 'detox';
 import {
   waitForElement,
   assertTextVisible,

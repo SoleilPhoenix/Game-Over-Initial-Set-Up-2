@@ -4,8 +4,9 @@
  * Uses write-only permission — does NOT read existing calendars.
  */
 
-import { Alert, Platform } from 'react-native';
+import { Platform } from 'react-native';
 import * as Calendar from 'expo-calendar';
+import { feedback, useUIStore } from '@/stores/uiStore';
 
 export interface CalendarEventData {
   title: string;
@@ -63,7 +64,7 @@ async function getDefaultCalendarId(): Promise<string | null> {
     try {
       return await Calendar.createCalendarAsync({
         title: 'Game Over Events',
-        color: '#5A7EB0',
+        color: '#C6A75E',
         entityType: Calendar.EntityTypes.EVENT,
         source: { isLocalAccount: true, name: 'Game Over', type: Calendar.SourceType.LOCAL },
         name: 'Game Over',
@@ -141,16 +142,14 @@ export async function addEventToCalendarWithFeedback(eventData: CalendarEventDat
   const result = await addEventToCalendar(eventData);
 
   if (result.success) {
-    Alert.alert(
+    useUIStore.getState().showSuccess(
       'Added to Calendar',
-      `"${eventData.title}" has been added to your calendar.`,
-      [{ text: 'OK' }]
+      `"${eventData.title}" has been added to your calendar.`
     );
   } else {
-    Alert.alert(
+    feedback.error(
       'Calendar Error',
       result.error || 'Failed to add event to calendar. Please try again.',
-      [{ text: 'OK' }]
     );
   }
 }

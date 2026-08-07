@@ -15,9 +15,8 @@ import {
   typeInInput,
   assertVisible,
   assertTextVisible,
-  dismissKeyboard,
 } from '../utils/testHelpers';
-import { navigateToTab, goBack } from '../utils/navigation';
+import { navigateToTab } from '../utils/navigation';
 
 describe('Chat Polls', () => {
   beforeAll(async () => {

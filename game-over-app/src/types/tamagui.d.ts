@@ -9,6 +9,7 @@ type AppConfig = typeof config;
 
 // Extend Tamagui with our custom config
 declare module 'tamagui' {
+  // eslint-disable-next-line @typescript-eslint/no-empty-object-type -- required Tamagui type augmentation pattern
   interface TamaguiCustomConfig extends AppConfig {}
 }
 

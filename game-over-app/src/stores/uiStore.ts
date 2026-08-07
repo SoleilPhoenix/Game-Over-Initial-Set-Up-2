@@ -6,9 +6,9 @@
 import { create } from 'zustand';
 
 // Toast types
-type ToastType = 'success' | 'error' | 'warning' | 'info';
+export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
-interface Toast {
+export interface Toast {
   id: string;
   type: ToastType;
   title: string;
@@ -16,20 +16,30 @@ interface Toast {
   duration?: number;
 }
 
-// Modal types
-type ModalType =
-  | 'confirm'
-  | 'alert'
-  | 'create-event'
-  | 'invite'
-  | 'create-poll'
-  | 'package-details';
+export interface ConfirmOptions {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel: string;
+  destructive?: boolean;
+}
 
-interface Modal {
-  type: ModalType;
-  data?: any;
-  onConfirm?: () => void;
-  onCancel?: () => void;
+export interface ChoiceOption {
+  value: string;
+  label: string;
+  destructive?: boolean;
+}
+
+export interface ChoiceOptions {
+  title: string;
+  message: string;
+  options: ChoiceOption[];
+  cancelLabel: string;
+}
+
+export interface ConfirmRequest extends ChoiceOptions {
+  id: string;
+  resolve: (value: string | null) => void;
 }
 
 interface UIState {
@@ -41,8 +51,8 @@ interface UIState {
   // Toast notifications
   toasts: Toast[];
 
-  // Modals
-  activeModal: Modal | null;
+  // App-owned decision sheet
+  activeConfirm: ConfirmRequest | null;
 
   // Bottom sheet
   bottomSheetContent: React.ReactNode | null;
@@ -74,16 +84,10 @@ interface UIActions {
   showWarning: (title: string, message?: string) => void;
   showInfo: (title: string, message?: string) => void;
 
-  // Modals
-  openModal: (modal: Modal) => void;
-  closeModal: () => void;
-  confirm: (
-    title: string,
-    message: string,
-    onConfirm: () => void,
-    onCancel?: () => void
-  ) => void;
-  alert: (title: string, message: string, onClose?: () => void) => void;
+  // App-owned decision sheet
+  confirm: (options: ConfirmOptions) => Promise<boolean>;
+  choose: (options: ChoiceOptions) => Promise<string | null>;
+  resolveConfirm: (value: string | null) => void;
 
   // Bottom sheet
   openBottomSheet: (
@@ -102,13 +106,27 @@ interface UIActions {
 
 const generateId = () => Math.random().toString(36).substring(2, 9);
 
+/**
+ * How long each kind of toast stays up, in ms. Errors and warnings both need
+ * enough time to be read before the user can continue; the short two seconds
+ * are reserved for pure information. A passing "profile updated" is gone
+ * before it can get in the way. Every toast is tappable, so these are ceilings,
+ * not waiting times. Owner decision from 2026-08-05.
+ */
+const TOAST_DURATIONS: Record<ToastType, number> = {
+  error: 6000,
+  success: 4000,
+  warning: 6000,
+  info: 2000,
+};
+
 export const useUIStore = create<UIState & UIActions>((set, get) => ({
   // Initial state
   isGlobalLoading: false,
   loadingMessage: null,
   loadingOperations: {},
   toasts: [],
-  activeModal: null,
+  activeConfirm: null,
   bottomSheetContent: null,
   bottomSheetSnapPoints: ['25%', '50%'],
   isKeyboardVisible: false,
@@ -142,7 +160,7 @@ export const useUIStore = create<UIState & UIActions>((set, get) => ({
     }));
 
     // Auto-hide after duration
-    const duration = toast.duration ?? 4000;
+    const duration = toast.duration ?? TOAST_DURATIONS[toast.type];
     if (duration > 0) {
       setTimeout(() => {
         get().hideToast(id);
@@ -162,7 +180,7 @@ export const useUIStore = create<UIState & UIActions>((set, get) => ({
     get().showToast({ type: 'success', title, message }),
 
   showError: (title, message) =>
-    get().showToast({ type: 'error', title, message, duration: 6000 }),
+    get().showToast({ type: 'error', title, message }),
 
   showWarning: (title, message) =>
     get().showToast({ type: 'warning', title, message }),
@@ -170,38 +188,38 @@ export const useUIStore = create<UIState & UIActions>((set, get) => ({
   showInfo: (title, message) =>
     get().showToast({ type: 'info', title, message }),
 
-  // Modals
-  openModal: (modal) => set({ activeModal: modal }),
+  // App-owned decision sheet
+  confirm: (options) =>
+    get().choose({
+      title: options.title,
+      message: options.message,
+      cancelLabel: options.cancelLabel,
+      options: [{
+        value: 'confirm',
+        label: options.confirmLabel,
+        destructive: options.destructive,
+      }],
+    }).then((value) => value === 'confirm'),
 
-  closeModal: () => set({ activeModal: null }),
-
-  confirm: (title, message, onConfirm, onCancel) =>
-    set({
-      activeModal: {
-        type: 'confirm',
-        data: { title, message },
-        onConfirm: () => {
-          onConfirm();
-          set({ activeModal: null });
+  choose: (options) =>
+    new Promise<string | null>((resolve) => {
+      const previous = get().activeConfirm;
+      previous?.resolve(null);
+      set({
+        activeConfirm: {
+          ...options,
+          id: generateId(),
+          resolve,
         },
-        onCancel: () => {
-          onCancel?.();
-          set({ activeModal: null });
-        },
-      },
+      });
     }),
 
-  alert: (title, message, onClose) =>
-    set({
-      activeModal: {
-        type: 'alert',
-        data: { title, message },
-        onConfirm: () => {
-          onClose?.();
-          set({ activeModal: null });
-        },
-      },
-    }),
+  resolveConfirm: (value) => {
+    const request = get().activeConfirm;
+    if (!request) return;
+    set({ activeConfirm: null });
+    request.resolve(value);
+  },
 
   // Bottom sheet
   openBottomSheet: (content, snapPoints) =>
@@ -237,7 +255,7 @@ export const useGlobalLoading = () =>
 
 export const useToasts = () => useUIStore((state) => state.toasts);
 
-export const useActiveModal = () => useUIStore((state) => state.activeModal);
+export const useActiveConfirm = () => useUIStore((state) => state.activeConfirm);
 
 export const useIsOnline = () => useUIStore((state) => state.isOnline);
 
@@ -246,3 +264,22 @@ export const useKeyboard = () =>
     isVisible: state.isKeyboardVisible,
     height: state.keyboardHeight,
   }));
+
+/**
+ * One feedback API for React components and imperative utilities alike.
+ * Components that need to render state should still subscribe with useUIStore.
+ */
+export const feedback = {
+  show: (type: ToastType, title: string, message?: string, duration?: number) =>
+    useUIStore.getState().showToast({ type, title, message, duration }),
+  success: (title: string, message?: string, duration?: number) =>
+    useUIStore.getState().showToast({ type: 'success', title, message, duration }),
+  error: (title: string, message?: string, duration?: number) =>
+    useUIStore.getState().showToast({ type: 'error', title, message, duration }),
+  warning: (title: string, message?: string, duration?: number) =>
+    useUIStore.getState().showToast({ type: 'warning', title, message, duration }),
+  info: (title: string, message?: string, duration?: number) =>
+    useUIStore.getState().showToast({ type: 'info', title, message, duration }),
+  confirm: (options: ConfirmOptions) => useUIStore.getState().confirm(options),
+  choose: (options: ChoiceOptions) => useUIStore.getState().choose(options),
+};

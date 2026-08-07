@@ -17,7 +17,6 @@
  */
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { sendEmail } from '../_shared/email.ts';
 import {
   getWelcomeEmailHtml,
@@ -96,34 +95,20 @@ serve(async (req: Request) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  const authHeader = req.headers.get('Authorization');
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+  if (!authHeader || authHeader !== `Bearer ${serviceRoleKey}`) {
+    return new Response(JSON.stringify({ error: 'Unauthorized — internal function' }), {
+      status: 401,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+
   try {
     const payload: SendEmailPayload = await req.json();
 
     if (!payload.template || !payload.to) {
       throw new Error('template and to are required');
-    }
-
-    // Check if user has email notifications enabled
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-
-    if (supabaseUrl && supabaseServiceRoleKey) {
-      const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('email_notifications_enabled')
-        .eq('email', payload.to)
-        .single();
-
-      // Skip welcome emails from this check (user just signed up)
-      if (payload.template !== 'welcome' && profile?.email_notifications_enabled === false) {
-        console.log(`Email notifications disabled for ${payload.to} — skipping`);
-        return new Response(
-          JSON.stringify({ success: true, skipped: true, reason: 'notifications_disabled' }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
-        );
-      }
     }
 
     const html = renderTemplate(payload.template, payload.data ?? {});

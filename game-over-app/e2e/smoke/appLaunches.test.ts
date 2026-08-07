@@ -25,7 +25,9 @@ describe('App Launch', () => {
   });
 
   it('should show create account button on welcome', async () => {
-    await expect(element(by.id('create-account-button'))).toBeVisible();
+    // Welcome's primary CTA is "Get Started" — testID is get-started-button.
+    // Previous create-account-button name was retired during the auth-flow cleanup.
+    await expect(element(by.id('get-started-button'))).toBeVisible();
   });
 
   it('should show login link on welcome', async () => {

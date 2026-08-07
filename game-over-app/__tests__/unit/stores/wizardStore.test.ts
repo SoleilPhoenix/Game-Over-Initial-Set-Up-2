@@ -5,6 +5,10 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+// Import store after mocking
+import { useWizardStore } from '@/stores/wizardStore';
+import { MAX_PARTICIPANT_COUNT, MIN_PARTICIPANT_COUNT } from '@/constants/participantLimits';
+
 // Mock MMKV before importing store
 vi.mock('react-native-mmkv', () => ({
   MMKV: vi.fn(() => ({
@@ -35,9 +39,6 @@ vi.mock('@/lib/storage', () => {
   };
 });
 
-// Import store after mocking
-import { useWizardStore } from '@/stores/wizardStore';
-
 describe('wizardStore', () => {
   beforeEach(() => {
     // Reset the store before each test
@@ -55,6 +56,7 @@ describe('wizardStore', () => {
       expect(state.endDate).toBeNull();
       expect(state.currentStep).toBe(1);
       expect(state.isDirty).toBe(false);
+      expect(state.participantCount).toBeGreaterThanOrEqual(MIN_PARTICIPANT_COUNT);
     });
   });
 
@@ -84,6 +86,33 @@ describe('wizardStore', () => {
 
       expect(useWizardStore.getState().startDate).toBe('2024-06-15');
       expect(useWizardStore.getState().endDate).toBe('2024-06-17');
+    });
+
+    it('should clamp participant counts to the supported range', () => {
+      useWizardStore.getState().setParticipantCount(1);
+      expect(useWizardStore.getState().participantCount).toBe(MIN_PARTICIPANT_COUNT);
+
+      useWizardStore.getState().setParticipantCount(51);
+      expect(useWizardStore.getState().participantCount).toBe(MAX_PARTICIPANT_COUNT);
+    });
+
+    it('should raise a legacy draft participant count to the minimum when loading it', () => {
+      useWizardStore.getState().startNewDraft();
+      const legacyDraftId = useWizardStore.getState().activeDraftId!;
+      useWizardStore.getState().setPartyType('bachelor');
+      useWizardStore.getState().startNewDraft();
+
+      useWizardStore.setState((state) => ({
+        savedDrafts: {
+          ...state.savedDrafts,
+          [legacyDraftId]: { ...state.savedDrafts[legacyDraftId], participantCount: 1 },
+        },
+      }));
+
+      useWizardStore.getState().loadDraft(legacyDraftId);
+
+      expect(useWizardStore.getState().participantCount).toBe(MIN_PARTICIPANT_COUNT);
+      expect(useWizardStore.getState().savedDrafts[legacyDraftId].participantCount).toBe(MIN_PARTICIPANT_COUNT);
     });
   });
 

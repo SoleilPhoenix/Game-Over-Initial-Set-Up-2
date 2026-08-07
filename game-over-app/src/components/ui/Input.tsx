@@ -3,7 +3,7 @@
  * Tamagui-based text input with label, error state, and icon support
  */
 
-import React, { useState, forwardRef } from 'react';
+import React, { useRef, useState, forwardRef } from 'react';
 import { TextInput } from 'react-native';
 import { styled, Input as TamaguiInput, YStack, XStack, Text, GetProps } from 'tamagui';
 
@@ -44,7 +44,7 @@ const StyledInput = styled(TamaguiInput, {
   backgroundColor: 'transparent',
   borderWidth: 0,
   fontSize: '$3',
-  color: '$textPrimary',
+  color: '#FFFFFF',
   paddingVertical: 0,
   height: '100%',
 
@@ -63,7 +63,7 @@ const StyledLabel = styled(Text, {
   variants: {
     focused: {
       true: {
-        color: '$primary',
+        color: '#E8DCC8',
       },
     },
     error: {
@@ -100,6 +100,7 @@ export interface InputProps extends Omit<GetProps<typeof StyledInput>, 'ref'> {
   testID?: string;
   containerTestID?: string;
   disabled?: boolean;
+  accessibilityLabel?: string;
 }
 
 export const Input = forwardRef<TextInput, InputProps>(
@@ -118,12 +119,14 @@ export const Input = forwardRef<TextInput, InputProps>(
       onFocus,
       onBlur,
       secureTextEntry,
+      accessibilityLabel,
       ...props
     },
     ref
   ) => {
     const [isFocused, setIsFocused] = useState(false);
     const [showPassword, setShowPassword] = useState(false);
+    const inputRef = useRef<TextInput>(null);
 
     const hasError = Boolean(error);
 
@@ -141,6 +144,19 @@ export const Input = forwardRef<TextInput, InputProps>(
       setShowPassword(!showPassword);
     };
 
+    const setInputRef = (node: TextInput | null) => {
+      inputRef.current = node;
+      if (typeof ref === 'function') {
+        ref(node);
+      } else if (ref) {
+        ref.current = node;
+      }
+    };
+
+    const focusInput = () => {
+      if (!disabled) inputRef.current?.focus();
+    };
+
     return (
       <YStack width="100%" testID={containerTestID}>
         {label && (
@@ -152,10 +168,11 @@ export const Input = forwardRef<TextInput, InputProps>(
           focused={isFocused && !hasError}
           error={hasError}
           disabled={disabled}
+          onPress={focusInput}
         >
           {leftIcon && <XStack marginRight="$2">{leftIcon}</XStack>}
           <StyledInput
-            ref={ref as any}
+            ref={setInputRef as any}
             {...props}
             value={value}
             onFocus={handleFocus}
@@ -164,31 +181,44 @@ export const Input = forwardRef<TextInput, InputProps>(
             editable={!disabled}
             placeholderTextColor="$textMuted"
             testID={testID}
+            accessibilityLabel={accessibilityLabel ?? label}
+            accessibilityState={{ disabled }}
           />
           {secureTextEntry && (
             <XStack
-              onPress={togglePasswordVisibility}
+              onPress={(event) => {
+                event.stopPropagation();
+                togglePasswordVisibility();
+              }}
               paddingLeft="$2"
               pressStyle={{ opacity: 0.7 }}
               testID={`${testID}-toggle-password`}
             >
-              <Text color="$primary" fontWeight="600" fontSize="$2">
+              <Text color={'#E8DCC8'} fontWeight="600" fontSize="$2">
                 {showPassword ? 'Hide' : 'Show'}
               </Text>
             </XStack>
           )}
           {rightIcon && !secureTextEntry && (
             <XStack
-              onPress={onRightIconPress}
+              onPress={onRightIconPress ? (event) => {
+                event.stopPropagation();
+                onRightIconPress();
+              } : focusInput}
               paddingLeft="$2"
-              pressStyle={{ opacity: 0.7 }}
+              {...(onRightIconPress ? { pressStyle: { opacity: 0.7 } } : {})}
             >
               {rightIcon}
             </XStack>
           )}
         </StyledInputContainer>
         {(error || hint) && (
-          <StyledHelperText error={hasError}>{error || hint}</StyledHelperText>
+          <StyledHelperText
+            error={hasError}
+            accessibilityLiveRegion={hasError ? 'polite' : 'none'}
+          >
+            {error || hint}
+          </StyledHelperText>
         )}
       </YStack>
     );

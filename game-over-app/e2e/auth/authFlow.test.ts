@@ -3,7 +3,7 @@
  * Tests the full user journey through authentication
  */
 
-import { device, element, by, expect } from 'detox';
+import { device, element, by } from 'detox';
 import {
   waitForElement,
   assertTextVisible,
@@ -12,9 +12,7 @@ import {
   typeInInput,
   dismissKeyboard,
   restartApp,
-  ensureSignedOut,
   TEST_USER,
-  TEST_USER_NEW,
 } from '../utils/testHelpers';
 
 describe('Complete Authentication Flow', () => {

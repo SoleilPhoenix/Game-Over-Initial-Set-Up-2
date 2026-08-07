@@ -4,7 +4,7 @@
  * security settings, notification preferences, and account management
  */
 
-import { by, device, element, expect, waitFor } from 'detox';
+import { by, device, element, waitFor } from 'detox';
 import { loginAsTestUser } from '../utils/auth';
 import {
   waitForElement,
@@ -13,7 +13,6 @@ import {
   tap,
   typeInInput,
   dismissKeyboard,
-  assertNotVisible,
 } from '../utils/testHelpers';
 import { navigateToTab } from '../utils/navigation';
 

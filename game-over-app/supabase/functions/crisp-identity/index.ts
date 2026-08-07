@@ -57,15 +57,18 @@ serve(async (req: Request) => {
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
 
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    if (!authHeader?.startsWith('Bearer ')) {
       throw new Error('Authorization header required');
     }
+    const token = authHeader.replace('Bearer ', '');
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
+    // Pass the JWT explicitly to getUser(). With supabase-js v2, getUser() WITHOUT
+    // an argument looks for a stored session (absent in an edge function) and fails
+    // with "Auth session missing!" even for a valid token — the global-header
+    // pattern does NOT feed getUser().
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     if (authError || !user?.email) {
       throw new Error('Unauthorized');
     }

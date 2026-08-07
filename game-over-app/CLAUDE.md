@@ -106,6 +106,9 @@ Zustand stores with persistence (`src/stores/`):
 - **`authStore`** - Auth state, session, user profile
 - **`wizardStore`** - Event creation wizard with auto-save (30s interval persist)
 - **`uiStore`** - Global UI state (loading spinners, toasts, modals)
+- **`favoritesStore`** - Favorite packages persisted via AsyncStorage; heart toggle in `app/package/[id].tsx`
+- **`languageStore`** - Active language (`en`/`de`) persisted via AsyncStorage; language page at `app/(tabs)/profile/language.tsx`
+- **`tabBarStore`** - Tab bar visibility state (show/hide during modal flows)
 
 **Auto-save Pattern:**
 ```typescript
@@ -154,9 +157,20 @@ Detection: `Constants.executionEnvironment === ExecutionEnvironment.StoreClient`
 - **Booking References:** `GO-XXXXXX` format via database trigger
 - **Profile Creation:** Automatic on user signup via `handle_new_user()` trigger
 
+**RLS Recursion Workaround:**
+RLS policies on `events` and `event_participants` caused infinite recursion (error code `42P17`) because policies queried the other table, creating circular lookups. The fix uses two `SECURITY DEFINER` functions that bypass RLS for ownership checks:
+- `is_event_creator(event_id uuid)` — checks if current user created the event
+- `is_event_participant(event_id uuid)` — checks if current user is a participant
+These are defined in `supabase/migrations/20240101000000_initial_schema.sql`. **Do not replace these with direct table queries in RLS policies** — that will re-introduce the recursion.
+
 **Edge Functions:** `supabase/functions/` (Deno runtime)
 - `create-payment-intent` - Creates Stripe PaymentIntent for bookings
 - `stripe-webhook` - Handles Stripe webhook events (payment success/failure)
+- `send-email` - Transactional email via SendGrid (booking confirmation, invite links)
+- `send-push-notification` - Sends Expo push notifications to stored `user_push_tokens`
+- `send-guest-invitations` - Creates invite codes and emails invitation links to guests
+- `send-final-briefing` - Sends event details 24h before (triggered by pg_cron at 09:00 UTC)
+- `process-payment-reminders` - Checks overdue deposits and sends reminders (pg_cron at 09:15 UTC)
 - Deploy: `npx supabase functions deploy <function-name>`
 
 **Realtime Subscriptions:**
@@ -256,13 +270,64 @@ All interactive elements must have `testID` props for Detox testing:
 <Button testID="submit-button" onPress={handleSubmit}>Submit</Button>
 ```
 
-### Package Matching Algorithm
-Located in `src/utils/packageMatching.ts`. AI-powered scoring:
-- Gathering type match: 40 points
-- Energy level match: 30 points
-- Vibe keywords match: 30 points
+### Activity Matching Algorithm
+Located in `src/utils/packageMatching.ts`. Scores **53 activities** against **12 questionnaire answers** (H1–H6 for honoree, G1–G6 for group):
 
-Usage: `usePackageMatching` hook returns packages sorted by score with `bestMatch` flag.
+- **H1** Honoree energy level, **H2** spotlight comfort, **H3** competition style, **H4** enjoyment type, **H5** indoor/outdoor preference, **H6** evening style
+- **G1** age range, **G2** group cohesion, **G3** fitness level, **G4** drinking culture, **G5** group dynamic, **G6** vibe keywords (multi-select: action/culture/nightlife/food/wellness)
+
+Each activity has a score array per question option. The total score sums all 12 dimension lookups, plus:
+- Ice-breaker bonus (+3) when group cohesion is `strangers` or `mixed`
+- H3×G5 conflict adjustment (±2) when competitive style conflicts with group dynamic
+- Seasonal penalty (−2) for outdoor activities Nov–Mar
+
+Hard filters exclude activities with a −1 score for the user's answer (e.g., high-fitness activities excluded when group fitness is `low`).
+
+Activities are sorted by total score descending; equal scores break by price ascending.
+Score thresholds: Strong ≥ 15, Good 10–14, Weak 5–9.
+
+```typescript
+// Usage: scoreActivities(answers) returns ScoredActivity[]
+import { scoreActivities, SCORE_THRESHOLDS } from '@/utils/packageMatching';
+const results = scoreActivities(wizardAnswers);
+const topActivity = results[0]; // highest scoring
+```
+
+The wizard questionnaire answers are stored in `wizardStore` as typed fields (`HonoreeEnergyLevel`, `SpotlightComfort`, etc.).
+
+### Internationalisation (i18n)
+Lightweight custom i18n in `src/i18n/`:
+- **`src/i18n/en.ts`** — English strings (source of truth for TypeScript types)
+- **`src/i18n/de.ts`** — German strings
+- **`src/i18n/index.ts`** — exports `useTranslation()` hook and `getTranslation()` utility
+
+```typescript
+// In components
+const { t, language } = useTranslation();
+<Text>{t.events.title}</Text>
+
+// Outside React (e.g. Alert callbacks)
+const t = getTranslation();
+Alert.alert(t.errors.generic);
+```
+
+Language is persisted via `languageStore` (Zustand + AsyncStorage). Toggle via `app/(tabs)/profile/language.tsx`.
+
+`TranslationKeys` uses `DeepString<typeof en>` — add new keys to `en.ts` first, then `de.ts`. Legal pages (terms, privacy, impressum) use bilingual SECTIONS/CONTENT objects keyed by language rather than the i18n system.
+
+### Participant Count Cache
+`src/lib/participantCountCache.ts` — AsyncStorage-backed cache for data that has no dedicated DB column:
+- **Desired participant count** — set in `packages.tsx` and `payment.tsx` (demo mode)
+- **Planning checklist state** — toggle state in event summary screen
+- **Guest details** (name/email/phone) — entered in Manage Invitations, saved on every keystroke
+
+```typescript
+import { saveParticipantCount, getParticipantCount } from '@/lib/participantCountCache';
+await saveParticipantCount(eventId, 8);
+const count = await getParticipantCount(eventId) ?? event.participants.length;
+```
+
+Use this cache as fallback when `event.participant_count` from DB only reflects actual `event_participants` rows (usually 2 during demo/draft flows).
 
 ### Calendar Integration
 `src/utils/calendar.ts`:
@@ -280,35 +345,36 @@ Standard components in `src/components/ui/`:
 - `SocialButton` - OAuth provider buttons
 
 **Component Color Guidelines:**
-- Never use `colors.light.*` values in components
-- Always use `DARK_THEME.*` or Tamagui tokens (`$background`, `$textPrimary`)
-- For loading states, use dark backgrounds immediately (no white flash)
+- Never use `colors.light.*` values directly — go through the theme hook
+- Always use `useTheme()` semantic tokens (`theme.background`, `theme.textPrimary`, …) or Tamagui semantic tokens (`$background`, `$textPrimary`)
+- For loading states, render the surface colour immediately (no white flash)
 
-### Dark Theme Design System
-**Game Over is a dark-mode-only app.** The theme is enforced in `app/_layout.tsx`:
-```typescript
-// Force dark theme - Game Over is a dark-mode-only app
-const colorScheme = 'dark';
-```
+### Editorial Design System ("Ethereal Architect")
+The app uses an **editorial dual-theme** system — Midnight Navy + Champagne Gold as the default dark theme, plus a warm off-white light variant. Both themes are intentional and user-toggleable from `Profile → Appearance`.
 
-Consistent dark glassmorphic theme defined in `src/constants/theme.ts`:
-```typescript
-const DARK_THEME = {
-  background: '#15181D',
-  surface: '#1E2329',
-  surfaceCard: '#23272F',
-  deepNavy: '#2D3748',
-  primary: '#258CF4',
-  glassCard: 'rgba(45, 55, 72, 0.6)',
-  textPrimary: '#FFFFFF',
-  textSecondary: '#D1D5DB',
-  textTertiary: '#9CA3AF',
-};
-```
+**Token contract** lives in `src/constants/designSystem.ts`:
+- `EDITORIAL_DARK` and `EDITORIAL_LIGHT` expose the **same semantic keys** (`background`, `surfaceCard`, `primary`, `textPrimary`, `accentGold`, …) — TypeScript enforces parity via the `EditorialTokens` type.
+- `RADII`, `SPACING`, `FONTS`, `TYPE_SCALE` are mode-agnostic constants.
+- `ambientShadow(theme)` and `primaryGradient(theme)` are helper functions that resolve the active palette.
 
-**Active State Color:** All active elements (bottom nav, FAB, filter tabs) use `#5A7EB0`
+**Theme plumbing:**
+- `src/stores/themeStore.ts` — Zustand store with `mode: 'dark' | 'light' | 'system'`, persisted via AsyncStorage.
+- `src/hooks/useTheme.ts` — central read access. Resolves `'system'` mode via React Native's `useColorScheme()` **only when** the user explicitly selected system-follow. **This is the one place `useColorScheme()` is allowed.** Components must read `theme.*` from this hook, never hardcode hex values.
+- `app/(tabs)/profile/appearance.tsx` — the user-facing toggle.
+- `tamagui.config.ts` — `dark` and `light` Tamagui themes mirror the same palette so `$tokens` and `useTheme()` stay in sync.
 
-**IMPORTANT:** Never use `useColorScheme()` or respect system color scheme settings. The app must always render in dark mode.
+**Primary palette:**
+| | Dark (default) | Light |
+|---|---|---|
+| `background` | `#0D1B2A` Midnight Navy | `#FFFFFF` |
+| `surfaceCard` | `#1A2F47` | `#FBF9F4` warm cream |
+| `primary` | `#C6A75E` Champagne Gold | `#1F2A44` Navy |
+| `accentGold` | `#C6A75E` (same both modes) | `#C6A75E` |
+| `textPrimary` | `#FFFFFF` | `#1F2A44` |
+
+**Deprecated values — do not use:** `#15181D`, `#1E2329`, `#23272F`, `#258CF4`, `#5A7EB0`, `rgba(90, 126, 176, …)`. These come from the pre-redesign theme and the muted-navy primary that preceded the editorial redesign.
+
+**Legacy constants:** `src/constants/theme.ts` still exports `DARK_THEME` for older components that haven't been migrated yet. New code should consume `useTheme()` instead. Old `DARK_THEME` keys have been remapped internally onto the editorial palette so screens that still reference them won't show stale colours.
 
 UI reference designs in `UI_and_UX/` folder.
 

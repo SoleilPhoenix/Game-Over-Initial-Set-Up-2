@@ -13,6 +13,8 @@ import { OptionBlock, OptionBlockGroup } from '@/components/ui/OptionBlock';
 import { GlassPanel } from '@/components/ui/GlassPanel';
 import { WizardFooter } from '@/components/ui/WizardFooter';
 import { useTranslation } from '@/i18n';
+import { feedback } from '@/stores/uiStore';
+import { joinList } from '@/utils/guestDataChange';
 
 const AGE_RANGES = [
   { value: '21-25', label: '21-25' },
@@ -46,13 +48,30 @@ export default function WizardStep3() {
     router.push('/create-event/packages');
   };
 
+  const handleNextDisabled = () => {
+    const requiredFields = t.wizard.requiredFields;
+    const missing: string[] = [];
+    if (!averageAge) missing.push(requiredFields.averageAge);
+    if (!groupCohesion) missing.push(requiredFields.groupCohesion);
+    if (!fitnessLevel) missing.push(requiredFields.fitnessLevel);
+    if (!drinkingCulture) missing.push(requiredFields.drinkingCulture);
+    if (!groupDynamic) missing.push(requiredFields.groupDynamic);
+    if (!vibes.length) missing.push(requiredFields.groupVibe);
+    if (missing.length > 0) {
+      feedback.warning(
+        requiredFields.title,
+        `${requiredFields.introduction} ${joinList(missing, requiredFields.conjunction)}`,
+      );
+    }
+  };
+
   const handleBack = () => {
     router.replace('/create-event/preferences' as any);
   };
 
   return (
-    <YStack flex={1} backgroundColor="$background">
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+    <YStack flex={1} backgroundColor="#0D1B2A">
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 120 }}>
         {/* G1: Average Age */}
         <GlassPanel icon="people-circle" title={t.wizard.g1Title} testID="panel-g1">
           <OptionBlockGroup testID="g1-options">
@@ -123,6 +142,7 @@ export default function WizardStep3() {
       <WizardFooter
         onBack={handleBack}
         onNext={handleNext}
+        onNextDisabledPress={handleNextDisabled}
         nextLabel={`${t.wizard.nextStep} \u2192`}
         nextDisabled={!isStepValid(3)}
       />

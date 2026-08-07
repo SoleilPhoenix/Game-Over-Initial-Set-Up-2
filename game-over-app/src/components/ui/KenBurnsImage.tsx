@@ -35,6 +35,7 @@ export function KenBurnsImage({ source, style, resizeMode = 'cover', children }:
     );
     animation.start();
     return () => animation.stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scale is an Animated.Value created once via useRef; we want the animation to run only once on mount
   }, []);
 
   return (
