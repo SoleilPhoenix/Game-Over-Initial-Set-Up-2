@@ -13,7 +13,7 @@
  *   channel: 'email' | 'whatsapp',
  *   variant: 'A' | 'B',              // A = playful, B = friendly-plain
  *   language?: 'de' | 'en',
- *   recipients: { firstName?: string, email?: string, phone?: string, amount: string }[]
+ *   recipients: { userId?: string, firstName?: string, email?: string, phone?: string, amount: string }[]
  * }
  */
 
@@ -21,6 +21,13 @@ import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { sendEmail } from '../_shared/email.ts';
 import { sendWhatsApp } from '../_shared/twilio.ts';
+import {
+  appendExtraCostReminderSection,
+  canIncludeExtraCostSection,
+  extraCostReminderSection,
+  formatReminderCents,
+  type ExtraCostReminderSection,
+} from '../_shared/payment-reminder.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,6 +39,7 @@ type Variant = 'A' | 'B';
 type Lang = 'de' | 'en';
 
 interface Recipient {
+  userId?: string;
   firstName?: string;
   email?: string;
   phone?: string;
@@ -93,10 +101,18 @@ function subject(lang: Lang, variant: Variant, honoree: string, firstName: strin
     : `Kleine Erinnerung: dein Beitrag für ${honoree}s Party`;
 }
 
-function reminderEmailHtml(body: string): string {
+function reminderEmailHtml(body: string, extraCosts?: ExtraCostReminderSection): string {
+  const extraCostBlock = extraCosts
+    ? `<div style="border-top:1px solid rgba(198,167,94,0.35);margin-top:22px;padding-top:18px;">
+      <p style="color:#C6A75E;font-size:15px;font-weight:700;margin:0 0 10px;">${escapeHtml(extraCosts.heading)}</p>
+      <p style="font-size:14px;line-height:1.5;margin:0;">${escapeHtml(extraCosts.amountLabel)}: <strong>${escapeHtml(extraCosts.amountFormatted)}</strong></p>
+      <p style="color:#AEB9C7;font-size:13px;line-height:1.5;margin:6px 0 0;">${escapeHtml(extraCosts.itemCountLabel)}</p>
+    </div>`
+    : '';
+
   return `<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#0D1B2A;color:#FFFFFF;padding:28px;border-radius:14px;max-width:520px;margin:0 auto;">
     <div style="color:#C6A75E;letter-spacing:3px;font-weight:700;text-align:center;font-size:13px;margin-bottom:18px;">GAME OVER</div>
-    <p style="font-size:16px;line-height:1.6;margin:0;">${escapeHtml(body)}</p>
+    <p style="font-size:16px;line-height:1.6;margin:0;">${escapeHtml(body)}</p>${extraCostBlock}
   </div>`;
 }
 
@@ -186,22 +202,130 @@ serve(async (req: Request) => {
       });
     }
 
+    // Verify recipient roles server-side, then load only open shares belonging to
+    // non-honoree participants in this event. Older clients without userId keep
+    // receiving the original reminder with no extra-cost section.
+    const recipientUserIds = [...new Set(
+      recipients.map((recipient) => recipient.userId).filter((id): id is string => !!id),
+    )];
+    const nonHonoreeRecipientIds = new Set<string>();
+    const eligibleRecipientIds = new Set<string>();
+    const extraCostsByUserId = new Map<string, { amountCents: number; itemCount: number }>();
+
+    if (recipientUserIds.length > 0) {
+      const { data: recipientParticipants, error: participantsError } = await supabase
+        .from('event_participants')
+        .select('user_id, role')
+        .eq('event_id', eventId)
+        .in('user_id', recipientUserIds);
+
+      if (participantsError) {
+        console.warn(
+          '[send-payment-reminders] Could not verify recipient roles; omitting extra costs:',
+          participantsError.message,
+        );
+      } else {
+        for (const participant of recipientParticipants ?? []) {
+          if (canIncludeExtraCostSection(participant.role)) {
+            nonHonoreeRecipientIds.add(participant.user_id);
+          }
+        }
+      }
+
+      // Bind the client-supplied userId to that participant's actual delivery
+      // address before attaching financial details. A mismatched address still
+      // gets the original booking reminder, but never another user's extra costs.
+      if (nonHonoreeRecipientIds.size > 0) {
+        const { data: recipientProfiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, email, phone')
+          .in('id', [...nonHonoreeRecipientIds]);
+
+        if (profilesError) {
+          console.warn(
+            '[send-payment-reminders] Could not verify recipient addresses; omitting extra costs:',
+            profilesError.message,
+          );
+        } else {
+          const profilesById = new Map(
+            (recipientProfiles ?? []).map((recipientProfile) => [
+              recipientProfile.id,
+              recipientProfile,
+            ]),
+          );
+
+          for (const recipient of recipients) {
+            if (!recipient.userId || !nonHonoreeRecipientIds.has(recipient.userId)) continue;
+            const recipientProfile = profilesById.get(recipient.userId);
+            const addressMatches = channel === 'email'
+              ? !!recipient.email &&
+                recipient.email.trim().toLowerCase() === recipientProfile?.email?.trim().toLowerCase()
+              : !!recipient.phone && !!recipientProfile?.phone &&
+                normalisePhone(recipient.phone) === normalisePhone(recipientProfile.phone);
+
+            if (addressMatches) eligibleRecipientIds.add(recipient.userId);
+          }
+        }
+      }
+
+      if (eligibleRecipientIds.size > 0) {
+        const { data: openExpenseShares, error: expenseSharesError } = await supabase
+          .from('event_expense_shares')
+          .select(`
+            user_id,
+            amount_cents,
+            expense:event_expenses!inner(event_id, title)
+          `)
+          .in('user_id', [...eligibleRecipientIds])
+          .is('settled_at', null)
+          .eq('expense.event_id', eventId);
+
+        if (expenseSharesError) {
+          console.warn(
+            '[send-payment-reminders] Could not load open extra costs; sending booking reminders unchanged:',
+            expenseSharesError.message,
+          );
+        } else {
+          for (const share of openExpenseShares ?? []) {
+            const current = extraCostsByUserId.get(share.user_id) ?? {
+              amountCents: 0,
+              itemCount: 0,
+            };
+            current.amountCents += share.amount_cents;
+            current.itemCount += 1;
+            extraCostsByUserId.set(share.user_id, current);
+          }
+        }
+      }
+    }
+
     const results: ReminderResult[] = [];
     let sent = 0, failed = 0;
 
     for (const r of recipients) {
       const firstName = (r.firstName ?? '').trim() || (lang === 'en' ? 'there' : 'du');
       const body = BODY[lang][chosenVariant]({ firstName, honoree: honoreeName, amount: r.amount, organizer: organizerName });
+      const recipientExtraCosts = r.userId ? extraCostsByUserId.get(r.userId) : undefined;
+      const extraCosts = recipientExtraCosts
+        ? extraCostReminderSection(
+          lang,
+          formatReminderCents(recipientExtraCosts.amountCents),
+          recipientExtraCosts.itemCount,
+        )
+        : undefined;
 
       let ok: { success: boolean; error?: string };
       if (channel === 'email') {
         ok = await sendEmail({
           to: r.email!,
           subject: subject(lang, chosenVariant, honoreeName, firstName),
-          html: reminderEmailHtml(body),
+          html: reminderEmailHtml(body, extraCosts),
         });
       } else {
-        ok = await sendWhatsApp(normalisePhone(r.phone!), body);
+        ok = await sendWhatsApp(
+          normalisePhone(r.phone!),
+          appendExtraCostReminderSection(body, extraCosts),
+        );
       }
 
       if (ok.success) sent++; else failed++;

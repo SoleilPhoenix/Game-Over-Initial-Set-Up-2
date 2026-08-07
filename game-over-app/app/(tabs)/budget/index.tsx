@@ -273,7 +273,7 @@ export default function BudgetDashboardScreen() {
   const [reminderVariant, setReminderVariant] = useState<'A' | 'B'>('A');
   // Latest reminder recipients, kept in a ref so the send handler (declared before
   // the recipients memo) always reads the current list.
-  const reminderRecipientsRef = useRef<{ firstName?: string; email?: string; phone?: string; amountCents: number }[]>([]);
+  const reminderRecipientsRef = useRef<{ userId: string; firstName?: string; email?: string; phone?: string; amountCents: number }[]>([]);
 
   // Extra-cost editor. Database IDs are used throughout; invite-only guests cannot
   // receive a share until they have joined and have an auth user ID.
@@ -798,6 +798,7 @@ export default function BudgetDashboardScreen() {
       const recipients = reminderRecipientsRef.current
         .filter(r => (channel === 'email' ? r.email : r.phone))
         .map(r => ({
+          userId: r.userId,
           firstName: r.firstName,
           email: r.email,
           phone: r.phone,
@@ -1014,6 +1015,7 @@ export default function BudgetDashboardScreen() {
       .map(p => {
         const fullName = p.profile?.full_name || '';
         return {
+          userId: p.user_id,
           firstName: fullName.split(' ')[0] || undefined,
           email: p.profile?.email || undefined,
           phone: (p.profile as any)?.phone || undefined,

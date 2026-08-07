@@ -8,6 +8,8 @@
  * - Payment Reminder (urgency-based)
  */
 
+import type { ExtraCostReminderSection } from './payment-reminder.ts';
+
 // ─── Shared Layout ──────────────────────────────────────────
 
 const NAVY = '#0D1B2A';
@@ -444,6 +446,7 @@ interface PaymentReminderParams {
   partyLabel?: string;       // "Natalias Bachelorette Party (JGA)"
   guestFirstName?: string;
   bookingReference?: string;
+  extraCosts?: ExtraCostReminderSection;
 }
 
 /**
@@ -460,7 +463,7 @@ const URGENCY_ACCENT: Record<string, { accent: string; onAccent: string; badgeBg
 export function getPaymentReminderEmailHtml(params: PaymentReminderParams): string {
   const {
     honoreeName, eventTitle, amountDue, daysRemaining, urgency, paymentUrl,
-    language, partyLabel, guestFirstName, bookingReference,
+    language, partyLabel, guestFirstName, bookingReference, extraCosts,
   } = params;
 
   const isDe = language === 'de';
@@ -512,6 +515,19 @@ export function getPaymentReminderEmailHtml(params: PaymentReminderParams): stri
           <p style="margin:0;color:${MUTED};font-size:13px;">${C.refLabel}: <strong style="color:#FFFFFF;letter-spacing:1px;">${bookingReference}</strong></p>
         </td></tr>` : '';
 
+  const extraCostBlock = extraCosts ? `
+        <!-- Separate extra-cost ledger; never combined with the booking balance. -->
+        <tr><td style="padding:24px 40px 0;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="background:${NAVY};border:1px solid ${BORDER};border-radius:14px;padding:20px 24px;text-align:center;">
+              <p style="margin:0 0 14px;color:${GOLD};font-size:15px;font-weight:700;">${extraCosts.heading}</p>
+              <p style="margin:0 0 6px;color:${MUTED};font-size:11px;letter-spacing:2px;font-weight:700;text-transform:uppercase;">${extraCosts.amountLabel}</p>
+              <p style="margin:0;color:#FFFFFF;font-size:30px;font-weight:800;">${extraCosts.amountFormatted}</p>
+              <p style="margin:8px 0 0;color:${MUTED};font-size:13px;">${extraCosts.itemCountLabel}</p>
+            </td></tr>
+          </table>
+        </td></tr>` : '';
+
   const warningBlock = isFinal ? `
         <tr><td style="padding:22px 40px 0;">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -555,7 +571,7 @@ export function getPaymentReminderEmailHtml(params: PaymentReminderParams): stri
             </td></tr>
           </table>
         </td></tr>
-${refRow}
+${refRow}${extraCostBlock}
 ${warningBlock}
         <!-- CTA -->
         <tr><td style="padding:26px 40px 0;" align="center">

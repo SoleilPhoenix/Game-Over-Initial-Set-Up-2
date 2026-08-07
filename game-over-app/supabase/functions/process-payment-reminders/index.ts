@@ -28,7 +28,15 @@ import {
   getBookingCancelledEmailHtml,
   getPaymentReminderEmailHtml,
 } from '../_shared/email-templates.ts';
-import { reminderCopy, reminderSubject, type ReminderType } from '../_shared/payment-reminder.ts';
+import {
+  canIncludeExtraCostSection,
+  extraCostReminderSection,
+  formatReminderCents,
+  reminderCopy,
+  reminderSubject,
+  type ExtraCostReminderSection,
+  type ReminderType,
+} from '../_shared/payment-reminder.ts';
 import { partyLabel, type PartyType } from '../_shared/briefing.ts';
 import {
   CANCEL_AT_DAYS,
@@ -44,10 +52,6 @@ const corsHeaders = {
 // Notification copy lives in _shared/payment-reminder.ts, bilingual, so it can be
 // rendered for review without starting this module's server. Language comes from the
 // organizer's profiles.language.
-
-function formatCents(cents: number): string {
-  return `\u20AC${(cents / 100).toFixed(2)}`;
-}
 
 function formatCentsForLanguage(cents: number, language: 'de' | 'en'): string {
   return new Intl.NumberFormat(language === 'de' ? 'de-DE' : 'en-US', {
@@ -160,7 +164,7 @@ serve(async (req: Request) => {
           const userId = event.created_by;
           const remainingCents = booking.remaining_amount_cents ??
             (booking.total_amount_cents - (booking.deposit_amount_cents ?? 0));
-          const amountStr = formatCents(remainingCents);
+          const amountStr = formatReminderCents(remainingCents);
 
           // Attempt idempotent insert — UNIQUE(booking_id, days_before_event) prevents duplicates
           const { error: insertError } = await supabase
@@ -205,8 +209,59 @@ serve(async (req: Request) => {
             language,
           );
 
+          // Extra costs are a second ledger. They ride along only on reminder passes,
+          // never alter remainingCents, and are omitted if the recipient is the honoree.
+          let extraCosts: ExtraCostReminderSection | undefined;
+          if (!isCancellationPass) {
+            const { data: recipientParticipant, error: participantError } = await supabase
+              .from('event_participants')
+              .select('role')
+              .eq('event_id', event.id)
+              .eq('user_id', userId)
+              .maybeSingle();
+
+            if (participantError) {
+              console.warn(
+                `[process-payment-reminders] Could not verify participant role for ${userId}; omitting extra costs:`,
+                participantError.message,
+              );
+            } else if (canIncludeExtraCostSection(recipientParticipant?.role)) {
+              const { data: openExpenseShares, error: expenseShareError } = await supabase
+                .from('event_expense_shares')
+                .select(`
+                  amount_cents,
+                  expense:event_expenses!inner(event_id, title)
+                `)
+                .eq('user_id', userId)
+                .is('settled_at', null)
+                .eq('expense.event_id', event.id);
+
+              if (expenseShareError) {
+                console.warn(
+                  `[process-payment-reminders] Could not load open extra costs for ${userId}; sending the booking reminder unchanged:`,
+                  expenseShareError.message,
+                );
+              } else if (openExpenseShares?.length) {
+                const extraCostCents = openExpenseShares.reduce(
+                  (sum, share) => sum + share.amount_cents,
+                  0,
+                );
+                extraCosts = extraCostReminderSection(
+                  language,
+                  formatReminderCents(extraCostCents),
+                  openExpenseShares.length,
+                );
+              }
+            }
+          }
+
           // Build notification message
-          const messageConfig = reminderCopy(milestone.type as ReminderType, language, amountStr);
+          const messageConfig = reminderCopy(
+            milestone.type as ReminderType,
+            language,
+            amountStr,
+            extraCosts,
+          );
           const body = messageConfig.body;
           const notificationType = isCancellationPass
             ? 'event_cancelled_nonpayment'
@@ -298,6 +353,7 @@ serve(async (req: Request) => {
                 partyLabel: label,
                 guestFirstName: organizerFirstName,
                 bookingReference: (booking.reference_number as string | null) ?? undefined,
+                extraCosts,
               });
 
               const emailResult = await sendEmail({
