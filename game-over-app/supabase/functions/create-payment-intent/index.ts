@@ -8,6 +8,34 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import Stripe from 'https://esm.sh/stripe@14.1.0?target=deno';
 import { corsHeaders, optionsResponse } from '../_shared/http.ts';
 
+/** The columns this function reads from the embedded event. */
+interface BookingEvent {
+  id: string;
+  created_by: string;
+  title: string;
+  honoree_name: string | null;
+}
+
+/**
+ * Accepts either shape PostgREST may hand back for `event:events!inner(...)` - the object it
+ * actually returns for a to-one relation, or the array the generated types describe - and
+ * returns null when the embed is missing entirely.
+ */
+function normaliseEmbeddedEvent(embedded: unknown): BookingEvent | null {
+  const candidate = Array.isArray(embedded) ? embedded[0] : embedded;
+  if (!candidate || typeof candidate !== 'object') return null;
+
+  const { id, created_by, title, honoree_name } = candidate as Record<string, unknown>;
+  if (typeof id !== 'string' || typeof created_by !== 'string') return null;
+
+  return {
+    id,
+    created_by,
+    title: typeof title === 'string' ? title : '',
+    honoree_name: typeof honoree_name === 'string' ? honoree_name : null,
+  };
+}
+
 interface CreatePaymentIntentRequest {
   booking_id: string;
   payment_type?: 'deposit' | 'remaining' | 'full'; // client hints what they're paying
@@ -98,8 +126,17 @@ serve(async (req: Request) => {
       throw new Error('Booking not found');
     }
 
+    // PostgREST returns an embedded to-one relation as an object, but the client's types
+    // describe every embed as an array. That mismatch produced six type errors here for a
+    // long time. Normalising once keeps the rest of the function honest and would also
+    // survive PostgREST returning an array, instead of silently reading properties off one.
+    const event = normaliseEmbeddedEvent(booking.event);
+    if (!event) {
+      throw new Error('Booking is not linked to an event');
+    }
+
     // Verify user owns the event
-    if (booking.event.created_by !== user.id) {
+    if (event.created_by !== user.id) {
       throw new Error('Unauthorized: You do not have access to this booking');
     }
 
@@ -191,15 +228,15 @@ serve(async (req: Request) => {
       },
       metadata: {
         booking_id: booking_id,
-        event_id: booking.event.id,
-        event_title: booking.event.title,
-        honoree_name: booking.event.honoree_name,
+        event_id: event.id,
+        event_title: event.title,
+        honoree_name: event.honoree_name,
         user_id: user.id,
         user_email: profile?.email || user.email || '',
         payment_type: payment_type,
       },
       // Wortmarke ohne Bindestrich - dieser Text landet auf der Kartenabrechnung.
-      description: `Game Over: ${booking.event.title} - ${booking.event.honoree_name}'s party`,
+      description: `Game Over: ${event.title} - ${event.honoree_name}'s party`,
       receipt_email: profile?.email || user.email,
     });
 
