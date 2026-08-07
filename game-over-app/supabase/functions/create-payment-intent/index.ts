@@ -6,11 +6,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import Stripe from 'https://esm.sh/stripe@14.1.0?target=deno';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { corsHeaders, optionsResponse } from '../_shared/http.ts';
 
 interface CreatePaymentIntentRequest {
   booking_id: string;
@@ -23,8 +19,12 @@ interface CreatePaymentIntentRequest {
 serve(async (req: Request) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return optionsResponse(req);
   }
+
+  // Per request, because the allowlist reflects the caller's Origin. Native clients
+  // send no Origin and get no Allow-Origin header back - they do not need one.
+  const cors = corsHeaders(req);
 
   try {
     // Validate environment variables
@@ -80,7 +80,7 @@ serve(async (req: Request) => {
         error: `Unsupported currency. Allowed: ${ALLOWED_CURRENCIES.join(', ')}`,
       }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...cors, 'Content-Type': 'application/json' },
       });
     }
 
@@ -118,7 +118,7 @@ serve(async (req: Request) => {
         return new Response(JSON.stringify({
           success: false,
           error: 'Deposit has not been confirmed yet. Please wait a moment and try again.',
-        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }), { status: 400, headers: { ...cors, 'Content-Type': 'application/json' } });
       }
       // Remaining balance after deposit
       serverAmountCents = bookingTotalCents - depositPaidCents;
@@ -130,7 +130,7 @@ serve(async (req: Request) => {
     if (serverAmountCents <= 0) {
       return new Response(JSON.stringify({ success: false, error: 'Nothing to pay — booking may already be settled.' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...cors, 'Content-Type': 'application/json' },
       });
     }
 
@@ -138,7 +138,7 @@ serve(async (req: Request) => {
     if (serverAmountCents > MAX_AMOUNT_CENTS) {
       return new Response(JSON.stringify({ success: false, error: 'Amount exceeds maximum allowed.' }), {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...cors, 'Content-Type': 'application/json' },
       });
     }
 
@@ -159,7 +159,7 @@ serve(async (req: Request) => {
               status: existingIntent.status,
             }),
             {
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              headers: { ...cors, 'Content-Type': 'application/json' },
               status: 200,
             }
           );
@@ -238,7 +238,7 @@ serve(async (req: Request) => {
         status: paymentIntent.status,
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...cors, 'Content-Type': 'application/json' },
         status: 200,
       }
     );
@@ -256,7 +256,7 @@ serve(async (req: Request) => {
         error: errorMessage,
       }),
       {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: { ...cors, 'Content-Type': 'application/json' },
         status: statusCode,
       }
     );
