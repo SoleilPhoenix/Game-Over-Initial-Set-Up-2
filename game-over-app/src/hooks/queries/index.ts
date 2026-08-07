@@ -99,3 +99,36 @@ export {
   useDeleteRefund,
   refundKeys,
 } from './useRefunds';
+
+// Extra costs
+export {
+  useEventExpenses,
+  useEventExpenseReports,
+  useCreateExpense,
+  useUpdateExpense,
+  useDeleteExpense,
+  useSetExpenseShares,
+  useMarkOwnExpenseShareSettled,
+  useReportExpense,
+  useResolveExpenseReport,
+  useMigrateLocalExpenses,
+  useEventExpenseCategories,
+  useCreateExpenseCategory,
+  useRenameExpenseCategory,
+  useDeleteExpenseCategory,
+  expenseKeys,
+} from './useExpenses';
+export type {
+  CreateExpenseCategoryInput,
+  CreateExpenseInput,
+  CreateEventExpense,
+  CreateEventExpenseCategory,
+  EventExpense,
+  EventExpenseCategory,
+  EventExpenseReport,
+  EventExpenseShare,
+  ExpenseShareInput,
+  ReportEventExpense,
+  ReportExpenseInput,
+  UpdateEventExpense,
+} from './useExpenses';

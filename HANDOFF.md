@@ -39,6 +39,24 @@ Letzte Aktualisierung: 2026-08-06.
 
 ## Nicht anfassen, ohne den Grund zu kennen
 
+**Weitere Kosten und Paketrechnung sind zwei getrennte Kassenbücher.** Owner-Entscheidung vom
+06.08. `event_expenses` fließt **nicht** in `bookings`, nicht in Anzahlung, Restbetrag oder
+`splitPerPerson`. Auch die Zahlungserinnerung *listet* beide getrennt und *summiert* sie nicht.
+Wer hier eine gemeinsame Gesamtsumme baut, wiederholt den Fehler vom 05.08.: zwei Wahrheiten für
+dieselbe Zahl.
+
+**Anteile an weiteren Kosten nur über `set_expense_shares`.** Ein Trigger erzwingt, dass die Summe
+der Anteile den vollen Betrag des Postens ergibt - aufgeschoben bis zum Commit, weil die Anteile
+Zeile für Zeile geschrieben werden. PostgREST fährt aber jede Anfrage in einer eigenen Transaktion:
+wer den Betrag ändert und danach die Anteile nachzieht, läuft schon beim ersten Schritt in die
+Prüfung. Die RPC macht beides in einem Zug. Direkte Schreibzugriffe auf `event_expense_shares`
+aus dem Client funktionieren nur zufällig, solange sich der Betrag nicht mit ändert.
+
+**Der Ehrengast hängt an `can_see_event_money()`, nicht an `is_event_participant()`.** Letztere
+kennt die Rolle nicht - der Ehrengast *ist* Teilnehmer. Jede Policy auf den vier
+`event_expense*`-Tabellen benutzt deshalb die neue Funktion. Wer das beim Erweitern vergisst,
+öffnet die Sperre aus `20260806073606` von hinten wieder.
+
 **`config.toml` braucht `verify_jwt = false` für selbst-autorisierende Funktionen.**
 `send-final-briefing`, `process-payment-reminders` und `stripe-webhook` prüfen ihre Autorisierung
 selbst (CRON_SECRET bzw. Stripe-Signatur). Ohne den Eintrag schaltet **jeder** CLI-Deploy die
@@ -72,6 +90,30 @@ koennen, und gehoert deshalb nicht in die Wortmarke.
 ---
 
 ## Offen
+
+### Weitere Kosten in die Datenbank (Branch `claude/weitere-kosten-datenbank`, Stand 06.08.)
+
+**Die Migration `20260806145949_event_expenses.sql` ist am 06.08. nach Owner-Freigabe auf die
+Produktivdatenbank angewendet** - über MCP `apply_migration`, nicht über `migrate.yml`. Live sind
+4 Tabellen (`event_expenses`, `event_expense_shares`, `event_expense_reports`,
+`event_expense_categories`), alle mit RLS, 16 Policies, 6 Trigger, 7 Funktionen. Der Branch ist
+**noch nicht nach `main` gemerged**, weil er unfertigen Anwendungscode trägt; die Datei muss
+mitkommen, wenn er gemerged wird.
+
+Fertig und verifiziert: Schema, Repository, Query-Hooks, Aufteilungsrechnung
+(`calculateExpenseSplit` in `money.ts`, neben `splitPerPerson`, das unangetastet bleibt),
+einmalige Übernahme aus dem Gerätespeicher, geteilte Kategorien.
+
+Offen: Oberfläche im Budget-Reiter, Push an die Markierten verdrahten, zweiter getrennter
+Abschnitt in der Zahlungserinnerung.
+
+Zwei Fallen, die beim Bauen aufgefallen sind und Zeit gekostet haben:
+- Der Benachrichtigungstrigger feuerte bei **jeder** Bearbeitung erneut für alle Beteiligten,
+  weil `set_expense_shares` die Anteile komplett ersetzt. Er schickt jetzt nur beim ersten Mal
+  je Person und Posten.
+- `send-push-notification` prüft nur, *dass* jemand angemeldet ist, nicht ob er die Empfänger
+  kennen darf. Jeder angemeldete Nutzer kann beliebigen Text an beliebige Nutzer schicken.
+  Eigenes Thema, hier bewusst nicht darauf aufgebaut.
 
 ### Muss noch gemacht werden
 

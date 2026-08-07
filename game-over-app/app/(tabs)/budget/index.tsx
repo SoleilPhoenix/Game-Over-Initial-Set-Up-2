@@ -29,7 +29,15 @@ import { useSwipeTabs } from '@/hooks/useSwipeTabs';
 import { computeBookedBudgetStats } from '@/utils/budgetStats';
 import { resolveEventCapabilities } from '@/utils/permissions';
 import { isReadOnlyEvent } from '@/utils/eventLifecycle';
-import { depositAndDue, formatEuroFromEuros, splitPerPerson } from '@/utils/money';
+import {
+  calculateExpenseSplit,
+  depositAndDue,
+  formatCentsForInput,
+  formatEuro,
+  formatEuroCents,
+  formatEuroFromEuros,
+  splitPerPerson,
+} from '@/utils/money';
 import { PastEventBanner } from '@/components/ui/PastEventBanner';
 import { getEventImage, resolveImageSource } from '@/constants/packageImages';
 import { loadBudgetInfo, loadDesiredParticipants, loadGuestDetails, type BudgetInfo, type GuestDetail } from '@/lib/participantCountCache';
@@ -51,6 +59,21 @@ import type {
   RefundStatus,
 } from '@/hooks/queries/useRefunds';
 import { CachedAvatarImage } from '@/components/ui/CachedAvatarImage';
+import {
+  useCreateExpense,
+  useCreateExpenseCategory,
+  useDeleteExpense,
+  useEventExpenseCategories,
+  useEventExpenseReports,
+  useEventExpenses,
+  useMarkOwnExpenseShareSettled,
+  useMigrateLocalExpenses,
+  useReportExpense,
+  useResolveExpenseReport,
+  useSetExpenseShares,
+  useUpdateExpense,
+  type EventExpense,
+} from '@/hooks/queries/useExpenses';
 
 // Avatar colors for participant initials
 const AVATAR_COLORS = [
@@ -250,29 +273,38 @@ export default function BudgetDashboardScreen() {
   const [reminderVariant, setReminderVariant] = useState<'A' | 'B'>('A');
   // Latest reminder recipients, kept in a ref so the send handler (declared before
   // the recipients memo) always reads the current list.
-  const reminderRecipientsRef = useRef<{ firstName?: string; email?: string; phone?: string; amountCents: number }[]>([]);
+  const reminderRecipientsRef = useRef<{ userId: string; firstName?: string; email?: string; phone?: string; amountCents: number }[]>([]);
 
-  // Expense modal
+  // Extra-cost editor. Database IDs are used throughout; invite-only guests cannot
+  // receive a share until they have joined and have an auth user ID.
   const [expenseModal, setExpenseModal] = useState<{
     visible: boolean;
     categoryKey: string | null;
-    viewMode: 'list' | 'form';
+    viewMode: 'form' | 'detail';
     description: string;
     amount: string;
-    paidBy: 'you' | 'other';
-    paidByPerson: string | null;
-    contributors: string[];
-    editingIndex: number | null;
+    paidByUserId: string | null;
+    participantIds: string[];
+    manualAmounts: Record<string, string>;
+    editingId: string | null;
+    detailId: string | null;
     payerDropdownOpen: boolean;
-  }>({ visible: false, categoryKey: null, viewMode: 'form', description: '', amount: '', paidBy: 'you', paidByPerson: null, contributors: [], editingIndex: null, payerDropdownOpen: false });
+    reportReason: string;
+  }>({
+    visible: false,
+    categoryKey: null,
+    viewMode: 'form',
+    description: '',
+    amount: '',
+    paidByUserId: null,
+    participantIds: [],
+    manualAmounts: {},
+    editingId: null,
+    detailId: null,
+    payerDropdownOpen: false,
+    reportReason: '',
+  });
 
-  const [addedExpenses, setAddedExpenses] = useState<{
-    categoryKey: string; description: string; amount: string;
-    paidBy: 'you' | 'other'; paidByPerson?: string | null; contributors: string[];
-  }[]>([]);
-
-  // Custom categories (user-created)
-  const [customCategories, setCustomCategories] = useState<ExpenseCategory[]>([]);
   const [customCatModal, setCustomCatModal] = useState<{
     visible: boolean;
     label: string;
@@ -337,61 +369,6 @@ export default function BudgetDashboardScreen() {
   const refundSheetPan = useRef(makeModalPan(refundSheetY, () => setRefundModal(prev => ({ ...prev, visible: false })))).current;
   const customCatSheetPan = useRef(makeModalPan(customCatSheetY, () => setCustomCatModal(prev => ({ ...prev, visible: false })))).current;
 
-  const openExpenseModal = useCallback((categoryKey: string) => {
-    const existing = addedExpenses.filter(e => e.categoryKey === categoryKey);
-    setExpenseModal(prev => ({
-      ...prev,
-      editingIndex: null,
-      categoryKey,
-      viewMode: existing.length > 0 ? 'list' : 'form',
-      description: '',
-      amount: '',
-      paidBy: 'you',
-      paidByPerson: null,
-      contributors: [],
-      visible: true,
-    }));
-  }, [addedExpenses]);
-
-  const openEditExpense = useCallback((globalIdx: number) => {
-    const exp = addedExpenses[globalIdx];
-    if (!exp) return;
-    setExpenseModal(prev => ({
-      ...prev,
-      editingIndex: globalIdx,
-      categoryKey: exp.categoryKey,
-      description: exp.description,
-      amount: exp.amount,
-      paidBy: exp.paidBy,
-      paidByPerson: exp.paidByPerson || null,
-      contributors: exp.contributors,
-      viewMode: 'form',
-      visible: true,
-    }));
-  }, [addedExpenses]);
-
-  const submitExpense = useCallback(() => {
-    if (!expenseModal.description.trim() || !expenseModal.amount.trim() || !expenseModal.categoryKey) return;
-    const newExpense = {
-      categoryKey: expenseModal.categoryKey,
-      description: expenseModal.description.trim(),
-      amount: expenseModal.amount.trim(),
-      paidBy: expenseModal.paidBy,
-      paidByPerson: expenseModal.paidBy === 'other' ? expenseModal.paidByPerson : null,
-      contributors: expenseModal.contributors,
-    };
-    setAddedExpenses(prev => {
-      const updated = expenseModal.editingIndex !== null
-        ? prev.map((e, i) => i === expenseModal.editingIndex ? newExpense : e)
-        : [...prev, newExpense];
-      if (selectedEventId) {
-        AsyncStorage.setItem(`gameover:expenses:${selectedEventId}`, JSON.stringify(updated));
-      }
-      return updated;
-    });
-    setExpenseModal(prev => ({ ...prev, editingIndex: null, visible: false }));
-  }, [expenseModal, selectedEventId]);
-
   const openRefundModal = useCallback(() => {
     setShowRefundDatePicker(false);
     setRefundModal({
@@ -413,7 +390,7 @@ export default function BudgetDashboardScreen() {
       editingId: refund.id,
       templateKey: refund.templateKey,
       description: refund.description,
-      amount: (refund.amountCents / 100).toFixed(2),
+      amount: formatCentsForInput(refund.amountCents),
       expectedBy: refund.expectedBy,
       status: refund.status,
       receivedAt: refund.receivedAt,
@@ -540,6 +517,32 @@ export default function BudgetDashboardScreen() {
   const { data: participants } = useParticipants(
     hasBookedEvents ? (selectedEventId || undefined) : undefined
   );
+
+  const expenseEventId = capabilities.canViewExtraCosts
+    ? selectedEventId ?? undefined
+    : undefined;
+  const { data: addedExpenses = [], isLoading: expensesLoading } = useEventExpenses(expenseEventId);
+  const { data: expenseReports = [] } = useEventExpenseReports(expenseEventId);
+  const { data: databaseExpenseCategories = [] } = useEventExpenseCategories(expenseEventId);
+  const createExpense = useCreateExpense(expenseEventId);
+  const updateExpense = useUpdateExpense(expenseEventId);
+  const deleteExpense = useDeleteExpense(expenseEventId);
+  const setExpenseShares = useSetExpenseShares(expenseEventId);
+  const settleOwnExpenseShare = useMarkOwnExpenseShareSettled(expenseEventId);
+  const reportExpense = useReportExpense(expenseEventId);
+  const resolveExpenseReport = useResolveExpenseReport(expenseEventId);
+  const createExpenseCategory = useCreateExpenseCategory(expenseEventId);
+  const migrateLocalExpenses = useMigrateLocalExpenses();
+  const expenseMigrationAttempted = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!expenseEventId || expenseMigrationAttempted.current.has(expenseEventId)) return;
+    expenseMigrationAttempted.current.add(expenseEventId);
+    void migrateLocalExpenses.mutateAsync(expenseEventId).catch((error) => {
+      console.warn('[expenses] local migration failed:', error);
+      feedback.error(t.common.error, t.budget.expenseMigrationError);
+    });
+  }, [expenseEventId, migrateLocalExpenses, t.budget.expenseMigrationError, t.common.error]);
 
   const refundEventId = capabilities.canEditEvent ? selectedEventId ?? undefined : undefined;
   const {
@@ -692,23 +695,13 @@ export default function BudgetDashboardScreen() {
     [rawInviteGuests]
   );
 
-  // Load device-local data that still belongs to the expense features.
+  // Load device-local data that still belongs to package budgeting. Extra costs
+  // have their own shared database ledger and are migrated above exactly once.
   useEffect(() => {
     if (!selectedEventId) return;
-    // Reset local state before loading new event's data
-    setAddedExpenses([]);
-    setCustomCategories([]);
-    // Budget cache
     loadBudgetInfo(selectedEventId).then(info => setCachedBudget(info ?? null));
     loadDesiredParticipants(selectedEventId).then(count => setCachedParticipantCount(count ?? null));
     loadGuestDetails(selectedEventId).then(guests => setCachedGuests(guests ?? {}));
-    // Persisted expenses / custom categories
-    AsyncStorage.getItem(`gameover:expenses:${selectedEventId}`).then(json => {
-      if (json) try { setAddedExpenses(JSON.parse(json)); } catch {}
-    });
-    AsyncStorage.getItem(`gameover:custom_cats:${selectedEventId}`).then(json => {
-      if (json) try { setCustomCategories(JSON.parse(json)); } catch {}
-    });
   }, [selectedEventId]);
 
   // Calculate budget stats — fall back to cache when DB booking doesn't exist
@@ -755,24 +748,6 @@ export default function BudgetDashboardScreen() {
       })),
     );
   }, [booking, participants, cachedBudget, cachedParticipantCount, cachedGuests]);
-
-  // Format currency (with cents)
-  const formatCurrency = (cents: number) => {
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-    }).format(cents / 100);
-  };
-
-  // Format currency rounded to nearest euro (no decimal places)
-  const formatCurrencyRounded = (cents: number) => {
-    return new Intl.NumberFormat('de-DE', {
-      style: 'currency',
-      currency: 'EUR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(Math.round(cents / 100));
-  };
 
   // Betraege des Buchungs-Kassenbuchs, gerundet auf ganze Euro.
   // Owner-Regel vom 05.08.: keine Cent-Betraege, weder hier noch in der
@@ -823,10 +798,11 @@ export default function BudgetDashboardScreen() {
       const recipients = reminderRecipientsRef.current
         .filter(r => (channel === 'email' ? r.email : r.phone))
         .map(r => ({
+          userId: r.userId,
           firstName: r.firstName,
           email: r.email,
           phone: r.phone,
-          amount: formatCurrency(r.amountCents),
+          amount: formatEuroCents(r.amountCents),
         }));
 
       const { data, error } = await supabase.functions.invoke('send-payment-reminders', {
@@ -998,6 +974,33 @@ export default function BudgetDashboardScreen() {
   // Keep ref in sync so openExpenseModal always has the latest list
   allContributorsRef.current = allContributors;
 
+  const expenseParticipants = useMemo(() => {
+    const byUserId = new Map<string, { userId: string; name: string; role: string | null }>();
+    for (const participant of participants ?? []) {
+      if (!participant.user_id || participant.role === 'honoree') continue;
+      byUserId.set(participant.user_id, {
+        userId: participant.user_id,
+        name: participant.profile?.full_name
+          || participant.profile?.email?.split('@')[0]
+          || t.budget.expenseUnknownParticipant,
+        role: participant.role,
+      });
+    }
+    if (user?.id && capabilities.canViewExtraCosts && !byUserId.has(user.id)) {
+      byUserId.set(user.id, {
+        userId: user.id,
+        name: userName,
+        role: capabilities.canEditEvent ? 'organizer' : 'guest',
+      });
+    }
+    return [...byUserId.values()];
+  }, [capabilities.canEditEvent, capabilities.canViewExtraCosts, participants, t.budget.expenseUnknownParticipant, user?.id, userName]);
+
+  const expenseParticipantNames = useMemo(
+    () => new Map(expenseParticipants.map(participant => [participant.userId, participant.name])),
+    [expenseParticipants],
+  );
+
   // Registered participant emails (for deduplication with invite guests)
   const registeredEmailSet = useMemo(() => new Set(
     (sortedParticipants || []).map(p => p.profile?.email?.toLowerCase()).filter(Boolean) as string[]
@@ -1012,6 +1015,7 @@ export default function BudgetDashboardScreen() {
       .map(p => {
         const fullName = p.profile?.full_name || '';
         return {
+          userId: p.user_id,
           firstName: fullName.split(' ')[0] || undefined,
           email: p.profile?.email || undefined,
           phone: (p.profile as any)?.phone || undefined,
@@ -1081,15 +1085,7 @@ export default function BudgetDashboardScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- translation strings change only on language switch which forces a re-render anyway
   }, []);
 
-  // For "Someone else paid" — exclude current user AND honoree (can't pay yourself or honoree)
-  const payerOptions = useMemo(
-    () => allContributors.filter(c =>
-      c.role !== 'honoree' &&
-      c.id !== 'honoree' &&
-      c.userId !== user?.id
-    ),
-    [allContributors, user?.id]
-  );
+  const payerOptions = expenseParticipants;
 
   // Days until event (calendar-date comparison — no time-of-day skew)
   const daysUntilEvent = useMemo(() => {
@@ -1130,18 +1126,285 @@ export default function BudgetDashboardScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally re-runs only on daysUntilEvent/percentage milestones; selectedEvent fields used only at fire-time
   }, [selectedEventId, daysUntilEvent, budgetStats.percentage]);
 
-  // All expense categories (preset + user-created)
+  const customCategories = useMemo<ExpenseCategory[]>(
+    () => databaseExpenseCategories.map((category, index) => {
+      const colors = CUSTOM_COLORS[index % CUSTOM_COLORS.length];
+      return {
+        key: category.key,
+        labelKey: category.label,
+        icon: category.icon || 'pricetag-outline',
+        color: colors.color,
+        bg: colors.bg,
+        packageNote: false,
+      };
+    }),
+    [databaseExpenseCategories],
+  );
+
+  // All expense categories (preset + shared event categories)
   const allExpenseCategories = useMemo<ExpenseCategory[]>(
     () => [...EXPENSE_CATEGORIES, ...customCategories],
     [customCategories]
   );
-
-  // Helper: save custom categories to AsyncStorage
-  const saveCustomCategories = useCallback((cats: ExpenseCategory[]) => {
-    if (selectedEventId) {
-      AsyncStorage.setItem(`gameover:custom_cats:${selectedEventId}`, JSON.stringify(cats));
+  const displayedExpenseCategories = useMemo<ExpenseCategory[]>(() => {
+    const knownKeys = new Set(allExpenseCategories.map(category => category.key));
+    const missingKeys = new Set(
+      addedExpenses
+        .map(expense => expense.categoryKey)
+        .filter((key): key is string => !!key && !knownKeys.has(key)),
+    );
+    const fallbackCategories = [...missingKeys].map((key, index) => {
+      const colors = CUSTOM_COLORS[(customCategories.length + index) % CUSTOM_COLORS.length];
+      return {
+        key,
+        labelKey: key,
+        icon: 'pricetag-outline',
+        color: colors.color,
+        bg: colors.bg,
+        packageNote: false,
+      };
+    });
+    if (addedExpenses.some(expense => !expense.categoryKey)) {
+      fallbackCategories.push({
+        key: '__uncategorized__',
+        labelKey: t.budget.expenseUncategorized,
+        icon: 'help-circle-outline',
+        color: theme.textSecondary,
+        bg: 'rgba(255,255,255,0.05)',
+        packageNote: false,
+      });
     }
-  }, [selectedEventId]);
+    return [...allExpenseCategories, ...fallbackCategories];
+  }, [addedExpenses, allExpenseCategories, customCategories.length, t.budget.expenseUncategorized, theme.textSecondary]);
+
+  const expenseAmountCents = useMemo(
+    () => parseRefundAmountToCents(expenseModal.amount),
+    [expenseModal.amount],
+  );
+  const manualExpenseAmounts = useMemo(() => {
+    const amounts: Record<string, number> = {};
+    for (const participantId of expenseModal.participantIds) {
+      if (Object.prototype.hasOwnProperty.call(expenseModal.manualAmounts, participantId)) {
+        amounts[participantId] = parseRefundAmountToCents(expenseModal.manualAmounts[participantId]);
+      }
+    }
+    return amounts;
+  }, [expenseModal.manualAmounts, expenseModal.participantIds]);
+  const suggestedExpenseSplit = useMemo(
+    () => calculateExpenseSplit(expenseAmountCents, expenseModal.participantIds, {
+      paidBy: expenseModal.paidByUserId,
+    }),
+    [expenseAmountCents, expenseModal.paidByUserId, expenseModal.participantIds],
+  );
+  const expenseSplit = useMemo(
+    () => calculateExpenseSplit(expenseAmountCents, expenseModal.participantIds, {
+      paidBy: expenseModal.paidByUserId,
+      manualAmounts: manualExpenseAmounts,
+    }),
+    [expenseAmountCents, expenseModal.paidByUserId, expenseModal.participantIds, manualExpenseAmounts],
+  );
+  const hasZeroExpenseShare = expenseSplit.shares.some(share => share.amountCents <= 0);
+  const expenseDistributionComplete = expenseAmountCents > 0
+    && expenseSplit.status === 'complete'
+    && expenseSplit.shares.length > 0
+    && !hasZeroExpenseShare;
+  const expenseSaveDisabled = !expenseModal.description.trim()
+    || !expenseModal.categoryKey
+    || !expenseModal.paidByUserId
+    || !expenseDistributionComplete
+    || createExpense.isPending
+    || updateExpense.isPending
+    || setExpenseShares.isPending;
+  const detailExpense = addedExpenses.find(expense => expense.id === expenseModal.detailId) ?? null;
+  const detailReports = detailExpense
+    ? expenseReports.filter(report => report.expenseId === detailExpense.id)
+    : [];
+  const ownOpenExpenseCents = addedExpenses.reduce((sum, expense) => {
+    const ownShare = expense.shares.find(share => share.userId === user?.id && !share.settledAt);
+    return sum + (ownShare?.amountCents ?? 0);
+  }, 0);
+
+  const resetExpenseForm = (categoryKey: string | null) => {
+    setExpenseModal({
+      visible: true,
+      categoryKey,
+      viewMode: 'form',
+      description: '',
+      amount: '',
+      paidByUserId: user?.id ?? null,
+      participantIds: expenseParticipants.map(participant => participant.userId),
+      manualAmounts: {},
+      editingId: null,
+      detailId: null,
+      payerDropdownOpen: false,
+      reportReason: '',
+    });
+  };
+
+  const openExpenseModal = (categoryKey: string) => resetExpenseForm(categoryKey);
+
+  const openExpenseDetail = (expense: EventExpense) => {
+    setExpenseModal(current => ({
+      ...current,
+      visible: true,
+      categoryKey: expense.categoryKey,
+      viewMode: 'detail',
+      detailId: expense.id,
+      editingId: null,
+      reportReason: '',
+      payerDropdownOpen: false,
+    }));
+  };
+
+  const openEditExpense = (expense: EventExpense) => {
+    setExpenseModal({
+      visible: true,
+      categoryKey: expense.categoryKey ?? EXPENSE_CATEGORIES[0].key,
+      viewMode: 'form',
+      description: expense.title,
+      amount: formatCentsForInput(expense.amountCents),
+      paidByUserId: expense.paidBy,
+      participantIds: expense.shares.map(share => share.userId),
+      manualAmounts: Object.fromEntries(
+        expense.shares.map(share => [share.userId, formatCentsForInput(share.amountCents)]),
+      ),
+      editingId: expense.id,
+      detailId: expense.id,
+      payerDropdownOpen: false,
+      reportReason: '',
+    });
+  };
+
+  const submitExpense = async () => {
+    if (expenseSaveDisabled || !expenseModal.categoryKey || !expenseModal.paidByUserId) return;
+    const shares = expenseSplit.shares
+      .filter(share => share.amountCents > 0)
+      .map(share => ({ userId: share.userId, amountCents: share.amountCents }));
+
+    try {
+      if (expenseModal.editingId) {
+        await updateExpense.mutateAsync({
+          id: expenseModal.editingId,
+          patch: {
+            title: expenseModal.description.trim(),
+            categoryKey: expenseModal.categoryKey,
+            paidBy: expenseModal.paidByUserId,
+          },
+        });
+        await setExpenseShares.mutateAsync({
+          expenseId: expenseModal.editingId,
+          amountCents: expenseAmountCents,
+          shares,
+        });
+      } else {
+        const created = await createExpense.mutateAsync({
+          title: expenseModal.description.trim(),
+          categoryKey: expenseModal.categoryKey,
+          paidBy: expenseModal.paidByUserId,
+          amountCents: expenseAmountCents,
+        });
+        try {
+          await setExpenseShares.mutateAsync({
+            expenseId: created.id,
+            amountCents: expenseAmountCents,
+            shares,
+          });
+        } catch (error) {
+          await deleteExpense.mutateAsync(created.id).catch(() => undefined);
+          throw error;
+        }
+      }
+      setExpenseModal(current => ({ ...current, visible: false }));
+      feedback.success(t.budget.expenseSavedTitle, t.budget.expenseSavedMessage);
+    } catch (error) {
+      console.error('[expenses] save failed:', error);
+      feedback.error(t.common.error, t.budget.expenseSaveError);
+    }
+  };
+
+  const confirmDeleteExpense = async (expense: EventExpense) => {
+    setExpenseModal(current => ({ ...current, visible: false }));
+    const confirmed = await feedback.confirm({
+      title: t.budget.expenseDeleteTitle,
+      message: t.budget.expenseDeleteMessage,
+      confirmLabel: t.common.delete,
+      cancelLabel: t.common.cancel,
+      destructive: true,
+    });
+    if (!confirmed) return;
+    try {
+      await deleteExpense.mutateAsync(expense.id);
+      feedback.success(t.budget.expenseDeletedTitle, t.budget.expenseDeletedMessage);
+    } catch (error) {
+      console.error('[expenses] delete failed:', error);
+      feedback.error(t.common.error, t.budget.expenseDeleteError);
+    }
+  };
+
+  const confirmSettleOwnExpenseShare = async (expense: EventExpense) => {
+    const ownShare = expense.shares.find(share => share.userId === user?.id && !share.settledAt);
+    if (!ownShare) return;
+    setExpenseModal(current => ({ ...current, visible: false }));
+    const confirmed = await feedback.confirm({
+      title: t.budget.expenseSettleTitle,
+      message: t.budget.expenseSettleMessage.replace('{{amount}}', formatEuroCents(ownShare.amountCents)),
+      confirmLabel: t.budget.expenseSettleConfirm,
+      cancelLabel: t.common.cancel,
+    });
+    if (!confirmed) return;
+    try {
+      await settleOwnExpenseShare.mutateAsync(ownShare.id);
+      feedback.success(t.budget.expenseSettledTitle, t.budget.expenseSettledMessage);
+    } catch (error) {
+      console.error('[expenses] settlement failed:', error);
+      feedback.error(t.common.error, t.budget.expenseSettleError);
+    }
+  };
+
+  const submitExpenseReport = async (expense: EventExpense) => {
+    const reason = expenseModal.reportReason.trim();
+    if (!reason || expense.createdBy === user?.id) return;
+    setExpenseModal(current => ({ ...current, visible: false }));
+    try {
+      await reportExpense.mutateAsync({ expenseId: expense.id, reason });
+      feedback.success(t.budget.expenseReportedTitle, t.budget.expenseReportedMessage);
+    } catch (error) {
+      console.error('[expenses] report failed:', error);
+      feedback.error(t.common.error, t.budget.expenseReportError);
+    }
+  };
+
+  const confirmResolveExpenseReport = async (reportId: string) => {
+    setExpenseModal(current => ({ ...current, visible: false }));
+    const confirmed = await feedback.confirm({
+      title: t.budget.expenseResolveTitle,
+      message: t.budget.expenseResolveMessage,
+      confirmLabel: t.budget.expenseResolveConfirm,
+      cancelLabel: t.common.cancel,
+    });
+    if (!confirmed) return;
+    try {
+      await resolveExpenseReport.mutateAsync(reportId);
+      feedback.success(t.budget.expenseResolvedTitle, t.budget.expenseResolvedMessage);
+    } catch (error) {
+      console.error('[expenses] resolve report failed:', error);
+      feedback.error(t.common.error, t.budget.expenseResolveError);
+    }
+  };
+
+  const submitCustomExpenseCategory = async () => {
+    const label = customCatModal.label.trim();
+    if (!label) return;
+    const key = `custom_${Date.now().toString(36)}`;
+    try {
+      await createExpenseCategory.mutateAsync({ key, label, icon: 'pricetag-outline' });
+      setCustomCatModal({ visible: false, label: '' });
+      resetExpenseForm(key);
+    } catch (error) {
+      console.error('[expenses] create category failed:', error);
+      feedback.error(t.common.error, t.budget.expenseCategoryError);
+    }
+  };
 
   // Event selector
   const selectedEventName = selectedEvent
@@ -1491,7 +1754,7 @@ export default function BudgetDashboardScreen() {
                             {t.budget.totalPackagePaid}
                           </Text>
                           <Text fontSize={36} fontWeight="700" color={theme.accentGold} letterSpacing={-1} style={{ marginTop: 4 }}>
-                            {formatCurrencyRounded(budgetStats.totalBudget)}
+                            {formatEuro(budgetStats.totalBudget)}
                           </Text>
                         </YStack>
                         <View style={{ width: 48, height: 48, borderRadius: 12, backgroundColor: theme.surfaceHigh, alignItems: 'center', justifyContent: 'center' }}>
@@ -1511,7 +1774,7 @@ export default function BudgetDashboardScreen() {
                           {t.budget.amountDueLabel}
                         </Text>
                         <Text fontSize={36} fontWeight="700" color={theme.textTertiary} letterSpacing={-1}>
-                          {formatCurrencyRounded(0)}
+                          {formatEuro(0)}
                         </Text>
                         <View style={{ alignSelf: 'flex-start', backgroundColor: `${theme.success}1A`, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4, marginTop: 2 }}>
                           <Text fontSize={11} fontWeight="700" color={theme.success} letterSpacing={0.5} style={{ textTransform: 'uppercase' }}>
@@ -1970,14 +2233,21 @@ export default function BudgetDashboardScreen() {
             </>
           ) : (
             <>
-            {/* Expense Breakdown */}
-            <YStack marginBottom="$4">
+            {/* Shared extra-cost ledger. Honorees are excluded by capabilities and RLS. */}
+            {capabilities.canViewExtraCosts && <YStack marginBottom="$4">
               <XStack justifyContent="space-between" alignItems="center" marginBottom="$3" paddingHorizontal="$1">
-                <Text fontSize={12} fontWeight="700" color={theme.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
-                  {(t.budget as any).expenseBreakdown}
-                </Text>
+                <YStack>
+                  <Text fontSize={12} fontWeight="700" color={theme.textTertiary} textTransform="uppercase" letterSpacing={0.8}>
+                    {t.budget.expenseBreakdown}
+                  </Text>
+                  <Text fontSize={12} color={ownOpenExpenseCents > 0 ? '#F97316' : '#22C55E'}>
+                    {ownOpenExpenseCents > 0
+                      ? t.budget.expenseOwnOpen.replace('{{amount}}', formatEuroCents(ownOpenExpenseCents))
+                      : t.budget.expenseOwnSettled}
+                  </Text>
+                </YStack>
                 <Pressable
-                  onPress={() => { setExpenseModal(prev => ({ ...prev, categoryKey: null, viewMode: 'form', visible: true })); }}
+                  onPress={() => resetExpenseForm(null)}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
                 >
                   <Ionicons name="add-circle-outline" size={16} color={theme.accentGold} />
@@ -1985,16 +2255,22 @@ export default function BudgetDashboardScreen() {
                 </Pressable>
               </XStack>
               <View style={styles.glassCard}>
-                {allExpenseCategories.map((item, index) => {
-                  const catExpenses = [...addedExpenses.filter(e => e.categoryKey === item.key)].reverse();
-                  const totalCents = catExpenses.reduce((sum, e) => {
-                    const val = parseFloat(e.amount.replace(',', '.'));
-                    return sum + (isNaN(val) ? 0 : val);
-                  }, 0);
+                {expensesLoading && (
+                  <View style={styles.emptyRefundBox}>
+                    <ActivityIndicator color={theme.accentGold} />
+                  </View>
+                )}
+                {!expensesLoading && displayedExpenseCategories.map((item) => {
+                  const catExpenses = addedExpenses.filter(expense => item.key === '__uncategorized__'
+                    ? !expense.categoryKey
+                    : expense.categoryKey === item.key);
+                  const totalCents = catExpenses.reduce((sum, expense) => sum + expense.amountCents, 0);
                   return (
                     <View key={item.key}>
-                      {/* Category header row — tap anywhere to open modal */}
-                      <Pressable style={[styles.refundRow, styles.contributionRowBorder]} onPress={() => openExpenseModal(item.key)}>
+                      <Pressable
+                        style={[styles.refundRow, styles.contributionRowBorder]}
+                        onPress={() => item.key !== '__uncategorized__' && openExpenseModal(item.key)}
+                      >
                         <XStack alignItems="center" gap="$3" flex={1}>
                           <View style={[styles.refundIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
                             <Ionicons name={item.icon as any} size={18} color={theme.accentGold} />
@@ -2019,35 +2295,57 @@ export default function BudgetDashboardScreen() {
                         <XStack alignItems="center" gap={8}>
                           {catExpenses.length > 0 && (
                             <Text fontSize={14} fontWeight="600" color={item.color}>
-                              €{totalCents.toFixed(2).replace('.', ',')}
+                              {formatEuroCents(totalCents)}
                             </Text>
                           )}
-                          <Pressable
-                            onPress={() => openExpenseModal(item.key)}
-                            hitSlop={8}
-                            style={styles.categoryAddBtn}
-                          >
-                            <Ionicons name="add-circle" size={22} color={theme.accentGold} />
-                          </Pressable>
+                          {item.key !== '__uncategorized__' && (
+                            <Pressable
+                              onPress={() => openExpenseModal(item.key)}
+                              hitSlop={8}
+                              style={styles.categoryAddBtn}
+                            >
+                              <Ionicons name="add-circle" size={22} color={theme.accentGold} />
+                            </Pressable>
+                          )}
                         </XStack>
                       </Pressable>
-                      {/* Expanded sub-items — tap to edit */}
-                      {catExpenses.map((exp, ei) => {
-                        const globalIdx = addedExpenses.indexOf(exp);
+                      {catExpenses.map((expense, expenseIndex) => {
+                        const ownShare = expense.shares.find(shareRow => shareRow.userId === user?.id);
+                        const settledCount = expense.shares.filter(shareRow => !!shareRow.settledAt).length;
+                        const mayEdit = expense.createdBy === user?.id || capabilities.canEditEvent;
                         return (
                           <Pressable
-                            key={ei}
+                            key={expense.id}
                             style={[
                               styles.expenseSubRow,
-                              ei < catExpenses.length - 1 && styles.expenseSubRowBorder,
+                              expenseIndex < catExpenses.length - 1 && styles.expenseSubRowBorder,
+                              expense.openReportCount > 0 && { borderLeftWidth: 3, borderLeftColor: '#F97316' },
                             ]}
-                            onPress={() => openEditExpense(globalIdx)}
+                            onPress={() => openExpenseDetail(expense)}
                           >
                             <View style={styles.expenseSubIndent} />
-                            <Text style={styles.expenseSubDesc} numberOfLines={1}>{exp.description}</Text>
-                            <Ionicons name="pencil-outline" size={12} color={theme.textTertiary} style={{ marginRight: 4 }} />
+                            <YStack flex={1}>
+                              <XStack alignItems="center" gap={5}>
+                                <Text style={styles.expenseSubDesc} numberOfLines={1}>{expense.title}</Text>
+                                {expense.openReportCount > 0 && (
+                                  <Ionicons name="warning-outline" size={13} color="#F97316" />
+                                )}
+                              </XStack>
+                              <Text fontSize={11} color={theme.textTertiary}>
+                                {ownShare
+                                  ? (ownShare.settledAt
+                                    ? t.budget.expenseYourShareSettled.replace('{{amount}}', formatEuroCents(ownShare.amountCents))
+                                    : t.budget.expenseYourShareOpen.replace('{{amount}}', formatEuroCents(ownShare.amountCents)))
+                                  : t.budget.expenseNoOwnShare}
+                                {' · '}
+                                {t.budget.expenseSettledCount
+                                  .replace('{{settled}}', String(settledCount))
+                                  .replace('{{total}}', String(expense.shares.length))}
+                              </Text>
+                            </YStack>
+                            <Ionicons name={mayEdit ? 'pencil-outline' : 'eye-outline'} size={13} color={theme.textTertiary} style={{ marginRight: 4 }} />
                             <Text style={[styles.expenseSubAmount, { color: item.color }]}>
-                              €{exp.amount}
+                              {formatEuroCents(expense.amountCents)}
                             </Text>
                           </Pressable>
                         );
@@ -2071,7 +2369,7 @@ export default function BudgetDashboardScreen() {
                   <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                 </Pressable>
               </View>
-            </YStack>
+            </YStack>}
 
             {/* Refund Tracking — the database ledger is organizer-only via RLS. */}
             {capabilities.canViewExtraCosts && capabilities.canEditEvent && <YStack marginBottom="$6">
@@ -2114,7 +2412,7 @@ export default function BudgetDashboardScreen() {
                       <SwipeableRefundRow
                         key={refund.id}
                         description={refund.description}
-                        amount={formatCurrency(refund.amountCents)}
+                        amount={formatEuroCents(refund.amountCents)}
                         icon={template?.icon ?? 'receipt-outline'}
                         color={template?.color ?? customColor.color}
                         bg={template?.bg ?? customColor.bg}
@@ -2157,57 +2455,43 @@ export default function BudgetDashboardScreen() {
         />
       )}
 
-      {/* ─── Expense Popup — inline, no Modal (matches destination.tsx drag pattern) ─── */}
+      {/* ─── Expense Popup — shared database ledger ─── */}
       {expenseModal.visible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} />
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setExpenseModal(current => ({ ...current, visible: false }))} />
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, justifyContent: 'flex-end' }}>
             <Animated.View style={[styles.modalSheet, { paddingBottom: modalPaddingBottom, transform: [{ translateY: expenseSheetY }] }]}>
               <View {...expenseSheetPan.panHandlers} style={styles.modalDragHandleArea}>
                 <View style={styles.modalDragHandle} />
               </View>
-              <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+              <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
                 {!expenseModal.categoryKey ? (
-                  /* ── Mode 1: Category picker ── */
                   <>
                     <XStack justifyContent="space-between" alignItems="center" marginBottom={20}>
                       <Text style={styles.modalTitle}>{t.budget.selectCategoryTitle}</Text>
-                      <Pressable onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
+                      <Pressable onPress={() => setExpenseModal(current => ({ ...current, visible: false }))} hitSlop={10}>
                         <Ionicons name="close" size={22} color={theme.textSecondary} />
                       </Pressable>
                     </XStack>
-                    {allExpenseCategories.map(cat => (
+                    {allExpenseCategories.map(category => (
                       <Pressable
-                        key={cat.key}
+                        key={category.key}
                         style={styles.templateRow}
-                        onPress={() => {
-                          const existing = addedExpenses.filter(e => e.categoryKey === cat.key);
-                          setExpenseModal(prev => ({
-                            ...prev,
-                            categoryKey: cat.key,
-                            viewMode: existing.length > 0 ? 'list' : 'form',
-                            description: '',
-                            amount: '',
-                            paidBy: 'you',
-                            paidByPerson: null,
-                            contributors: [],
-                          }));
-                        }}
+                        onPress={() => resetExpenseForm(category.key)}
                       >
-                        <View style={[styles.refundIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
-                          <Ionicons name={cat.icon as any} size={18} color={theme.accentGold} />
+                        <View style={[styles.refundIcon, { backgroundColor: category.bg }]}>
+                          <Ionicons name={category.icon as any} size={18} color={category.color} />
                         </View>
                         <Text style={styles.templateLabel}>
-                          {cat.labelKey in t.budget ? (t.budget as any)[cat.labelKey] : cat.labelKey}
+                          {category.labelKey in t.budget ? (t.budget as any)[category.labelKey] : category.labelKey}
                         </Text>
                         <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                       </Pressable>
                     ))}
-                    {/* Add custom category */}
                     <Pressable
                       style={styles.templateRow}
                       onPress={() => {
-                        setExpenseModal(prev => ({ ...prev, visible: false }));
+                        setExpenseModal(current => ({ ...current, visible: false }));
                         setCustomCatModal({ visible: true, label: '' });
                       }}
                     >
@@ -2218,241 +2502,308 @@ export default function BudgetDashboardScreen() {
                       <Ionicons name="chevron-forward" size={16} color={theme.textTertiary} />
                     </Pressable>
                   </>
-                ) : expenseModal.viewMode === 'list' ? (
-                  /* ── Mode 2: Existing expenses list ── */
+                ) : expenseModal.viewMode === 'detail' && detailExpense ? (
                   (() => {
-                    const expCat = allExpenseCategories.find(c => c.key === expenseModal.categoryKey)!;
-                    const catExpenses = [...addedExpenses.filter(e => e.categoryKey === expenseModal.categoryKey)].reverse();
+                    const category = allExpenseCategories.find(candidate => candidate.key === detailExpense.categoryKey);
+                    const mayEdit = detailExpense.createdBy === user?.id || capabilities.canEditEvent;
+                    const mayResolve = mayEdit;
+                    const ownShare = detailExpense.shares.find(share => share.userId === user?.id);
+                    const alreadyReported = detailReports.some(report => report.reportedBy === user?.id);
                     return (
                       <>
-                        <XStack alignItems="center" gap={12} marginBottom={20}>
-                          <View style={[styles.modalCatIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
-                            <Ionicons name={expCat.icon as any} size={22} color={theme.accentGold} />
+                        <XStack alignItems="center" gap={12} marginBottom={18}>
+                          <View style={[styles.modalCatIcon, { backgroundColor: category?.bg ?? 'rgba(198,167,94,0.15)' }]}>
+                            <Ionicons name={(category?.icon ?? 'receipt-outline') as any} size={22} color={category?.color ?? theme.accentGold} />
                           </View>
                           <YStack flex={1}>
-                            <Text style={styles.modalTitle}>
-                              {expCat.labelKey in t.budget ? (t.budget as any)[expCat.labelKey] : expCat.labelKey}
+                            <Text style={styles.modalTitle}>{detailExpense.title}</Text>
+                            <Text style={styles.modalNote}>
+                              {t.budget.paidByPersonLabel.replace(
+                                '{{name}}',
+                                detailExpense.paidBy
+                                  ? expenseParticipantNames.get(detailExpense.paidBy) ?? t.budget.expenseUnknownParticipant
+                                  : t.budget.paidBySomeoneElse,
+                              )}
                             </Text>
-                            <Text style={styles.modalNote}>{catExpenses.length === 1 ? t.budget.expenseCountOne : t.budget.expenseCountMany.replace('{{count}}', String(catExpenses.length))}</Text>
                           </YStack>
-                          <Pressable onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
+                          <Text fontSize={16} fontWeight="700" color={category?.color ?? theme.accentGold}>
+                            {formatEuroCents(detailExpense.amountCents)}
+                          </Text>
+                          <Pressable onPress={() => setExpenseModal(current => ({ ...current, visible: false }))} hitSlop={10}>
                             <Ionicons name="close" size={22} color={theme.textSecondary} />
                           </Pressable>
                         </XStack>
-                        {catExpenses.map((exp, i) => {
-                          const globalIdx = addedExpenses.indexOf(exp);
-                          return (
-                            <Pressable
-                              key={i}
-                              style={[styles.expenseListRow, i < catExpenses.length - 1 && styles.contributionRowBorder]}
-                              onPress={() => {
-                                setExpenseModal(prev => ({
-                                  ...prev,
-                                  editingIndex: globalIdx,
-                                  description: exp.description,
-                                  amount: exp.amount,
-                                  paidBy: exp.paidBy,
-                                  paidByPerson: exp.paidByPerson || null,
-                                  contributors: exp.contributors,
-                                  viewMode: 'form',
-                                }));
-                              }}
-                            >
-                              <YStack flex={1}>
-                                <Text style={{ fontSize: 14, fontWeight: '500', color: theme.textPrimary }}>{exp.description}</Text>
-                                <Text style={{ fontSize: 11, color: theme.textTertiary }}>
-                                  {exp.paidBy === 'other' ? t.budget.paidByPersonLabel.replace('{{name}}', exp.paidByPerson || t.budget.paidBySomeoneElse) : t.budget.paidByYou}
-                                  {exp.contributors.length > 0 ? ` · ${t.budget.contributorsSuffix.replace('{{count}}', String(exp.contributors.length))}` : ''}
-                                </Text>
-                              </YStack>
-                              <Ionicons name="pencil-outline" size={14} color={theme.textTertiary} style={{ marginRight: 6 }} />
-                              <Text style={{ fontSize: 14, fontWeight: '600', color: expCat.color }}>€{exp.amount}</Text>
+
+                        {detailExpense.openReportCount > 0 && (
+                          <View style={[styles.contributorRow, { borderColor: '#F97316', marginBottom: 14 }]}>
+                            <Ionicons name="warning-outline" size={18} color="#F97316" />
+                            <Text style={{ color: '#F97316', fontSize: 13, flex: 1 }}>
+                              {t.budget.expenseReportedBadge.replace('{{count}}', String(detailExpense.openReportCount))}
+                            </Text>
+                          </View>
+                        )}
+
+                        <Text style={styles.inputLabel}>{t.budget.expenseDistributionTitle}</Text>
+                        {detailExpense.shares.map(share => (
+                          <View key={share.id} style={styles.contributorRow}>
+                            <YStack flex={1}>
+                              <Text style={styles.contributorName}>
+                                {expenseParticipantNames.get(share.userId) ?? t.budget.expenseUnknownParticipant}
+                              </Text>
+                              <Text fontSize={11} color={share.settledAt ? '#22C55E' : '#F97316'}>
+                                {share.settledAt ? t.budget.expenseShareSettled : t.budget.expenseShareOpen}
+                              </Text>
+                            </YStack>
+                            <Text fontSize={14} fontWeight="600" color={theme.textPrimary}>
+                              {formatEuroCents(share.amountCents)}
+                            </Text>
+                            <Ionicons
+                              name={share.settledAt ? 'checkmark-circle' : 'time-outline'}
+                              size={18}
+                              color={share.settledAt ? '#22C55E' : '#F97316'}
+                            />
+                          </View>
+                        ))}
+
+                        {detailReports.length > 0 && (
+                          <>
+                            <Text style={[styles.inputLabel, { marginTop: 16 }]}>{t.budget.expenseReportsTitle}</Text>
+                            {detailReports.map(report => (
+                              <View key={report.id} style={[styles.contributorRow, { alignItems: 'flex-start' }]}>
+                                <YStack flex={1}>
+                                  <Text style={styles.contributorName}>
+                                    {expenseParticipantNames.get(report.reportedBy) ?? t.budget.expenseUnknownParticipant}
+                                  </Text>
+                                  <Text fontSize={12} color={theme.textSecondary}>{report.reason || t.budget.expenseNoReportReason}</Text>
+                                </YStack>
+                                {mayResolve && (
+                                  <Pressable onPress={() => void confirmResolveExpenseReport(report.id)} hitSlop={8}>
+                                    <Text fontSize={12} fontWeight="600" color={theme.accentGold}>{t.budget.expenseResolveAction}</Text>
+                                  </Pressable>
+                                )}
+                              </View>
+                            ))}
+                          </>
+                        )}
+
+                        {ownShare && !ownShare.settledAt && (
+                          <Pressable
+                            style={[styles.submitButton, { marginTop: 18 }]}
+                            onPress={() => void confirmSettleOwnExpenseShare(detailExpense)}
+                            disabled={settleOwnExpenseShare.isPending}
+                          >
+                            <Text style={styles.submitButtonText}>{t.budget.expenseSettleOwnShare}</Text>
+                          </Pressable>
+                        )}
+
+                        {mayEdit && (
+                          <XStack gap={10} marginTop={ownShare && !ownShare.settledAt ? 10 : 18}>
+                            <Pressable style={[styles.paidByButton, { flex: 1 }]} onPress={() => openEditExpense(detailExpense)}>
+                              <Text style={styles.paidByText}>{t.common.edit}</Text>
                             </Pressable>
-                          );
-                        })}
-                        <Pressable
-                          style={[styles.submitButton, { marginTop: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }]}
-                          onPress={() => {
-                            setExpenseModal(prev => ({
-                              ...prev,
-                              viewMode: 'form',
-                              description: '',
-                              amount: '',
-                              paidBy: 'you',
-                              paidByPerson: null,
-                              contributors: [],
-                            }));
-                          }}
-                        >
-                          <Ionicons name="add" size={18} color="#FFFFFF" />
-                          <Text style={styles.submitButtonText}>{t.budget.expenseAddAnother}</Text>
-                        </Pressable>
-                        <Pressable style={{ marginTop: 12, alignItems: 'center' }} onPress={() => setExpenseModal(prev => ({ ...prev, categoryKey: null }))}>
-                          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{t.budget.expenseChangeCategory}</Text>
-                        </Pressable>
+                            <Pressable style={[styles.paidByButton, { flex: 1, borderColor: '#EF4444' }]} onPress={() => void confirmDeleteExpense(detailExpense)}>
+                              <Text style={[styles.paidByText, { color: '#EF4444' }]}>{t.common.delete}</Text>
+                            </Pressable>
+                          </XStack>
+                        )}
+
+                        {detailExpense.createdBy !== user?.id && !alreadyReported && (
+                          <>
+                            <Text style={[styles.inputLabel, { marginTop: 18 }]}>{t.budget.expenseReportReasonLabel}</Text>
+                            <TextInput
+                              style={styles.modalInput}
+                              placeholder={t.budget.expenseReportReasonPlaceholder}
+                              placeholderTextColor={theme.textTertiary}
+                              value={expenseModal.reportReason}
+                              onChangeText={reportReason => setExpenseModal(current => ({ ...current, reportReason }))}
+                              maxLength={500}
+                              multiline
+                            />
+                            <Pressable
+                              style={[styles.paidByButton, !expenseModal.reportReason.trim() && { opacity: 0.45 }]}
+                              disabled={!expenseModal.reportReason.trim() || reportExpense.isPending}
+                              onPress={() => void submitExpenseReport(detailExpense)}
+                            >
+                              <Text style={[styles.paidByText, { color: '#F97316' }]}>{t.budget.expenseReportAction}</Text>
+                            </Pressable>
+                          </>
+                        )}
+                        {detailExpense.createdBy !== user?.id && alreadyReported && (
+                          <Text fontSize={12} color="#F97316" textAlign="center" marginTop={16}>
+                            {t.budget.expenseAlreadyReported}
+                          </Text>
+                        )}
                       </>
                     );
                   })()
                 ) : (
-                  /* ── Mode 3: Expense form with contributor selection ── */
                   (() => {
-                    const expCat = allExpenseCategories.find(c => c.key === expenseModal.categoryKey)!;
-                    const hasExisting = addedExpenses.filter(e => e.categoryKey === expenseModal.categoryKey).length > 0;
+                    const category = allExpenseCategories.find(candidate => candidate.key === expenseModal.categoryKey);
                     return (
                       <>
                         <XStack alignItems="center" gap={12} marginBottom={20}>
-                          <View style={[styles.modalCatIcon, { backgroundColor: 'rgba(198,167,94,0.15)' }]}>
-                            <Ionicons name={expCat.icon as any} size={22} color={theme.accentGold} />
+                          <View style={[styles.modalCatIcon, { backgroundColor: category?.bg ?? 'rgba(198,167,94,0.15)' }]}>
+                            <Ionicons name={(category?.icon ?? 'receipt-outline') as any} size={22} color={category?.color ?? theme.accentGold} />
                           </View>
                           <YStack flex={1}>
                             <Text style={styles.modalTitle}>
-                              {expCat.labelKey in t.budget ? (t.budget as any)[expCat.labelKey] : expCat.labelKey}
+                              {category
+                                ? (category.labelKey in t.budget ? (t.budget as any)[category.labelKey] : category.labelKey)
+                                : t.budget.selectCategoryTitle}
                             </Text>
-                            {expCat.packageNote && (
-                              <Text style={styles.modalNote}>{(t.budget as any).expensePackageNote || 'Extra costs beyond package'}</Text>
-                            )}
+                            <Text style={styles.modalNote}>{t.budget.expenseSeparateLedgerNote}</Text>
                           </YStack>
-                          <Pressable onPress={() => setExpenseModal(prev => ({ ...prev, visible: false }))} hitSlop={10}>
+                          <Pressable onPress={() => setExpenseModal(current => ({ ...current, visible: false }))} hitSlop={10}>
                             <Ionicons name="close" size={22} color={theme.textSecondary} />
                           </Pressable>
                         </XStack>
+
                         <Text style={styles.inputLabel}>{t.budget.expenseWhatFor}</Text>
                         <TextInput
                           style={styles.modalInput}
                           placeholder={t.budget.expenseWhatForPlaceholder}
                           placeholderTextColor={theme.textTertiary}
                           value={expenseModal.description}
-                          onChangeText={v => setExpenseModal(prev => ({ ...prev, description: v }))}
+                          onChangeText={description => setExpenseModal(current => ({ ...current, description }))}
                           autoCapitalize="sentences"
                         />
                         <Text style={styles.inputLabel}>{t.budget.expenseAmount}</Text>
                         <TextInput
                           style={styles.modalInput}
-                          placeholder="0.00"
+                          placeholder="0,00"
                           placeholderTextColor={theme.textTertiary}
                           value={expenseModal.amount}
-                          onChangeText={v => setExpenseModal(prev => ({ ...prev, amount: v }))}
+                          onChangeText={amount => setExpenseModal(current => ({ ...current, amount }))}
                           keyboardType="decimal-pad"
                         />
+
                         <Text style={styles.inputLabel}>{t.budget.expenseWhoPaid}</Text>
-                        <XStack gap={10} style={{ marginBottom: expenseModal.paidBy === 'other' ? 12 : 20 }}>
-                          {(['you', 'other'] as const).map(opt => (
-                            <Pressable
-                              key={opt}
-                              style={[styles.paidByButton, expenseModal.paidBy === opt && styles.paidByButtonActive]}
-                              onPress={() => { setExpenseModal(prev => ({ ...prev, paidBy: opt, paidByPerson: opt !== 'other' ? null : prev.paidByPerson })); }}
-                            >
-                              <Text style={[styles.paidByText, expenseModal.paidBy === opt && styles.paidByTextActive]}>
-                                {opt === 'you' ? t.budget.expenseYou : t.budget.expenseSomeoneElse}
-                              </Text>
-                            </Pressable>
-                          ))}
-                        </XStack>
-                        {/* Person picker — dropdown button when "Someone else" is selected */}
-                        {expenseModal.paidBy === 'other' && payerOptions.length > 0 && (
-                          <View style={{ marginBottom: 16 }}>
-                            {/* Dropdown trigger button */}
-                            <Pressable
-                              style={[styles.dropdownButton, expenseModal.paidByPerson && styles.dropdownButtonSelected]}
-                              onPress={() => setExpenseModal(prev => ({ ...prev, payerDropdownOpen: !prev.payerDropdownOpen }))}
-                            >
-                              <Text style={[styles.dropdownButtonText, expenseModal.paidByPerson && { color: theme.textPrimary }]}>
-                                {expenseModal.paidByPerson
-                                  ? payerOptions.find(c => c.id === expenseModal.paidByPerson)?.name ?? t.budget.expenseSelectPerson
-                                  : t.budget.expenseSelectPerson}
-                              </Text>
-                              <Ionicons
-                                name={expenseModal.payerDropdownOpen ? 'chevron-up' : 'chevron-down'}
-                                size={16}
-                                color={theme.textTertiary}
-                              />
-                            </Pressable>
-                            {/* Dropdown list — max 3 rows visible, inner scroll for rest (short enough to clear the tab bar overlap) */}
-                            {expenseModal.payerDropdownOpen && (
-                              <View style={[styles.dropdownList, { maxHeight: 132 }]}>
-                                <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-                                {payerOptions.map((c, i) => {
-                                  const sel = expenseModal.paidByPerson === c.id;
-                                  return (
-                                    <Pressable
-                                      key={c.id}
-                                      style={[
-                                        styles.dropdownItem,
-                                        sel && styles.dropdownItemSelected,
-                                        i < payerOptions.length - 1 && styles.dropdownItemBorder,
-                                      ]}
-                                      onPress={() => {
-                                        setExpenseModal(prev => ({ ...prev, paidByPerson: sel ? null : c.id, payerDropdownOpen: false }));
-                                      }}
-                                    >
-                                      <Text style={[styles.dropdownItemText, sel && { color: theme.accentGold, fontWeight: '700' as const }]}>
-                                        {c.name}
-                                      </Text>
-                                      {sel && <Ionicons name="checkmark" size={16} color={theme.accentGold} />}
-                                    </Pressable>
-                                  );
-                                })}
-                                </ScrollView>
-                              </View>
-                            )}
-                          </View>
-                        )}
-                        {/* Contributors — payer is always excluded to avoid duplication */}
-                        {(() => {
-                          // When "You" pays, exclude the current user's entry (not index 0 which is always the organizer)
-                          const payerExcludedId = expenseModal.paidBy === 'you'
-                            ? (allContributors.find(c => c.userId === user?.id)?.id ?? allContributors[0]?.id ?? null)
-                            : expenseModal.paidByPerson;
-                          const contributorOptions = allContributors.filter(c => c.id !== payerExcludedId);
-                          if (contributorOptions.length === 0) return null;
-                          return (
-                            <>
-                              <Text style={styles.inputLabel}>{t.budget.expenseWhoShouldContribute}</Text>
-                              {contributorOptions.map(contributor => {
-                                const selected = expenseModal.contributors.includes(contributor.id);
+                        <Pressable
+                          style={[styles.dropdownButton, expenseModal.paidByUserId && styles.dropdownButtonSelected]}
+                          onPress={() => setExpenseModal(current => ({ ...current, payerDropdownOpen: !current.payerDropdownOpen }))}
+                        >
+                          <Text style={[styles.dropdownButtonText, expenseModal.paidByUserId && { color: theme.textPrimary }]}>
+                            {expenseModal.paidByUserId
+                              ? expenseParticipantNames.get(expenseModal.paidByUserId) ?? t.budget.expenseUnknownParticipant
+                              : t.budget.expenseSelectPerson}
+                          </Text>
+                          <Ionicons name={expenseModal.payerDropdownOpen ? 'chevron-up' : 'chevron-down'} size={16} color={theme.textTertiary} />
+                        </Pressable>
+                        {expenseModal.payerDropdownOpen && (
+                          <View style={[styles.dropdownList, { maxHeight: 176, marginBottom: 16 }]}>
+                            <ScrollView bounces={false} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                              {payerOptions.map((participant, index) => {
+                                const selected = expenseModal.paidByUserId === participant.userId;
                                 return (
                                   <Pressable
-                                    key={contributor.id}
-                                    style={[styles.contributorRow, selected && styles.contributorRowSelected]}
-                                    onPress={() => setExpenseModal(prev => ({
-                                      ...prev,
-                                      contributors: selected
-                                        ? prev.contributors.filter(id => id !== contributor.id)
-                                        : [...prev.contributors, contributor.id],
+                                    key={participant.userId}
+                                    style={[
+                                      styles.dropdownItem,
+                                      selected && styles.dropdownItemSelected,
+                                      index < payerOptions.length - 1 && styles.dropdownItemBorder,
+                                    ]}
+                                    onPress={() => setExpenseModal(current => ({
+                                      ...current,
+                                      paidByUserId: participant.userId,
+                                      payerDropdownOpen: false,
                                     }))}
                                   >
-                                    <Text style={styles.contributorName}>{contributor.name}</Text>
-                                    <View style={[styles.contributorCheck, selected && styles.contributorCheckSelected]}>
-                                      {selected && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
-                                    </View>
+                                    <Text style={[styles.dropdownItemText, selected && { color: theme.accentGold, fontWeight: '700' }]}>
+                                      {participant.name}
+                                    </Text>
+                                    {selected && <Ionicons name="checkmark" size={16} color={theme.accentGold} />}
                                   </Pressable>
                                 );
                               })}
-                            </>
+                            </ScrollView>
+                          </View>
+                        )}
+
+                        <Text style={[styles.inputLabel, { marginTop: 18 }]}>{t.budget.expenseWhoShouldContribute}</Text>
+                        <Text style={styles.modalNote}>{t.budget.expenseSplitHint}</Text>
+                        {expenseParticipants.map(participant => {
+                          const selected = expenseModal.participantIds.includes(participant.userId);
+                          const suggested = suggestedExpenseSplit.shares.find(share => share.userId === participant.userId)?.amountCents ?? 0;
+                          const effective = expenseSplit.shares.find(share => share.userId === participant.userId)?.amountCents ?? 0;
+                          return (
+                            <View key={participant.userId} style={[styles.contributorRow, selected && styles.contributorRowSelected]}>
+                              <Pressable
+                                style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }}
+                                onPress={() => setExpenseModal(current => {
+                                  const nextManualAmounts = { ...current.manualAmounts };
+                                  delete nextManualAmounts[participant.userId];
+                                  return {
+                                    ...current,
+                                    participantIds: selected
+                                      ? current.participantIds.filter(id => id !== participant.userId)
+                                      : [...current.participantIds, participant.userId],
+                                    manualAmounts: nextManualAmounts,
+                                  };
+                                })}
+                              >
+                                <View style={[styles.contributorCheck, selected && styles.contributorCheckSelected]}>
+                                  {selected && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
+                                </View>
+                                <YStack flex={1}>
+                                  <Text style={styles.contributorName}>{participant.name}</Text>
+                                  {selected && (
+                                    <Text fontSize={11} color={theme.textTertiary}>
+                                      {t.budget.expenseSuggestedShare.replace('{{amount}}', formatEuroCents(suggested))}
+                                    </Text>
+                                  )}
+                                </YStack>
+                              </Pressable>
+                              {selected && (
+                                <TextInput
+                                  style={[styles.modalInput, { width: 104, marginBottom: 0, paddingVertical: 9, textAlign: 'right' }]}
+                                  value={Object.prototype.hasOwnProperty.call(expenseModal.manualAmounts, participant.userId)
+                                    ? expenseModal.manualAmounts[participant.userId]
+                                    : formatCentsForInput(effective)}
+                                  onChangeText={amount => setExpenseModal(current => ({
+                                    ...current,
+                                    manualAmounts: { ...current.manualAmounts, [participant.userId]: amount },
+                                  }))}
+                                  keyboardType="decimal-pad"
+                                />
+                              )}
+                            </View>
                           );
-                        })()}
+                        })}
+
+                        <Text
+                          style={{
+                            marginTop: 12,
+                            fontSize: 12,
+                            color: expenseDistributionComplete ? '#22C55E' : '#F97316',
+                          }}
+                        >
+                          {expenseAmountCents <= 0
+                            ? t.budget.expenseInvalidAmount
+                            : expenseSplit.shares.length === 0
+                              ? t.budget.expenseSelectShareParticipant
+                              : hasZeroExpenseShare
+                                ? t.budget.expenseZeroShare
+                                : expenseSplit.status === 'short'
+                                  ? t.budget.expenseSplitShort.replace('{{amount}}', formatEuroCents(expenseSplit.remainingCents))
+                                  : expenseSplit.status === 'over'
+                                    ? t.budget.expenseSplitOver.replace('{{amount}}', formatEuroCents(Math.abs(expenseSplit.remainingCents)))
+                                    : t.budget.expenseSplitComplete}
+                        </Text>
+
                         <Pressable
-                          style={[styles.submitButton, { marginTop: 20 }, (!expenseModal.description.trim() || !expenseModal.amount.trim()) && styles.submitButtonDisabled]}
-                          onPress={submitExpense}
-                          disabled={!expenseModal.description.trim() || !expenseModal.amount.trim()}
+                          style={[styles.submitButton, { marginTop: 18 }, expenseSaveDisabled && styles.submitButtonDisabled]}
+                          onPress={() => void submitExpense()}
+                          disabled={expenseSaveDisabled}
                         >
                           <Text style={styles.submitButtonText}>
-                            {expenseModal.editingIndex !== null ? t.budget.expenseSaveChanges : t.budget.expenseAddBtn}
+                            {expenseModal.editingId ? t.budget.expenseSaveChanges : t.budget.expenseAddBtn}
                           </Text>
                         </Pressable>
                         <Pressable
                           style={{ marginTop: 12, alignItems: 'center' }}
-                          onPress={() => {
-                            if (hasExisting) {
-                              setExpenseModal(prev => ({ ...prev, viewMode: 'list' }));
-                            } else {
-                              setExpenseModal(prev => ({ ...prev, categoryKey: null }));
-                            }
-                          }}
+                          onPress={() => resetExpenseForm(null)}
                         >
-                          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>
-                            {hasExisting ? t.budget.expenseBackToList : t.budget.expenseChangeCategory}
-                          </Text>
+                          <Text style={{ color: theme.textSecondary, fontSize: 13 }}>{t.budget.expenseChangeCategory}</Text>
                         </Pressable>
                       </>
                     );
@@ -2463,7 +2814,6 @@ export default function BudgetDashboardScreen() {
           </KeyboardAvoidingView>
         </View>
       )}
-
       {/* ─── Refund Popup — inline, no Modal (matches destination.tsx drag pattern) ─── */}
       {refundModal.visible && (
         <View style={styles.popupOverlay} pointerEvents="box-none">
@@ -2717,26 +3067,12 @@ export default function BudgetDashboardScreen() {
                 autoFocus
               />
               <Pressable
-                style={[styles.submitButton, !customCatModal.label.trim() && styles.submitButtonDisabled]}
-                disabled={!customCatModal.label.trim()}
-                onPress={() => {
-                  const key = `custom_${Date.now()}`;
-                  const customCatColor = CUSTOM_COLORS[customCategories.length % CUSTOM_COLORS.length];
-                  const newCat: ExpenseCategory = {
-                    key,
-                    labelKey: customCatModal.label.trim(),
-                    icon: 'pricetag-outline',
-                    color: customCatColor.color,
-                    bg: customCatColor.bg,
-                    packageNote: false,
-                  };
-                  const updated = [...customCategories, newCat];
-                  setCustomCategories(updated);
-                  saveCustomCategories(updated);
-                  setCustomCatModal(prev => ({ ...prev, visible: false }));
-                  // Open expense form directly for new category
-                  setExpenseModal({ visible: true, categoryKey: key, viewMode: 'form', description: '', amount: '', paidBy: 'you', paidByPerson: null, contributors: [], editingIndex: null, payerDropdownOpen: false });
-                }}
+                style={[
+                  styles.submitButton,
+                  (!customCatModal.label.trim() || createExpenseCategory.isPending) && styles.submitButtonDisabled,
+                ]}
+                disabled={!customCatModal.label.trim() || createExpenseCategory.isPending}
+                onPress={() => void submitCustomExpenseCategory()}
               >
                 <Text style={styles.submitButtonText}>{t.budget.createAndAddExpense}</Text>
               </Pressable>

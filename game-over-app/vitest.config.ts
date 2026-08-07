@@ -28,6 +28,10 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Siehe __tests__/stubs/expo-modules-core.ts. Ohne diesen Eintrag scheitern
+      // usePublicInvitePreview und useBookingFlow in jedem Worktree, waehrend derselbe Lauf im
+      // Hauptbaum gruen ist - ein Unterschied, der schon einmal fuer echten Fehler gehalten wurde.
+      'expo-modules-core': path.resolve(__dirname, './__tests__/stubs/expo-modules-core.ts'),
     },
   },
 });

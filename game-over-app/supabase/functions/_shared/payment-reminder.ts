@@ -21,6 +21,23 @@ export interface ReminderCopy {
   body: string;
 }
 
+export interface ExtraCostReminderSection {
+  heading: string;
+  amountLabel: string;
+  amountFormatted: string;
+  itemCountLabel: string;
+}
+
+/** Existing reminder currency format, shared by both reminder entry points. */
+export function formatReminderCents(cents: number): string {
+  return `\u20AC${(cents / 100).toFixed(2)}`;
+}
+
+/** Money visibility rule shared by both service-role reminder entry points. */
+export function canIncludeExtraCostSection(role: string | null | undefined): boolean {
+  return role !== 'honoree';
+}
+
 const DE: Record<ReminderType, ReminderCopy> = {
   notice_18: {
     title: 'Restzahlung steht an',
@@ -101,14 +118,59 @@ const EN: Record<ReminderType, ReminderCopy> = {
 
 const COPY: Record<Language, Record<ReminderType, ReminderCopy>> = { de: DE, en: EN };
 
+const EXTRA_COST_COPY: Record<Language, {
+  heading: string;
+  amountLabel: string;
+  itemCount: (count: number) => string;
+}> = {
+  de: {
+    heading: 'Weitere Kosten',
+    amountLabel: 'Offener Betrag',
+    // "Posten" ist im Plural gleich - hier steht bewusst keine Fallunterscheidung.
+    itemCount: (count) => `${count} Posten`,
+  },
+  en: {
+    heading: 'Extra costs',
+    amountLabel: 'Amount due',
+    itemCount: (count) => `${count} ${count === 1 ? 'item' : 'items'}`,
+  },
+};
+
+/** Copy for the separate extra-cost ledger. It never changes the booking amount. */
+export function extraCostReminderSection(
+  language: Language,
+  amountFormatted: string,
+  itemCount: number,
+): ExtraCostReminderSection {
+  const copy = EXTRA_COST_COPY[language];
+  return {
+    heading: copy.heading,
+    amountLabel: copy.amountLabel,
+    amountFormatted,
+    itemCountLabel: copy.itemCount(itemCount),
+  };
+}
+
+/** Add the extra-cost ledger to plain-text channels while preserving the original body. */
+export function appendExtraCostReminderSection(
+  body: string,
+  extraCosts?: ExtraCostReminderSection,
+): string {
+  if (!extraCosts) return body;
+
+  return `${body}\n\n${extraCosts.heading}\n${extraCosts.amountLabel}: ${extraCosts.amountFormatted}\n${extraCosts.itemCountLabel}`;
+}
+
 /** Resolved copy with `{{amount}}` already substituted. */
 export function reminderCopy(
   type: ReminderType,
   language: Language,
   amountFormatted: string,
+  extraCosts?: ExtraCostReminderSection,
 ): ReminderCopy {
   const entry = COPY[language][type];
-  return { title: entry.title, body: entry.body.replace('{{amount}}', amountFormatted) };
+  const body = entry.body.replace('{{amount}}', amountFormatted);
+  return { title: entry.title, body: appendExtraCostReminderSection(body, extraCosts) };
 }
 
 /** Subject line. Sender name already reads "Game Over", the suffix keeps it recognisable. */
